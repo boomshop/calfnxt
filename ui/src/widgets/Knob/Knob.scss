@@ -1,0 +1,155 @@
+:root {
+  --aux-knob-tiny: 40px;
+  --aux-knob-small: 64px;
+  --aux-knob-medium: 80px;
+  --aux-knob-large: 120px;
+  --aux-knob-huge: 192px;
+  --aux-knob-bgmargin: 22px;
+}
+
+.Knob {
+  &.aux-preset-tiny {
+    --aux-value-height: 18px;
+    --aux-main-fontsize: 10px;
+
+    > .aux-label {
+      bottom: -8px;
+    }
+
+    > .aux-value {
+      width: 32px;
+      > input {
+        font-size: 12px;
+      }
+    }
+  }
+
+  &.aux-preset-small {
+    --aux-main-fontsize: 12px;
+
+    > .aux-label {
+      bottom: -4px;
+    }
+
+    > .aux-value {
+      width: 48px;
+
+      > input {
+        font-size: 15px;
+      }
+    }
+  }
+
+  &.aux-preset-medium {
+    > .aux-value {
+      width: 80px;
+
+      > input {
+        font-size: 18px;
+      }
+    }
+  }
+
+  &.aux-preset-large {
+    > .aux-label {
+      bottom: 8px;
+    }
+
+    > .aux-value {
+      width: 96px;
+
+      > input {
+        font-size: 28px;
+      }
+    }
+  }
+
+  &.aux-preset-huge {
+    > .aux-label {
+      bottom: 12px;
+    }
+
+    > .aux-value {
+      width: 128px;
+
+      > input {
+        font-size: 40px;
+      }
+    }
+  }
+
+  > .aux-label {
+    position: absolute;
+    bottom: 0;
+  }
+
+  > .aux-knob {
+    border-radius: 50%;
+
+    > svg {
+      border-radius: 50%;
+
+      > .aux-circular {
+        > .aux-base {
+          fill: var(--background-lesser);
+          stroke: var(--background-lesser);
+          stroke-width: 2px;
+        }
+
+        > .aux-value {
+          fill: var(--color-accent);
+        }
+
+        > .aux-hand {
+          fill: var(--color);
+        }
+
+        > .aux-labels {
+          > .aux-label {
+            fill: var(--color-least);
+            font-size: var(--font-size-tiny);
+          }
+        }
+
+        > .aux-dots {
+          > .aux-dot {
+            fill: var(--background);
+          }
+        }
+      }
+    }
+    &::before {
+      content: none;
+    }
+
+    &::after {
+      content: none;
+    }
+  }
+
+  > .aux-value {
+    width: 48px;
+    align-self: center !important;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    > input {
+      text-align: center !important;
+      background: transparent;
+      color: var(--color);
+      border-radius: 2px;
+    }
+  }
+
+  > .aux-label {
+    text-align: center;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  &.over {
+    --color-accent: var(--color-warn);
+  }
+}

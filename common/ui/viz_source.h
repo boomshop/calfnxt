@@ -1,0 +1,55 @@
+#pragma once
+
+namespace calfNXT {
+namespace Ui {
+
+/** Optional DSP→editor telemetry (meters now; spectrum arrays later).
+ *
+ * Not VST3 parameters — high-rate display data only.
+ * Protocol (host→UI JSON via __calfnxtOnHost):
+ *   {t:"io", ch:N}                         // bus channel count (WebEditor)
+ *   {t:"viz", id:"in"|"out", kind:"levels", v:[...dBFS]}
+ *   {t:"viz", id:"eq", kind:"gains", v:[...dB]}  // per-band applied gain (EQ)
+ * Future:
+ *   {t:"viz", id:"fft", kind:"spectrum", v:[...]}
+ *   UI→host {t:"vizcfg", id:"fft", bins:N} after measuring pixel width.
+ */
+class IVizSource
+{
+public:
+  virtual ~IVizSource() = default;
+
+  /** Input peak-hold exchange: fill out[] with dBFS, reset DSP holds. Returns ch count. */
+  virtual int takeInputLevelsDb(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Output peak-hold exchange: fill out[] with dBFS, reset DSP holds. Returns ch count. */
+  virtual int takeOutputLevelsDb(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Per-band applied EQ gains in dB (static or dyn). Returns band count. */
+  virtual int takeBandGainsDb(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for input levels (e.g. "in"). */
+  virtual const char* vizInputLevelsId() const { return "in"; }
+  /** Stream id for output levels (e.g. "out"). */
+  virtual const char* vizOutputLevelsId() const { return "out"; }
+  /** Stream id for EQ band gains (e.g. "eq"). */
+  virtual const char* vizBandGainsId() const { return "eq"; }
+};
+
+} // namespace Ui
+} // namespace calfNXT

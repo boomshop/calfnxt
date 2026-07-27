@@ -1,0 +1,174 @@
+.EqualizerUI {
+  display: grid;
+  grid-template-areas: 'graph bands' 'controls controls';
+  grid-template-columns: 1fr auto;
+  grid-template-rows: 1fr 160px;
+  gap: var(--gap);
+  align-items: stretch;
+
+  > .chart {
+    grid-area: graph;
+    position: relative;
+  }
+
+  > .controls {
+    grid-area: controls;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: var(--gap);
+
+    > .eq {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 24px;
+
+      > .Icon {
+        color: var(--color-least);
+        opacity: 0.5;
+      }
+
+      > .label {
+        font-size: var(--font-size-large);
+        color: var(--color-least);
+        opacity: 0.5;
+        margin-left: 12px;
+      }
+    }
+
+    > .dyn {
+      width: 204px;
+      display: grid;
+      grid-template-columns: auto auto auto;
+      // align-items: center;
+      align-content: space-evenly;
+      justify-content: space-evenly;
+      align-items: center;
+    }
+  }
+
+  > .bands {
+    grid-area: bands;
+    display: grid;
+    gap: 4px;
+    grid-template-columns: 1fr 1fr;
+    position: relative;
+    width: 208px;
+    margin: -2px;
+
+    > .band {
+      display: flex;
+      align-items: stretch;
+      border: 2px solid transparent;
+      border-radius: var(--border-radius);
+      background: var(--background-less);
+      background-clip: content-box;
+
+      > .band-type {
+        flex-shrink: 0;
+        opacity: 0.55;
+        cursor: pointer;
+        height: auto;
+        width: 28px;
+      }
+
+      > .mini {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+        flex: 1;
+
+        > .aux-chart {
+          width: 100%;
+          height: 100%;
+          background: none;
+          border: 2px solid var(--background);
+          border-width: 0 2px;
+
+          > svg {
+            > .aux-graphs {
+              > .aux-baseline {
+                stroke: var(--color-least);
+                stroke-opacity: 0.7;
+              }
+            }
+          }
+        }
+      }
+
+      > .aux-button {
+        min-height: 0;
+        height: auto;
+        padding: 4px;
+        width: 26px;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+
+        > .aux-label {
+          font-size: var(--font-size-large);
+        }
+
+        > .aux-icon {
+          --aux-icon-size: 16px;
+        }
+      }
+
+      &.selected {
+        border-color: var(--color-accent);
+
+        > .mini {
+          > .aux-chart {
+            > svg {
+              > .aux-graphs {
+                > .aux-baseline {
+                  stroke-opacity: 1;
+                }
+              }
+            }
+          }
+        }
+
+        > .aux-button {
+          border-radius: 0;
+        }
+      }
+
+      &.active {
+        background-color: var(--background-lesser);
+
+        > .band-type {
+          opacity: 1;
+        }
+
+        > .mini {
+          > .aux-chart {
+            width: 100%;
+
+            > svg {
+              > .aux-graphs {
+                > .aux-baseline {
+                  stroke: var(--color);
+                  stroke-opacity: 1;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      &:has(> .mini.dyn) > .band-type {
+        color: var(--color-accent);
+        opacity: 1;
+      }
+
+      &.dyn:has(> .mini.listen).dyn > .band-type {
+        color: var(--color-warn);
+        opacity: 1;
+      }
+    }
+  }
+}

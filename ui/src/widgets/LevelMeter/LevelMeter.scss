@@ -1,0 +1,36 @@
+:root {
+  --aux-meter-size: 8px;
+}
+
+.LevelMeter {
+  --aux-meter-size: 8px;
+  height: 100%;
+  min-height: 120px;
+
+  > .aux-bar {
+    border-radius: 2px;
+    overflow: hidden;
+
+    > .aux-mask {
+      opacity: 0.88;
+      border-radius: 1.5px;
+      overflow: hidden;
+    }
+  }
+
+  &.aux-vertical {
+    --aux-meter-gridgap: 3px 2px;
+
+    > .aux-bar {
+      justify-self: center;
+    }
+  }
+
+  > .aux-scale > .aux-label {
+    color: color-mix(in srgb, var(--fg, #e8eaed) 55%, transparent) !important;
+  }
+
+  &.small {
+    --aux-meter-size: 5px;
+  }
+}

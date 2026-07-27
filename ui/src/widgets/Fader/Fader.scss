@@ -1,0 +1,97 @@
+.Fader {
+  --aux-fader-handlewidth: 36px;
+  --aux-fader-handleheight: 56px;
+  --aux-fader-gridgap: 0px;
+  --aux-scale-markersize: calc(var(--aux-fader-handlewidth) + 2px);
+  --aux-scale-dotsize: var(--aux-fader-handlewidth);
+  --aux-scale-labelmarginvertical: calc(var(--aux-fader-handlewidth) + 4px);
+  --aux-scale-labelmarginhorizontal: calc(var(--aux-fader-handlewidth) + 2px);
+  --aux-scale-minwidth: 12px;
+  --aux-scale-minheight: 8px;
+
+  height: 100%;
+
+  > .aux-track {
+    background: var(--background-less);
+
+    > .aux-handle {
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+      background: linear-gradient(
+        to bottom,
+        hsl(
+          calc(var(--color-accent-h) - 5) var(--color-accent-s)
+            var(--color-accent-l)
+        ),
+        hsl(var(--color-accent-h) var(--color-accent-s) var(--color-accent-l)),
+        hsl(
+          calc(var(--color-accent-h) + 5) var(--color-accent-s)
+            var(--color-accent-l)
+        )
+      );
+      border: 2px solid var(--background-less);
+
+      &::before {
+        content: '';
+        display: block;
+        position: absolute;
+        top: calc(50% - 2px);
+        left: 0px;
+        right: 0px;
+        height: 5px;
+        background: var(--background-less);
+      }
+
+      &::after {
+        content: '';
+        display: block;
+        position: absolute;
+        top: calc(50% - 0px);
+        left: 0px;
+        right: 0px;
+        height: 1px;
+        background: var(--color);
+      }
+    }
+  }
+
+  > .aux-scale {
+    margin-left: calc(var(--aux-fader-handlewidth) * -1) !important;
+
+    > .aux-dot {
+      background: var(--color-least);
+      opacity: 0.5;
+    }
+  }
+
+  > .aux-value {
+    width: 40px;
+
+    > input {
+      background: transparent;
+      color: var(--color);
+    }
+  }
+
+  &.small {
+    --aux-fader-handlewidth: 20px;
+    --aux-fader-handleheight: 28px;
+    --aux-scale-markersize: var(--aux-fader-handlewidth);
+    --aux-scale-minwidth: 0;
+    --aux-scale-minheight: 0;
+  }
+
+  &.aux-vertical {
+    grid-template-areas:
+      'label .'
+      'track scale'
+      'value .';
+
+    > .aux-track {
+      border-radius: 18px / 8px;
+
+      > .aux-handle {
+        border-radius: 18px / 8px;
+      }
+    }
+  }
+}

@@ -1,0 +1,29 @@
+.MultiMeter {
+  --aux-meter-size: 6px;
+  --aux-multimeter-reduce: 1px;
+  --aux-multimeter-gridgap: 2px;
+
+  min-width: 48px;
+
+  &.aux-horizontal {
+    width: auto;
+
+    > .aux-levelmeter {
+      > .aux-scale {
+        > .aux-label {
+          transform: translateX(-50%) !important;
+
+          &.aux-base {
+            color: var(--color-warn);
+          }
+        }
+
+        > .aux-dot {
+          &.aux-base {
+            background: var(--color-warn);
+          }
+        }
+      }
+    }
+  }
+}

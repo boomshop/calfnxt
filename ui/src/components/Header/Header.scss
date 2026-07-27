@@ -1,0 +1,52 @@
+.Header {
+  height: 56px;
+  display: flex;
+  gap: 16px;
+  padding: 0 16px;
+  align-items: center;
+
+  > .logo {
+    height: 32px;
+    flex-shrink: 0;
+  }
+
+  > .title {
+    margin-top: 12px;
+    margin-left: -48px;
+    font-size: var(--font-size-small);
+    flex-shrink: 0;
+  }
+
+  > .io {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--gap);
+    margin-left: auto;
+
+    &.in {
+      margin-left: 12px;
+    }
+
+    > .MultiMeter {
+      flex: 1;
+
+      > .aux-levelmeter {
+        --aux-multimeter-labelwidth: 8px;
+      }
+    }
+
+    > .tag {
+      text-transform: uppercase;
+    }
+  }
+
+  > .children {
+    flex: 0 1 auto;
+    min-width: 0;
+
+    > .bypass {
+      --aux-button-paddinghorizontal: 20px;
+    }
+  }
+}

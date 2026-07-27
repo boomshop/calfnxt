@@ -1,0 +1,27 @@
+{
+  "name": "calfnxt-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "codegen": "npm run codegen:equalizer",
+    "codegen:equalizer": "python3 ../tools/codegen/generate_plugin.py --descriptor ../dsp/equalizer/equalizer.plugin.json --cpp-out /tmp/equalizer_params.h --ts-out src/generated/equalizerModel.ts --registry-out /tmp/plugins.registry.json --namespace Equalizer"
+  },
+  "dependencies": {
+    "@deutschesoft/aux-widgets": "^1.4.9",
+    "@deutschesoft/awml": "^2.4.12",
+    "@deutschesoft/use-aux-widgets": "^1.2.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "sass": "^1.101.7",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}

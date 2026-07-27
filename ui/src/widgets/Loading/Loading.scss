@@ -1,0 +1,64 @@
+.Loading {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 4rem;
+  position: absolute;
+  inset: 0;
+
+  > img {
+    width: 128px;
+  }
+
+  > .bar {
+    --loading-bar: 128px;
+    --loading-dot: 6px;
+    --loading-travel: calc(var(--loading-bar) - var(--loading-dot));
+
+    position: relative;
+    width: var(--loading-bar);
+    height: var(--loading-dot);
+
+    > i {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: var(--loading-dot);
+      height: var(--loading-dot);
+      margin: 0;
+      border-radius: 50%;
+      // Full-bar gradient; background-position tracks travel so each dot
+      // samples left=#0066ff … right=#ff0066. Opacity still applies.
+      background-image: linear-gradient(to right, #0066ff, #ff0066);
+      background-size: var(--loading-bar) var(--loading-dot);
+      background-repeat: no-repeat;
+      animation: loading-dot 1.1s ease-in-out infinite;
+
+      @for $n from 1 through 16 {
+        &:nth-child(#{$n}) {
+          opacity: 1 - ($n - 1) * (0.94 / 15);
+          animation-delay: ($n - 1) * 0.02s;
+        }
+      }
+    }
+  }
+}
+
+@keyframes loading-dot {
+  0% {
+    transform: translateX(0);
+    background-position: 0 0;
+  }
+  50% {
+    transform: translateX(var(--loading-travel));
+    background-position: calc(-1 * var(--loading-travel)) 0;
+  }
+  100% {
+    transform: translateX(0);
+    background-position: 0 0;
+  }
+}

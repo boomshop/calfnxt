@@ -1,0 +1,215 @@
+@import '@deutschesoft/aux-widgets/styles/blank_allfonts.css';
+
+:root {
+  --background: #000000;
+  --background-less: #0a0a0a;
+  --background-lesser: #1b1b1b;
+  --background-least: #333333;
+
+  --color: #ffffff;
+  --color-less: #dddddd;
+  --color-lesser: #bbbbbb;
+  --color-least: #999999;
+
+  --color-accent: hsl(216, 100%, 50%);
+  --contrast-accent: #ffffff;
+  --color-accent-h: 216;
+  --color-accent-s: 100%;
+  --color-accent-l: 50%;
+
+  --color-warn: #ff0066;
+  --contrast-warn: #ffffff;
+
+  --accent: hsl(
+    var(--color-accent-h) var(--color-accent-s) var(--color-accent-l)
+  );
+
+  --border-radius: 3px;
+
+  --gap: 8px;
+
+  --font-size-tiny: 8px;
+  --font-size-small: 10px;
+  --font-size: 15px;
+  --font-size-large: 20px;
+
+  --aux-main-smallfontsize: var(--font-size-tiny);
+  --aux-main-fontsize: var(--font-size);
+  --aux-main-bigfontsize: var(--font-size-large);
+
+  --aux-scale-markersize: 3px;
+  --aux-scale-minheight: 13px;
+}
+
+/* Kill UA focus, apply ours only for keyboard / :focus-visible. */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--background);
+  color: var(--color);
+  font:
+    14px/1.4 'Pragati Narrow',
+    'Oswald',
+    sans-serif;
+  user-select: none;
+  overflow: hidden;
+}
+
+.inactive,
+.aux-inactive {
+  opacity: 0.5;
+  filter: grayscale(1);
+}
+
+.disabled,
+.aux-disabled {
+  opacity: 0.25;
+  filter: grayscale(1);
+}
+
+.block {
+  background: var(--background-less);
+  border-radius: var(--border-radius);
+  position: relative;
+
+  > .title {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    padding: 4px;
+    background: var(--background-lesser);
+    font-size: var(--font-size-small);
+  }
+
+  &:has(.title) {
+    padding-top: 20px !important;
+  }
+}
+
+.aux-button {
+  border-radius: var(--border-radius);
+  background: var(--background-lesser);
+
+  &.aux-active {
+    background: var(--color-accent);
+    color: var(--contrast-accent);
+
+    &.warn {
+      background: var(--color-warn);
+      color: var(--contrast-warn);
+    }
+  }
+
+  > .aux-icon {
+    --aux-icon-size: 20px;
+  }
+}
+
+.aux-chart {
+  background: var(--background-less);
+  border-radius: var(--border-radius);
+
+  > svg {
+    > .aux-grid {
+      > .aux-gridlabel {
+        fill: var(--color-least);
+      }
+
+      > .aux-gridline {
+        stroke: var(--background-least);
+        stroke-opacity: 0.5;
+      }
+    }
+  }
+}
+
+.aux-levelmeter {
+  --aux-multimeter-gridgap: 0;
+  --aux-meter-gridgap: 0 4px;
+  --aux-multimeter-labelwidth: 20px;
+
+  min-width: 48px !important;
+  margin: 0;
+
+  > .aux-bar {
+    overflow: hidden;
+
+    > .aux-mask {
+      opacity: 0.8;
+    }
+  }
+
+  > .aux-label {
+    font-size: var(--font-size-tiny);
+  }
+
+  > .aux-scale {
+  }
+
+  &.aux-horizontal {
+    > .aux-bar {
+      align-self: center;
+    }
+
+    > .aux-scale {
+      margin-top: -2px;
+    }
+  }
+}
+
+.aux-scale {
+  > .aux-dot {
+    background: var(--background-least);
+
+    &.aux-marker {
+      background: var(--color-least);
+    }
+  }
+
+  > .aux-label {
+    font-size: var(--font-size-tiny);
+    color: var(--color-least);
+  }
+}
+
+.aux-select {
+  gap: 3px;
+}
+
+.aux-selectlist {
+  background: var(--background-less);
+
+  > .aux-button {
+    &:hover {
+      background: var(--background-least);
+    }
+
+    &.aux-active {
+      background: var(--color-accent);
+    }
+  }
+}
+
+.aux-value {
+  width: 48px;
+
+  > input {
+    background: transparent;
+    color: var(--color);
+  }
+}

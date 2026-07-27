@@ -1,0 +1,76 @@
+.DevShell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(ellipse at 30% 20%, #2a3038 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 80%, #1e242c 0%, transparent 50%), #121416;
+  color: #c8ccd2;
+  font:
+    13px/1.4 'Pragati Narrow',
+    'Oswald',
+    system-ui,
+    sans-serif;
+}
+
+.DevShell__bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid #2c3238;
+  background: rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+}
+
+.DevShell__brand {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #e8eaed;
+}
+
+.DevShell__nav {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.DevShell__link {
+  color: #8b949e;
+  text-decoration: none;
+  padding: 0.2rem 0.55rem;
+  border-radius: 3px;
+
+  &:hover {
+    color: #e8eaed;
+    background: #2a3038;
+  }
+
+  &--active {
+    color: var(--color);
+    background: var(--color-accent);
+  }
+}
+
+.DevShell__size {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+}
+
+.DevShell__stage {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  overflow: auto;
+}
+
+.DevShell__frame {
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px #3a424c,
+    0 12px 40px rgba(0, 0, 0, 0.45);
+  position: relative;
+  background: black;
+}

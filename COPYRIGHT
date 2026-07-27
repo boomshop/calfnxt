@@ -1,0 +1,51 @@
+Copyright (C) 2026 Markus Schmidt <schmidt@boomshop.net>
+and the calfNXT contributors.
+
+calfNXT is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+calfNXT is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with calfNXT.  If not, see <https://www.gnu.org/licenses/>.
+
+The full text of the GNU General Public License version 3 is in the
+file LICENSE in the root of this source tree.
+
+
+Third-party and related works
+-----------------------------
+
+Calf Studio Gear
+  Portions of the DSP are derived from Calf Studio Gear
+  (https://calf-studio-gear.org / https://github.com/calf-studio-gear/calf),
+  originally licensed under the GNU Lesser General Public License,
+  version 2.1. The LGPL permits combining and distributing such code
+  under the terms of the GNU GPL. Copyright holders of the upstream
+  project include (non-exhaustive; see upstream AUTHORS):
+
+    Krzysztof Foltman, Hermann Meyer, Thor Harald Johansen,
+    Thorsten Wilms, Hans Baier, Torben Hohn, Markus Schmidt,
+    Tom Szilagyi, Damien Zammit, Christian Holschuh, Johannes Lorenz,
+    and other contributors listed in the Calf Studio Gear source tree.
+
+@deutschesoft/aux-widgets
+  GNU General Public License, version 3.
+
+@deutschesoft/awml
+@deutschesoft/use-aux-widgets
+  GNU General Public License, version 2 only (as declared by upstream).
+
+Steinberg VST3 SDK (external/vst3sdk/)
+  Components used by this project are typically under the MIT License
+  (see LICENSE files under external/vst3sdk/). The SDK is often obtained
+  separately; retain its notices when redistributing.
+
+Other UI and system dependencies (React, Vite, GTK, WebKitGTK, etc.)
+  remain under their respective licenses; see package metadata and
+  distribution packaging for details.

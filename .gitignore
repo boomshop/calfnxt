@@ -1,0 +1,31 @@
+# Build
+/build/
+/out/
+/cmake-build-*/
+*.o
+*.a
+*.so
+*.vst3/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# SDK clone is large — keep locally; optional to track submodule later
+# external/vst3sdk/ is expected present for builds
+
+# Generated
+**/projectversion.h
+ui/src/generated/
+ui/node_modules/
+ui/dist/
+
+# Legacy per-plugin UI output (replaced by ui/dist)
+dsp/*/web/
+.cursor/
+/external/vst3sdk/
+
+# Reference / vendor trees kept locally, not in this repo
+/examples/

@@ -1,0 +1,201 @@
+{
+  "id": "equalizer",
+  "name": "calfNXT Equalizer",
+  "vendor": "calfNXT",
+  "vendor_url": "https://calf-studio-gear.org",
+  "vendor_email": "mailto:calf@calf-studio-gear.org",
+  "version": "0.1.0",
+  "category": "Fx|EQ",
+  "vst3_uid": [
+    "0xC4A1F003",
+    "0x0E11C01A",
+    "0xCA1F0003",
+    "0xB0000004"
+  ],
+  "editor": {
+    "width": 1024,
+    "height": 600
+  },
+  "buses": {
+    "audio_inputs": [
+      {
+        "name": "Stereo In",
+        "channels": 2
+      }
+    ],
+    "audio_outputs": [
+      {
+        "name": "Stereo Out",
+        "channels": 2
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "id": "bypass",
+      "name": "Bypass",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    }
+  ],
+  "bands": {
+    "count": 16,
+    "params": [
+      {
+        "id": "active",
+        "name": "Active",
+        "type": "float",
+        "unit": "",
+        "min": 0.0,
+        "max": 1.0,
+        "default": 0.0,
+        "scale": "linear",
+        "precision": 0
+      },
+      {
+        "id": "type",
+        "name": "Type",
+        "type": "float",
+        "unit": "",
+        "min": 0.0,
+        "max": 5.0,
+        "default": 0.0,
+        "scale": "linear",
+        "precision": 0
+      },
+      {
+        "id": "slope",
+        "name": "Slope",
+        "type": "float",
+        "unit": "dB",
+        "min": 12.0,
+        "max": 36.0,
+        "default": 12.0,
+        "scale": "linear",
+        "precision": 0
+      },
+      {
+        "id": "freq",
+        "name": "Freq",
+        "type": "float",
+        "unit": "Hz",
+        "min": 20.0,
+        "max": 20000.0,
+        "default": 1000.0,
+        "scale": "log",
+        "precision": 1
+      },
+      {
+        "id": "gain",
+        "name": "Gain",
+        "type": "float",
+        "unit": "dB",
+        "min": -24.0,
+        "max": 24.0,
+        "default": 0.0,
+        "scale": "dB",
+        "precision": 1
+      },
+      {
+        "id": "q",
+        "name": "Q",
+        "type": "float",
+        "unit": "",
+        "min": 0.1,
+        "max": 20.0,
+        "default": 0.707,
+        "scale": "log",
+        "precision": 2
+      },
+      {
+        "id": "dyn",
+        "name": "Dyn",
+        "type": "float",
+        "unit": "",
+        "min": 0.0,
+        "max": 1.0,
+        "default": 0.0,
+        "scale": "linear",
+        "precision": 0
+      },
+      {
+        "id": "dyn_attack",
+        "name": "Dyn Attack",
+        "type": "float",
+        "unit": "ms",
+        "min": 0.1,
+        "max": 500.0,
+        "default": 20.0,
+        "scale": "log",
+        "precision": 1
+      },
+      {
+        "id": "dyn_release",
+        "name": "Dyn Release",
+        "type": "float",
+        "unit": "ms",
+        "min": 1.0,
+        "max": 2000.0,
+        "default": 200.0,
+        "scale": "log",
+        "precision": 0
+      },
+      {
+        "id": "dyn_threshold",
+        "name": "Dyn Thresh",
+        "type": "float",
+        "unit": "dB",
+        "min": -60.0,
+        "max": 0.0,
+        "default": -36.0,
+        "scale": "dB",
+        "precision": 1
+      },
+      {
+        "id": "dyn_ratio",
+        "name": "Dyn Ratio",
+        "type": "float",
+        "unit": ":1",
+        "min": 1.0,
+        "max": 20.0,
+        "default": 2.0,
+        "scale": "log",
+        "precision": 1
+      },
+      {
+        "id": "dyn_listen",
+        "name": "Dyn Listen",
+        "type": "float",
+        "unit": "",
+        "min": 0.0,
+        "max": 1.0,
+        "default": 0.0,
+        "scale": "linear",
+        "precision": 0
+      }
+    ],
+    "defaults": [
+      { "type": 0, "freq": 60.0, "q": 1.0 },
+      { "type": 0, "freq": 80.0, "q": 1.0 },
+      { "type": 0, "freq": 100.0, "q": 1.0 },
+      { "type": 0, "freq": 200.0, "q": 1.0 },
+      { "type": 0, "freq": 400.0, "q": 1.0 },
+      { "type": 0, "freq": 700.0, "q": 1.0 },
+      { "type": 0, "freq": 1000.0, "q": 1.0 },
+      { "type": 0, "freq": 1500.0, "q": 1.0 },
+      { "type": 0, "freq": 2000.0, "q": 1.0 },
+      { "type": 0, "freq": 3000.0, "q": 1.0 },
+      { "type": 0, "freq": 4000.0, "q": 1.0 },
+      { "type": 0, "freq": 5000.0, "q": 1.0 },
+      { "type": 1, "freq": 120.0, "q": 0.707 },
+      { "type": 2, "freq": 5000.0, "q": 0.707 },
+      { "type": 4, "freq": 30.0, "q": 0.707, "slope": 36.0 },
+      { "type": 3, "freq": 10000.0, "q": 0.707, "slope": 36.0 }
+    ]
+  }
+}

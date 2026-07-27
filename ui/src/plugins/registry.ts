@@ -1,0 +1,23 @@
+import type { ComponentType } from "react";
+
+export type PluginId = "equalizer";
+
+type PluginLoader = () => Promise<{ default: ComponentType }>;
+
+/** Hash route id → lazy plugin shell (bound to VST3 host). */
+export const pluginApps: Record<PluginId, PluginLoader> = {
+  equalizer: () => import("./EqualizerUI/BoundEqualizerUI"),
+};
+
+export function isPluginId(id: string): id is PluginId {
+  return Object.prototype.hasOwnProperty.call(pluginApps, id);
+}
+
+export function knownPluginIds(): PluginId[] {
+  return Object.keys(pluginApps) as PluginId[];
+}
+
+/** Read plugin id from location.hash (`#equalizer`). */
+export function pluginIdFromHash(hash = window.location.hash): string {
+  return hash.replace(/^#/, "").split(/[?/]/, 1)[0].trim();
+}
