@@ -306,7 +306,17 @@ def update_registry(registry_path: Path, desc: dict[str, Any]) -> None:
             registry = json.loads(registry_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             registry = {"plugins": []}
-    plugins = [p for p in registry.get("plugins", []) if p.get("id") != desc["id"]]
+    plugins = []
+    for plugin in registry.get("plugins", []):
+        plugin_id = plugin.get("id")
+        if plugin_id == desc["id"]:
+            continue
+        descriptor = plugin.get("descriptor")
+        if not isinstance(descriptor, str):
+            continue
+        descriptor_path = registry_path.parent.parent / descriptor
+        if descriptor_path.exists():
+            plugins.append(plugin)
     plugins.append(
         {
             "id": desc["id"],
