@@ -54,9 +54,11 @@ private:
   Dsp::IoStage io_;
   double sampleRate_ = 44100.0;
 
-  // Delay (interleaved L/R), up to ±20 ms.
+  // Delay (interleaved L/R), up to ±20 ms. Time is ramped + fractional read.
   std::vector<float> delayBuf_;
   int delayPos_ = 0;
+  float delayMsCur_ = 0.f;
+  float delaySmoothCoeff_ = 1.f;
 
   Dsp::BandSplitter sideSplit_;
   Dsp::AllpassChain decorrL_;

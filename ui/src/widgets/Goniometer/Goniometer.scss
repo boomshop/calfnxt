@@ -10,13 +10,14 @@
     height: 100%;
     pointer-events: none;
     z-index: 1;
-    overflow: visible;
+    opacity: 0.5;
 
     .axis {
       stroke: var(--color);
       stroke-width: 1;
       opacity: 0.35;
       vector-effect: non-scaling-stroke;
+      fill: none;
     }
 
     .label {
@@ -32,17 +33,16 @@
     height: 100%;
 
     > svg {
-      background: var(--background-less);
+      background: var(--background);
       width: 100%;
       height: 100%;
       border-radius: var(--border-radius);
     }
   }
 
-  /* Scatter dots: fill the arc path; line mode uses stroke. */
+  /* Scatter dots: fill from in-SVG linearGradient (S→M→S). */
   &.mode-dots {
     .aux-graph {
-      fill: var(--color);
       stroke: none;
       opacity: 0.85;
     }

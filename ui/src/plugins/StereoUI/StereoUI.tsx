@@ -22,6 +22,64 @@ export interface StereoUIProps {
   host: IStereoHost;
 }
 
+/** Ring ticks / labels for Stereo knobs (Circular `labels` / `dots`). */
+const DB36_DOTS = [-36, -30, -24, -18, -12, -6, 0, 6, 12, 18, 24, 30, 36];
+const DB36_LABELS = [
+  { pos: -36, label: '−36' },
+  { pos: 0, label: '0' },
+  { pos: 36, label: '+36' },
+];
+
+const UNIT_DOTS = [-1, -0.5, 0, 0.5, 1];
+const UNIT_LABELS = [
+  { pos: -1, label: '−1' },
+  { pos: 0, label: '0' },
+  { pos: 1, label: '+1' },
+];
+
+const UNIT01_DOTS = [0, 0.5, 1];
+const UNIT01_LABELS = [
+  { pos: 0, label: '0' },
+  { pos: 1, label: '1' },
+];
+
+const XOVER_DOTS = [80, 200, 400, 800, 2000];
+const XOVER_LABELS = [
+  { pos: 80, label: '80' },
+  { pos: 200, label: '200' },
+  { pos: 400, label: '400' },
+  { pos: 800, label: '800' },
+  { pos: 2000, label: '2k' },
+];
+
+const STAGES_DOTS = [1, 2, 3, 4, 5, 6, 7, 8];
+const STAGES_LABELS = STAGES_DOTS.map((n) => ({ pos: n, label: String(n) }));
+
+const SLOPE_DOTS = [12, 24, 48];
+const SLOPE_LABELS = [
+  { pos: 12, label: '12' },
+  { pos: 24, label: '24' },
+  { pos: 48, label: '48' },
+];
+
+const PHASE_DOTS = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360];
+const PHASE_LABELS = [
+  { pos: 0, label: '0' },
+  { pos: 60, label: '60' },
+  { pos: 120, label: '120' },
+  { pos: 180, label: '180' },
+  { pos: 240, label: '240' },
+  { pos: 300, label: '300' },
+  { pos: 360, label: '360' },
+];
+
+const DELAY_DOTS = [-20, -15, -10, -5, 0, 5, 10, 15, 20];
+const DELAY_LABELS = [
+  { pos: -20, label: '−20' },
+  { pos: 0, label: '0' },
+  { pos: 20, label: '+20' },
+];
+
 function useDynamicValue<T>(dv: DynamicValue<T>): T {
   const [v, setV] = useState(() => dv.value);
   useEffect(() => dv.subscribe(setV), [dv]);
@@ -43,6 +101,12 @@ function formatDelayMs(v: number, lanes: StereoBusPair): string {
   return v > 0
     ? `${lanes[1]} ${v.toFixed(2)}`
     : `${lanes[0]} ${(-v).toFixed(2)}`;
+}
+
+function snapSlopeDb(v: number): number {
+  if (v < 18) return 12;
+  if (v >= 36) return 48;
+  return 24;
 }
 
 export function StereoUI(props: StereoUIProps) {
@@ -85,6 +149,8 @@ export function StereoUI(props: StereoUIProps) {
           min={-36}
           max={36}
           base={0}
+          dots={DB36_DOTS}
+          labels={DB36_LABELS}
           {...edit(paramIds.level_l)}
         />
         <Knob
@@ -93,6 +159,8 @@ export function StereoUI(props: StereoUIProps) {
           min={-36}
           max={36}
           base={0}
+          dots={DB36_DOTS}
+          labels={DB36_LABELS}
           {...edit(paramIds.level_r)}
         />
       </div>
@@ -112,6 +180,8 @@ export function StereoUI(props: StereoUIProps) {
               min={-36}
               max={36}
               base={0}
+              dots={DB36_DOTS}
+              labels={DB36_LABELS}
               {...edit(paramIds.mlev)}
             />
             <Knob
@@ -121,6 +191,8 @@ export function StereoUI(props: StereoUIProps) {
               min={-1}
               max={1}
               base={0}
+              dots={UNIT_DOTS}
+              labels={UNIT_LABELS}
               {...edit(paramIds.mpan)}
             />
           </div>
@@ -135,6 +207,8 @@ export function StereoUI(props: StereoUIProps) {
               min={-36}
               max={36}
               base={0}
+              dots={DB36_DOTS}
+              labels={DB36_LABELS}
               {...edit(paramIds.slev)}
             />
             <Knob
@@ -144,9 +218,13 @@ export function StereoUI(props: StereoUIProps) {
               min={-1}
               max={1}
               base={0}
+              dots={UNIT_DOTS}
+              labels={UNIT_LABELS}
               {...edit(paramIds.sbal)}
             />
           </div>
+        </div>
+        <div className="decorr">
           <Toggle state$={host.decorr$} label="Decorr" />
           <Knob
             label="Amount"
@@ -154,8 +232,10 @@ export function StereoUI(props: StereoUIProps) {
             value$={host.decorrAmount$}
             min={0}
             max={1}
+            dots={UNIT01_DOTS}
+            labels={UNIT01_LABELS}
             {...edit(paramIds.decorr_amount)}
-            disabled={host.decorr$}
+            active$={host.decorr$}
           />
           <Knob
             label="Xover"
@@ -164,8 +244,10 @@ export function StereoUI(props: StereoUIProps) {
             min={80}
             max={2000}
             scale="frequency"
+            dots={XOVER_DOTS}
+            labels={XOVER_LABELS}
             {...edit(paramIds.decorr_xover)}
-            disabled={host.decorr$}
+            active$={host.decorr$}
           />
           <Knob
             label="Slope"
@@ -173,12 +255,16 @@ export function StereoUI(props: StereoUIProps) {
             value$={host.decorrSlope$}
             min={12}
             max={48}
+            snap={[12, 24, 48]}
+            dots={SLOPE_DOTS}
+            labels={SLOPE_LABELS}
             {...{
-              'value.format': (v: number) =>
-                v < 18 ? '12' : v >= 36 ? '48' : '24',
+              'value.format': (v: number) => `${snapSlopeDb(v)} dB`,
             }}
             {...edit(paramIds.decorr_slope)}
-            disabled={host.decorr$}
+            active$={host.decorr$}
+            scale="log2"
+            log_factor={2}
           />
           <Knob
             label="Stages"
@@ -186,8 +272,12 @@ export function StereoUI(props: StereoUIProps) {
             value$={host.decorrStages$}
             min={1}
             max={8}
+            snap={1}
+            dots={STAGES_DOTS}
+            labels={STAGES_LABELS}
+            {...{ 'value.format': (v: number) => v.toFixed(0) }}
             {...edit(paramIds.decorr_stages)}
-            disabled={host.decorr$}
+            active$={host.decorr$}
           />
           <Knob
             label="Spread"
@@ -195,8 +285,10 @@ export function StereoUI(props: StereoUIProps) {
             value$={host.decorrSpread$}
             min={0}
             max={1}
+            dots={UNIT01_DOTS}
+            labels={UNIT01_LABELS}
             {...edit(paramIds.decorr_spread)}
-            disabled={host.decorr$}
+            active$={host.decorr$}
           />
         </div>
       </div>
@@ -236,6 +328,8 @@ export function StereoUI(props: StereoUIProps) {
           min={-20}
           max={20}
           base={0}
+          dots={DELAY_DOTS}
+          labels={DELAY_LABELS}
           {...{
             'value.format': (v: number) => formatDelayMs(v, bus.afterMode),
           }}
@@ -248,6 +342,8 @@ export function StereoUI(props: StereoUIProps) {
           min={-1}
           max={1}
           base={0}
+          dots={UNIT_DOTS}
+          labels={UNIT_LABELS}
           {...edit(paramIds.stereo_base)}
         />
         <Knob
@@ -256,6 +352,8 @@ export function StereoUI(props: StereoUIProps) {
           value$={host.stereoPhase$}
           min={0}
           max={360}
+          dots={PHASE_DOTS}
+          labels={PHASE_LABELS}
           {...edit(paramIds.stereo_phase)}
         />
       </div>
@@ -266,11 +364,13 @@ export function StereoUI(props: StereoUIProps) {
         <div className="title">Out</div>
         <Knob
           label="Balance"
-          size="small"
+          size="medium"
           value$={host.balanceOut$}
           min={-1}
           max={1}
           base={0}
+          dots={UNIT_DOTS}
+          labels={UNIT_LABELS}
           {...edit(paramIds.balance_out)}
         />
         <Goniometer samples$={host.gonio$} />

@@ -38,7 +38,7 @@
   --aux-main-bigfontsize: var(--font-size-large);
 
   --aux-scale-markersize: 3px;
-  --aux-scale-minheight: 13px;
+  --aux-scale-minheight: 15px;
 }
 
 /* Kill UA focus, apply ours only for keyboard / :focus-visible. */
@@ -85,6 +85,7 @@ body,
   border-radius: var(--border-radius);
   position: relative;
   padding: var(--gap);
+  overflow: hidden;
 
   > .title {
     position: absolute;
@@ -139,7 +140,7 @@ body,
   }
 }
 
-.aux-levelmeter {
+.aux-meter {
   --aux-multimeter-gridgap: 0;
   --aux-meter-gridgap: 0 4px;
   --aux-multimeter-labelwidth: 20px;
@@ -149,9 +150,11 @@ body,
 
   > .aux-bar {
     overflow: hidden;
+    border-radius: var(--border-radius);
 
     > .aux-mask {
       opacity: 0.8;
+      border-radius: var(--border-radius);
     }
   }
 
@@ -163,12 +166,10 @@ body,
   }
 
   &.aux-horizontal {
+    --aux-meter-gridgap: 2px 4px;
+
     > .aux-bar {
       align-self: center;
-    }
-
-    > .aux-scale {
-      margin-top: -2px;
     }
   }
 }

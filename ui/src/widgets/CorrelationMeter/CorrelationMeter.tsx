@@ -8,6 +8,9 @@ const CorrelationMeterBindings = {
 };
 
 const CorrelationMeterOptions = {
+  gap_labels: 20,
+  gap_dots: 10,
+  levels: [0.1, 0.5, 1],
   min: -1,
   max: 1,
   base: 0,
@@ -20,10 +23,10 @@ const CorrelationMeterOptions = {
   falling: 0,
   foreground: '#000000',
   gradient: [
-    { value: -1, color: '#ff0066' },
+    { value: -1, color: '#ff6600' },
     { value: 0, color: '#ff0066' },
     { value: 0, color: '#0066ff' },
-    { value: 1, color: '#0066ff' },
+    { value: 1, color: '#003CFF' },
   ],
 };
 

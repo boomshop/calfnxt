@@ -25,6 +25,10 @@ const ChartWidget = componentFromWidget(
 /** Dot radius in SVG px. */
 const DOT_R = 1.25;
 
+/** Match CorrelationMeter ends: Side / anti ≈ warm, Mid / +corr ≈ blue. */
+const COLOR_SIDE = '#ff0066';
+const COLOR_MID = '#0066FF';
+
 type AuxRange = { valueToPixel: (v: number) => number };
 
 type AuxGraphInstance = {
@@ -38,9 +42,68 @@ type AuxChartInstance = {
   addGraph: (g: unknown) => AuxGraphInstance;
   removeGraph: (g: AuxGraphInstance) => void;
   isDestructed?: () => boolean;
+  svg?: SVGSVGElement;
 };
 
 export type GoniometerDrawMode = 'line' | 'dots';
+
+let gonioGradSeq = 0;
+
+/**
+ * One horizontal paint server on the chart SVG: S → M → S.
+ * Dots stay a single path; the renderer samples the gradient (no per-dot color).
+ */
+function installMsGradient(svg: SVGSVGElement): () => void {
+  const ns = 'http://www.w3.org/2000/svg';
+  const gradId = `calfnxt-gonio-ms-${++gonioGradSeq}`;
+
+  let defs = svg.querySelector(':scope > defs');
+  if (!defs) {
+    defs = document.createElementNS(ns, 'defs');
+    svg.insertBefore(defs, svg.firstChild);
+  }
+
+  const grad = document.createElementNS(ns, 'linearGradient');
+  grad.id = gradId;
+  grad.setAttribute('gradientUnits', 'userSpaceOnUse');
+  for (const [offset, color] of [
+    ['0%', COLOR_SIDE],
+    ['50%', COLOR_MID],
+    ['100%', COLOR_SIDE],
+  ] as const) {
+    const stop = document.createElementNS(ns, 'stop');
+    stop.setAttribute('offset', offset);
+    stop.setAttribute('stop-color', color);
+    grad.appendChild(stop);
+  }
+  defs.appendChild(grad);
+
+  // Fragment urls from external CSS often miss the SVG; keep the rule in-tree.
+  const style = document.createElementNS(ns, 'style');
+  style.textContent =
+    `.aux-graph.aux-filled{fill:url(#${gradId});stroke:none}` +
+    `.aux-graph.aux-outline{fill:none}`;
+  svg.insertBefore(style, svg.firstChild);
+
+  const sync = () => {
+    const w = Math.max(1, svg.clientWidth || svg.viewBox.baseVal.width || 1);
+    grad.setAttribute('x1', '0');
+    grad.setAttribute('y1', '0');
+    grad.setAttribute('x2', String(w));
+    grad.setAttribute('y2', '0');
+  };
+  sync();
+  const ro = new ResizeObserver(sync);
+  ro.observe(svg);
+
+  return () => {
+    ro.disconnect();
+    grad.remove();
+    style.remove();
+    if (defs && !defs.childNodes.length)
+      defs.remove();
+  };
+}
 
 /** Calf phase-graph style 45° L/R → XY (M↑, R↖, L↗). */
 function interleavedToXy(samples: number[]): { x: number; y: number }[] {
@@ -49,10 +112,13 @@ function interleavedToXy(samples: number[]): { x: number; y: number }[] {
   for (let i = 0; i < n; i += 2) {
     const l = samples[i]!;
     const r = samples[i + 1]!;
-    if (l === 0 && r === 0) continue;
+    if (l === 0 && r === 0)
+      continue;
     let a: number;
-    if (r === 0) a = l > 0 ? Math.PI / 2 : (3 * Math.PI) / 2;
-    else a = Math.atan2(l, r);
+    if (r === 0)
+      a = l > 0 ? Math.PI / 2 : (3 * Math.PI) / 2;
+    else
+      a = Math.atan2(l, r);
     a += Math.PI / 4;
     const R = Math.hypot(l, r);
     pts.push({ x: -R * Math.cos(a), y: R * Math.sin(a) });
@@ -67,11 +133,11 @@ function interleavedToXy(samples: number[]): { x: number; y: number }[] {
  */
 function makeDotsPath(samples: number[], graph: AuxGraphInstance): string {
   const pts = interleavedToXy(samples);
-  if (!pts.length) return '';
+  if (!pts.length)
+    return '';
   const rx = graph.range_x;
   const ry = graph.range_y;
   const r = DOT_R;
-  // Two arcs per point → filled circle; no connecting lines between points.
   let d = '';
   for (const p of pts) {
     const cx = rx.valueToPixel(p.x);
@@ -92,21 +158,19 @@ function GoniometerChrome() {
       className="Goniometer-chrome"
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
-      aria-hidden>
-      {/* Mid (vertical) */}
+      aria-hidden
+    >
       <line className="axis m" x1="50" y1="12" x2="50" y2="92" />
-      {/* Side (horizontal) */}
       <line className="axis s" x1="8" y1="50" x2="92" y2="50" />
-      {/* Right channel diagonal (top-left ↔ bottom-right) */}
       <line className="axis r" x1="12" y1="12" x2="92" y2="92" />
-      {/* Left channel diagonal (top-right ↔ bottom-left) */}
       <line className="axis l" x1="88" y1="12" x2="8" y2="92" />
       <text
         className="label m"
         x="50"
         y="5"
         textAnchor="middle"
-        dominantBaseline="hanging">
+        dominantBaseline="hanging"
+      >
         M
       </text>
       <text
@@ -114,7 +178,8 @@ function GoniometerChrome() {
         x="95"
         y="50"
         textAnchor="start"
-        dominantBaseline="middle">
+        dominantBaseline="middle"
+      >
         S
       </text>
       <text
@@ -122,7 +187,8 @@ function GoniometerChrome() {
         x="6"
         y="5"
         textAnchor="start"
-        dominantBaseline="hanging">
+        dominantBaseline="hanging"
+      >
         R
       </text>
       <text
@@ -130,7 +196,8 @@ function GoniometerChrome() {
         x="94"
         y="5"
         textAnchor="end"
-        dominantBaseline="hanging">
+        dominantBaseline="hanging"
+      >
         L
       </text>
     </svg>
@@ -150,6 +217,7 @@ export function Goniometer(props: GoniometerProps) {
   const { samples$, drawMode = 'dots', className, ...rest } = props;
   const graphRef = useRef<AuxGraphInstance | null>(null);
   const chartRef = useRef<AuxChartInstance | null>(null);
+  const gradDisposeRef = useRef<(() => void) | null>(null);
   const samplesRef = useRef<number[]>([]);
   const modeRef = useRef(drawMode);
   modeRef.current = drawMode;
@@ -157,13 +225,13 @@ export function Goniometer(props: GoniometerProps) {
   const pushDots = useCallback((samples: number[]) => {
     samplesRef.current = samples;
     const graph = graphRef.current;
-    if (!graph || graph.isDestructed?.()) return;
+    if (!graph || graph.isDestructed?.())
+      return;
     if (modeRef.current === 'line') {
       graph.set('mode', 'line');
       graph.set('type', 'L');
       graph.set('dots', makeLineDots(samples));
     } else {
-      // Filled circles via path string; mode "fill" closes/fills arcs.
       graph.set('mode', 'fill');
       graph.set('dots', (g: AuxGraphInstance) => makeDotsPath(samples, g));
     }
@@ -172,8 +240,12 @@ export function Goniometer(props: GoniometerProps) {
   const attach = useCallback(
     (chart: AuxChartInstance) => {
       chartRef.current = chart;
-      if (chart.isDestructed?.()) return;
-      if (graphRef.current) return;
+      if (chart.isDestructed?.())
+        return;
+      if (graphRef.current)
+        return;
+      if (chart.svg && !gradDisposeRef.current)
+        gradDisposeRef.current = installMsGradient(chart.svg);
       graphRef.current = chart.addGraph({
         dots: [],
         type: 'L',
@@ -190,6 +262,8 @@ export function Goniometer(props: GoniometerProps) {
     const graph = graphRef.current;
     graphRef.current = null;
     chartRef.current = null;
+    gradDisposeRef.current?.();
+    gradDisposeRef.current = null;
     if (chart && graph && !chart.isDestructed?.()) {
       try {
         chart.removeGraph(graph);
@@ -217,7 +291,8 @@ export function Goniometer(props: GoniometerProps) {
   }, [drawMode, pushDots]);
 
   useEffect(() => {
-    if (!samples$) return;
+    if (!samples$)
+      return;
     const sync = (v: number[]) => pushDots(v);
     sync(samples$.value);
     return samples$.subscribe(sync);
@@ -229,11 +304,7 @@ export function Goniometer(props: GoniometerProps) {
   return (
     <div className={cls}>
       <GoniometerChrome />
-      <ChartWidget
-        className="Goniometer-plot"
-        widgetRef={widgetRef}
-        {...rest}
-      />
+      <ChartWidget className="Goniometer-plot" widgetRef={widgetRef} {...rest} />
     </div>
   );
 }

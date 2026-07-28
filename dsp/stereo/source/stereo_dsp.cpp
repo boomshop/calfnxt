@@ -75,6 +75,10 @@ void StereoPlugin::rebuildDelayBuffer()
   const int n = std::max(4, static_cast<int>(sampleRate_ * 0.05) * 2);
   delayBuf_.assign(static_cast<size_t>(n), 0.f);
   delayPos_ = 0;
+  delayMsCur_ = params_[kParamDelay];
+  // ~8 ms smoothing toward the knob — avoids zipper when the read head jumps.
+  delaySmoothCoeff_ = static_cast<float>(
+    1.0 - std::exp(-1.0 / (0.008 * std::max(1.0, sampleRate_))));
 }
 
 void StereoPlugin::updateDecorrelate()
@@ -215,19 +219,43 @@ void StereoPlugin::processSample(float& L, float& R)
     R = -R;
 
   // Delay (±ms): positive delays R, negative delays L (Calf convention).
+  // Ramp the delay time and lerp between adjacent taps to avoid clicks.
   if (!delayBuf_.empty())
   {
     const int bufSize = static_cast<int>(delayBuf_.size());
-    delayBuf_[delayPos_] = L;
-    delayBuf_[delayPos_ + 1] = R;
+    delayBuf_[static_cast<size_t>(delayPos_)] = L;
+    delayBuf_[static_cast<size_t>(delayPos_ + 1)] = R;
 
-    int nbuf = static_cast<int>(sampleRate_ * (std::fabs(params_[kParamDelay]) / 1000.f));
-    nbuf -= nbuf % 2;
-    nbuf = std::clamp(nbuf, 0, bufSize - 2);
-    if (params_[kParamDelay] > 0.f && nbuf > 0)
-      R = delayBuf_[(delayPos_ - nbuf + 1 + bufSize) % bufSize];
-    else if (params_[kParamDelay] < 0.f && nbuf > 0)
-      L = delayBuf_[(delayPos_ - nbuf + bufSize) % bufSize];
+    delayMsCur_ += (params_[kParamDelay] - delayMsCur_) * delaySmoothCoeff_;
+    const float absMs = std::fabs(delayMsCur_);
+    if (absMs > 1.0e-5f)
+    {
+      // Channel-sample delay (buffer is interleaved L/R).
+      float dSamp = static_cast<float>(sampleRate_) * (absMs * 0.001f);
+      const float maxSamp = static_cast<float>((bufSize / 2) - 2);
+      dSamp = std::clamp(dSamp, 0.f, maxSamp);
+      const int i0 = static_cast<int>(dSamp);
+      const float frac = dSamp - static_cast<float>(i0);
+      const int i1 = i0 + 1;
+
+      auto readCh = [&](int ch /*0=L,1=R*/, int age) -> float {
+        const int idx = (delayPos_ - age * 2 + ch + bufSize * 4) % bufSize;
+        return delayBuf_[static_cast<size_t>(idx)];
+      };
+
+      if (delayMsCur_ > 0.f)
+      {
+        const float a = readCh(1, i0);
+        const float b = readCh(1, i1);
+        R = a + (b - a) * frac;
+      }
+      else
+      {
+        const float a = readCh(0, i0);
+        const float b = readCh(0, i1);
+        L = a + (b - a) * frac;
+      }
+    }
 
     delayPos_ = (delayPos_ + 2) % bufSize;
   }

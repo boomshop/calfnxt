@@ -11,6 +11,7 @@ export type KnobPreset = 'tiny' | 'small' | 'medium' | 'large' | 'huge';
 const KnobBindings = {
   value$: { name: 'value' },
   active$: { name: 'active' },
+  disabled$: { name: 'disabled' },
 };
 
 const ringsize = 3;
@@ -167,15 +168,18 @@ export function Knob(props: KnobProps) {
     unsubsRef.current = [];
   }, []);
 
-  const attach = useCallback((knob: AuxKnobInstance) => {
-    detach();
-    if (knob.isDestructed()) return;
-    unsubsRef.current = [
-      knob.subscribe('set_value', () => syncOverClass(knob)),
-      knob.subscribe('set_base', () => syncOverClass(knob)),
-    ];
-    syncOverClass(knob);
-  }, [detach]);
+  const attach = useCallback(
+    (knob: AuxKnobInstance) => {
+      detach();
+      if (knob.isDestructed()) return;
+      unsubsRef.current = [
+        knob.subscribe('set_value', () => syncOverClass(knob)),
+        knob.subscribe('set_base', () => syncOverClass(knob)),
+      ];
+      syncOverClass(knob);
+    },
+    [detach],
+  );
 
   const widgetRef = useCallback(
     (w: AuxKnobInstance | null) => {

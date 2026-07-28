@@ -1,23 +1,28 @@
 /* Layout only — no visual design polish. */
 .StereoUI {
   align-items: stretch;
-  gap: 4px;
+  gap: var(--gap);
 
   > .bus {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 24px;
+    width: 0;
     font-size: 20px;
     line-height: 1;
-    flex: 0.5;
+    margin: 0 -4px;
+    position: relative;
+    z-index: 2;
+    background: var(--background-less);
+    padding-top: 20px;
 
     > span {
       display: flex;
-      padding-top: 20px;
+      padding: 12px 0;
+
       color: var(--color-least);
-      opacity: 0.6;
+      background: var(--background-less);
 
       &::after {
         content: '🞂';
@@ -28,16 +33,21 @@
   }
 
   .block {
-    flex: 1;
+    flex: 1 1 auto;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: var(--gap);
     padding: var(--gap);
-    background: none;
+  }
 
-    > .title {
-      background: var(--background-less);
+  > .mode {
+    flex: 0 0 120px;
+
+    > .Buttons {
+      > .Button {
+        --aux-button-paddinghorizontal: 16px;
+      }
     }
   }
 
@@ -45,9 +55,6 @@
     flex-direction: column;
     padding-left: 0;
     padding-right: 0;
-
-    > .Buttons {
-    }
   }
 
   > .ms {
@@ -57,31 +64,25 @@
     .lane {
       display: flex;
       align-items: center;
-      gap: var(--gap);
+      gap: 24px;
+      justify-content: center;
 
       > .label {
         font-size: var(--font-size-large);
-        flex: 0;
         line-height: 64px;
+        align-self: end;
       }
 
       > .controls {
         display: flex;
         justify-content: space-evenly;
-        flex: 1;
+        gap: 12px;
       }
 
-      &.mid {
-        > .label {
-          align-self: end;
-        }
+      > .label {
       }
 
       &.side {
-        display: grid;
-        grid-template-rows: auto auto auto;
-        grid-template-columns: auto auto auto auto;
-
         > .label {
           grid-row: 1 / 4;
           align-self: start;
@@ -92,6 +93,15 @@
           display: flex;
         }
       }
+    }
+
+    > .decorr {
+      display: grid;
+      grid-template-rows: auto auto;
+      grid-template-columns: 1fr 1fr 1fr;
+      align-items: center;
+      margin: 12px 12px 0 12px;
+      gap: 8px;
     }
   }
 
@@ -111,14 +121,21 @@
   > .out {
     flex-direction: column;
     align-items: center;
+    padding-bottom: 0;
+    padding-top: 20px !important;
 
     > .Goniometer {
       width: 180px;
       height: 180px;
+
+      > * {
+        width: 180px;
+        height: 180px;
+      }
     }
 
     > .CorrelationMeter {
-      align-self: stretch;
+      width: 180px;
     }
   }
 }
