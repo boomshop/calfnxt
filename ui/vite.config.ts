@@ -14,15 +14,26 @@ function stripCrossorigin(): Plugin {
   };
 }
 
+const root = path.resolve(__dirname);
+
 export default defineConfig({
   plugins: [react(), stripCrossorigin()],
   base: "./",
-  root: path.resolve(__dirname),
+  root,
   build: {
     outDir: path.resolve(__dirname, "dist"),
     emptyOutDir: true,
     assetsDir: "assets",
+    manifest: true,
     modulePreload: { polyfill: false },
+    rollupOptions: {
+      // Per-plugin HTML entries → VST3 packs only that entry's asset graph.
+      // Dev still uses index.html + hash router (not part of production input).
+      input: {
+        equalizer: path.resolve(root, "src/html/equalizer.html"),
+        stereo: path.resolve(root, "src/html/stereo.html"),
+      },
+    },
   },
   server: {
     host: "127.0.0.1",

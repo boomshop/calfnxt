@@ -293,8 +293,8 @@ export function EQChart(props: EQChartProps) {
     const eq = eqWidget as {
       addGraph: (g: unknown) => void;
       removeGraph: (g: unknown) => void;
-      on: (event: string, cb: (...args: unknown[]) => void) => void;
-      off: (event: string, cb: (...args: unknown[]) => void) => void;
+      subscribe: (event: string, cb: (...args: unknown[]) => void) => () => void;
+      isDestructed: () => boolean;
       baseline: {
         toFront: () => void;
         set: (key: string, value: unknown) => void;
@@ -303,6 +303,8 @@ export function EQChart(props: EQChartProps) {
       };
     };
 
+    if (eq.isDestructed()) return;
+
     const ghostOnly = (band: { get: (k: string) => unknown }) => {
       if (!band.get('active')) return false;
       const cls = band.get('class');
@@ -310,6 +312,7 @@ export function EQChart(props: EQChartProps) {
     };
 
     const syncBaseline = () => {
+      if (eq.isDestructed()) return;
       eq.baseline.set('rendering_filter', ghostOnly);
       eq.baseline.set('bands', ghosts.slice());
       // Same densify as individual graphs — baseline uses EqualizerGraph defaults
@@ -329,6 +332,7 @@ export function EQChart(props: EQChartProps) {
     };
 
     const bringBaselineFront = () => {
+      if (eq.isDestructed()) return;
       // Must run after addGraph — new graphs append and would cover the sum curve.
       eq.baseline.toFront();
     };
@@ -337,13 +341,15 @@ export function EQChart(props: EQChartProps) {
     graphs.forEach((graph) => eq.addGraph(graph));
     bringBaselineFront();
     // Handles re-added as children re-enter baseline — restore ghosts + z-order.
-    const onBandAdded = () => {
+    // subscribe() skips removeEventListener when the Equalizer is already destroyed
+    // (options/__events null) — raw off() would throw on unmount / hash switch.
+    const unsubBandAdded = eq.subscribe('bandadded', () => {
       syncBaseline();
       bringBaselineFront();
-    };
-    eq.on('bandadded', onBandAdded);
+    });
     return () => {
-      eq.off('bandadded', onBandAdded);
+      unsubBandAdded();
+      if (eq.isDestructed()) return;
       graphs.forEach((graph) => eq.removeGraph(graph));
       eq.baseline.set('bands', []);
     };

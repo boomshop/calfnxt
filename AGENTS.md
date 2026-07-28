@@ -13,7 +13,8 @@ Greenfield **VST3 + WebKitGTK** (Linux first) plugin suite. One `.vst3` per plug
 Shared React SPA UI embedded into each bundle’s `Resources/`. Branding: **calfNXT**
 (namespace `calfNXT`, cmake `calfnxt`, URI `calfnxt://`, bridge `calfnxtNative`).
 
-Plugins today: **Equalizer** (`#equalizer`). More Calf-heritage processors planned.
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`).
+More Calf-heritage processors planned.
 
 ---
 
@@ -27,9 +28,9 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Display / vendor | `calfNXT` |
 | C++ namespace | `calfNXT` |
 | CMake project / libs | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui` |
-| Plugin targets | `calfnxt-equalizer` |
-| VST3 package / `.so` | `calfNXTEqualizer` (must match; Carla/JUCE) |
-| Install names | `~/.vst3/calfNXTEqualizer.vst3` |
+| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo` |
+| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo` (must match; Carla/JUCE) |
+| Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3` |
 | URI scheme | `calfnxt://bundle/...` |
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
 | Script message handler | `webkit.messageHandlers.calfnxt` |
@@ -46,8 +47,9 @@ Classic upstream “Calf Studio Gear” may still be mentioned as the DSP herita
 common/ui/     WebEditor (WebKitGTK + X11 GtkPlug + host IRunLoop timer)
 common/dsp/    EffectBase (SingleComponentEffect), peak_hold.h
 dsp/equalizer/ equalizer.plugin.json + DSP + codegen
+dsp/stereo/    stereo.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
-ui/            React SPA (Vite), hash router #equalizer
+ui/            React SPA (Vite), hash router #equalizer / #stereo
 external/vst3sdk/
 ```
 
@@ -115,8 +117,11 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 
 ## UI structure
 
-- SPA: `ui/index.html` → `main.tsx` → `App.tsx` hash `#<pluginId>`.
-- `ui/src/plugins/registry.ts` lazy map.
+- Dev SPA: `ui/index.html` → `main.tsx` → `App.tsx` hash `#<pluginId>`.
+- Production: per-plugin entries (`src/html/<id>.html` → `src/entries/*`);
+  `pack-plugin-ui.mjs` writes `ui/dist/plugins/<id>/` (only that entry’s asset graph).
+  Each VST3 embeds `dist/plugins/<id>/` as `Resources/` (`calfnxt_copy_plugin_ui`).
+- `ui/src/plugins/registry.ts` lazy map (dev router).
 - `Bound*UI` creates host-bound model; `*UI` is presentational.
 - Shared `Header`: logo, title, children slot, In/Out MultiMeter + gain.
 - Widgets: `Fader`, `Knob`, `MultiMeter`, `LevelMeter`, `EQChart`, … under `ui/src/widgets/`.
@@ -171,7 +176,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 ## Open / deferred
 
 1. Analyzer arrays (`viz` + `vizcfg` bins).
-2. More plugins / shared Resources across bundles.
+2. More plugins.
 3. macOS / Windows WebView hosts.
 4. Optional: compare `examples/auxvst` WebView hosting; optional SVF upgrade if steep bass still artifacts.
 

@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "codegen": "npm run codegen:equalizer",
-    "codegen:equalizer": "python3 ../tools/codegen/generate_plugin.py --descriptor ../dsp/equalizer/equalizer.plugin.json --cpp-out /tmp/equalizer_params.h --ts-out src/generated/equalizerModel.ts --registry-out /tmp/plugins.registry.json --namespace Equalizer"
+    "build": "vite build && node scripts/pack-plugin-ui.mjs",
+    "codegen": "npm run codegen:equalizer && npm run codegen:stereo",
+    "codegen:equalizer": "python3 ../tools/codegen/generate_plugin.py --descriptor ../dsp/equalizer/equalizer.plugin.json --cpp-out /tmp/equalizer_params.h --ts-out src/generated/equalizerModel.ts --registry-out /tmp/plugins.registry.json --namespace Equalizer",
+    "codegen:stereo": "python3 ../tools/codegen/generate_plugin.py --descriptor ../dsp/stereo/stereo.plugin.json --cpp-out /tmp/stereo_params.h --ts-out src/generated/stereoModel.ts --registry-out /tmp/plugins.registry.json --namespace Stereo"
   },
   "dependencies": {
     "@deutschesoft/aux-widgets": "^1.4.9",

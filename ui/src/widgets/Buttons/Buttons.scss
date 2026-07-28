@@ -1,0 +1,23 @@
+.Buttons {
+  display: flex;
+  gap: 2px;
+
+  &.layout-horizontal {
+    flex-direction: row;
+    align-items: center;
+
+    > .Button {
+      flex: 0 0 auto;
+    }
+  }
+
+  &.layout-vertical {
+    flex-direction: column;
+    align-items: stretch;
+
+    > .Button {
+      width: 100%;
+      box-sizing: border-box;
+    }
+  }
+}

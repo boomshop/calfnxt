@@ -640,11 +640,14 @@ void WebEditor::flushVizLevels(const char* streamId, float* levels, int n)
 
 void WebEditor::flushVizArray(const char* streamId, const char* kind, float* values, int n)
 {
-  if (!webview_ || !streamId || !kind || n <= 0)
+  if (!webview_ || !streamId || !kind || n < 0)
     return;
 
   // try/catch so a UI exception cannot tear down the WebKit process.
-  char js[1536];
+  // Gonio can be ~256 floats; keep headroom for to_chars + commas.
+  // n==0 is valid (clear display, e.g. bypass).
+  constexpr size_t kJsCap = 8192;
+  char js[kJsCap];
   char* p = js;
   char* end = js + sizeof js;
   int written = std::snprintf(p, static_cast<size_t>(end - p),
@@ -658,7 +661,7 @@ void WebEditor::flushVizArray(const char* streamId, const char* kind, float* val
   {
     char num[64];
     const auto [endp, ec] = std::to_chars(num, num + sizeof num, static_cast<double>(values[i]),
-                                          std::chars_format::general, 9);
+                                          std::chars_format::general, 6);
     if (ec != std::errc())
       return;
     *endp = '\0';
@@ -740,6 +743,32 @@ void WebEditor::flushViz()
       bandGains[i] = v;
     }
     flushVizArray(vizSource_->vizBandGainsId(), "gains", bandGains, nGains);
+  }
+
+  float corr = 0.f;
+  if (vizSource_->takeCorrelation(&corr, 1) > 0)
+  {
+    if (!std::isfinite(corr))
+      corr = 0.f;
+    corr = std::clamp(corr, -1.f, 1.f);
+    flushVizArray(vizSource_->vizStereoFieldId(), "corr", &corr, 1);
+  }
+
+  constexpr int kMaxGonio = 256;
+  float gonio[kMaxGonio];
+  const int nGonio = vizSource_->takeGonio(gonio, kMaxGonio);
+  if (nGonio >= 0)
+  {
+    for (int i = 0; i < nGonio; ++i)
+    {
+      float v = gonio[i];
+      if (!std::isfinite(v))
+        v = 0.f;
+      else
+        v = std::clamp(v, -2.f, 2.f);
+      gonio[i] = v;
+    }
+    flushVizArray(vizSource_->vizStereoFieldId(), "gonio", gonio, nGonio);
   }
 }
 

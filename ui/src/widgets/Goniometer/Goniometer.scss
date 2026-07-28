@@ -1,0 +1,58 @@
+.Goniometer {
+  position: relative;
+  min-width: 5rem;
+  min-height: 5rem;
+
+  > .Goniometer-chrome {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    overflow: visible;
+
+    .axis {
+      stroke: var(--color);
+      stroke-width: 1;
+      opacity: 0.35;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .label {
+      fill: var(--color);
+      font-size: 5px;
+      opacity: 0.55;
+      font-family: var(--font-family, system-ui, sans-serif);
+    }
+  }
+
+  > .Goniometer-plot {
+    width: 100%;
+    height: 100%;
+
+    > svg {
+      background: var(--background-less);
+      width: 100%;
+      height: 100%;
+      border-radius: var(--border-radius);
+    }
+  }
+
+  /* Scatter dots: fill the arc path; line mode uses stroke. */
+  &.mode-dots {
+    .aux-graph {
+      fill: var(--color);
+      stroke: none;
+      opacity: 0.85;
+    }
+  }
+
+  &.mode-line {
+    .aux-graph {
+      fill: none;
+      stroke: var(--color);
+      stroke-width: 1;
+    }
+  }
+}

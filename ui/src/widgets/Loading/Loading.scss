@@ -1,3 +1,5 @@
+@use 'sass:math';
+
 .Loading {
   display: flex;
   flex-direction: column;
@@ -40,7 +42,7 @@
 
       @for $n from 1 through 16 {
         &:nth-child(#{$n}) {
-          opacity: 1 - ($n - 1) * (0.94 / 15);
+          opacity: 1 - ($n - 1) * math.div(0.94, 15);
           animation-delay: ($n - 1) * 0.02s;
         }
       }

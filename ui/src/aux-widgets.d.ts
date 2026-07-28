@@ -1,4 +1,4 @@
-declare module "@deutschesoft/aux-widgets/src/index.pure.js" {
+declare module '@deutschesoft/aux-widgets/src/index.pure.js' {
   // AUX ships without TypeScript types; treat widgets as any-compatible constructors.
   export const Fader: new (...args: unknown[]) => unknown;
   export const Knob: new (...args: unknown[]) => unknown;
@@ -13,13 +13,15 @@ declare module "@deutschesoft/aux-widgets/src/index.pure.js" {
   export const ConfirmButton: new (...args: unknown[]) => unknown;
   export const MultiMeter: new (...args: unknown[]) => unknown;
   export const Icon: new (...args: unknown[]) => unknown;
+  export const PhaseMeter: new (...args: unknown[]) => unknown;
+  export const Chart: new (...args: unknown[]) => unknown;
 }
 
-declare module "@deutschesoft/aux-widgets/src/widgets/icon.js" {
+declare module '@deutschesoft/aux-widgets/src/widgets/icon.js' {
   export const Icon: new (...args: unknown[]) => unknown;
 }
 
-declare module "@deutschesoft/aux-widgets/src/utils/biquad.js" {
+declare module '@deutschesoft/aux-widgets/src/utils/biquad.js' {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export function biquadFilter(...trafos: any[]): any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

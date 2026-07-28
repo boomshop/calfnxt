@@ -1,0 +1,277 @@
+{
+  "id": "stereo",
+  "name": "calfNXT Stereo",
+  "vendor": "calfNXT",
+  "vendor_url": "https://calf-studio-gear.org",
+  "vendor_email": "mailto:calf@calf-studio-gear.org",
+  "version": "0.1.0",
+  "category": "Fx|Spatial",
+  "vst3_uid": [
+    "0xC4A1F004",
+    "0x0E11C01B",
+    "0xCA1F0004",
+    "0xB0000001"
+  ],
+  "editor": {
+    "width": 1024,
+    "height": 384
+  },
+  "buses": {
+    "audio_inputs": [
+      {
+        "name": "Stereo In",
+        "channels": 2
+      }
+    ],
+    "audio_outputs": [
+      {
+        "name": "Stereo Out",
+        "channels": 2
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "id": "bypass",
+      "name": "Bypass",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "level_l",
+      "name": "Level L",
+      "type": "float",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 36.0,
+      "default": 0.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "level_r",
+      "name": "Level R",
+      "type": "float",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 36.0,
+      "default": 0.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "mode",
+      "name": "Mode",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 6.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "mlev",
+      "name": "M Level",
+      "type": "float",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 36.0,
+      "default": 0.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "mpan",
+      "name": "M Pan",
+      "type": "float",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "slev",
+      "name": "S Level",
+      "type": "float",
+      "unit": "dB",
+      "min": -36.0,
+      "max": 36.0,
+      "default": 0.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "sbal",
+      "name": "S Bal",
+      "type": "float",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "decorr",
+      "name": "Decorr",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "decorr_amount",
+      "name": "Amount",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "decorr_xover",
+      "name": "Xover",
+      "type": "float",
+      "unit": "Hz",
+      "min": 80.0,
+      "max": 2000.0,
+      "default": 400.0,
+      "scale": "log",
+      "precision": 0
+    },
+    {
+      "id": "decorr_slope",
+      "name": "Slope",
+      "type": "float",
+      "unit": "dB",
+      "min": 12.0,
+      "max": 48.0,
+      "default": 24.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "decorr_stages",
+      "name": "Stages",
+      "type": "float",
+      "unit": "",
+      "min": 1.0,
+      "max": 8.0,
+      "default": 4.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "decorr_spread",
+      "name": "Spread",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "mute_l",
+      "name": "Mute L",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "mute_r",
+      "name": "Mute R",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "phase_l",
+      "name": "Phase L",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "phase_r",
+      "name": "Phase R",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "delay",
+      "name": "Delay",
+      "type": "float",
+      "unit": "ms",
+      "min": -20.0,
+      "max": 20.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "stereo_base",
+      "name": "Stereo Base",
+      "type": "float",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "stereo_phase",
+      "name": "Stereo Phase",
+      "type": "float",
+      "unit": "deg",
+      "min": 0.0,
+      "max": 360.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "balance_out",
+      "name": "Balance Out",
+      "type": "float",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 2
+    }
+  ]
+}

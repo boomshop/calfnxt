@@ -84,6 +84,7 @@ body,
   background: var(--background-less);
   border-radius: var(--border-radius);
   position: relative;
+  padding: var(--gap);
 
   > .title {
     position: absolute;
@@ -97,7 +98,7 @@ body,
   }
 
   &:has(.title) {
-    padding-top: 20px !important;
+    padding-top: 28px !important;
   }
 }
 

@@ -1,5 +1,4 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
-import { postToHost } from './bridge';
 import { DevShell } from './dev/DevShell';
 import {
   isPluginId,
@@ -8,6 +7,7 @@ import {
   pluginIdFromHash,
   type PluginId,
 } from './plugins/registry';
+import { reportCssViewportOnce } from './reportViewport';
 import { Loading } from './widgets';
 
 function FallbackMissing({ id }: { id: string }) {
@@ -28,32 +28,12 @@ function FallbackMissing({ id }: { id: string }) {
   );
 }
 
-/** Once: report CSS viewport so the native editor can scale the host window. */
-function useReportCssViewport() {
-  useEffect(() => {
-    if (!window.calfnxtNative?.post) return;
-
-    let sent = false;
-    const report = () => {
-      if (sent) return;
-      const w = Math.round(window.innerWidth);
-      const h = Math.round(window.innerHeight);
-      if (w < 1 || h < 1) return;
-      sent = true;
-      postToHost({ t: 'viewport', w, h });
-    };
-
-    // After first layout (and a second frame for WebKit embed settle).
-    const id = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(report);
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, []);
-}
-
 export function App() {
   const [pluginId, setPluginId] = useState(() => pluginIdFromHash());
-  useReportCssViewport();
+
+  useEffect(() => {
+    reportCssViewportOnce();
+  }, []);
 
   useEffect(() => {
     const onHash = () => setPluginId(pluginIdFromHash());

@@ -1,12 +1,13 @@
 import type { ComponentType } from "react";
 
-export type PluginId = "equalizer";
+export type PluginId = "equalizer" | "stereo";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
 
 /** Hash route id → lazy plugin shell (bound to VST3 host). */
 export const pluginApps: Record<PluginId, PluginLoader> = {
   equalizer: () => import("./EqualizerUI/BoundEqualizerUI"),
+  stereo: () => import("./StereoUI/BoundStereoUI"),
 };
 
 export function isPluginId(id: string): id is PluginId {

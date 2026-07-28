@@ -31,8 +31,9 @@ add_subdirectory(ui)
 add_subdirectory(common/ui)
 add_subdirectory(common/dsp)
 add_subdirectory(dsp/equalizer)
+add_subdirectory(dsp/stereo)
 
 # UI build needs generated models from every plugin descriptor
-add_dependencies(calfnxt_web_ui equalizer_codegen)
+add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen)
 
-message(STATUS "calfnxt: common/{ui,dsp} + dsp/equalizer + shared ui/dist")
+message(STATUS "calfnxt: common/{ui,dsp} + dsp/{equalizer,stereo} + shared ui/dist")

@@ -51,13 +51,11 @@ target_link_libraries(${target}
 
 target_compile_features(${target} PUBLIC cxx_std_17)
 
-calfnxt_copy_plugin_ui(${target})
+calfnxt_copy_plugin_ui(${target} equalizer)
 
 # TARGET_FILE_DIR = …/<plugin>.vst3/Contents/<arch> → bundle root is ../..
-# Bundle basename == .so basename (PACKAGE_NAME) so Carla/JUCE can discover it.
 add_custom_target(install-user-vst3
   COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.vst3"
-  # Drop retired sample plugins if still present from earlier installs.
   COMMAND ${CMAKE_COMMAND} -E rm -rf
     "$ENV{HOME}/.vst3/calfNXTVolume.vst3"
     "$ENV{HOME}/.vst3/calfNXTBalance.vst3"
@@ -66,8 +64,16 @@ add_custom_target(install-user-vst3
   COMMAND ${CMAKE_COMMAND} -E copy_directory
     "$<TARGET_FILE_DIR:calfnxt-equalizer>/../.."
     "$ENV{HOME}/.vst3/calfNXTEqualizer.vst3"
-  COMMENT "Install Equalizer VST3 → ~/.vst3"
+  COMMAND ${CMAKE_COMMAND} -E rm -rf
+    "$ENV{HOME}/.vst3/calfNXTStereo.vst3"
+    "$ENV{HOME}/.vst3/calfNXTStereoTools.vst3"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "$<TARGET_FILE_DIR:calfnxt-stereo>/../.."
+    "$ENV{HOME}/.vst3/calfNXTStereo.vst3"
+  COMMENT "Install Equalizer + Stereo VST3 → ~/.vst3"
   DEPENDS
     calfnxt-equalizer
     calfnxt-equalizer-resources
+    calfnxt-stereo
+    calfnxt-stereo-resources
 )

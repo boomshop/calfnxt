@@ -8,6 +8,8 @@ type ChannelCountApply = (ch: number) => void;
 const hostApplies = new Map<number, HostApply>();
 const vizLevelsApplies = new Map<string, VizLevelsApply>();
 const vizGainsApplies = new Map<string, VizLevelsApply>();
+const vizCorrApplies = new Map<string, HostApply>();
+const vizGonioApplies = new Map<string, VizLevelsApply>();
 const channelCountApplies = new Set<ChannelCountApply>();
 let hostWired = false;
 
@@ -32,6 +34,10 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizLevelsApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "gains" && Array.isArray(msg.v))
     vizGainsApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "corr" && Array.isArray(msg.v) && typeof msg.v[0] === "number")
+    vizCorrApplies.get(msg.id)?.(msg.v[0]);
+  if (msg.t === "viz" && msg.kind === "gonio" && Array.isArray(msg.v))
+    vizGonioApplies.get(msg.id)?.(msg.v);
 }
 
 function ensureHostWire(): void {
@@ -106,6 +112,34 @@ export function bindVizGains(dv: DynamicValue<number[]>, id: string): () => void
   });
   return () => {
     vizGainsApplies.delete(id);
+  };
+}
+
+/** Wire stereo correlation (−1…1) from DSP viz (id e.g. "stereo"). */
+export function bindVizCorr(dv: DynamicValue<number>, id: string): () => void {
+  ensureHostWire();
+  vizCorrApplies.set(id, (v) => {
+    const x = typeof v === "number" && Number.isFinite(v) ? v : 0;
+    dv.set(Math.min(1, Math.max(-1, x)));
+  });
+  return () => {
+    vizCorrApplies.delete(id);
+  };
+}
+
+/** Wire goniometer interleaved L/R samples from DSP viz (id e.g. "stereo"). */
+export function bindVizGonio(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizGonioApplies.set(id, (v) => {
+    const clean = v.map((x) => {
+      if (typeof x !== "number" || !Number.isFinite(x))
+        return 0;
+      return Math.min(2, Math.max(-2, x));
+    });
+    dv.set(clean);
+  });
+  return () => {
+    vizGonioApplies.delete(id);
   };
 }
 

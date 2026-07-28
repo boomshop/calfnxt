@@ -1,0 +1,124 @@
+/* Layout only — no visual design polish. */
+.StereoUI {
+  align-items: stretch;
+  gap: 4px;
+
+  > .bus {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    font-size: 20px;
+    line-height: 1;
+    flex: 0.5;
+
+    > span {
+      display: flex;
+      padding-top: 20px;
+      color: var(--color-least);
+      opacity: 0.6;
+
+      &::after {
+        content: '🞂';
+        margin-top: -1px;
+        margin-left: -1px;
+      }
+    }
+  }
+
+  .block {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--gap);
+    padding: var(--gap);
+    background: none;
+
+    > .title {
+      background: var(--background-less);
+    }
+  }
+
+  > .in {
+    flex-direction: column;
+    padding-left: 0;
+    padding-right: 0;
+
+    > .Buttons {
+    }
+  }
+
+  > .ms {
+    flex-direction: column;
+    align-items: stretch;
+
+    .lane {
+      display: flex;
+      align-items: center;
+      gap: var(--gap);
+
+      > .label {
+        font-size: var(--font-size-large);
+        flex: 0;
+        line-height: 64px;
+      }
+
+      > .controls {
+        display: flex;
+        justify-content: space-evenly;
+        flex: 1;
+      }
+
+      &.mid {
+        > .label {
+          align-self: end;
+        }
+      }
+
+      &.side {
+        display: grid;
+        grid-template-rows: auto auto auto;
+        grid-template-columns: auto auto auto auto;
+
+        > .label {
+          grid-row: 1 / 4;
+          align-self: start;
+        }
+
+        > .controls {
+          grid-column: 2 / 5;
+          display: flex;
+        }
+      }
+    }
+  }
+
+  > .channels {
+    flex-direction: column;
+
+    > .ch {
+      display: flex;
+      gap: var(--gap);
+    }
+  }
+
+  > .spatial {
+    flex-direction: column;
+  }
+
+  > .out {
+    flex-direction: column;
+    align-items: center;
+
+    > .Goniometer {
+      width: 180px;
+      height: 180px;
+    }
+
+    > .CorrelationMeter {
+      align-self: stretch;
+    }
+  }
+}

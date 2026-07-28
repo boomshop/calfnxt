@@ -2,6 +2,7 @@
 
 #include "biquad.h"
 #include "compressor.h"
+#include "dsp_math.h"
 #include "gain_util.h"
 
 #include <algorithm>
@@ -32,27 +33,6 @@ inline int slopeToStages(float slopeDb)
   if (slopeDb >= 18.f)
     return 2;
   return 1;
-}
-
-/**
- * Block-rate approach in log space (~40% of remaining gap).
- * Replaces Calf's 1.003× crawl (multi-second sweeps across the audio band).
- */
-inline float glideTowardLog(float value, float target, bool& keepGliding)
-{
-  constexpr float kEps = 1.0e-6f;
-  if (value == target)
-    return value;
-  const float a = std::max(kEps, value);
-  const float b = std::max(kEps, target);
-  if (std::fabs(a - b) <= 0.001f * std::max(a, b))
-    return target;
-  keepGliding = true;
-  const float logN = std::log(a) + (std::log(b) - std::log(a)) * 0.4f;
-  const float out = std::exp(logN);
-  if ((target > value && out >= target) || (target < value && out <= target))
-    return target;
-  return out;
 }
 
 inline bool typeUsesGain(int type)
