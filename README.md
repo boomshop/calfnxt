@@ -11,11 +11,12 @@ substantially reworked; the UI and host integration are new, with additional
 features and the goal of bringing over most of the original signal processors
 over time.
 
-Branding / namespace: **calfNXT**. Shared React SPA UI embedded into each `.vst3`
-bundle’s `Resources/`.
+Branding / namespace: **calfNXT**. Shared React SPA UI, packed per plugin into
+each `.vst3` bundle’s `Resources/`.
 
-**Early public preview:** the first shippable plugin is **Equalizer** (`calfNXTEqualizer`).
-More processors from the classic Calf suite will follow. Linux + X11 hosts only for now.
+**Early public preview (Linux + X11 hosts):** shipping today are **Equalizer**
+(`calfNXTEqualizer`) and **Stereo** (`calfNXTStereo`) — more processors from
+the classic Calf suite will follow as work continues.
 
 This project is free software licensed under the **GNU General Public License
 v3 or later** — see [`LICENSE`](LICENSE) and [`COPYRIGHT`](COPYRIGHT).
@@ -127,12 +128,17 @@ cd calfnxt
 git clone --recursive https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
 
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-cmake --build build --target calfnxt-equalizer-resources -j
+cmake --build build --target calfnxt-plugins -j
+# or: ./tools/install-user-vst3.sh  (force-rebuilds UI + embeds + installs)
 cmake --build build --target install-user-vst3
 ```
 
-Then rescan plugins in your host. The bundle appears as `~/.vst3/calfNXTEqualizer.vst3`.
+Then rescan plugins in your host. Bundles appear as:
+
+| Plugin    | Path                         |
+|-----------|------------------------------|
+| Equalizer | `~/.vst3/calfNXTEqualizer.vst3` |
+| Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
 
 ---
 
@@ -144,39 +150,45 @@ After UI or DSP changes you typically need: **build → embed UI into Resources 
 ### Full rebuild (DSP + plugins + UI embed)
 
 ```bash
-cmake --build build -j
-cmake --build build --target calfnxt-equalizer-resources -j
+cmake --build build --target calfnxt-plugins -j
 cmake --build build --target install-user-vst3
+# equivalent shortcut (also clears UI stamps so Resources always refresh):
+#   ./tools/install-user-vst3.sh
 ```
 
-Installed bundle:
+`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, …) and embeds each
+UI pack. `install-user-vst3` then copies the bundles into `~/.vst3/`:
 
-| Plugin    | Path                            |
-|-----------|---------------------------------|
+| Plugin    | Path                         |
+|-----------|------------------------------|
 | Equalizer | `~/.vst3/calfNXTEqualizer.vst3` |
+| Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
 
-Rescan / reload the plugin in the host after install.
+Rescan / reload the plugins in the host after install.
 
 ### UI-only changes (React / SCSS / widgets)
 
 A Vite build **alone** does **not** update what the VST editor shows.  
-You must copy the SPA into the bundle’s `Resources/`:
+You must copy the SPA into each bundle’s `Resources/`:
 
 ```bash
-cmake --build build --target calfnxt-equalizer-resources -j
+./tools/install-user-vst3.sh
+# or manually:
+cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resources -j
 cmake --build build --target install-user-vst3
 ```
 
-The `*-resources` target runs `npm run build` in `ui/` and embeds `dist/` into the plugin package.
+The `*-resources` targets run `npm run build` in `ui/` (MPA entries + per-plugin
+packs under `ui/dist/plugins/<id>/`) and embed only that plugin’s assets.
 
 ### DSP / C++ only
 
 ```bash
-cmake --build build -j
+cmake --build build --target calfnxt-plugins -j
 cmake --build build --target install-user-vst3
 ```
 
-Re-run `*-resources` as well if the UI also changed.
+Re-run `*-resources` (or `./tools/install-user-vst3.sh`) as well if the UI also changed.
 
 ---
 
@@ -187,7 +199,7 @@ cd ui && npm install   # once
 cd ui && npm run dev
 ```
 
-Open e.g. http://localhost:5173/#equalizer  
+Open e.g. http://localhost:5173/#equalizer or http://localhost:5173/#stereo  
 
 This is useful for layout and widget work. It does **not** replace installing into `~/.vst3` for Carla / other hosts.
 
@@ -198,9 +210,10 @@ This is useful for layout and widget work. It does **not** replace installing in
 | Goal                         | Command |
 |-----------------------------|---------|
 | Configure                   | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` |
-| Build plugins               | `cmake --build build -j` |
-| Embed SPA into `.vst3`      | `cmake --build build --target calfnxt-equalizer-resources -j` |
-| Install for the current user| `cmake --build build --target install-user-vst3` |
+| Build **all** plugins (+ UI)| `cmake --build build --target calfnxt-plugins -j` |
+| Embed SPA + install         | `./tools/install-user-vst3.sh` or `cmake --build build --target install-user-vst3` |
+| Single plugin (Equalizer)   | `cmake --build build --target calfnxt-equalizer calfnxt-equalizer-resources -j` |
+| Single plugin (Stereo)      | `cmake --build build --target calfnxt-stereo calfnxt-stereo-resources -j` |
 | UI HMR in the browser       | `cd ui && npm run dev` |
 
 ---
@@ -208,6 +221,6 @@ This is useful for layout and widget work. It does **not** replace installing in
 ## Notes
 
 - Codegen runs as part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++ params + `ui/src/generated/`).
-- Install also removes obsolete `calfNXTVolume.vst3` / `calfNXTBalance.vst3` if still present from earlier builds.
+- Install also removes obsolete `calfNXTVolume.vst3` / `calfNXTBalance.vst3` / `calfNXTStereoTools.vst3` if still present from earlier builds.
 - Env flags: `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE` (see `AGENTS.md`).
 - The editor embeds via X11 (`GtkPlug`); Wayland-only sessions may need `GDK_BACKEND=x11` for the host.

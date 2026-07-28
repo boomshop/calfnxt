@@ -36,4 +36,15 @@ add_subdirectory(dsp/stereo)
 # UI build needs generated models from every plugin descriptor
 add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen)
 
+# Meta-target: all plugins + embedded UI packs (add new plugins here).
+add_custom_target(calfnxt-plugins
+  DEPENDS
+    calfnxt-equalizer
+    calfnxt-equalizer-resources
+    calfnxt-stereo
+    calfnxt-stereo-resources
+  COMMENT "Build all calfNXT VST3 plugins (+ embedded UI)"
+)
+
 message(STATUS "calfnxt: common/{ui,dsp} + dsp/{equalizer,stereo} + shared ui/dist")
+message(STATUS "calfnxt: build all plugins with --target calfnxt-plugins")

@@ -135,9 +135,9 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-# embed UI after ui changes:
-cmake --build build --target calfnxt-equalizer-resources -j
+cmake --build build --target calfnxt-plugins -j
+# embed UI after ui changes (or use ./tools/install-user-vst3.sh):
+cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resources -j
 # user install:
 cmake --build build --target install-user-vst3
 ```
