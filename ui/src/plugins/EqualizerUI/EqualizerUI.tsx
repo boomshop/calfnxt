@@ -27,7 +27,6 @@ import {
 import '../PluginUI.scss';
 import './EqualizerUI.scss';
 import { Header } from '../../components';
-import type { DynamicValue } from '@deutschesoft/awml';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 
 /** Ring ticks / labels for EQ control knobs (Circular `labels` / `dots`). */
@@ -63,11 +62,6 @@ export interface EqualizerUIProps {
   host: IEqualizerHost;
 }
 
-function useDynamicValue<T>(dv: DynamicValue<T>): T {
-  const [v, setV] = useState(() => dv.value);
-  useEffect(() => dv.subscribe(setV), [dv]);
-  return v;
-}
 
 function BandRow(props: {
   band: IEqualizerBand;
@@ -76,10 +70,10 @@ function BandRow(props: {
   onSelect: (id: string) => void;
 }) {
   const { band, index, selected, onSelect } = props;
-  const active = useDynamicValue(band.active$);
-  const filterType = useDynamicValue(band.type$);
-  const dyn = useDynamicValue(band.dyn$);
-  const listen = useDynamicValue(band.listen$);
+  const active = useDynamicValueReadonly(band.active$, false);
+  const filterType = useDynamicValueReadonly<EqFilterType>(band.type$, 'parametric');
+  const dyn = useDynamicValueReadonly(band.dyn$, false);
+  const listen = useDynamicValueReadonly(band.listen$, false);
   const dynActive = bandSupportsDyn(filterType) && dyn;
 
   return (
@@ -124,10 +118,10 @@ function BandRow(props: {
 
 function BandControls(props: { band: IEqualizerBand }) {
   const { band } = props;
-  const filterType = useDynamicValue<EqFilterType>(band.type$);
+  const filterType = useDynamicValueReadonly<EqFilterType>(band.type$, 'parametric');
   const pass = isPassFilter(filterType);
   const canDyn = bandSupportsDyn(filterType);
-  const doesDyn = useDynamicValueReadonly(band.dyn$);
+  const doesDyn = useDynamicValueReadonly(band.dyn$, false);
 
   return (
     <div className="controls" data-band={band.id}>

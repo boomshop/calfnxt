@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import type { DynamicValue } from '@deutschesoft/awml';
+import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import {
   Knob,
   Buttons,
@@ -93,11 +92,6 @@ const DELAY_LABELS = [
   { pos: 20, label: '+20' },
 ];
 
-function useDynamicValue<T>(dv: DynamicValue<T>): T {
-  const [v, setV] = useState(() => dv.value);
-  useEffect(() => dv.subscribe(setV), [dv]);
-  return v;
-}
 
 function Bus({ pair }: { pair: StereoBusPair }) {
   return (
@@ -129,7 +123,7 @@ function snapSlopeDb(v: number): number {
 
 export function StereoUI(props: StereoUIProps) {
   const { host } = props;
-  const mode = useDynamicValue(host.mode$);
+  const mode = useDynamicValueReadonly(host.mode$, 0);
   const bus = stereoBusFormats(mode);
   const edit = (id: number) => ({
     beginEdit: () => host.beginEdit(id),
