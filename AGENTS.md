@@ -36,7 +36,7 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | CMake project / libs | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui` |
 | Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients` |
 | VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients` (must match; Carla/JUCE) |
-| Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3` |
+| Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3`, `calfNXTTransients.vst3` |
 | URI scheme | `calfnxt://bundle/...` |
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
 | Script message handler | `webkit.messageHandlers.calfnxt` |
@@ -56,7 +56,7 @@ dsp/equalizer/ equalizer.plugin.json + DSP + codegen
 dsp/stereo/    stereo.plugin.json + DSP + codegen
 dsp/transients/ transients.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
-ui/            React SPA (Vite), hash router #equalizer / #stereo
+ui/            React SPA (Vite), hash router #equalizer / #stereo / #transients
 external/vst3sdk/
 ```
 
@@ -73,8 +73,9 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 1. `process()`: `syncParamPlains(data, params_, kParamCount)` — one pass over host queues
    (`setNormalized`), then fill **plain** array from Parameters (auxvst-style; not O(n×queues)).
 2. Plugin DSP reads `params_[kParam…]` (plain: dB, etc.). Do **not** store 0…1 in DSP.
-3. `WebEditor`: `IDependent::update` + **poll ~16 ms** → `pushParamPlain` → coalesce → `evalJs`  
-   `__calfnxtOnHost({t:"param",id,v})` with locale-safe `std::to_chars` (never `snprintf %.g` under `de_DE`).
+3. `WebEditor` proxy: `IDependent::update` + **poll ~16 ms** → `pushParamPlain` → coalesce →
+   socket line → helper `evalJs` `__calfnxtOnHost({t:"param",id,v})` with locale-safe
+   `std::to_chars` (never `snprintf %.g` under `de_DE`).
 4. `bind_param.ts` → AWML `DynamicValue.set(plain)`.
 5. AUX widget via `use-aux-widgets` (`value$`, Fader often `sync: true`).
 

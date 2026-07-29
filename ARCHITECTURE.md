@@ -2,7 +2,8 @@
 
 > Agent / session handoff (param bridge, viz, HiDPI viewport sizing, naming): see **`AGENTS.md`**.
 
-Greenfield: **VST3 + WebKitGTK** (Linux first). Classic Calf Studio Gear DSP stays the audio core; UI is a modern Web view (React + DynamicValues).
+Greenfield: **VST3 + WebKitGTK** (Linux first; WebKit in **`calfnxt-web-host`**, not the `.so`).
+Classic Calf Studio Gear DSP stays the audio core; UI is a modern Web view (React + DynamicValues).
 
 ## Stack
 
@@ -13,8 +14,8 @@ Greenfield: **VST3 + WebKitGTK** (Linux first). Classic Calf Studio Gear DSP sta
 | DSP | Hand-written C++ under `dsp/` |
 | Parameters / metadata | Per-plugin descriptor → **codegen** |
 | DSP shell | `common/dsp` → `calfNXT::Plugin::EffectBase` |
-| UI shell | `common/ui` → `calfNXT::Ui::WebEditor` + React SPA in `ui/` |
-| Bridge | `window.calfnxtNative.post` ↔ AWML `DynamicValue` + AUX widgets (`@deutschesoft/*`) |
+| UI shell | `common/ui` → `WebEditor` proxy + `calfnxt-web-host` (GTK/WebKit OOP) + React SPA |
+| Bridge | `window.calfnxtNative.post` ↔ Unix socket ↔ AWML `DynamicValue` + AUX widgets |
 
 ## Descriptor (SSOT)
 
@@ -71,15 +72,17 @@ Dev UI: `cd ui && npm run dev` → http://localhost:5173/#equalizer (HMR, sized 
 ## Layout
 
 ```
-common/ui/              # WebEditor → calfnxt_ui
+common/ui/              # WebEditor proxy + calfnxt-web-host → calfnxt_ui
 common/dsp/             # EffectBase + IoStage + peak_hold → calfnxt_dsp
 dsp/equalizer/          # descriptor + DSP
+dsp/stereo/
+dsp/transients/
 tools/codegen/
 ui/
   index.html            # SPA shell
   src/
     App.tsx             # hash router
-    plugins/            # EqualizerUI, registry
+    plugins/            # EqualizerUI, StereoUI, TransientsUI, registry
     generated/          # codegen TS models
 external/vst3sdk/
 ```
@@ -87,7 +90,8 @@ external/vst3sdk/
 ## Intentionally deferred
 
 - Spectrum / analyzer arrays (`kind:"spectrum"` + UI→host `vizcfg` bin count)
-- Additional Calf-heritage plugins beyond Equalizer
+- Additional Calf-heritage plugins beyond Equalizer / Stereo / Transients
 - Full AUX catalog beyond current widgets (Fader/Knob/MultiMeter/EQChart/…)
 - macOS / Windows WebView hosts
 - Shared Resources across `.vst3` bundles (each still embeds a SPA copy)
+- Shared `calfnxt-web-host` binary across bundles (each bundle copies the helper today)

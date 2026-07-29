@@ -5,24 +5,55 @@
 </p>
 
 **calfNXT** is the successor to [Calf Studio Gear](https://calf-studio-gear.org):
-a greenfield **VST3** plugin suite with a new embedded web UI (React + AUX /
-WebKitGTK, Linux first). Parts of the classic Calf DSP are reused but
-substantially reworked; the UI and host integration are new, with additional
-features and the goal of bringing over most of the original signal processors
-over time.
+a greenfield **VST3** plugin suite with a React + AUX web UI (Linux first).
+WebKitGTK runs in a separate **`calfnxt-web-host`** process (X11 embed) so the
+plugin `.so` stays free of GTK — required for hosts like Ardour. Parts of the
+classic Calf DSP are reused but substantially reworked; more processors will
+follow over time.
 
 Branding / namespace: **calfNXT**. Shared React SPA UI, packed per plugin into
 each `.vst3` bundle’s `Resources/`.
-
-**Early public preview (Linux + X11 hosts):** shipping today are **Equalizer**
-(`calfNXTEqualizer`), **Stereo** (`calfNXTStereo`) and **Transients** (`calfNXTTransients`) — more processors from
-the classic Calf suite will follow as work continues.
 
 This project is free software licensed under the **GNU General Public License
 v3 or later** — see [`LICENSE`](LICENSE) and [`COPYRIGHT`](COPYRIGHT).
 
 For architecture and agent handoff, see [`ARCHITECTURE.md`](ARCHITECTURE.md)
 and [`AGENTS.md`](AGENTS.md).
+
+---
+
+## Plugins
+
+Early public preview (**Linux + X11** hosts). More processors from classic Calf
+will follow.
+
+| Plugin | Bundle | Role |
+|--------|--------|------|
+| **Equalizer** | `calfNXTEqualizer.vst3` | 16-band parametric / dyn EQ |
+| **Stereo** | `calfNXTStereo.vst3` | Width, M/S, decorrelation, imaging |
+| **Transients** | `calfNXTTransients.vst3` | Attack / release shaping |
+
+### Equalizer
+
+- Fixed **16 bands** (peaking, shelves, LP/HP with 12/24/36 dB slopes, band-pass)
+- Per-band **Dynamic EQ** (detector-matched GR on peaking / shelves / BP)
+- **Listen** solos one band’s detector into the output
+- Interactive frequency response (static handles + dyn effective-gain ghosts)
+- Shared In/Out gain + peak meters
+
+### Stereo
+
+- Mode matrix (LR↔MS, mono folds, L/R swap, …) with live bus labels
+- Mid/Side level & pan/balance, optional **decorrelator** (amount, xover, slope, stages, spread)
+- Per-channel mute / phase, stereo delay, base width, stereo phase, output balance
+- **Goniometer** + correlation meter
+
+### Transients
+
+- Independent **attack / release** boost with time constants and sustain threshold
+- Optional **lookahead** (reported to the host for PDC; wet/dry stay in phase)
+- Detector **HP/LP** (12/24/36 dB) + listen; wet/dry **mix**
+- Live **envelope chart** (input / output / envelope overlays, selectable display window)
 
 ---
 
