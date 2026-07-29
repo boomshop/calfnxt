@@ -84,11 +84,9 @@
   }
 
   > .aux-knob {
-    border-radius: 50%;
+    overflow: show;
 
     > svg {
-      border-radius: 50%;
-
       > .aux-circular {
         > .aux-base {
           fill: var(--background-lesser);

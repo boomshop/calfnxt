@@ -16,7 +16,7 @@ const KnobBindings = {
 
 const ringsize = 3;
 const handwidth = 3;
-const handadd = 4;
+const handadd = 3;
 const handlength = ringsize + handadd;
 const handcorr = 1;
 
@@ -47,7 +47,7 @@ const KnobOptions = {
       },
       dots_defaults: { length: ringsize + handcorr * 2, margin: 8, width: 1 },
       markers_defaults: { thickness: 2, margin: 8 },
-      labels_defaults: { margin: 9 },
+      labels_defaults: { margin: 7 },
       show_labels: true,
     },
     medium: {
@@ -64,6 +64,7 @@ const KnobOptions = {
         width: 1,
       },
       markers_defaults: { thickness: 2, margin: 11 },
+      labels_defaults: { margin: 11 },
       show_labels: true,
     },
     large: {
