@@ -30,6 +30,7 @@ public:
   Steinberg::tresult PLUGIN_API process(Steinberg::Vst::ProcessData& data) SMTG_OVERRIDE;
   Steinberg::tresult PLUGIN_API setState(Steinberg::IBStream* state) SMTG_OVERRIDE;
   Steinberg::tresult PLUGIN_API getState(Steinberg::IBStream* state) SMTG_OVERRIDE;
+  Steinberg::uint32 PLUGIN_API getLatencySamples() SMTG_OVERRIDE;
 
   Ui::IVizSource* vizSource() override { return this; }
   int takeInputLevelsDb(float* out, int maxOut) override { return io_.takeInputLevelsDb(out, maxOut); }
@@ -65,6 +66,7 @@ private:
   };
 
   void updateFilters();
+  void updateLatency(bool bypass, int lookaheadSamples);
   BlockState makeBlockState() const;
   float filterDetector(float s, const BlockState& state);
   void processSample(const BlockState& state, float& L, float& R);
@@ -76,6 +78,7 @@ private:
   float params_[kParamCount] {};
   Dsp::IoStage io_;
   double sampleRate_ = 44100.0;
+  Steinberg::uint32 latencySamples_ = 0;
   Dsp::Transients transients_;
   Dsp::BiquadD1 hp_[3];
   Dsp::BiquadD1 lp_[3];

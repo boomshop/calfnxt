@@ -71,10 +71,15 @@ public:
     return std::fabs(attackLevel_) <= 1.0e-6f && std::fabs(releaseLevel_) <= 1.0e-6f;
   }
 
-  void processFrame(float* io, float detector)
+  /**
+   * Push current frame into the lookahead buffer, update envelopes, write
+   * delayed dry samples back into @p io, and return the shaping gain.
+   * Mix as: out = delayed * (mix * gain + (1 - mix)) so wet/dry stay in phase.
+   */
+  float processFrame(float* io, float detector)
   {
     if (!io || lookBuf_.empty())
-      return;
+      return 1.f;
 
     const float s = std::fabs(detector);
     for (int ch = 0; ch < channels_; ++ch)
@@ -121,7 +126,7 @@ public:
     const int span = static_cast<int>(lookBuf_.size());
     const int pos = (lookPos_ + span - lookaheadSamples_ * channels_) % span;
     for (int ch = 0; ch < channels_; ++ch)
-      io[ch] = lookBuf_[static_cast<size_t>(pos + ch)] * newReturn_;
+      io[ch] = lookBuf_[static_cast<size_t>(pos + ch)];
 
     lookPos_ = (lookPos_ + channels_) % span;
 
@@ -130,7 +135,10 @@ public:
     sanitizeDenormal(release_);
     sanitizeDenormal(newReturn_);
     sanitizeDenormal(oldReturn_);
+    return newReturn_;
   }
+
+  int lookaheadSamples() const { return lookaheadSamples_; }
 
   float envelope() const { return envelope_; }
   float attack() const { return attack_; }

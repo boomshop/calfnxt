@@ -86,7 +86,12 @@ void TransientsPlugin::resetProcessing()
 tresult PLUGIN_API TransientsPlugin::setActive(TBool state)
 {
   if (state)
+  {
     resetProcessing();
+    updateLatency(
+      params_[kParamBypass] >= 0.5f,
+      static_cast<int>(std::lround(std::clamp(params_[kParamLookahead], 0.f, 100.f))));
+  }
   return EffectBase::setActive(state);
 }
 
@@ -174,8 +179,8 @@ float TransientsPlugin::filterDetector(float s, const BlockState& state)
 
 void TransientsPlugin::processSample(const BlockState& state, float& L, float& R)
 {
-  const float dryL = L;
-  const float dryR = R;
+  const float inL = L;
+  const float inR = R;
   float detector = 0.5f * (L + R);
   detector = filterDetector(detector, state);
 
@@ -187,16 +192,18 @@ void TransientsPlugin::processSample(const BlockState& state, float& L, float& R
     return;
   }
 
-  // Always run the follower (meters/display). Wet apply only when shaping.
-  float values[2] = {L, R};
-  transients_.processFrame(values, detector);
-  if (!state.bypass && !state.neutral)
+  // Delay line always advances (meters). Mix uses delayed dry so wet/dry stay
+  // phase-aligned: out = delayed * (mix * gain + dry).
+  float delayed[2] = {L, R};
+  const float gain = transients_.processFrame(delayed, detector);
+  if (!state.bypass)
   {
-    L = values[0] * state.mix + dryL * state.dry;
-    R = values[1] * state.mix + dryR * state.dry;
+    const float scale = state.neutral ? 1.f : (state.mix * gain + state.dry);
+    L = delayed[0] * scale;
+    R = delayed[1] * scale;
   }
 
-  const float inPeak = 0.5f * (std::fabs(dryL) + std::fabs(dryR));
+  const float inPeak = 0.5f * (std::fabs(inL) + std::fabs(inR));
   envBufFeedSample(inPeak, 0.5f * (std::fabs(L) + std::fabs(R)));
 }
 
@@ -207,9 +214,25 @@ void TransientsPlugin::processSilence(const BlockState& state, int nFrames)
   {
     float detector = filterDetector(0.f, state);
     float values[2] = {0.f, 0.f};
-    transients_.processFrame(values, detector);
+    (void)transients_.processFrame(values, detector);
     envBufFeedSample(0.f, 0.f);
   }
+}
+
+void TransientsPlugin::updateLatency(bool bypass, int lookaheadSamples)
+{
+  const uint32 want =
+    bypass ? 0u : static_cast<uint32>(std::clamp(lookaheadSamples, 0, Dsp::Transients::kMaxLookaheadSamples));
+  if (want == latencySamples_)
+    return;
+  latencySamples_ = want;
+  if (componentHandler)
+    componentHandler->restartComponent(kLatencyChanged);
+}
+
+uint32 PLUGIN_API TransientsPlugin::getLatencySamples()
+{
+  return latencySamples_;
 }
 
 void TransientsPlugin::envBufFeedSample(float inPeak, float outPeak)
@@ -289,14 +312,17 @@ tresult PLUGIN_API TransientsPlugin::process(ProcessData& data)
 {
   syncParamPlains(data, params_, kParamCount);
   updateFilters();
+  const int lookahead = static_cast<int>(
+    std::lround(std::clamp(params_[kParamLookahead], 0.f, 100.f)));
   transients_.setParams(
     params_[kParamAttackTime],
     params_[kParamAttackBoost],
     params_[kParamReleaseTime],
     params_[kParamReleaseBoost],
     Dsp::dbToLin(params_[kParamSustainThreshold]),
-    static_cast<int>(std::lround(std::clamp(params_[kParamLookahead], 0.f, 100.f))));
+    lookahead);
   const BlockState state = makeBlockState();
+  updateLatency(state.bypass, lookahead);
 
   const float displayMs = snapDisplayMs(params_[kParamDisplay]);
   const int slots = std::max(kEnvMinSlots, std::min(kEnvSlots, envVisibleSlots_));
@@ -393,6 +419,9 @@ tresult PLUGIN_API TransientsPlugin::setState(IBStream* state)
   }
   readParamPlains(params_, kParamCount);
   updateFilters();
+  updateLatency(
+    params_[kParamBypass] >= 0.5f,
+    static_cast<int>(std::lround(std::clamp(params_[kParamLookahead], 0.f, 100.f))));
   return kResultOk;
 }
 
