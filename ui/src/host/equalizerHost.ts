@@ -146,7 +146,7 @@ export const EQ_DYN_RATIO_MIN = 1;
 export const EQ_DYN_RATIO_MAX = 20;
 
 /** Default selection: band 9 (0-based index 8). */
-export const EQ_DEFAULT_SELECTED_INDEX = 8;
+export const EQ_DEFAULT_SELECTED_INDEX = 0;
 
 export interface IEqualizerBand {
   /** Stable slot index 0…15 */
@@ -216,10 +216,7 @@ function bindTypeParam(
   let fromHost = false;
   let prevType = type$.value;
   const memory = new Map<EqFilterType, TypeMemory>([
-    [
-      prevType,
-      { gain: gain$.value, q: q$.value, slope: slope$.value },
-    ],
+    [prevType, { gain: gain$.value, q: q$.value, slope: slope$.value }],
   ]);
 
   const bridge = DynamicValue.fromConstant(EQ_TYPE_TO_INDEX[type$.value]);
@@ -300,8 +297,12 @@ export function createBoundEqualizerBands(): {
     const slopePlain = paramDefault(bandParamId(i, EQ_BAND_OFFSET.slope), 12);
 
     const type$ = DynamicValue.fromConstant<EqFilterType>(seedType);
-    const slope$ = DynamicValue.fromConstant<EqPassSlope>(snapSlope(slopePlain));
-    const auxType$ = DynamicValue.fromConstant(toAuxEqType(type$.value, slope$.value));
+    const slope$ = DynamicValue.fromConstant<EqPassSlope>(
+      snapSlope(slopePlain),
+    );
+    const auxType$ = DynamicValue.fromConstant(
+      toAuxEqType(type$.value, slope$.value),
+    );
     const syncAux = () => {
       auxType$.set(toAuxEqType(type$.value, slope$.value));
     };
@@ -355,22 +356,47 @@ export function createBoundEqualizerBands(): {
       paramDefault(bandParamId(i, EQ_BAND_OFFSET.dyn_listen), 0) >= 0.5,
     );
 
-    disposers.push(bindBoolParamToHost(active$, bandParamId(i, EQ_BAND_OFFSET.active)));
     disposers.push(
-      bindTypeParam(type$, gain$, q$, slope$, bandParamId(i, EQ_BAND_OFFSET.type)),
+      bindBoolParamToHost(active$, bandParamId(i, EQ_BAND_OFFSET.active)),
     );
-    disposers.push(bindSlopeParam(slope$, bandParamId(i, EQ_BAND_OFFSET.slope)));
-    disposers.push(bindParamToHost(frequency$, bandParamId(i, EQ_BAND_OFFSET.freq)));
+    disposers.push(
+      bindTypeParam(
+        type$,
+        gain$,
+        q$,
+        slope$,
+        bandParamId(i, EQ_BAND_OFFSET.type),
+      ),
+    );
+    disposers.push(
+      bindSlopeParam(slope$, bandParamId(i, EQ_BAND_OFFSET.slope)),
+    );
+    disposers.push(
+      bindParamToHost(frequency$, bandParamId(i, EQ_BAND_OFFSET.freq)),
+    );
     disposers.push(bindParamToHost(gain$, bandParamId(i, EQ_BAND_OFFSET.gain)));
     disposers.push(bindParamToHost(q$, bandParamId(i, EQ_BAND_OFFSET.q)));
-    disposers.push(bindBoolParamToHost(dyn$, bandParamId(i, EQ_BAND_OFFSET.dyn)));
-    disposers.push(bindParamToHost(dynAttack$, bandParamId(i, EQ_BAND_OFFSET.dyn_attack)));
-    disposers.push(bindParamToHost(dynRelease$, bandParamId(i, EQ_BAND_OFFSET.dyn_release)));
     disposers.push(
-      bindParamToHost(dynThreshold$, bandParamId(i, EQ_BAND_OFFSET.dyn_threshold)),
+      bindBoolParamToHost(dyn$, bandParamId(i, EQ_BAND_OFFSET.dyn)),
     );
-    disposers.push(bindParamToHost(dynRatio$, bandParamId(i, EQ_BAND_OFFSET.dyn_ratio)));
-    disposers.push(bindBoolParamToHost(listen$, bandParamId(i, EQ_BAND_OFFSET.dyn_listen)));
+    disposers.push(
+      bindParamToHost(dynAttack$, bandParamId(i, EQ_BAND_OFFSET.dyn_attack)),
+    );
+    disposers.push(
+      bindParamToHost(dynRelease$, bandParamId(i, EQ_BAND_OFFSET.dyn_release)),
+    );
+    disposers.push(
+      bindParamToHost(
+        dynThreshold$,
+        bandParamId(i, EQ_BAND_OFFSET.dyn_threshold),
+      ),
+    );
+    disposers.push(
+      bindParamToHost(dynRatio$, bandParamId(i, EQ_BAND_OFFSET.dyn_ratio)),
+    );
+    disposers.push(
+      bindBoolParamToHost(listen$, bandParamId(i, EQ_BAND_OFFSET.dyn_listen)),
+    );
 
     bands.push({
       index: i,
@@ -422,8 +448,7 @@ export function createBoundEqualizerBands(): {
           bandSupportsDyn(band.type$.value)
         )
           band.effectiveGain$.set(g);
-        else
-          band.effectiveGain$.set(band.gain$.value);
+        else band.effectiveGain$.set(band.gain$.value);
       }
     }, false),
   );
