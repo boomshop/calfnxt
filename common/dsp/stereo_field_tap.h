@@ -2,6 +2,8 @@
 
 // Output-field telemetry for correlation meter + goniometer (not VST params).
 
+#include "dsp_math.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -71,6 +73,9 @@ public:
     sumLr_ = c * sumLr_ + (1.0 - c) * static_cast<double>(L) * static_cast<double>(R);
     sumL2_ = c * sumL2_ + (1.0 - c) * static_cast<double>(L) * static_cast<double>(L);
     sumR2_ = c * sumR2_ + (1.0 - c) * static_cast<double>(R) * static_cast<double>(R);
+    Dsp::sanitizeDenormal(sumLr_);
+    Dsp::sanitizeDenormal(sumL2_);
+    Dsp::sanitizeDenormal(sumR2_);
     const double denom = std::sqrt(std::max(1.0e-20, sumL2_ * sumR2_));
     float corr = static_cast<float>(sumLr_ / denom);
     if (!std::isfinite(corr))
@@ -83,6 +88,7 @@ public:
       envelope_ = lemax;
     else
       envelope_ = envRelease_ * (envelope_ - lemax) + lemax;
+    Dsp::sanitizeDenormal(envelope_);
     const float scale = 1.f / std::max(0.25f, envelope_);
     const float Ls = L * scale;
     const float Rs = R * scale;

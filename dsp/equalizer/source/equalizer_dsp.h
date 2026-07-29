@@ -42,6 +42,7 @@ protected:
 
 private:
   void applyBandTargetsFromParams();
+  bool hasAnyActiveBandsOrListen() const;
   void publishDisplayGains();
 
   float params_[kParamCount] {};

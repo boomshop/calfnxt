@@ -2,6 +2,8 @@
 
 // First-order allpass building blocks for stereo decorrelation.
 
+#include "dsp_math.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -33,6 +35,8 @@ public:
     const double y = a_ * (xd - y1_) + x1_;
     x1_ = xd;
     y1_ = y;
+    Dsp::sanitizeDenormal(x1_);
+    Dsp::sanitizeDenormal(y1_);
     return static_cast<float>(y);
   }
 

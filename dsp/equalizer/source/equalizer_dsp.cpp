@@ -97,6 +97,18 @@ void EqualizerPlugin::applyBandTargetsFromParams()
   publishDisplayGains();
 }
 
+bool EqualizerPlugin::hasAnyActiveBandsOrListen() const
+{
+  for (int b = 0; b < kEqBandCount; ++b)
+  {
+    if (bands_[b].isListening())
+      return true;
+    if (params_[bandParam(b, kBandActive)] >= 0.5f)
+      return true;
+  }
+  return false;
+}
+
 tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
 {
   syncParamPlains(data, params_, kParamCount);
@@ -107,6 +119,12 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
   io_.setBypassGains(bypass);
   if (!io_.begin(data))
     return kResultOk;
+
+  if (!hasAnyActiveBandsOrListen())
+  {
+    io_.end(data);
+    return kResultOk;
+  }
 
   if (!bypass)
   {

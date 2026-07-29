@@ -46,9 +46,35 @@ protected:
   const char* editorHtml() const override { return kEditorHtml; }
 
 private:
+  struct BlockState
+  {
+    float levelLinL = 1.f;
+    float levelLinR = 1.f;
+    int mode = 0;
+    float mlev = 1.f;
+    float slev = 1.f;
+    float mpanL = 1.f;
+    float mpanR = 1.f;
+    float sbalL = 1.f;
+    float sbalR = 1.f;
+    bool decorrOn = false;
+    float decorrAmount = 0.f;
+    bool muteL = false;
+    bool muteR = false;
+    bool phaseL = false;
+    bool phaseR = false;
+    float delayTargetMs = 0.f;
+    float stereoBase = 0.f;
+    float phaseCos = 1.f;
+    float phaseSin = 0.f;
+    float balanceOutL = 1.f;
+    float balanceOutR = 1.f;
+  };
+
   void rebuildDelayBuffer();
   void updateDecorrelate();
-  void processSample(float& L, float& R);
+  BlockState makeBlockState() const;
+  void processSample(const BlockState& state, float& L, float& R);
 
   float params_[kParamCount] {};
   Dsp::IoStage io_;

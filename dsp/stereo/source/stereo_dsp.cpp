@@ -110,43 +110,77 @@ void StereoPlugin::updateDecorrelate()
   }
 }
 
-void StereoPlugin::processSample(float& L, float& R)
+StereoPlugin::BlockState StereoPlugin::makeBlockState() const
+{
+  BlockState state;
+  state.levelLinL = Dsp::dbToLin(params_[kParamLevelL]);
+  state.levelLinR = Dsp::dbToLin(params_[kParamLevelR]);
+  state.mode = static_cast<int>(std::lround(std::clamp(params_[kParamMode], 0.f, 6.f)));
+  state.slev = Dsp::dbToLin(params_[kParamSlev]);
+  state.mlev = Dsp::dbToLin(params_[kParamMlev]);
+
+  const float sbal = 1.f + params_[kParamSbal];
+  const float mpan = 1.f + params_[kParamMpan];
+  state.sbalL = std::min(1.f, 2.f - sbal);
+  state.sbalR = std::min(1.f, sbal);
+  state.mpanL = std::min(1.f, 2.f - mpan);
+  state.mpanR = std::min(1.f, mpan);
+
+  state.decorrAmount = params_[kParamDecorrAmount];
+  state.decorrOn = params_[kParamDecorr] >= 0.5f &&
+                   state.decorrAmount > 1.0e-5f &&
+                   state.mode != 1 && state.mode != 3 && state.mode != 4 && state.mode != 5;
+
+  state.muteL = params_[kParamMuteL] >= 0.5f;
+  state.muteR = params_[kParamMuteR] >= 0.5f;
+  state.phaseL = params_[kParamPhaseL] >= 0.5f;
+  state.phaseR = params_[kParamPhaseR] >= 0.5f;
+
+  state.delayTargetMs = params_[kParamDelay];
+  state.stereoBase = params_[kParamStereoBase];
+  if (state.stereoBase < 0.f)
+    state.stereoBase *= 0.5f;
+
+  const float rad = params_[kParamStereoPhase] * static_cast<float>(M_PI / 180.0);
+  state.phaseCos = std::cos(rad);
+  state.phaseSin = std::sin(rad);
+
+  const float balOut = params_[kParamBalanceOut];
+  state.balanceOutL = 1.f - std::max(0.f, balOut);
+  state.balanceOutR = 1.f + std::min(0.f, balOut);
+  return state;
+}
+
+void StereoPlugin::processSample(const BlockState& state, float& L, float& R)
 {
   // Input levels (replaces balance-in)
-  L *= Dsp::dbToLin(params_[kParamLevelL]);
-  R *= Dsp::dbToLin(params_[kParamLevelR]);
-
-  const int mode = static_cast<int>(
-    std::lround(std::clamp(params_[kParamMode], 0.f, 6.f)));
-  const float slev = Dsp::dbToLin(params_[kParamSlev]);
-  const float sbal = 1.f + params_[kParamSbal];
-  const float mlev = Dsp::dbToLin(params_[kParamMlev]);
-  const float mpan = 1.f + params_[kParamMpan];
+  L *= state.levelLinL;
+  R *= state.levelLinR;
 
   float l = L;
   float r = R;
-  switch (mode)
+  switch (state.mode)
   {
     case 0: // LR > LR
     {
       const float m = (L + R) * 0.5f;
       const float s = (L - R) * 0.5f;
-      l = m * mlev * std::min(1.f, 2.f - mpan) + s * slev * std::min(1.f, 2.f - sbal);
-      r = m * mlev * std::min(1.f, mpan) - s * slev * std::min(1.f, sbal);
+      l = m * state.mlev * state.mpanL + s * state.slev * state.sbalL;
+      r = m * state.mlev * state.mpanR - s * state.slev * state.sbalR;
       break;
     }
     case 1: // LR > MS (L=mid, R=side)
     {
-      const float ll = L * std::min(1.f, 2.f - sbal);
-      const float rr = R * std::min(1.f, sbal);
-      l = 0.5f * (ll + rr) * mlev;
-      r = 0.5f * (ll - rr) * slev;
+      const float ll = L * state.sbalL;
+      const float rr = R * state.sbalR;
+      l = 0.5f * (ll + rr) * state.mlev;
+      r = 0.5f * (ll - rr) * state.slev;
       break;
     }
     case 2: // MS > LR (L=mid, R=side in)
     {
-      l = L * mlev * std::min(1.f, 2.f - mpan) + R * slev * std::min(1.f, 2.f - sbal);
-      r = L * mlev * std::min(1.f, mpan) - R * slev * std::min(1.f, sbal);
+      l = L * state.mlev * state.mpanL + R * state.slev * state.sbalL;
+      r = L * state.mlev * state.mpanR - R * state.slev * state.sbalR;
       break;
     }
     case 3: // LR > LL
@@ -168,8 +202,8 @@ void StereoPlugin::processSample(float& L, float& R)
       R = r;
       const float m = (L + R) * 0.5f;
       const float s = (L - R) * 0.5f;
-      l = m * mlev * std::min(1.f, 2.f - mpan) + s * slev * std::min(1.f, 2.f - sbal);
-      r = m * mlev * std::min(1.f, mpan) - s * slev * std::min(1.f, sbal);
+      l = m * state.mlev * state.mpanL + s * state.slev * state.sbalL;
+      r = m * state.mlev * state.mpanR - s * state.slev * state.sbalR;
       break;
     }
     default:
@@ -182,9 +216,7 @@ void StereoPlugin::processSample(float& L, float& R)
   // Allpass the high-band L/R (not two sides averaged into m±sA/m±sB — that
   // cancels to mono when the chains diverge). Restore mid so the mono sum is
   // unchanged; low side stays untouched for bass mono-compatibility.
-  const bool decorrOn = params_[kParamDecorr] >= 0.5f;
-  const float amount = params_[kParamDecorrAmount];
-  if (decorrOn && amount > 1.0e-5f && mode != 1 && mode != 3 && mode != 4 && mode != 5)
+  if (state.decorrOn)
   {
     const float m = (L + R) * 0.5f;
     const float s = (L - R) * 0.5f;
@@ -196,9 +228,9 @@ void StereoPlugin::processSample(float& L, float& R)
     const float Rh = m - sHigh;
     const float Ld = decorrL_.process(Lh);
     const float Rd = decorrR_.process(Rh);
-    const float dry = 1.f - amount;
-    float L2 = dry * Lh + amount * Ld;
-    float R2 = dry * Rh + amount * Rd;
+    const float dry = 1.f - state.decorrAmount;
+    float L2 = dry * Lh + state.decorrAmount * Ld;
+    float R2 = dry * Rh + state.decorrAmount * Rd;
 
     const float m2 = (L2 + R2) * 0.5f;
     L2 = L2 - m2 + m;
@@ -209,13 +241,13 @@ void StereoPlugin::processSample(float& L, float& R)
   }
 
   // Mute / phase
-  if (params_[kParamMuteL] >= 0.5f)
+  if (state.muteL)
     L = 0.f;
-  if (params_[kParamMuteR] >= 0.5f)
+  if (state.muteR)
     R = 0.f;
-  if (params_[kParamPhaseL] >= 0.5f)
+  if (state.phaseL)
     L = -L;
-  if (params_[kParamPhaseR] >= 0.5f)
+  if (state.phaseR)
     R = -R;
 
   // Delay (±ms): positive delays R, negative delays L (Calf convention).
@@ -226,7 +258,7 @@ void StereoPlugin::processSample(float& L, float& R)
     delayBuf_[static_cast<size_t>(delayPos_)] = L;
     delayBuf_[static_cast<size_t>(delayPos_ + 1)] = R;
 
-    delayMsCur_ += (params_[kParamDelay] - delayMsCur_) * delaySmoothCoeff_;
+    delayMsCur_ += (state.delayTargetMs - delayMsCur_) * delaySmoothCoeff_;
     const float absMs = std::fabs(delayMsCur_);
     if (absMs > 1.0e-5f)
     {
@@ -261,32 +293,24 @@ void StereoPlugin::processSample(float& L, float& R)
   }
 
   // Stereo base
-  float sb = params_[kParamStereoBase];
-  if (sb < 0.f)
-    sb *= 0.5f;
   {
-    const float ll = L + sb * L - sb * R;
-    const float rr = R + sb * R - sb * L;
+    const float ll = L + state.stereoBase * L - state.stereoBase * R;
+    const float rr = R + state.stereoBase * R - state.stereoBase * L;
     L = ll;
     R = rr;
   }
 
   // Stereo phase rotation
   {
-    const float deg = params_[kParamStereoPhase];
-    const float rad = deg * static_cast<float>(M_PI / 180.0);
-    const float c = std::cos(rad);
-    const float s = std::sin(rad);
-    const float ll = L * c - R * s;
-    const float rr = L * s + R * c;
+    const float ll = L * state.phaseCos - R * state.phaseSin;
+    const float rr = L * state.phaseSin + R * state.phaseCos;
     L = ll;
     R = rr;
   }
 
   // Balance out
-  const float balOut = params_[kParamBalanceOut];
-  L *= (1.f - std::max(0.f, balOut));
-  R *= (1.f + std::min(0.f, balOut));
+  L *= state.balanceOutL;
+  R *= state.balanceOutR;
 
   fieldTap_.process(L, R);
 }
@@ -296,13 +320,17 @@ tresult PLUGIN_API StereoPlugin::process(ProcessData& data)
   syncParamPlains(data, params_, kParamCount);
   updateDecorrelate();
   sideSplit_.prepareBlock();
+  const BlockState state = makeBlockState();
 
   const bool bypass = params_[kParamBypass] >= 0.5f;
   io_.setBypassGains(bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
   if (!io_.begin(data))
+  {
+    fieldTap_.clearDisplay();
     return kResultOk;
+  }
 
   if (bypass)
   {
@@ -320,7 +348,7 @@ tresult PLUGIN_API StereoPlugin::process(ProcessData& data)
     {
       float L = nCh > 0 ? out[0][i] : 0.f;
       float R = nCh > 1 ? out[1][i] : L;
-      processSample(L, R);
+      processSample(state, L, R);
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)
@@ -335,7 +363,7 @@ tresult PLUGIN_API StereoPlugin::process(ProcessData& data)
     {
       float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
       float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
-      processSample(L, R);
+      processSample(state, L, R);
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)

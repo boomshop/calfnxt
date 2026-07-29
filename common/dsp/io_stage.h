@@ -44,6 +44,7 @@ public:
       data.outputs[0].silenceFlags = data.inputs[0].silenceFlags;
       return false;
     }
+    data.outputs[0].silenceFlags = 0;
 
     const float gIn = bypassGains_ ? 1.f : dbToLin(inGainDb_);
     const int32 nCh = data.inputs[0].numChannels;
@@ -90,6 +91,7 @@ public:
     if (data.numOutputs < 1 || !data.outputs)
       return;
 
+    data.outputs[0].silenceFlags = 0;
     const float gOut = bypassGains_ ? 1.f : dbToLin(outGainDb_);
     const int32 nCh = data.outputs[0].numChannels;
     const int32 nFrames = data.numSamples;

@@ -87,6 +87,8 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 - Fader `sync: true` where needed
 - Embed UI via `calfnxt_copy_plugin_ui` / `*-resources` targets (UI rebuild alone does not update VST3 Resources)
 - Editor HiDPI: UI `{t:"viewport",w,h}` → host/css scale → `IPlugFrame::resizeView` (override `CALFNXT_UI_SCALE`)
+- DSP hygiene: keep silence-flag passthrough correct, add denormal sanitizing for stateful filters/meters,
+  and prefer idle/block fast-paths over per-sample recomputation when parameters are unchanged
 
 ---
 
