@@ -33,14 +33,25 @@ const DB36_LABELS = [
 const UNIT_DOTS = [-1, -0.5, 0, 0.5, 1];
 const UNIT_LABELS = [
   { pos: -1, label: '−1' },
+  { pos: -0.5, label: '−.5' },
   { pos: 0, label: '0' },
+  { pos: 0.5, label: '.5' },
   { pos: 1, label: '+1' },
 ];
 
-const UNIT01_DOTS = [0, 0.5, 1];
+const UNIT01_DOTS = [0, 0.25, 0.5, 0.75, 1];
 const UNIT01_LABELS = [
   { pos: 0, label: '0' },
+  { pos: 0.25, label: '.25' },
+  { pos: 0.5, label: '.5' },
+  { pos: 0.75, label: '.75' },
   { pos: 1, label: '1' },
+];
+
+const BALANCE_LABELS = [
+  { pos: -1, label: 'L' },
+  { pos: 0, label: 'C' },
+  { pos: 1, label: 'R' },
 ];
 
 const XOVER_DOTS = [80, 200, 400, 800, 2000];
@@ -76,7 +87,9 @@ const PHASE_LABELS = [
 const DELAY_DOTS = [-20, -15, -10, -5, 0, 5, 10, 15, 20];
 const DELAY_LABELS = [
   { pos: -20, label: '−20' },
+  { pos: -10, label: '−10' },
   { pos: 0, label: '0' },
+  { pos: 10, label: '10' },
   { pos: 20, label: '+20' },
 ];
 
@@ -101,6 +114,11 @@ function formatDelayMs(v: number, lanes: StereoBusPair): string {
   return v > 0
     ? `${lanes[1]} ${v.toFixed(2)}`
     : `${lanes[0]} ${(-v).toFixed(2)}`;
+}
+
+function formatBalance(v: number): string {
+  if (Math.abs(v) < 0.005) return 'C';
+  return v < 0 ? `L ${(-v).toFixed(2)}` : `R ${v.toFixed(2)}`;
 }
 
 function snapSlopeDb(v: number): number {
@@ -192,7 +210,8 @@ export function StereoUI(props: StereoUIProps) {
               max={1}
               base={0}
               dots={UNIT_DOTS}
-              labels={UNIT_LABELS}
+              labels={BALANCE_LABELS}
+              {...{ 'value.format': formatBalance }}
               {...edit(paramIds.mpan)}
             />
           </div>
@@ -219,7 +238,8 @@ export function StereoUI(props: StereoUIProps) {
               max={1}
               base={0}
               dots={UNIT_DOTS}
-              labels={UNIT_LABELS}
+              labels={BALANCE_LABELS}
+              {...{ 'value.format': formatBalance }}
               {...edit(paramIds.sbal)}
             />
           </div>
@@ -370,7 +390,8 @@ export function StereoUI(props: StereoUIProps) {
           max={1}
           base={0}
           dots={UNIT_DOTS}
-          labels={UNIT_LABELS}
+          labels={BALANCE_LABELS}
+          {...{ 'value.format': formatBalance }}
           {...edit(paramIds.balance_out)}
         />
         <Goniometer samples$={host.gonio$} />
