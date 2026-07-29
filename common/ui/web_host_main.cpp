@@ -183,6 +183,9 @@ void onUriScheme(WebKitURISchemeRequest* request, gpointer)
   GFileInputStream* stream = g_file_read(file, nullptr, &err);
   if (!stream)
   {
+    std::fprintf(stderr, "[calfnxt-web-host] uri scheme missing file: %s (%s)\n",
+                 full, err && err->message ? err->message : "?");
+    std::fflush(stderr);
     webkit_uri_scheme_request_finish_error(request, err);
     if (err)
       g_error_free(err);
@@ -363,6 +366,11 @@ int main(int argc, char** argv)
     std::fprintf(stderr, "[calfnxt-web-host] gtk_init_check failed\n");
     return 1;
   }
+
+  std::fprintf(stderr, "[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d\n",
+               static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width,
+               g.height);
+  std::fflush(stderr);
 
   g.ctx = webkit_web_context_new();
   webkit_web_context_register_uri_scheme(g.ctx, "calfnxt", onUriScheme, nullptr, nullptr);

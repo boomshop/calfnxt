@@ -309,6 +309,21 @@ bool WebEditor::openHelper(void* x11Parent)
     return false;
   }
 
+  // Always log attach paths — empty editor windows are otherwise silent in hosts.
+  std::fprintf(stderr, "[calfnxt] editor: helper=%s root=%s entry=%s\n",
+               helperPath, webRoot_, entryHtml_);
+  std::fflush(stderr);
+
+  char indexPath[4224];
+  std::snprintf(indexPath, sizeof indexPath, "%s/%s", webRoot_, entryHtml_);
+  if (access(indexPath, R_OK) != 0)
+  {
+    std::fprintf(stderr,
+                 "[calfnxt] editor UI missing: %s (build *-resources / install-user-vst3)\n",
+                 indexPath);
+    std::fflush(stderr);
+  }
+
   int sp[2] = {-1, -1};
   if (socketpair(AF_UNIX, SOCK_STREAM, 0, sp) != 0)
   {
@@ -372,7 +387,8 @@ bool WebEditor::openHelper(void* x11Parent)
   helperPid_ = pid;
   pageReady_ = false;
   readBuf_.clear();
-  logMsg("[calfnxt] spawned web-host pid=%d path=%s\n", static_cast<int>(pid), helperPath);
+  std::fprintf(stderr, "[calfnxt] spawned web-host pid=%d\n", static_cast<int>(pid));
+  std::fflush(stderr);
   return true;
 }
 
