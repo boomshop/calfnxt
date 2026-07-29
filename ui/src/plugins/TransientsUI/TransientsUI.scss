@@ -19,9 +19,11 @@
       align-self: center;
     }
 
-    > .EQChart {
+    > .FrequencyRange {
       grid-area: chart;
-      background: var(--background);
+      > .EQChart {
+        background: var(--background);
+      }
     }
 
     > .filter {

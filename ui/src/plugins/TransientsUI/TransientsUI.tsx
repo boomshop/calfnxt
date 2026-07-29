@@ -1,16 +1,14 @@
-import { useEffect, useMemo } from 'react';
-import { DynamicValue } from '@deutschesoft/awml';
 import { Header } from '../../components';
-import { EQChart, EnvelopeChart, Knob, Select, Toggle } from '../../widgets';
+import {
+  EnvelopeChart,
+  FrequencyRange,
+  Knob,
+  Select,
+  Toggle,
+} from '../../widgets';
 import { paramIds } from '../../generated/transientsModel';
 import {
-  type EqPassSlope,
-  type IEqualizerBand,
-  toAuxEqType,
-} from '../../host/equalizerHost';
-import {
   TRANSIENTS_DISPLAY_MS,
-  TRANSIENTS_FILTER_MODE_ENTRIES,
   TRANSIENTS_VIEW_ENTRIES,
   transientsParamDefault,
   type ITransientsHost,
@@ -61,15 +59,6 @@ const LOOKAHEAD_LABELS = [
   { pos: 100, label: '100' },
 ];
 
-const HP_LP_DOTS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
-const HP_LP_LABELS = [
-  { pos: 20, label: '20' },
-  { pos: 100, label: '100' },
-  { pos: 1000, label: '1k' },
-  { pos: 10000, label: '10k' },
-  { pos: 20000, label: '20k' },
-];
-
 const ATTACK_MS_DOTS = [
   1, 5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500,
 ];
@@ -116,97 +105,12 @@ function formatDisplayMs(v: number): string {
   return ms >= 1000 ? `${ms / 1000} s` : `${ms} ms`;
 }
 
-function snapSlope(v: number): EqPassSlope {
-  if (v >= 30) return 36;
-  if (v >= 18) return 24;
-  return 12;
-}
-
 export function TransientsUI(props: TransientsUIProps) {
   const { host } = props;
   const edit = (id: number) => ({
     beginEdit: () => host.beginEdit(id),
     endEdit: () => host.endEdit(id),
   });
-  const filterBands = useMemo<IEqualizerBand[]>(() => {
-    const makeBand = (
-      index: number,
-      id: string,
-      type: 'highpass' | 'lowpass',
-      frequency$: DynamicValue<number>,
-      mode$: DynamicValue<number>,
-    ) => {
-      const gain$ = DynamicValue.fromConstant(0);
-      const effectiveGain$ = DynamicValue.fromConstant(0);
-      const q$ = DynamicValue.fromConstant(0.707);
-      const type$ = DynamicValue.fromConstant(type);
-      const slope$ = DynamicValue.fromConstant<EqPassSlope>(
-        snapSlope(mode$.value),
-      );
-      const auxType$ = DynamicValue.fromConstant(
-        toAuxEqType(type, slope$.value),
-      );
-      const active$ = DynamicValue.fromConstant(mode$.value > 0);
-      const dyn$ = DynamicValue.fromConstant(false);
-      const dynAttack$ = DynamicValue.fromConstant(0);
-      const dynRelease$ = DynamicValue.fromConstant(0);
-      const dynThreshold$ = DynamicValue.fromConstant(0);
-      const dynRatio$ = DynamicValue.fromConstant(1);
-      const listen$ = DynamicValue.fromConstant(false);
-      const unsub = mode$.subscribe((v: number) => {
-        const slope = snapSlope(v);
-        active$.set(v > 0);
-        if (v > 0) {
-          slope$.set(slope);
-          auxType$.set(toAuxEqType(type, slope));
-        }
-      }, false);
-      return {
-        index,
-        id,
-        gain$,
-        effectiveGain$,
-        frequency$,
-        q$,
-        type$,
-        slope$,
-        auxType$,
-        active$,
-        dyn$,
-        dynAttack$,
-        dynRelease$,
-        dynThreshold$,
-        dynRatio$,
-        listen$,
-        defaults: {
-          frequency:
-            type === 'highpass'
-              ? transientsParamDefault('hipass')
-              : transientsParamDefault('lopass'),
-          gain: 0,
-          q: 0.707,
-          dynAttack: 0,
-          dynRelease: 0,
-          dynThreshold: 0,
-          dynRatio: 1,
-        },
-        _unsub: unsub,
-      };
-    };
-
-    return [
-      makeBand(0, 'transients-hp', 'highpass', host.hipass$, host.hpMode$),
-      makeBand(1, 'transients-lp', 'lowpass', host.lopass$, host.lpMode$),
-    ] as (IEqualizerBand & { _unsub: () => void })[];
-  }, [host.hipass$, host.hpMode$, host.lopass$, host.lpMode$]);
-
-  useEffect(
-    () => () =>
-      (filterBands as (IEqualizerBand & { _unsub?: () => void })[]).forEach(
-        (band) => band._unsub?.(),
-      ),
-    [filterBands],
-  );
 
   return (
     <div className="TransientsUI PluginUI">
@@ -227,69 +131,19 @@ export function TransientsUI(props: TransientsUIProps) {
       </Header>
 
       <div className="block envelope">
-        <div className="title">Envelope Control</div>
+        <div className="title">Envelope Filter</div>
 
-        <Knob
-          label="Look"
-          className="look"
-          value$={host.lookahead$}
-          min={0}
-          max={100}
-          reset={transientsParamDefault('lookahead')}
-          size="small"
-          dots={LOOKAHEAD_DOTS}
-          labels={LOOKAHEAD_LABELS}
-          {...{ 'value.format': (v: number) => v.toFixed(0) }}
-          {...edit(paramIds.lookahead)}
+        <FrequencyRange
+          hipass$={host.hipass$}
+          lopass$={host.lopass$}
+          hpMode$={host.hpMode$}
+          lpMode$={host.lpMode$}
+          listen$={host.listen$}
+          hipassDefault={transientsParamDefault('hipass')}
+          lopassDefault={transientsParamDefault('lopass')}
+          hipassEdit={edit(paramIds.hipass)}
+          lopassEdit={edit(paramIds.lopass)}
         />
-        <Toggle
-          state$={host.listen$}
-          icon="headphones"
-          className="listen warn"
-        />
-
-        <EQChart
-          bands={filterBands}
-          interactive
-          showLabels={false}
-          yRange={{ min: -60, max: 6 }}
-          dbGrid={12}
-        />
-
-        <div className="filter">
-          <Select
-            value$={host.hpMode$}
-            entries={TRANSIENTS_FILTER_MODE_ENTRIES}
-          />
-          <Knob
-            label="HP Hz"
-            value$={host.hipass$}
-            min={20}
-            max={20000}
-            reset={transientsParamDefault('hipass')}
-            scale="frequency"
-            dots={HP_LP_DOTS}
-            labels={HP_LP_LABELS}
-            {...edit(paramIds.hipass)}
-            size="small"
-          />
-          <Knob
-            label="LP Hz"
-            value$={host.lopass$}
-            min={20}
-            max={20000}
-            reset={transientsParamDefault('lopass')}
-            scale="frequency"
-            dots={HP_LP_DOTS}
-            labels={HP_LP_LABELS}
-            {...edit(paramIds.lopass)}
-            size="small"
-          />
-          <Select
-            value$={host.lpMode$}
-            entries={TRANSIENTS_FILTER_MODE_ENTRIES}
-          />
-        </div>
       </div>
 
       <div className="block shape">
@@ -307,6 +161,19 @@ export function TransientsUI(props: TransientsUIProps) {
             {...{ 'value.format': formatBipolarPercent }}
             size="large"
             {...edit(paramIds.attack_boost)}
+          />
+          <Knob
+            label="Look"
+            className="look"
+            value$={host.lookahead$}
+            min={0}
+            max={100}
+            reset={transientsParamDefault('lookahead')}
+            size="small"
+            dots={LOOKAHEAD_DOTS}
+            labels={LOOKAHEAD_LABELS}
+            {...{ 'value.format': (v: number) => v.toFixed(0) }}
+            {...edit(paramIds.lookahead)}
           />
           <Knob
             label="Release"

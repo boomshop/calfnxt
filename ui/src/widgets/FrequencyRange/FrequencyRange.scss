@@ -1,0 +1,26 @@
+.FrequencyRange {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  position: relative;
+
+  > .listen {
+    position: absolute;
+    top: var(--gap);
+    left: var(--gap);
+    z-index: 1;
+    background: transparent;
+  }
+
+  > .EQChart {
+    flex: 1;
+  }
+
+  .filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+  }
+}
