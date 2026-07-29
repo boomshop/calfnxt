@@ -1,0 +1,200 @@
+{
+  "id": "transients",
+  "name": "calfNXT Transients",
+  "vendor": "calfNXT",
+  "vendor_url": "https://calf-studio-gear.org",
+  "vendor_email": "mailto:calf@calf-studio-gear.org",
+  "version": "0.1.0",
+  "category": "Fx|Dynamics",
+  "vst3_uid": [
+    "0xC4A1F005",
+    "0x0E11C01C",
+    "0xCA1F0005",
+    "0xB0000002"
+  ],
+  "editor": {
+    "width": 1024,
+    "height": 360
+  },
+  "buses": {
+    "audio_inputs": [
+      {
+        "name": "Stereo In",
+        "channels": 2
+      }
+    ],
+    "audio_outputs": [
+      {
+        "name": "Stereo Out",
+        "channels": 2
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "id": "bypass",
+      "name": "Bypass",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "mix",
+      "name": "Mix",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "attack_time",
+      "name": "Attack Time",
+      "type": "float",
+      "unit": "ms",
+      "min": 1.0,
+      "max": 500.0,
+      "default": 30.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "attack_boost",
+      "name": "Attack Boost",
+      "type": "float",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "sustain_threshold",
+      "name": "Sustain Threshold",
+      "type": "float",
+      "unit": "dB",
+      "min": -60.0,
+      "max": 0.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 1
+    },
+    {
+      "id": "release_time",
+      "name": "Release Time",
+      "type": "float",
+      "unit": "ms",
+      "min": 1.0,
+      "max": 5000.0,
+      "default": 300.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "release_boost",
+      "name": "Release Boost",
+      "type": "float",
+      "unit": "",
+      "min": -1.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "display",
+      "name": "Display",
+      "type": "float",
+      "unit": "ms",
+      "min": 100.0,
+      "max": 5000.0,
+      "default": 1000.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "lookahead",
+      "name": "Lookahead",
+      "type": "float",
+      "unit": "samples",
+      "min": 0.0,
+      "max": 100.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "view",
+      "name": "View Mode",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "hipass",
+      "name": "Highpass",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 100.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "lopass",
+      "name": "Lowpass",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 5000.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "hp_mode",
+      "name": "HP Mode",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "lp_mode",
+      "name": "LP Mode",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "listen",
+      "name": "Listen",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    }
+  ]
+}

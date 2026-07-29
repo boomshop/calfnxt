@@ -12,7 +12,7 @@ const LevelMeterBindings = {
  * - gradient = visible meter fill
  * - foreground = mask (= page background)
  *
- * WebEditor forces WebKit hardware acceleration NEVER for X11 embed stability.
+ * WebEditor defaults WebKit HW accel to ALWAYS; set CALFNXT_WEB_NO_GPU=1 for software.
  */
 const LevelMeterOptions = {
   'scale.labels': (v: number) => v.toFixed(0),

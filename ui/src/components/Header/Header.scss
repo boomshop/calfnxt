@@ -44,6 +44,8 @@
   > .children {
     flex: 0 1 auto;
     min-width: 0;
+    display: flex;
+    gap: var(--gap);
 
     > .bypass {
       --aux-button-paddinghorizontal: 20px;

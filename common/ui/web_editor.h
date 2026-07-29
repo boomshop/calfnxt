@@ -112,6 +112,7 @@ private:
   bool viewportApplied_ = false;
   char webRoot_[4096] {};
   std::chrono::steady_clock::time_point lastVizFlush_ {};
+  std::chrono::steady_clock::time_point lastEnvVizFlush_ {};
 
   /** Editor size from plugin descriptor (design CSS pixels). */
   Steinberg::int32 designWidth_ = 360;
@@ -119,6 +120,8 @@ private:
 
   static constexpr std::uint32_t kMaxQueuedParams = 16;
   static constexpr int kVizHz = 30;
+  /** Envelope SVG paths are heavy under software WebKit — match meter rate. */
+  static constexpr int kEnvVizHz = 30;
   std::atomic<std::uint32_t> pendingParamMask_ {0};
   std::atomic<double> pendingParamPlain_[kMaxQueuedParams] {};
   double lastFlushedPlain_[kMaxQueuedParams] {};

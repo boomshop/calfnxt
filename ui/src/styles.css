@@ -86,6 +86,7 @@ body,
   position: relative;
   padding: var(--gap);
   overflow: hidden;
+  border: 1px solid var(--background-lesser);
 
   > .title {
     position: absolute;
@@ -134,7 +135,7 @@ body,
 
       > .aux-gridline {
         stroke: var(--background-least);
-        stroke-opacity: 0.5;
+        stroke-opacity: 0.7;
       }
     }
   }

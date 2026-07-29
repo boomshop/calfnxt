@@ -9,6 +9,7 @@ import {
 import {
   STEREO_MODE_ENTRIES,
   stereoBusFormats,
+  stereoParamDefault,
   type IStereoHost,
   type StereoBusPair,
 } from '../../host/stereoHost';
@@ -161,6 +162,7 @@ export function StereoUI(props: StereoUIProps) {
           min={-36}
           max={36}
           base={0}
+          reset={stereoParamDefault('level_l')}
           dots={DB36_DOTS}
           labels={DB36_LABELS}
           {...edit(paramIds.level_l)}
@@ -171,6 +173,7 @@ export function StereoUI(props: StereoUIProps) {
           min={-36}
           max={36}
           base={0}
+          reset={stereoParamDefault('level_r')}
           dots={DB36_DOTS}
           labels={DB36_LABELS}
           {...edit(paramIds.level_r)}
@@ -192,6 +195,7 @@ export function StereoUI(props: StereoUIProps) {
               min={-36}
               max={36}
               base={0}
+              reset={stereoParamDefault('mlev')}
               dots={DB36_DOTS}
               labels={DB36_LABELS}
               {...edit(paramIds.mlev)}
@@ -203,6 +207,7 @@ export function StereoUI(props: StereoUIProps) {
               min={-1}
               max={1}
               base={0}
+              reset={stereoParamDefault('mpan')}
               dots={UNIT_DOTS}
               labels={BALANCE_LABELS}
               {...{ 'value.format': formatBalance }}
@@ -220,6 +225,7 @@ export function StereoUI(props: StereoUIProps) {
               min={-36}
               max={36}
               base={0}
+              reset={stereoParamDefault('slev')}
               dots={DB36_DOTS}
               labels={DB36_LABELS}
               {...edit(paramIds.slev)}
@@ -231,6 +237,7 @@ export function StereoUI(props: StereoUIProps) {
               min={-1}
               max={1}
               base={0}
+              reset={stereoParamDefault('sbal')}
               dots={UNIT_DOTS}
               labels={BALANCE_LABELS}
               {...{ 'value.format': formatBalance }}
@@ -246,6 +253,7 @@ export function StereoUI(props: StereoUIProps) {
             value$={host.decorrAmount$}
             min={0}
             max={1}
+            reset={stereoParamDefault('decorr_amount')}
             dots={UNIT01_DOTS}
             labels={UNIT01_LABELS}
             {...edit(paramIds.decorr_amount)}
@@ -257,6 +265,7 @@ export function StereoUI(props: StereoUIProps) {
             value$={host.decorrXover$}
             min={80}
             max={2000}
+            reset={stereoParamDefault('decorr_xover')}
             scale="frequency"
             dots={XOVER_DOTS}
             labels={XOVER_LABELS}
@@ -269,6 +278,7 @@ export function StereoUI(props: StereoUIProps) {
             value$={host.decorrSlope$}
             min={12}
             max={48}
+            reset={stereoParamDefault('decorr_slope')}
             snap={[12, 24, 48]}
             dots={SLOPE_DOTS}
             labels={SLOPE_LABELS}
@@ -286,6 +296,7 @@ export function StereoUI(props: StereoUIProps) {
             value$={host.decorrStages$}
             min={1}
             max={8}
+            reset={stereoParamDefault('decorr_stages')}
             snap={1}
             dots={STAGES_DOTS}
             labels={STAGES_LABELS}
@@ -299,6 +310,7 @@ export function StereoUI(props: StereoUIProps) {
             value$={host.decorrSpread$}
             min={0}
             max={1}
+            reset={stereoParamDefault('decorr_spread')}
             dots={UNIT01_DOTS}
             labels={UNIT01_LABELS}
             {...edit(paramIds.decorr_spread)}
@@ -342,6 +354,7 @@ export function StereoUI(props: StereoUIProps) {
           min={-20}
           max={20}
           base={0}
+          reset={stereoParamDefault('delay')}
           dots={DELAY_DOTS}
           labels={DELAY_LABELS}
           {...{
@@ -356,6 +369,7 @@ export function StereoUI(props: StereoUIProps) {
           min={-1}
           max={1}
           base={0}
+          reset={stereoParamDefault('stereo_base')}
           dots={UNIT_DOTS}
           labels={UNIT_LABELS}
           {...edit(paramIds.stereo_base)}
@@ -366,6 +380,7 @@ export function StereoUI(props: StereoUIProps) {
           value$={host.stereoPhase$}
           min={0}
           max={360}
+          reset={stereoParamDefault('stereo_phase')}
           dots={PHASE_DOTS}
           labels={PHASE_LABELS}
           {...edit(paramIds.stereo_phase)}
@@ -383,6 +398,7 @@ export function StereoUI(props: StereoUIProps) {
           min={-1}
           max={1}
           base={0}
+          reset={stereoParamDefault('balance_out')}
           dots={UNIT_DOTS}
           labels={BALANCE_LABELS}
           {...{ 'value.format': formatBalance }}

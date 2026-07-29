@@ -168,6 +168,16 @@ export interface IEqualizerBand {
   dynRatio$: DynamicValue<number>;
   /** Solo detector / sidechain into the plugin output. */
   listen$: DynamicValue<boolean>;
+  /** DSP descriptor defaults for AUX Knob double-click reset. */
+  defaults: {
+    frequency: number;
+    gain: number;
+    q: number;
+    dynAttack: number;
+    dynRelease: number;
+    dynThreshold: number;
+    dynRatio: number;
+  };
 }
 
 function snapSlope(v: number): EqPassSlope {
@@ -309,16 +319,30 @@ export function createBoundEqualizerBands(): {
     type$.subscribe(syncAux, false);
     slope$.subscribe(syncAux, false);
 
-    const gain$ = DynamicValue.fromConstant(
-      paramDefault(bandParamId(i, EQ_BAND_OFFSET.gain), 0),
+    const gainDefault = paramDefault(bandParamId(i, EQ_BAND_OFFSET.gain), 0);
+    const freqDefault = paramDefault(bandParamId(i, EQ_BAND_OFFSET.freq), 1000);
+    const qDefault = paramDefault(bandParamId(i, EQ_BAND_OFFSET.q), 0.707);
+    const dynAttackDefault = paramDefault(
+      bandParamId(i, EQ_BAND_OFFSET.dyn_attack),
+      20,
     );
+    const dynReleaseDefault = paramDefault(
+      bandParamId(i, EQ_BAND_OFFSET.dyn_release),
+      200,
+    );
+    const dynThresholdDefault = paramDefault(
+      bandParamId(i, EQ_BAND_OFFSET.dyn_threshold),
+      -36,
+    );
+    const dynRatioDefault = paramDefault(
+      bandParamId(i, EQ_BAND_OFFSET.dyn_ratio),
+      2,
+    );
+
+    const gain$ = DynamicValue.fromConstant(gainDefault);
     const effectiveGain$ = DynamicValue.fromConstant(gain$.value);
-    const frequency$ = DynamicValue.fromConstant(
-      paramDefault(bandParamId(i, EQ_BAND_OFFSET.freq), 1000),
-    );
-    const q$ = DynamicValue.fromConstant(
-      paramDefault(bandParamId(i, EQ_BAND_OFFSET.q), 0.707),
-    );
+    const frequency$ = DynamicValue.fromConstant(freqDefault);
+    const q$ = DynamicValue.fromConstant(qDefault);
     const active$ = DynamicValue.fromConstant(
       paramDefault(bandParamId(i, EQ_BAND_OFFSET.active), 0) >= 0.5,
     );
@@ -340,18 +364,10 @@ export function createBoundEqualizerBands(): {
     disposers.push(dyn$.subscribe(() => syncStaticCurve(), false));
     disposers.push(active$.subscribe(() => syncStaticCurve(), false));
     disposers.push(type$.subscribe(() => syncStaticCurve(), false));
-    const dynAttack$ = DynamicValue.fromConstant(
-      paramDefault(bandParamId(i, EQ_BAND_OFFSET.dyn_attack), 20),
-    );
-    const dynRelease$ = DynamicValue.fromConstant(
-      paramDefault(bandParamId(i, EQ_BAND_OFFSET.dyn_release), 200),
-    );
-    const dynThreshold$ = DynamicValue.fromConstant(
-      paramDefault(bandParamId(i, EQ_BAND_OFFSET.dyn_threshold), -36),
-    );
-    const dynRatio$ = DynamicValue.fromConstant(
-      paramDefault(bandParamId(i, EQ_BAND_OFFSET.dyn_ratio), 2),
-    );
+    const dynAttack$ = DynamicValue.fromConstant(dynAttackDefault);
+    const dynRelease$ = DynamicValue.fromConstant(dynReleaseDefault);
+    const dynThreshold$ = DynamicValue.fromConstant(dynThresholdDefault);
+    const dynRatio$ = DynamicValue.fromConstant(dynRatioDefault);
     const listen$ = DynamicValue.fromConstant(
       paramDefault(bandParamId(i, EQ_BAND_OFFSET.dyn_listen), 0) >= 0.5,
     );
@@ -415,6 +431,15 @@ export function createBoundEqualizerBands(): {
       dynThreshold$,
       dynRatio$,
       listen$,
+      defaults: {
+        frequency: freqDefault,
+        gain: gainDefault,
+        q: qDefault,
+        dynAttack: dynAttackDefault,
+        dynRelease: dynReleaseDefault,
+        dynThreshold: dynThresholdDefault,
+        dynRatio: dynRatioDefault,
+      },
     });
   }
 

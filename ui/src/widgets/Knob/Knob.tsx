@@ -121,10 +121,12 @@ function syncOverClass(knob: AuxKnobInstance) {
   if (knob.isDestructed()) return;
   const base = knob.get('base');
   const value = knob.get('value');
+  const min = knob.get('min');
   const over =
     typeof base === 'number' &&
-    base === 0 &&
+    typeof min === 'number' &&
     typeof value === 'number' &&
+    base > min &&
     value > base;
   knob.element.classList.toggle('over', over);
 }

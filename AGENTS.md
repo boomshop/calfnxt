@@ -13,7 +13,7 @@ Greenfield **VST3 + WebKitGTK** (Linux first) plugin suite. One `.vst3` per plug
 Shared React SPA UI embedded into each bundle’s `Resources/`. Branding: **calfNXT**
 (namespace `calfNXT`, cmake `calfnxt`, URI `calfnxt://`, bridge `calfnxtNative`).
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`).
 More Calf-heritage processors planned.
 
 ---
@@ -28,13 +28,13 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Display / vendor | `calfNXT` |
 | C++ namespace | `calfNXT` |
 | CMake project / libs | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui` |
-| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo` |
-| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo` (must match; Carla/JUCE) |
+| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients` |
+| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients` (must match; Carla/JUCE) |
 | Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3` |
 | URI scheme | `calfnxt://bundle/...` |
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
 | Script message handler | `webkit.messageHandlers.calfnxt` |
-| Env flags | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE` |
+| Env flags | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU` |
 | Msg type (TS) | `calfNXTMsg` |
 
 Classic upstream “Calf Studio Gear” may still be mentioned as the DSP heritage; that is not this product name.
@@ -48,6 +48,7 @@ common/ui/     WebEditor (WebKitGTK + X11 GtkPlug + host IRunLoop timer)
 common/dsp/    EffectBase (SingleComponentEffect), peak_hold.h
 dsp/equalizer/ equalizer.plugin.json + DSP + codegen
 dsp/stereo/    stereo.plugin.json + DSP + codegen
+dsp/transients/ transients.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
 ui/            React SPA (Vite), hash router #equalizer / #stereo
 external/vst3sdk/
@@ -113,7 +114,7 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 3. Native: `scale = hostPx / cssPx` → `resizeView(design × scale)`. No WebKit zoom.
 4. Optional override: `CALFNXT_UI_SCALE` (e.g. `1.35` or `1`) wins over measurement.
 
-`WebEditor`: HW accel `NEVER`, `canResize` + `onSize` sync GtkPlug/WebView, `web-process-terminated` → reload.
+`WebEditor`: HW accel `ALWAYS` (opt out `CALFNXT_WEB_NO_GPU=1`), `canResize` + `onSize` sync GtkPlug/WebView, `web-process-terminated` → reload.
 
 ---
 
@@ -144,7 +145,7 @@ cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resource
 cmake --build build --target install-user-vst3
 ```
 
-Install path: `~/.vst3/calfNXTEqualizer.vst3` (also removes obsolete Volume/Balance bundles if present).
+Install paths: `~/.vst3/calfNXTEqualizer.vst3`, `~/.vst3/calfNXTStereo.vst3`, `~/.vst3/calfNXTTransients.vst3` (also removes obsolete Volume/Balance bundles if present).
 
 Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
@@ -192,6 +193,8 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 | DSP base / I/O / peaks / EQ | `common/dsp/effect_base.*`, `io_stage.h`, `peak_hold.h`, `biquad.h`, `eq_band.h`, `compressor.h` |
 | Reference (WebView/params) | `examples/auxvst/` (call it **auxvst**, not MDA) |
 | Equalizer DSP | `dsp/equalizer/source/*_dsp.*` |
+| Stereo DSP | `dsp/stereo/source/*_dsp.*` |
+| Transients DSP | `dsp/transients/source/*_dsp.*`, `common/dsp/transients.h` |
 | Param bind | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts` |
 | Header I/O | `ui/src/components/Header/*`, `host/headerMeters.ts` |
 | Meters | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*` |

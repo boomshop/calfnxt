@@ -84,10 +84,18 @@ export type IStereoHost = {
 };
 
 function bindNum(name: keyof typeof paramIds): DynamicValue<number> {
-  const meta = pluginMeta.parameters.find((p) => p.id === name);
-  const dv = DynamicValue.fromConstant(meta?.default ?? 0);
+  const dv = DynamicValue.fromConstant(stereoParamDefault(name));
   bindParamToHost(dv, paramIds[name]);
   return dv;
+}
+
+/** DSP descriptor default (plain) for AUX Knob double-click reset. */
+export function stereoParamDefault(
+  name: keyof typeof paramIds,
+  fallback = 0,
+): number {
+  const meta = pluginMeta.parameters.find((p) => p.id === name);
+  return typeof meta?.default === 'number' ? meta.default : fallback;
 }
 
 function bindBool(name: keyof typeof paramIds): DynamicValue<boolean> {

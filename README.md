@@ -15,7 +15,7 @@ Branding / namespace: **calfNXT**. Shared React SPA UI, packed per plugin into
 each `.vst3` bundle’s `Resources/`.
 
 **Early public preview (Linux + X11 hosts):** shipping today are **Equalizer**
-(`calfNXTEqualizer`) and **Stereo** (`calfNXTStereo`) — more processors from
+(`calfNXTEqualizer`), **Stereo** (`calfNXTStereo`) and **Transients** (`calfNXTTransients`) — more processors from
 the classic Calf suite will follow as work continues.
 
 This project is free software licensed under the **GNU General Public License
@@ -139,6 +139,7 @@ Then rescan plugins in your host. Bundles appear as:
 |-----------|------------------------------|
 | Equalizer | `~/.vst3/calfNXTEqualizer.vst3` |
 | Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
+| Transients | `~/.vst3/calfNXTTransients.vst3` |
 
 ---
 
@@ -156,13 +157,14 @@ cmake --build build --target install-user-vst3
 #   ./tools/install-user-vst3.sh
 ```
 
-`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, …) and embeds each
+`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, …) and embeds each
 UI pack. `install-user-vst3` then copies the bundles into `~/.vst3/`:
 
 | Plugin    | Path                         |
 |-----------|------------------------------|
 | Equalizer | `~/.vst3/calfNXTEqualizer.vst3` |
 | Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
+| Transients | `~/.vst3/calfNXTTransients.vst3` |
 
 Rescan / reload the plugins in the host after install.
 
@@ -174,7 +176,7 @@ You must copy the SPA into each bundle’s `Resources/`:
 ```bash
 ./tools/install-user-vst3.sh
 # or manually:
-cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resources -j
+cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resources calfnxt-transients-resources -j
 cmake --build build --target install-user-vst3
 ```
 
@@ -199,7 +201,7 @@ cd ui && npm install   # once
 cd ui && npm run dev
 ```
 
-Open e.g. http://localhost:5173/#equalizer or http://localhost:5173/#stereo  
+Open e.g. http://localhost:5173/#equalizer or http://localhost:5173/#stereo or http://localhost:5173/#transients  
 
 This is useful for layout and widget work. It does **not** replace installing into `~/.vst3` for Carla / other hosts.
 
@@ -214,6 +216,7 @@ This is useful for layout and widget work. It does **not** replace installing in
 | Embed SPA + install         | `./tools/install-user-vst3.sh` or `cmake --build build --target install-user-vst3` |
 | Single plugin (Equalizer)   | `cmake --build build --target calfnxt-equalizer calfnxt-equalizer-resources -j` |
 | Single plugin (Stereo)      | `cmake --build build --target calfnxt-stereo calfnxt-stereo-resources -j` |
+| Single plugin (Transients)  | `cmake --build build --target calfnxt-transients calfnxt-transients-resources -j` |
 | UI HMR in the browser       | `cd ui && npm run dev` |
 
 ---

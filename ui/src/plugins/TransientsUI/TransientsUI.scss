@@ -1,0 +1,71 @@
+.TransientsUI {
+  align-items: stretch;
+
+  > .envelope {
+    display: grid;
+    grid-template-areas: 'listen chart' '. chart' 'look filter';
+    grid-template-columns: auto 1fr;
+    grid-template-rows: 1fr 1fr auto;
+    gap: var(--gap);
+
+    > .look {
+      grid-area: look;
+      align-self: end;
+    }
+
+    > .listen {
+      grid-area: listen;
+      justify-self: center;
+      align-self: center;
+    }
+
+    > .EQChart {
+      grid-area: chart;
+      background: var(--background);
+    }
+
+    > .filter {
+      grid-area: filter;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+  }
+
+  > .shape {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+
+    > .upper {
+      display: flex;
+      justify-content: space-evenly;
+      align-items: center;
+    }
+
+    > .lower {
+      display: flex;
+      justify-content: space-evenly;
+      align-items: center;
+      gap: var(--gap);
+    }
+  }
+
+  > .display {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap);
+
+    > .EnvelopeChart {
+      flex: 1;
+      background: var(--background);
+    }
+
+    > .controls {
+      display: flex;
+      justify-content: space-evenly;
+      align-items: center;
+    }
+  }
+}

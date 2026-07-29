@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Equalizer as AuxEqualizer,
   EqBand as AuxEqBand,
@@ -20,13 +20,10 @@ import {
   bandSupportsDyn,
 } from '../../host/equalizerHost';
 import { DynamicValue } from '@deutschesoft/awml';
+import {
+  useChartGradient,
+} from '../../hooks/useChartGradient';
 import './EQChart.scss';
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
-/** Baseline stroke: cut (bottom) → boost (top). */
-const EQ_STROKE_CUT = '#0066ff';
-const EQ_STROKE_BOOST = '#ff0066';
 
 const EqualizerBindings = {};
 
@@ -47,6 +44,8 @@ const EqualizerWidget = componentFromWidget(
 
 export interface EQChartProps {
   bands: IEqualizerBand[];
+  yRange?: { min: number; max: number };
+  dbGrid?: number;
   /** Full editor chart vs single-band miniature. */
   size?: 'normal' | 'mini';
   /**
@@ -54,6 +53,8 @@ export interface EQChartProps {
    * Avoids bidirectional bindings on shared DynamicValues.
    */
   interactive?: boolean;
+  /** Handle labels (B1…Bn). Default on for normal size, off for mini. */
+  showLabels?: boolean;
   selectedBandId?: string | null;
   /** Select a band (never null — empty chart clicks do not clear selection). */
   onSelectBand?: (id: string) => void;
@@ -67,8 +68,11 @@ export interface EQChartProps {
 export function EQChart(props: EQChartProps) {
   const {
     bands: bandModels,
+    yRange = { min: EQ_GAIN_MIN, max: EQ_GAIN_MAX },
+    dbGrid = 6,
     size = 'normal',
     interactive = size !== 'mini',
+    showLabels = size !== 'mini',
     selectedBandId = null,
     onSelectBand,
     className,
@@ -76,92 +80,50 @@ export function EQChart(props: EQChartProps) {
 
   const [eqWidget, setEqWidget] = useState<unknown>(null);
   const isMini = size === 'mini';
-  const gradId = `eq-response-grad-${useId().replace(/:/g, '')}`;
 
-  // Vertical gain gradient on the sum curve: low/cut = blue, high/boost = red.
+  const eq = eqWidget as {
+    svg: SVGSVGElement;
+    range_y: { options: { basis: number } };
+    baseline: { element: SVGElement };
+    set: (key: string, value: unknown) => void;
+  } | null;
+
   useEffect(() => {
-    if (!eqWidget || isMini) return;
-    const eq = eqWidget as {
-      svg: SVGSVGElement;
-      range_y: { options: { basis: number } };
-      baseline: { element: SVGElement };
-    };
-    const svg = eq.svg;
-    if (!svg) return;
+    if (!eq || isMini) return;
+    eq.set('range_y', { min: yRange.min, max: yRange.max });
+    eq.set('db_grid', dbGrid);
+  }, [dbGrid, eq, isMini, yRange.max, yRange.min]);
 
-    let defs = svg.querySelector(':scope > defs.eq-response-defs');
-    if (!defs) {
-      defs = document.createElementNS(SVG_NS, 'defs');
-      defs.classList.add('eq-response-defs');
-      svg.insertBefore(defs, svg.firstChild);
-    }
-
-    let grad = defs.querySelector(
-      `#${CSS.escape(gradId)}`,
-    ) as SVGLinearGradientElement | null;
-    if (!grad) {
-      grad = document.createElementNS(
-        SVG_NS,
-        'linearGradient',
-      ) as SVGLinearGradientElement;
-      grad.id = gradId;
-      grad.setAttribute('gradientUnits', 'userSpaceOnUse');
-      grad.setAttribute('x1', '0');
-      grad.setAttribute('x2', '0');
-      const stopCut = document.createElementNS(SVG_NS, 'stop');
-      stopCut.setAttribute('offset', '20%');
-      stopCut.setAttribute('stop-color', EQ_STROKE_CUT);
-      const stopBoost = document.createElementNS(SVG_NS, 'stop');
-      stopBoost.setAttribute('offset', '800%');
-      stopBoost.setAttribute('stop-color', EQ_STROKE_BOOST);
-      grad.appendChild(stopCut);
-      grad.appendChild(stopBoost);
-      defs.appendChild(grad);
-    }
-
-    const syncGeom = () => {
-      const h = Math.max(
-        1,
-        eq.range_y?.options?.basis || svg.clientHeight || 1,
-      );
-      // range_y is reverse: y=0 is +max (top), y=basis is −min (bottom).
-      grad!.setAttribute('y1', String(h));
-      grad!.setAttribute('y2', '0');
-    };
-    syncGeom();
-
-    // Full paint value (not bare id) so SCSS can do stroke: var(--eq-gain-stroke).
-    const paint = `url(#${gradId})`;
-    svg.style.setProperty('--eq-gain-stroke', paint);
-
-    const path = eq.baseline?.element;
-    if (path) path.style.stroke = 'var(--eq-gain-stroke)';
-
-    const ro = new ResizeObserver(syncGeom);
-    ro.observe(svg);
-    return () => {
-      ro.disconnect();
-      if (path) path.style.removeProperty('stroke');
-      svg.style.removeProperty('--eq-gain-stroke');
-      grad?.remove();
-      if (defs && !defs.childElementCount) defs.remove();
-    };
-  }, [eqWidget, isMini, gradId]);
+  const baselineTargets = useMemo(
+    () => (eq?.baseline?.element ? [eq.baseline.element] : []),
+    [eq],
+  );
+  const getEqHeight = useCallback(
+    (svg: SVGSVGElement) =>
+      eq?.range_y?.options?.basis || svg.clientHeight || 1,
+    [eq],
+  );
+  const reassertGradStroke = useChartGradient({
+    svg: eq?.svg,
+    enabled: !!eq && !isMini,
+    targets: baselineTargets,
+    getHeight: getEqHeight,
+  });
 
   const handleOptions = useMemo(
     () =>
       bandModels.map((_, i) => ({
         type: 'parametric',
-        label: isMini ? '' : `B${i + 1}`,
-        ...(isMini ? { format_label: false as const } : {}),
+        label: showLabels ? `B${i + 1}` : '',
+        ...(!showLabels ? { format_label: false as const } : {}),
         class: `eq-band eq-band-${i}`,
         min_size: isMini ? 4 : 24,
         max_size: isMini ? 10 : 64,
-        y_min: EQ_GAIN_MIN,
-        y_max: EQ_GAIN_MAX,
+        y_min: yRange.min,
+        y_max: yRange.max,
         show_axis: false,
       })),
-    [bandModels, isMini],
+    [bandModels, isMini, showLabels, yRange.max, yRange.min],
   );
 
   const ghostOptions = useMemo(
@@ -172,11 +134,11 @@ export function EQChart(props: EQChartProps) {
         format_label: false as const,
         show_handle: false,
         class: `eq-ghost eq-band-${i}`,
-        y_min: EQ_GAIN_MIN,
-        y_max: EQ_GAIN_MAX,
+        y_min: yRange.min,
+        y_max: yRange.max,
         show_axis: false,
       })),
-    [bandModels],
+    [bandModels, yRange.max, yRange.min],
   );
 
   const alwaysOn$ = useMemo(() => DynamicValue.fromConstant(true), []);
@@ -326,8 +288,7 @@ export function EQChart(props: EQChartProps) {
         eq.baseline.set('oversampling', 5);
         eq.baseline.set('threshold', 3);
         // Re-assert gradient stroke after AUX may touch the path.
-        const path = eq.baseline.element;
-        if (path) path.style.stroke = 'var(--eq-gain-stroke)';
+        reassertGradStroke();
       }
     };
 
@@ -353,7 +314,7 @@ export function EQChart(props: EQChartProps) {
       graphs.forEach((graph) => eq.removeGraph(graph));
       eq.baseline.set('bands', []);
     };
-  }, [eqWidget, graphs, ghosts, isMini]);
+  }, [eqWidget, graphs, ghosts, isMini, reassertGradStroke]);
 
   useEffect(() => {
     type AuxEl = { element: Element };
@@ -397,6 +358,8 @@ export function EQChart(props: EQChartProps) {
       className={cls}
       show_grid={!isMini}
       show_handles={isMini || interactive}
+      range_y={yRange}
+      db_grid={dbGrid}
     />
   );
 }

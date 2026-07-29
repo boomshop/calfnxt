@@ -85,6 +85,31 @@ bool jsonNumberAfterKey(const char* s, const char* key, double& out)
   return end != p;
 }
 
+bool jsonStringAfterKey(const char* s, const char* key, char* out, size_t outSize)
+{
+  if (!s || !key || !out || outSize < 2)
+    return false;
+  const char* p = std::strstr(s, key);
+  if (!p)
+    return false;
+  p = std::strchr(p, ':');
+  if (!p)
+    return false;
+  ++p;
+  while (*p == ' ' || *p == '\t')
+    ++p;
+  if (*p != '"')
+    return false;
+  ++p;
+  size_t n = 0;
+  while (*p && *p != '"' && n + 1 < outSize)
+    out[n++] = *p++;
+  if (*p != '"')
+    return false;
+  out[n] = '\0';
+  return true;
+}
+
 bool envFlag(const char* name)
 {
   return g_getenv(name) != nullptr;
@@ -357,17 +382,20 @@ bool WebEditor::openWeb(void* x11Parent)
   g_signal_connect(ucm, "script-message-received::calfnxt", G_CALLBACK(onScriptMessage), this);
   webkit_user_content_manager_register_script_message_handler(ucm, "calfnxt");
 
-  // UI→host: set uses fixed-point q/d; viewport is integer CSS w/h.
+  // UI→host: set uses fixed-point q/d; viewport/vizcfg keep integer payloads.
   static const char bridge[] =
     "window.__calfnxtHostQ=window.__calfnxtHostQ||[];"
     "window.__calfnxtOnHost=window.__calfnxtOnHost||function(m){window.__calfnxtHostQ.push(m);};"
     "window.calfnxtNative={post:function(m){"
     "var src=typeof m==='string'?JSON.parse(m):m;"
     "var o={t:src.t};"
-    "if(src.id!=null)o.id=src.id|0;"
+    "if(src.id!=null&&src.t!=='vizcfg')o.id=src.id|0;"
     "if(src.t==='set'&&typeof src.v==='number'){o.q=Math.round(src.v*1e6);o.d=1e6;}"
     "if(src.t==='viewport'){"
     "if(src.w!=null)o.w=src.w|0;if(src.h!=null)o.h=src.h|0;"
+    "}"
+    "if(src.t==='vizcfg'){"
+    "if(src.id!=null)o.id=String(src.id);if(src.bins!=null)o.bins=src.bins|0;"
     "}"
     "window.webkit.messageHandlers.calfnxt.postMessage(JSON.stringify(o));}};"
     ;
@@ -381,9 +409,15 @@ bool WebEditor::openWeb(void* x11Parent)
   g_object_unref(ucm);
 
   auto* settings = webkit_web_view_get_settings(webview_);
-  // Software rendering is more stable for AUX canvas meters in X11 embeds.
+  // GPU compositing helps SVG/canvas viz. Opt out with CALFNXT_WEB_NO_GPU=1 if
+  // the X11 GtkPlug embed flickers or WebKit crashes on a given host/GPU.
+  const bool noGpu = envFlag("CALFNXT_WEB_NO_GPU");
   webkit_settings_set_hardware_acceleration_policy(
-    settings, WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER);
+    settings,
+    noGpu ? WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER
+          : WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
+  logMsg("[calfnxt] WebKit hardware acceleration: %s\n",
+         noGpu ? "never (CALFNXT_WEB_NO_GPU)" : "always");
   const bool webDebug = envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR");
   webkit_settings_set_enable_developer_extras(settings, webDebug ? TRUE : FALSE);
   if (webDebug)
@@ -644,9 +678,9 @@ void WebEditor::flushVizArray(const char* streamId, const char* kind, float* val
     return;
 
   // try/catch so a UI exception cannot tear down the WebKit process.
-  // Gonio can be ~256 floats; keep headroom for to_chars + commas.
+  // Envelope display can be ~1280 floats; keep headroom for to_chars + commas.
   // n==0 is valid (clear display, e.g. bypass).
-  constexpr size_t kJsCap = 8192;
+  constexpr size_t kJsCap = 24576;
   char js[kJsCap];
   char* p = js;
   char* end = js + sizeof js;
@@ -683,6 +717,28 @@ void WebEditor::flushViz()
 
   using clock = std::chrono::steady_clock;
   const auto now = clock::now();
+
+  // Envelope chart: software WebKit struggles with high-rate SVG path updates.
+  if (lastEnvVizFlush_.time_since_epoch().count() == 0
+      || now - lastEnvVizFlush_ >= std::chrono::milliseconds(1000 / kEnvVizHz))
+  {
+    lastEnvVizFlush_ = now;
+    constexpr int kMaxEnvFloats = 256 * 5 + 1; // slots x channels + scroll phase
+    float envBuf[kMaxEnvFloats];
+    const int nEnv = vizSource_->takeEnvelopeDisplay(envBuf, kMaxEnvFloats);
+    if (nEnv > 0)
+    {
+      for (int i = 0; i < nEnv; ++i)
+      {
+        float v = envBuf[i];
+        if (!std::isfinite(v))
+          v = 0.f;
+        envBuf[i] = v;
+      }
+      flushVizArray(vizSource_->vizEnvelopeId(), "envelope", envBuf, nEnv);
+    }
+  }
+
   if (lastVizFlush_.time_since_epoch().count() != 0)
   {
     const auto minGap = std::chrono::milliseconds(1000 / kVizHz);
@@ -898,6 +954,19 @@ bool WebEditor::onWebMessage(const char* json)
   {
     pushAllParams();
     pushIoChannels();
+    return true;
+  }
+
+  if (jsonHasType(json, "vizcfg"))
+  {
+    if (!vizSource_)
+      return true;
+    double binsf = 0.0;
+    char id[64];
+    if (!jsonStringAfterKey(json, "\"id\"", id, sizeof id)
+        || !jsonNumberAfterKey(json, "\"bins\"", binsf))
+      return false;
+    vizSource_->configureVizBins(id, static_cast<int>(std::lround(binsf)));
     return true;
   }
 

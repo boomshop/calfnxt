@@ -71,6 +71,27 @@ public:
   virtual const char* vizBandGainsId() const { return "eq"; }
   /** Stream id for stereo field (correlation + gonio). */
   virtual const char* vizStereoFieldId() const { return "stereo"; }
+
+  /** Envelope display buffer (transient shaper: input, output, envelope,
+   *  attack, release — 5 floats per slot, N slots), plus a trailing scroll
+   *  phase in [0,1] for sub-slot interpolation.
+   *  Returns total float count written (slots * 5 + 1), or 0 if unavailable. */
+  virtual int takeEnvelopeDisplay(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for envelope display. */
+  virtual const char* vizEnvelopeId() const { return "env"; }
+
+  /** Optional UI→DSP viz sizing/config, e.g. visible chart bins/points. */
+  virtual void configureVizBins(const char* id, int bins)
+  {
+    (void)id;
+    (void)bins;
+  }
 };
 
 } // namespace Ui

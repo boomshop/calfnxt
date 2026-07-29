@@ -10,6 +10,7 @@ const vizLevelsApplies = new Map<string, VizLevelsApply>();
 const vizGainsApplies = new Map<string, VizLevelsApply>();
 const vizCorrApplies = new Map<string, HostApply>();
 const vizGonioApplies = new Map<string, VizLevelsApply>();
+const vizEnvelopeApplies = new Map<string, (v: Float32Array) => void>();
 const channelCountApplies = new Set<ChannelCountApply>();
 let hostWired = false;
 
@@ -38,6 +39,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizCorrApplies.get(msg.id)?.(msg.v[0]);
   if (msg.t === "viz" && msg.kind === "gonio" && Array.isArray(msg.v))
     vizGonioApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "envelope" && Array.isArray(msg.v))
+    vizEnvelopeApplies.get(msg.id)?.(new Float32Array(msg.v));
 }
 
 function ensureHostWire(): void {
@@ -140,6 +143,15 @@ export function bindVizGonio(dv: DynamicValue<number[]>, id: string): () => void
   });
   return () => {
     vizGonioApplies.delete(id);
+  };
+}
+
+/** Wire envelope display buffer (Float32Array) from DSP viz (id e.g. "env"). */
+export function bindVizEnvelope(dv: DynamicValue<Float32Array | null>, id: string): () => void {
+  ensureHostWire();
+  vizEnvelopeApplies.set(id, (v) => dv.set(v));
+  return () => {
+    vizEnvelopeApplies.delete(id);
   };
 }
 

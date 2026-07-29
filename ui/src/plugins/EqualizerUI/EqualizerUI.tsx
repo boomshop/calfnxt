@@ -138,6 +138,7 @@ function BandControls(props: { band: IEqualizerBand }) {
           value$={band.frequency$}
           min={EQ_FREQ_MIN}
           max={EQ_FREQ_MAX}
+          reset={band.defaults.frequency}
           label="Freq"
           size={pass ? 'large' : 'medium'}
           scale="frequency"
@@ -153,6 +154,7 @@ function BandControls(props: { band: IEqualizerBand }) {
             value$={band.gain$}
             min={EQ_GAIN_MIN}
             max={EQ_GAIN_MAX}
+            reset={band.defaults.gain}
             label="Gain"
             size="large"
             base={0}
@@ -167,6 +169,7 @@ function BandControls(props: { band: IEqualizerBand }) {
           value$={band.q$}
           min={EQ_Q_MIN}
           max={EQ_Q_MAX}
+          reset={band.defaults.q}
           label="Q"
           size="medium"
           scale="log2"
@@ -194,6 +197,7 @@ function BandControls(props: { band: IEqualizerBand }) {
             value$={band.dynAttack$}
             min={EQ_DYN_ATTACK_MIN}
             max={EQ_DYN_ATTACK_MAX}
+            reset={band.defaults.dynAttack}
             label="Attack"
             size="small"
             scale="log2"
@@ -206,6 +210,7 @@ function BandControls(props: { band: IEqualizerBand }) {
             value$={band.dynRelease$}
             min={EQ_DYN_RELEASE_MIN}
             max={EQ_DYN_RELEASE_MAX}
+            reset={band.defaults.dynRelease}
             label="Release"
             size="small"
             scale="log2"
@@ -219,6 +224,7 @@ function BandControls(props: { band: IEqualizerBand }) {
             value$={band.dynThreshold$}
             min={EQ_DYN_THRESH_MIN}
             max={EQ_DYN_THRESH_MAX}
+            reset={band.defaults.dynThreshold}
             label="Thresh"
             size="small"
             {...{
@@ -229,6 +235,7 @@ function BandControls(props: { band: IEqualizerBand }) {
             value$={band.dynRatio$}
             min={EQ_DYN_RATIO_MIN}
             max={EQ_DYN_RATIO_MAX}
+            reset={band.defaults.dynRatio}
             label="Ratio"
             size="small"
             scale="log2"

@@ -32,9 +32,10 @@ add_subdirectory(common/ui)
 add_subdirectory(common/dsp)
 add_subdirectory(dsp/equalizer)
 add_subdirectory(dsp/stereo)
+add_subdirectory(dsp/transients)
 
 # UI build needs generated models from every plugin descriptor
-add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen)
+add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen)
 
 # Meta-target: all plugins + embedded UI packs (add new plugins here).
 add_custom_target(calfnxt-plugins
@@ -43,8 +44,10 @@ add_custom_target(calfnxt-plugins
     calfnxt-equalizer-resources
     calfnxt-stereo
     calfnxt-stereo-resources
+    calfnxt-transients
+    calfnxt-transients-resources
   COMMENT "Build all calfNXT VST3 plugins (+ embedded UI)"
 )
 
-message(STATUS "calfnxt: common/{ui,dsp} + dsp/{equalizer,stereo} + shared ui/dist")
+message(STATUS "calfnxt: common/{ui,dsp} + dsp/{equalizer,stereo,transients} + shared ui/dist")
 message(STATUS "calfnxt: build all plugins with --target calfnxt-plugins")

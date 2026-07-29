@@ -51,6 +51,7 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
           endEdit={io.endInGainEdit}
           min={ioGainMeta.min}
           max={ioGainMeta.max}
+          reset={ioGainMeta.default}
           label={false}
           base={0}
           scale="decibel"
@@ -81,6 +82,7 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
           endEdit={io.endOutGainEdit}
           min={ioGainMeta.min}
           max={ioGainMeta.max}
+          reset={ioGainMeta.default}
           label={false}
           base={0}
           scale="decibel"
