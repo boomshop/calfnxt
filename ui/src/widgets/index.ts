@@ -6,6 +6,7 @@ export * from "./CorrelationMeter";
 export * from "./GonioMeter";
 export * from "./EQChart";
 export * from "./EnvelopeChart";
+export * from "./FrequencyRange";
 export * from "./Toggle";
 export * from "./Select";
 export * from "./Button";
