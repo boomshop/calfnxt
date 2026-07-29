@@ -3,7 +3,7 @@ export * from "./Knob";
 export * from "./LevelMeter";
 export * from "./MultiMeter";
 export * from "./CorrelationMeter";
-export * from "./Goniometer";
+export * from "./GonioMeter";
 export * from "./EQChart";
 export * from "./Toggle";
 export * from "./Select";

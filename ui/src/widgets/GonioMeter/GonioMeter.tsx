@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
-import './Goniometer.scss';
+import './GonioMeter.scss';
 
 const ChartBindings = {};
 
@@ -19,7 +19,7 @@ const ChartWidget = componentFromWidget(
   AuxChart,
   ChartBindings,
   ChartOptions,
-  'GoniometerPlot',
+  'GonioMeterPlot',
 );
 
 /** Dot radius in SVG px. */
@@ -36,6 +36,7 @@ type AuxGraphInstance = {
   isDestructed?: () => boolean;
   range_x: AuxRange;
   range_y: AuxRange;
+  element?: SVGElement;
 };
 
 type AuxChartInstance = {
@@ -45,7 +46,9 @@ type AuxChartInstance = {
   svg?: SVGSVGElement;
 };
 
-export type GoniometerDrawMode = 'line' | 'dots';
+export type GonioMeterDrawMode = 'line' | 'dots';
+
+const GONIO_TRAIL_OPACITIES = [1, 0.66, 0.33] as const;
 
 let gonioGradSeq = 0;
 
@@ -152,10 +155,10 @@ function makeLineDots(samples: number[]): { x: number; y: number }[] {
 }
 
 /** Axis chrome in viewBox coords (y down). Matches 45° map: M↑, R↖, L↗. */
-function GoniometerChrome() {
+function GonioMeterChrome() {
   return (
     <svg
-      className="Goniometer-chrome"
+      className="GonioMeter-chrome"
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
       aria-hidden
@@ -204,71 +207,95 @@ function GoniometerChrome() {
   );
 }
 
-export interface GoniometerProps {
+export interface GonioMeterProps {
   /** Interleaved L/R samples from DSP viz. */
   samples$?: DynamicValue<number[]>;
   /** `dots` = scatter (default); `line` = connected polyline. */
-  drawMode?: GoniometerDrawMode;
+  drawMode?: GonioMeterDrawMode;
   className?: string;
   [key: string]: unknown;
 }
 
-export function Goniometer(props: GoniometerProps) {
+export function GonioMeter(props: GonioMeterProps) {
   const { samples$, drawMode = 'dots', className, ...rest } = props;
-  const graphRef = useRef<AuxGraphInstance | null>(null);
+  const graphRefs = useRef<(AuxGraphInstance | null)[]>([]);
   const chartRef = useRef<AuxChartInstance | null>(null);
   const gradDisposeRef = useRef<(() => void) | null>(null);
-  const samplesRef = useRef<number[]>([]);
+  const historyRef = useRef<number[][]>([[], [], []]);
   const modeRef = useRef(drawMode);
   modeRef.current = drawMode;
 
-  const pushDots = useCallback((samples: number[]) => {
-    samplesRef.current = samples;
-    const graph = graphRef.current;
-    if (!graph || graph.isDestructed?.())
-      return;
-    if (modeRef.current === 'line') {
-      graph.set('mode', 'line');
-      graph.set('type', 'L');
-      graph.set('dots', makeLineDots(samples));
-    } else {
-      graph.set('mode', 'fill');
-      graph.set('dots', (g: AuxGraphInstance) => makeDotsPath(samples, g));
+  const renderHistory = useCallback((history: number[][]) => {
+    for (let i = 0; i < graphRefs.current.length; ++i) {
+      const graph = graphRefs.current[i];
+      if (!graph || graph.isDestructed?.())
+        continue;
+      const samples = history[i] ?? [];
+      if (modeRef.current === 'line') {
+        graph.set('mode', 'line');
+        graph.set('type', 'L');
+        graph.set('dots', makeLineDots(samples));
+      } else {
+        graph.set('mode', 'fill');
+        graph.set('dots', (g: AuxGraphInstance) => makeDotsPath(samples, g));
+      }
     }
   }, []);
+
+  const pushDots = useCallback((samples: number[], rotateHistory = true) => {
+    const nextHistory = rotateHistory
+      ? !samples.length
+        ? [[], [], []]
+        : [samples, historyRef.current[0] ?? [], historyRef.current[1] ?? []]
+      : historyRef.current;
+    historyRef.current = nextHistory;
+    renderHistory(nextHistory);
+  }, [renderHistory]);
 
   const attach = useCallback(
     (chart: AuxChartInstance) => {
       chartRef.current = chart;
       if (chart.isDestructed?.())
         return;
-      if (graphRef.current)
+      if (graphRefs.current.length)
         return;
       if (chart.svg && !gradDisposeRef.current)
         gradDisposeRef.current = installMsGradient(chart.svg);
-      graphRef.current = chart.addGraph({
-        dots: [],
-        type: 'L',
-        mode: 'line',
-        color: '',
-      });
-      pushDots(samplesRef.current);
+
+      const layers: (AuxGraphInstance | null)[] = [null, null, null];
+      for (let historyIdx = GONIO_TRAIL_OPACITIES.length - 1; historyIdx >= 0; --historyIdx) {
+        const graph = chart.addGraph({
+          dots: [],
+          type: 'L',
+          mode: 'line',
+          color: '',
+        });
+        if (graph.element)
+          graph.element.style.opacity = String(GONIO_TRAIL_OPACITIES[historyIdx]);
+        layers[historyIdx] = graph;
+      }
+      graphRefs.current = layers;
+      pushDots(historyRef.current[0] ?? [], false);
     },
     [pushDots],
   );
 
   const detach = useCallback(() => {
     const chart = chartRef.current;
-    const graph = graphRef.current;
-    graphRef.current = null;
+    const graphs = graphRefs.current;
+    graphRefs.current = [];
     chartRef.current = null;
     gradDisposeRef.current?.();
     gradDisposeRef.current = null;
-    if (chart && graph && !chart.isDestructed?.()) {
-      try {
-        chart.removeGraph(graph);
-      } catch {
-        /* destroyed */
+    if (chart && !chart.isDestructed?.()) {
+      for (const graph of graphs) {
+        if (!graph)
+          continue;
+        try {
+          chart.removeGraph(graph);
+        } catch {
+          /* destroyed */
+        }
       }
     }
   }, []);
@@ -287,7 +314,7 @@ export function Goniometer(props: GoniometerProps) {
   useEffect(() => () => detach(), [detach]);
 
   useEffect(() => {
-    pushDots(samplesRef.current);
+    pushDots(historyRef.current[0] ?? [], false);
   }, [drawMode, pushDots]);
 
   useEffect(() => {
@@ -298,13 +325,13 @@ export function Goniometer(props: GoniometerProps) {
     return samples$.subscribe(sync);
   }, [samples$, pushDots]);
 
-  const cls = ['Goniometer', `mode-${drawMode}`, className ?? '']
+  const cls = ['GonioMeter', `mode-${drawMode}`, className ?? '']
     .filter(Boolean)
     .join(' ');
   return (
     <div className={cls}>
-      <GoniometerChrome />
-      <ChartWidget className="Goniometer-plot" widgetRef={widgetRef} {...rest} />
+      <GonioMeterChrome />
+      <ChartWidget className="GonioMeter-plot" widgetRef={widgetRef} {...rest} />
     </div>
   );
 }

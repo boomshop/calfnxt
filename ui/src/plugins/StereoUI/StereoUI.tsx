@@ -4,7 +4,7 @@ import {
   Buttons,
   Toggle,
   CorrelationMeter,
-  Goniometer,
+  GonioMeter,
 } from '../../widgets';
 import {
   STEREO_MODE_ENTRIES,
@@ -388,7 +388,7 @@ export function StereoUI(props: StereoUIProps) {
           {...{ 'value.format': formatBalance }}
           {...edit(paramIds.balance_out)}
         />
-        <Goniometer samples$={host.gonio$} />
+        <GonioMeter samples$={host.gonio$} />
         <CorrelationMeter value$={host.corr$} />
       </div>
     </div>
