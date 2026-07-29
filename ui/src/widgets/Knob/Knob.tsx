@@ -24,6 +24,8 @@ const handcorr = 1;
 const KnobOptions = {
   'value.format': (v: number) => v.toFixed(2),
   show_value: true,
+  /** Select-all on focus (middle-click edit + AUX value click). */
+  auto_select: true,
   presets: {
     tiny: {
       margin: 0,
@@ -109,11 +111,19 @@ const KnobWidget = componentFromWidget(
   'Knob',
 );
 
+type AuxValueWidget = {
+  _input: HTMLInputElement;
+  _value_clicked: () => unknown;
+  __editing?: boolean;
+  isDestructed?: () => boolean;
+};
+
 type AuxKnobInstance = {
   get: (key: string) => unknown;
   subscribe: (event: string, cb: (...args: unknown[]) => void) => () => void;
   isDestructed: () => boolean;
   element: Element;
+  value?: AuxValueWidget;
 };
 
 /** base=0 and value above base → CSS hook for boost styling. */
@@ -129,6 +139,49 @@ function syncOverClass(knob: AuxKnobInstance) {
     base > min &&
     value > base;
   knob.element.classList.toggle('over', over);
+}
+
+/** Middle-click: enter numeric edit (Value sits under the SVG for drag clarity). */
+function beginNumericEdit(knob: AuxKnobInstance) {
+  if (knob.isDestructed()) return;
+  const value = knob.value;
+  if (!value || value.isDestructed?.()) return;
+  if (value.__editing) {
+    value._input.select();
+    return;
+  }
+  value._value_clicked();
+}
+
+/**
+ * Focus after middle-button release. Focusing on mousedown lets Linux paste the
+ * primary selection into the newly focused input on mouseup.
+ */
+function beginNumericEditFromMiddle(knob: AuxKnobInstance) {
+  if (knob.isDestructed()) return;
+  const value = knob.value;
+  if (!value || value.isDestructed?.()) return;
+  const input = value._input;
+  const blockPrimaryPaste = (e: Event) => {
+    e.preventDefault();
+  };
+  // Catch any paste that still races past preventDefault on the mouse events.
+  input.addEventListener('paste', blockPrimaryPaste, true);
+  beginNumericEdit(knob);
+  window.setTimeout(() => {
+    input.removeEventListener('paste', blockPrimaryPaste, true);
+  }, 0);
+}
+
+function isMiddleButton(e: Event): boolean {
+  return 'button' in e && (e as MouseEvent).button === 1;
+}
+
+function suppressMiddleDefault(e: Event) {
+  if (!isMiddleButton(e)) return false;
+  e.preventDefault();
+  e.stopPropagation();
+  return true;
 }
 
 export interface KnobProps {
@@ -175,9 +228,37 @@ export function Knob(props: KnobProps) {
     (knob: AuxKnobInstance) => {
       detach();
       if (knob.isDestructed()) return;
+
+      // Capture phase: stop Linux primary-paste / autoscroll before the browser acts.
+      const onMiddleDown = (e: Event) => {
+        suppressMiddleDefault(e);
+      };
+      const onMiddleUp = (e: Event) => {
+        if (!suppressMiddleDefault(e)) return;
+        beginNumericEditFromMiddle(knob);
+      };
+      const onMiddleClick = (e: Event) => {
+        suppressMiddleDefault(e);
+      };
+
+      const el = knob.element;
+      const opts: AddEventListenerOptions = { capture: true };
+      el.addEventListener('pointerdown', onMiddleDown, opts);
+      el.addEventListener('mousedown', onMiddleDown, opts);
+      el.addEventListener('pointerup', onMiddleUp, opts);
+      el.addEventListener('mouseup', onMiddleUp, opts);
+      el.addEventListener('auxclick', onMiddleClick, opts);
+
       unsubsRef.current = [
         knob.subscribe('set_value', () => syncOverClass(knob)),
         knob.subscribe('set_base', () => syncOverClass(knob)),
+        () => {
+          el.removeEventListener('pointerdown', onMiddleDown, opts);
+          el.removeEventListener('mousedown', onMiddleDown, opts);
+          el.removeEventListener('pointerup', onMiddleUp, opts);
+          el.removeEventListener('mouseup', onMiddleUp, opts);
+          el.removeEventListener('auxclick', onMiddleClick, opts);
+        },
       ];
       syncOverClass(knob);
     },

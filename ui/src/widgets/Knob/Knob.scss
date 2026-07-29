@@ -84,6 +84,8 @@
   }
 
   > .aux-knob {
+    position: relative;
+    z-index: 1;
     overflow: show;
 
     > svg {
@@ -132,12 +134,21 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    /* Idle: drag through the centered readout (middle-click opens edit). */
+    z-index: 0;
+    pointer-events: none;
 
     > input {
       text-align: center !important;
       background: transparent;
       color: var(--color);
       border-radius: 2px;
+    }
+
+    /* Editing: above SVG so caret can be placed / text selected by click. */
+    &.aux-active {
+      z-index: 2;
+      pointer-events: auto;
     }
   }
 
