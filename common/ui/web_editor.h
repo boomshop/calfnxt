@@ -4,32 +4,30 @@
 #include "public.sdk/source/vst/vsteditcontroller.h"
 #include "public.sdk/source/vst/vstparameters.h"
 
-#include <gtk/gtk.h>
-#include <webkit2/webkit2.h>
-
 #include "viz_source.h"
 
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstddef>
+#include <string>
+#include <sys/types.h>
 
 namespace calfNXT {
 namespace Ui {
 
-/** VST3 editor: WebKitGTK + X11 embed + host run loop.
+/**
+ * VST3 editor proxy (host process): no GTK/WebKit.
+ *
+ * Spawns `calfnxt-web-host` (out-of-process GtkPlug + WebKit) and speaks the
+ * same JSON bridge over a Unix socketpair — required so Ardour’s internalized
+ * toolkit does not collide with system GTK3.
  *
  * Bridge (web → host): JSON via calfnxtNative.post
  *   {"t":"begin"|"set"|"end"|"sync","id":…}  (set uses q/d fixed-point)
- *   {"t":"viewport",w,h}  // CSS px from window.innerWidth/Height (once)
- * Host → web:
- *   window.__calfnxtOnHost({t:"param",id:…,v:…})
- *   window.__calfnxtOnHost({t:"io",ch:N})
- *   window.__calfnxtOnHost({t:"viz",id:"out",kind:"levels",v:[…]})
- *
- * Size: open at design CSS size from *.plugin.json. UI reports measured CSS
- * viewport; host/window pixels ÷ CSS → scale; resizeView(design × scale).
- * Override: CALFNXT_UI_SCALE (takes priority over measurement). No WebKit zoom.
+ *   {"t":"viewport",w,h}
+ * Host → web (via helper evalJs):
+ *   window.__calfnxtOnHost({t:"param"|"io"|"viz",…})
  */
 class WebEditor : public Steinberg::CPluginView, public Steinberg::Linux::ITimerHandler
 {
@@ -60,7 +58,6 @@ public:
   void evalJs(const char* js);
   void pushParamPlain(Steinberg::Vst::ParamID id, double plain);
   void pushAllParams();
-  /** Push `{t:"io",ch}` from current output bus arrangement (no audio peaks). */
   void pushIoChannels();
 
   Steinberg::Vst::EditController* controller() const { return controller_; }
@@ -70,9 +67,8 @@ protected:
   virtual bool onWebMessage(const char* json);
 
 private:
-  void ensureGtk();
-  bool openWeb(void* x11Parent);
-  void closeWeb();
+  bool openHelper(void* x11Parent);
+  void closeHelper();
   void attachParamListeners();
   void detachParamListeners();
   void flushPendingParams();
@@ -81,46 +77,40 @@ private:
   void flushVizLevels(const char* streamId, float* levels, int n);
   void flushVizArray(const char* streamId, const char* kind, float* values, int n);
   int queryIoChannelCount() const;
-  void onWebProcessTerminated(WebKitWebProcessTerminationReason reason);
 
-  void syncNativeSize();
   void requestHostSize();
-  /** Apply design×scale via resizeView (no zoom). */
   bool applyDesignScale(double scale, const char* reason);
-  /** CSS viewport from UI → scale = hostPx/cssPx → resize to design×scale. */
   bool applyCssViewport(int cssW, int cssH);
 
-  static void onUriScheme(WebKitURISchemeRequest* request, gpointer userData);
-  static void onScriptMessage(WebKitUserContentManager* manager, WebKitJavascriptResult* js,
-                              gpointer userData);
-  static void onLoadChanged(WebKitWebView* view, WebKitLoadEvent event, gpointer userData);
-  static void onWebProcessTerminatedCb(WebKitWebView* view,
-                                       WebKitWebProcessTerminationReason reason,
-                                       gpointer userData);
+  bool sendLine(const char* line);
+  void pumpSocket();
+  void handleHelperLine(const std::string& line);
+  void sendSizeToHelper();
+  static bool findHelperPath(char* out, size_t cap);
+  static void fillWebRoot(char* out, size_t cap);
 
   Steinberg::Vst::EditController* controller_ = nullptr;
   IVizSource* vizSource_ = nullptr;
   char entryHtml_[256] {};
-  GtkWidget* plug_ = nullptr;
-  WebKitWebView* webview_ = nullptr;
-  WebKitWebContext* ctx_ = nullptr;
+  char webRoot_[4096] {};
   Steinberg::IPtr<Steinberg::Linux::IRunLoop> runLoop_;
   bool timerRegistered_ = false;
   bool listeningParams_ = false;
   bool suppressParamPush_ = false;
   bool requestingHostResize_ = false;
   bool viewportApplied_ = false;
-  char webRoot_[4096] {};
+  bool pageReady_ = false;
+  int sock_ = -1;
+  pid_t helperPid_ = -1;
+  std::string readBuf_;
   std::chrono::steady_clock::time_point lastVizFlush_ {};
   std::chrono::steady_clock::time_point lastEnvVizFlush_ {};
 
-  /** Editor size from plugin descriptor (design CSS pixels). */
   Steinberg::int32 designWidth_ = 360;
   Steinberg::int32 designHeight_ = 420;
 
   static constexpr std::uint32_t kMaxQueuedParams = 16;
   static constexpr int kVizHz = 30;
-  /** Envelope SVG paths are heavy under software WebKit — match meter rate. */
   static constexpr int kEnvVizHz = 30;
   std::atomic<std::uint32_t> pendingParamMask_ {0};
   std::atomic<double> pendingParamPlain_[kMaxQueuedParams] {};

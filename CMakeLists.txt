@@ -46,7 +46,8 @@ add_custom_target(calfnxt-plugins
     calfnxt-stereo-resources
     calfnxt-transients
     calfnxt-transients-resources
-  COMMENT "Build all calfNXT VST3 plugins (+ embedded UI)"
+    calfnxt-web-host
+  COMMENT "Build all calfNXT VST3 plugins (+ embedded UI + web-host)"
 )
 
 message(STATUS "calfnxt: common/{ui,dsp} + dsp/{equalizer,stereo,transients} + shared ui/dist")

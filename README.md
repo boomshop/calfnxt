@@ -61,8 +61,8 @@ CMake requires these modules (see root `CMakeLists.txt`):
 
 | pkg-config id | Purpose |
 |---------------|---------|
-| `gtk+-3.0` | GtkPlug / X11 embed shell |
-| `webkit2gtk-4.1` | WebKitGTK editor (`WebKitWebView`) |
+| `gtk+-3.0` | GtkPlug / X11 embed (**only** in `calfnxt-web-host`, not the `.so`) |
+| `webkit2gtk-4.1` | WebKitGTK editor in `calfnxt-web-host` |
 
 Related runtime pieces (usually pulled in as dependencies of the packages above): GLib, GObject, Cairo, Soup, X11.
 
@@ -225,5 +225,5 @@ This is useful for layout and widget work. It does **not** replace installing in
 
 - Codegen runs as part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++ params + `ui/src/generated/`).
 - Install also removes obsolete `calfNXTVolume.vst3` / `calfNXTBalance.vst3` / `calfNXTStereoTools.vst3` if still present from earlier builds.
-- Env flags: `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE` (see `AGENTS.md`).
-- The editor embeds via X11 (`GtkPlug`); Wayland-only sessions may need `GDK_BACKEND=x11` for the host.
+- Env flags: `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU` (see `AGENTS.md`).
+- The editor UI runs **out-of-process** (`calfnxt-web-host` next to the `.so`) so Ardour does not load GTK3 into its process. Embed is still X11 `GtkPlug`; Wayland-only sessions may need `GDK_BACKEND=x11` for the host/helper.

@@ -13,6 +13,12 @@ Greenfield **VST3 + WebKitGTK** (Linux first) plugin suite. One `.vst3` per plug
 Shared React SPA UI embedded into each bundle’s `Resources/`. Branding: **calfNXT**
 (namespace `calfNXT`, cmake `calfnxt`, URI `calfnxt://`, bridge `calfnxtNative`).
 
+**Editor process model:** the VST3 `.so` must **not** link GTK/WebKit (Ardour’s
+internalized toolkit collides with system GTK3 — `GdkDisplay` GType abort).
+`WebEditor` in the host process is a thin proxy: it spawns `calfnxt-web-host`
+(GtkPlug + WebKit, XEmbed into the host XID) and forwards the JSON bridge over a
+Unix socketpair. Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
+
 Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`).
 More Calf-heritage processors planned.
 
@@ -44,7 +50,7 @@ Classic upstream “Calf Studio Gear” may still be mentioned as the DSP herita
 ## Layout
 
 ```
-common/ui/     WebEditor (WebKitGTK + X11 GtkPlug + host IRunLoop timer)
+common/ui/     WebEditor proxy (host process) + calfnxt-web-host (GtkPlug/WebKit OOP)
 common/dsp/    EffectBase (SingleComponentEffect), peak_hold.h
 dsp/equalizer/ equalizer.plugin.json + DSP + codegen
 dsp/stereo/    stereo.plugin.json + DSP + codegen
@@ -114,7 +120,10 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 3. Native: `scale = hostPx / cssPx` → `resizeView(design × scale)`. No WebKit zoom.
 4. Optional override: `CALFNXT_UI_SCALE` (e.g. `1.35` or `1`) wins over measurement.
 
-`WebEditor`: HW accel `ALWAYS` (opt out `CALFNXT_WEB_NO_GPU=1`), `canResize` + `onSize` sync GtkPlug/WebView, `web-process-terminated` → reload.
+`WebEditor` (proxy): IRunLoop ~16 ms pumps the socket + param/viz flush.
+`calfnxt-web-host`: HW accel `ALWAYS` (opt out `CALFNXT_WEB_NO_GPU=1`), GtkPlug
+size sync, `web-process-terminated` → reload + `{t:"_ready"}`.
+Verify Ardour-safe link: `ldd …/*.so` must not list `libgtk-3` / `libwebkit`.
 
 ---
 
@@ -189,7 +198,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
 | Concern | Files |
 |---------|--------|
-| Editor / bridge | `common/ui/web_editor.{h,cpp}`, `viz_source.h` |
+| Editor / bridge | `common/ui/web_editor.{h,cpp}`, `web_host_main.cpp`, `viz_source.h` |
 | DSP base / I/O / peaks / EQ | `common/dsp/effect_base.*`, `io_stage.h`, `peak_hold.h`, `biquad.h`, `eq_band.h`, `compressor.h` |
 | Reference (WebView/params) | `examples/auxvst/` (call it **auxvst**, not MDA) |
 | Equalizer DSP | `dsp/equalizer/source/*_dsp.*` |

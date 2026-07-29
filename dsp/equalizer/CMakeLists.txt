@@ -52,6 +52,7 @@ target_link_libraries(${target}
 target_compile_features(${target} PUBLIC cxx_std_17)
 
 calfnxt_copy_plugin_ui(${target} equalizer)
+calfnxt_copy_web_host(${target})
 
 # TARGET_FILE_DIR = …/<plugin>.vst3/Contents/<arch> → bundle root is ../..
 add_custom_target(install-user-vst3
@@ -83,4 +84,5 @@ add_custom_target(install-user-vst3
     calfnxt-stereo-resources
     calfnxt-transients
     calfnxt-transients-resources
+    calfnxt-web-host
 )

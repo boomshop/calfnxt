@@ -1,0 +1,468 @@
+/**
+ * calfnxt-web-host — out-of-process GtkPlug + WebKitGTK editor.
+ *
+ * Spawned by the VST3 module (no GTK in the host process). Speaks newline-
+ * delimited messages on an inherited Unix socket FD:
+ *   plugin → host: JS one-liners to evaluate, or {"t":"_size","w","h"}
+ *   host → plugin: UI JSON from calfnxtNative.post, or {"t":"_ready"}
+ */
+
+#include <gdk/gdkx.h>
+#include <glib-unix.h>
+#include <gtk/gtk.h>
+#include <gtk/gtkx.h>
+#include <jsc/jsc.h>
+#include <webkit2/webkit2.h>
+
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
+#include <string>
+#include <unistd.h>
+
+namespace {
+
+struct HostState
+{
+  int sock = -1;
+  std::string readBuf;
+  char webRoot[4096] {};
+  char entryHtml[256] {};
+  int width = 360;
+  int height = 420;
+  GtkWidget* plug = nullptr;
+  WebKitWebView* webview = nullptr;
+  WebKitWebContext* ctx = nullptr;
+  guint sockSource = 0;
+};
+
+HostState g;
+
+bool envFlag(const char* name)
+{
+  const char* s = std::getenv(name);
+  return s != nullptr && s[0] != '\0';
+}
+
+bool sendLine(const char* line)
+{
+  if (g.sock < 0 || !line)
+    return false;
+  std::string msg(line);
+  if (msg.empty() || msg.back() != '\n')
+    msg.push_back('\n');
+  const char* p = msg.data();
+  size_t left = msg.size();
+  while (left > 0)
+  {
+    const ssize_t w = ::write(g.sock, p, left);
+    if (w < 0)
+    {
+      if (errno == EINTR)
+        continue;
+      return false;
+    }
+    p += static_cast<size_t>(w);
+    left -= static_cast<size_t>(w);
+  }
+  return true;
+}
+
+void syncNativeSize()
+{
+  if (!g.plug)
+    return;
+  const int w = g.width;
+  const int h = g.height;
+  if (w < 1 || h < 1)
+    return;
+  gtk_widget_set_size_request(g.plug, w, h);
+  if (g.webview)
+  {
+    webkit_web_view_set_zoom_level(g.webview, 1.0);
+    gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
+    gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
+    gtk_widget_set_size_request(GTK_WIDGET(g.webview), w, h);
+  }
+  if (GdkWindow* win = gtk_widget_get_window(g.plug))
+    gdk_window_resize(win, w, h);
+  gtk_widget_queue_resize(g.plug);
+}
+
+void evalJs(const char* js)
+{
+  if (!g.webview || !js)
+    return;
+  webkit_web_view_evaluate_javascript(
+    g.webview, js, -1, nullptr, nullptr, nullptr,
+    +[](GObject* object, GAsyncResult* result, gpointer) {
+      GError* error = nullptr;
+      JSCValue* value =
+        webkit_web_view_evaluate_javascript_finish(WEBKIT_WEB_VIEW(object), result, &error);
+      if (error)
+      {
+        std::fprintf(stderr, "[calfnxt-web-host] evalJs: %s\n", error->message);
+        g_error_free(error);
+      }
+      if (value)
+        g_object_unref(value);
+    },
+    nullptr);
+}
+
+bool jsonHasType(const char* s, const char* type)
+{
+  char needle[40];
+  std::snprintf(needle, sizeof needle, "\"t\":\"%s\"", type);
+  if (std::strstr(s, needle))
+    return true;
+  std::snprintf(needle, sizeof needle, "\"t\": \"%s\"", type);
+  return std::strstr(s, needle) != nullptr;
+}
+
+bool jsonNumberAfterKey(const char* s, const char* key, double& out)
+{
+  const char* p = std::strstr(s, key);
+  if (!p)
+    return false;
+  p = std::strchr(p, ':');
+  if (!p)
+    return false;
+  ++p;
+  while (*p == ' ' || *p == '\t')
+    ++p;
+  char* end = nullptr;
+  out = std::strtod(p, &end);
+  return end != p;
+}
+
+void handlePluginLine(const std::string& line)
+{
+  if (line.empty())
+    return;
+  if (jsonHasType(line.c_str(), "_size"))
+  {
+    double w = 0.0;
+    double h = 0.0;
+    if (jsonNumberAfterKey(line.c_str(), "\"w\"", w)
+        && jsonNumberAfterKey(line.c_str(), "\"h\"", h))
+    {
+      g.width = static_cast<int>(w);
+      g.height = static_cast<int>(h);
+      syncNativeSize();
+    }
+    return;
+  }
+  evalJs(line.c_str());
+}
+
+void onUriScheme(WebKitURISchemeRequest* request, gpointer)
+{
+  const char* path = webkit_uri_scheme_request_get_path(request);
+  if (!path || !path[0] || !std::strcmp(path, "/"))
+    path = "/index.html";
+  std::string rel = path;
+  if (!rel.empty() && rel[0] == '/')
+    rel.erase(0, 1);
+  if (rel.rfind("bundle/", 0) == 0)
+    rel.erase(0, 7);
+  if (rel.empty())
+    rel = "index.html";
+  if (const auto hash = rel.find('#'); hash != std::string::npos)
+    rel.resize(hash);
+  if (rel.empty())
+    rel = "index.html";
+
+  char full[4096];
+  std::snprintf(full, sizeof full, "%s/%s", g.webRoot, rel.c_str());
+
+  GError* err = nullptr;
+  GFile* file = g_file_new_for_path(full);
+  GFileInputStream* stream = g_file_read(file, nullptr, &err);
+  if (!stream)
+  {
+    webkit_uri_scheme_request_finish_error(request, err);
+    if (err)
+      g_error_free(err);
+    g_object_unref(file);
+    return;
+  }
+  GFileInfo* info =
+    g_file_query_info(file, G_FILE_ATTRIBUTE_STANDARD_SIZE, G_FILE_QUERY_INFO_NONE, nullptr, nullptr);
+  const goffset size = info ? g_file_info_get_size(info) : -1;
+  if (info)
+    g_object_unref(info);
+
+  const char* mime = "text/html";
+  if (std::strstr(full, ".js"))
+    mime = "text/javascript";
+  else if (std::strstr(full, ".css"))
+    mime = "text/css";
+  else if (std::strstr(full, ".svg"))
+    mime = "image/svg+xml";
+  else if (std::strstr(full, ".png"))
+    mime = "image/png";
+  else if (std::strstr(full, ".woff2"))
+    mime = "font/woff2";
+  else if (std::strstr(full, ".ttf"))
+    mime = "font/ttf";
+
+  auto* headers = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
+  soup_message_headers_append(headers, "Access-Control-Allow-Origin", "*");
+  auto* response = webkit_uri_scheme_response_new(G_INPUT_STREAM(stream), size);
+  webkit_uri_scheme_response_set_status(response, SOUP_STATUS_OK, nullptr);
+  webkit_uri_scheme_response_set_content_type(response, mime);
+  webkit_uri_scheme_response_set_http_headers(response, headers);
+  webkit_uri_scheme_request_finish_with_response(request, response);
+  g_object_unref(response);
+  g_object_unref(stream);
+  g_object_unref(file);
+}
+
+void onScriptMessage(WebKitUserContentManager*, WebKitJavascriptResult* js, gpointer)
+{
+  JSCValue* value = webkit_javascript_result_get_js_value(js);
+  if (!value)
+    return;
+  char* s = jsc_value_is_string(value) ? jsc_value_to_string(value) : jsc_value_to_json(value, 0);
+  if (!s)
+    return;
+  sendLine(s);
+  g_free(s);
+}
+
+void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
+{
+  if (ev == WEBKIT_LOAD_FINISHED)
+    sendLine("{\"t\":\"_ready\"}");
+}
+
+void onWebProcessTerminated(WebKitWebView*, WebKitWebProcessTerminationReason reason, gpointer)
+{
+  std::fprintf(stderr,
+               "[calfnxt-web-host] web process terminated (reason=%d) — reloading\n",
+               static_cast<int>(reason));
+  if (!g.webview)
+    return;
+  char uri[512];
+  std::snprintf(uri, sizeof uri, "calfnxt://bundle/%s", g.entryHtml);
+  webkit_web_view_load_uri(g.webview, uri);
+}
+
+gboolean onSocketReadable(gint /*fd*/, GIOCondition condition, gpointer)
+{
+  if (condition & (G_IO_ERR | G_IO_HUP | G_IO_NVAL))
+  {
+    gtk_main_quit();
+    return G_SOURCE_REMOVE;
+  }
+  if (!(condition & G_IO_IN))
+    return G_SOURCE_CONTINUE;
+
+  char chunk[8192];
+  for (;;)
+  {
+    const ssize_t n = ::read(g.sock, chunk, sizeof chunk);
+    if (n < 0)
+    {
+      if (errno == EINTR)
+        continue;
+      if (errno == EAGAIN || errno == EWOULDBLOCK)
+        break;
+      gtk_main_quit();
+      return G_SOURCE_REMOVE;
+    }
+    if (n == 0)
+    {
+      gtk_main_quit();
+      return G_SOURCE_REMOVE;
+    }
+    g.readBuf.append(chunk, static_cast<size_t>(n));
+    for (;;)
+    {
+      const auto pos = g.readBuf.find('\n');
+      if (pos == std::string::npos)
+        break;
+      std::string line = g.readBuf.substr(0, pos);
+      g.readBuf.erase(0, pos + 1);
+      while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+        line.pop_back();
+      handlePluginLine(line);
+    }
+  }
+  return G_SOURCE_CONTINUE;
+}
+
+void printUsage(const char* argv0)
+{
+  std::fprintf(stderr,
+               "Usage: %s --fd N --parent XID --root DIR --entry HTML "
+               "[--width W] [--height H]\n",
+               argv0);
+}
+
+} // namespace
+
+int main(int argc, char** argv)
+{
+  unsigned long long parentXid = 0;
+  int fd = -1;
+
+  for (int i = 1; i < argc; ++i)
+  {
+    auto need = [&](const char* opt) -> const char* {
+      if (i + 1 >= argc)
+      {
+        std::fprintf(stderr, "[calfnxt-web-host] missing value for %s\n", opt);
+        std::exit(2);
+      }
+      return argv[++i];
+    };
+    if (!std::strcmp(argv[i], "--fd"))
+      fd = std::atoi(need("--fd"));
+    else if (!std::strcmp(argv[i], "--parent"))
+      parentXid = std::strtoull(need("--parent"), nullptr, 10);
+    else if (!std::strcmp(argv[i], "--root"))
+      std::snprintf(g.webRoot, sizeof g.webRoot, "%s", need("--root"));
+    else if (!std::strcmp(argv[i], "--entry"))
+      std::snprintf(g.entryHtml, sizeof g.entryHtml, "%s", need("--entry"));
+    else if (!std::strcmp(argv[i], "--width"))
+      g.width = std::atoi(need("--width"));
+    else if (!std::strcmp(argv[i], "--height"))
+      g.height = std::atoi(need("--height"));
+    else if (!std::strcmp(argv[i], "--help") || !std::strcmp(argv[i], "-h"))
+    {
+      printUsage(argv[0]);
+      return 0;
+    }
+    else
+    {
+      std::fprintf(stderr, "[calfnxt-web-host] unknown arg: %s\n", argv[i]);
+      printUsage(argv[0]);
+      return 2;
+    }
+  }
+
+  if (fd < 0 || parentXid == 0 || !g.webRoot[0] || !g.entryHtml[0])
+  {
+    printUsage(argv[0]);
+    return 2;
+  }
+  g.sock = fd;
+  {
+    const int flags = fcntl(g.sock, F_GETFL, 0);
+    if (flags >= 0)
+      fcntl(g.sock, F_SETFL, flags | O_NONBLOCK);
+  }
+
+  gdk_set_allowed_backends("x11");
+  if (!gtk_init_check(&argc, &argv))
+  {
+    std::fprintf(stderr, "[calfnxt-web-host] gtk_init_check failed\n");
+    return 1;
+  }
+
+  g.ctx = webkit_web_context_new();
+  webkit_web_context_register_uri_scheme(g.ctx, "calfnxt", onUriScheme, nullptr, nullptr);
+  auto* sec = webkit_web_context_get_security_manager(g.ctx);
+  webkit_security_manager_register_uri_scheme_as_local(sec, "calfnxt");
+  webkit_security_manager_register_uri_scheme_as_secure(sec, "calfnxt");
+  webkit_security_manager_register_uri_scheme_as_cors_enabled(sec, "calfnxt");
+
+  auto* ucm = webkit_user_content_manager_new();
+  g_signal_connect(ucm, "script-message-received::calfnxt", G_CALLBACK(onScriptMessage), nullptr);
+  webkit_user_content_manager_register_script_message_handler(ucm, "calfnxt");
+
+  static const char bridge[] =
+    "window.__calfnxtHostQ=window.__calfnxtHostQ||[];"
+    "window.__calfnxtOnHost=window.__calfnxtOnHost||function(m){window.__calfnxtHostQ.push(m);};"
+    "window.calfnxtNative={post:function(m){"
+    "var src=typeof m==='string'?JSON.parse(m):m;"
+    "var o={t:src.t};"
+    "if(src.id!=null&&src.t!=='vizcfg')o.id=src.id|0;"
+    "if(src.t==='set'&&typeof src.v==='number'){o.q=Math.round(src.v*1e6);o.d=1e6;}"
+    "if(src.t==='viewport'){"
+    "if(src.w!=null)o.w=src.w|0;if(src.h!=null)o.h=src.h|0;"
+    "}"
+    "if(src.t==='vizcfg'){"
+    "if(src.id!=null)o.id=String(src.id);if(src.bins!=null)o.bins=src.bins|0;"
+    "}"
+    "window.webkit.messageHandlers.calfnxt.postMessage(JSON.stringify(o));}};"
+    ;
+  auto* script = webkit_user_script_new(bridge, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+                                        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, nullptr, nullptr);
+  webkit_user_content_manager_add_script(ucm, script);
+  webkit_user_script_unref(script);
+
+  g.webview = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "web-context", g.ctx,
+                                          "user-content-manager", ucm, nullptr));
+  g_object_unref(ucm);
+
+  auto* settings = webkit_web_view_get_settings(g.webview);
+  const bool noGpu = envFlag("CALFNXT_WEB_NO_GPU");
+  webkit_settings_set_hardware_acceleration_policy(
+    settings,
+    noGpu ? WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER
+          : WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
+  const bool webDebug = envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR");
+  webkit_settings_set_enable_developer_extras(settings, webDebug ? TRUE : FALSE);
+  if (webDebug)
+    webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
+
+  g.plug = gtk_plug_new(static_cast<Window>(parentXid));
+  gtk_widget_set_size_request(g.plug, g.width, g.height);
+  gtk_container_add(GTK_CONTAINER(g.plug), GTK_WIDGET(g.webview));
+  gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
+  gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
+  gtk_widget_show_all(g.plug);
+  syncNativeSize();
+
+  g_signal_connect(g.webview, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
+  g_signal_connect(g.webview, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
+  g_signal_connect(g.webview, "load-failed",
+                   G_CALLBACK(+[](WebKitWebView*, WebKitLoadEvent, const gchar* failingUri,
+                                  GError* error, gpointer) -> gboolean {
+                     std::fprintf(stderr, "[calfnxt-web-host] load-failed: %s (%s)\n",
+                                  failingUri ? failingUri : "?",
+                                  error && error->message ? error->message : "?");
+                     return FALSE;
+                   }),
+                   nullptr);
+
+  char uri[512];
+  std::snprintf(uri, sizeof uri, "calfnxt://bundle/%s", g.entryHtml);
+  webkit_web_view_load_uri(g.webview, uri);
+
+  if (envFlag("CALFNXT_WEB_INSPECTOR"))
+  {
+    auto* inspector = webkit_web_view_get_inspector(g.webview);
+    webkit_web_inspector_show(inspector);
+  }
+
+  g.sockSource = g_unix_fd_add(g.sock, static_cast<GIOCondition>(G_IO_IN | G_IO_ERR | G_IO_HUP),
+                               onSocketReadable, nullptr);
+
+  gtk_main();
+
+  if (g.sockSource)
+    g_source_remove(g.sockSource);
+  if (g.plug)
+  {
+    gtk_widget_destroy(g.plug);
+    g.plug = nullptr;
+    g.webview = nullptr;
+  }
+  if (g.ctx)
+  {
+    g_object_unref(g.ctx);
+    g.ctx = nullptr;
+  }
+  if (g.sock >= 0)
+  {
+    ::close(g.sock);
+    g.sock = -1;
+  }
+  return 0;
+}

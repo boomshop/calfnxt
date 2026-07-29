@@ -41,9 +41,10 @@ Hand-written: DSP algorithm + React layout (`ui/src/plugins/<Name>UI/`).
 Stereo I/O, float32/64, `createView` → WebEditor, param helpers, host default-value notify.
 Optional `vizSource()` for non-parameter telemetry (peak meters).
 
-### `common/ui` — `WebEditor`
+### `common/ui` — `WebEditor` + `calfnxt-web-host`
 
-WebKitGTK + X11 embed + host run loop + `calfnxt://` bundle scheme.
+Host-process **proxy** (`WebEditor`): VST3 `IPlugView`, spawn helper, Unix-socket JSON bridge, IRunLoop timer.
+UI process **`calfnxt-web-host`**: WebKitGTK + X11 `GtkPlug` + `calfnxt://` scheme (keeps GTK out of Ardour).
 Param bridge + viz flush (~30 Hz): `{t:"viz",id:"in"|"out",kind:"levels",v:[…]}`.
 Editor HiDPI: UI `{t:"viewport"}` → `resizeView` (optional `CALFNXT_UI_SCALE`).
 

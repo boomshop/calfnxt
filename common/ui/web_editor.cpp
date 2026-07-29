@@ -3,10 +3,6 @@
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/vstspeaker.h"
 
-#include <gdk/gdkx.h>
-#include <gtk/gtkx.h>
-#include <jsc/jsc.h>
-
 #include <algorithm>
 #include <cstdarg>
 #include <charconv>
@@ -16,7 +12,17 @@
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <spawn.h>
+#include <signal.h>
 #include <string>
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+extern char** environ;
 
 namespace calfNXT {
 namespace Ui {
@@ -26,8 +32,6 @@ using namespace Steinberg::Vst;
 
 namespace {
 
-bool g_gtkReady = false;
-
 void dlAnchor() {}
 
 struct SuppressParamPush
@@ -36,28 +40,6 @@ struct SuppressParamPush
   explicit SuppressParamPush(bool& f) : flag(f) { flag = true; }
   ~SuppressParamPush() { flag = false; }
 };
-
-void fillWebRoot(char* out, size_t cap)
-{
-  Dl_info info {};
-  if (dladdr(reinterpret_cast<void*>(&dlAnchor), &info) && info.dli_fname)
-  {
-    std::string so(info.dli_fname);
-    auto pos = so.rfind("/x86_64-linux/");
-    if (pos != std::string::npos)
-    {
-      std::snprintf(out, cap, "%s/Resources", so.substr(0, pos).c_str());
-      return;
-    }
-    auto slash = so.rfind('/');
-    if (slash != std::string::npos)
-    {
-      std::snprintf(out, cap, "%s/../Resources", so.substr(0, slash).c_str());
-      return;
-    }
-  }
-  std::snprintf(out, cap, ".");
-}
 
 bool jsonHasType(const char* s, const char* type)
 {
@@ -112,13 +94,13 @@ bool jsonStringAfterKey(const char* s, const char* key, char* out, size_t outSiz
 
 bool envFlag(const char* name)
 {
-  return g_getenv(name) != nullptr;
+  const char* s = std::getenv(name);
+  return s != nullptr && s[0] != '\0';
 }
 
-/** Optional override: CALFNXT_UI_SCALE=1.35 (or 1 to force no scaling). */
 float envFloat(const char* name)
 {
-  const char* s = g_getenv(name);
+  const char* s = std::getenv(name);
   if (!s || !s[0])
     return 0.f;
   char* end = nullptr;
@@ -133,7 +115,6 @@ int clampPx(int v, int lo, int hi)
   return std::max(lo, std::min(hi, v));
 }
 
-/** stderr when CALFNXT_WEB_DEBUG is set (Carla often hides plugin stderr). */
 void logMsg(const char* fmt, ...)
 {
   if (!envFlag("CALFNXT_WEB_DEBUG"))
@@ -149,26 +130,289 @@ void logMsg(const char* fmt, ...)
 
 } // namespace
 
-void WebEditor::syncNativeSize()
+void WebEditor::fillWebRoot(char* out, size_t cap)
 {
-  if (!plug_)
+  Dl_info info {};
+  if (dladdr(reinterpret_cast<void*>(&dlAnchor), &info) && info.dli_fname)
+  {
+    std::string so(info.dli_fname);
+    auto pos = so.rfind("/x86_64-linux/");
+    if (pos != std::string::npos)
+    {
+      std::snprintf(out, cap, "%s/Resources", so.substr(0, pos).c_str());
+      return;
+    }
+    auto slash = so.rfind('/');
+    if (slash != std::string::npos)
+    {
+      std::snprintf(out, cap, "%s/../Resources", so.substr(0, slash).c_str());
+      return;
+    }
+  }
+  std::snprintf(out, cap, ".");
+}
+
+bool WebEditor::findHelperPath(char* out, size_t cap)
+{
+  Dl_info info {};
+  if (dladdr(reinterpret_cast<void*>(&dlAnchor), &info) && info.dli_fname)
+  {
+    std::string so(info.dli_fname);
+    auto slash = so.rfind('/');
+    if (slash != std::string::npos)
+    {
+      std::snprintf(out, cap, "%s/calfnxt-web-host", so.substr(0, slash).c_str());
+      if (access(out, X_OK) == 0)
+        return true;
+    }
+  }
+  std::snprintf(out, cap, "calfnxt-web-host");
+  return access(out, X_OK) == 0;
+}
+
+WebEditor::WebEditor(EditController* controller, ViewRect size, const char* entryHtml)
+: CPluginView(nullptr)
+, controller_(controller)
+{
+  designWidth_ = std::max<int32>(1, size.getWidth());
+  designHeight_ = std::max<int32>(1, size.getHeight());
+  rect = ViewRect(0, 0, designWidth_, designHeight_);
+  std::snprintf(entryHtml_, sizeof entryHtml_, "%s", entryHtml ? entryHtml : "index.html");
+}
+
+WebEditor::~WebEditor()
+{
+  detachParamListeners();
+  closeHelper();
+}
+
+tresult PLUGIN_API WebEditor::isPlatformTypeSupported(FIDString type)
+{
+  if (type && std::strcmp(type, kPlatformTypeX11EmbedWindowID) == 0)
+    return kResultTrue;
+  return kResultFalse;
+}
+
+bool WebEditor::sendLine(const char* line)
+{
+  if (sock_ < 0 || !line)
+    return false;
+  const size_t n = std::strlen(line);
+  std::string msg;
+  msg.reserve(n + 1);
+  msg.append(line, n);
+  if (n == 0 || line[n - 1] != '\n')
+    msg.push_back('\n');
+
+  const char* p = msg.data();
+  size_t left = msg.size();
+  while (left > 0)
+  {
+    const ssize_t w = ::write(sock_, p, left);
+    if (w < 0)
+    {
+      if (errno == EINTR)
+        continue;
+      if (errno == EAGAIN || errno == EWOULDBLOCK)
+      {
+        pollfd pfd {sock_, POLLOUT, 0};
+        if (poll(&pfd, 1, 50) <= 0)
+          return false;
+        continue;
+      }
+      logMsg("[calfnxt] socket write failed: %s\n", std::strerror(errno));
+      return false;
+    }
+    p += static_cast<size_t>(w);
+    left -= static_cast<size_t>(w);
+  }
+  return true;
+}
+
+void WebEditor::sendSizeToHelper()
+{
+  char line[96];
+  std::snprintf(line, sizeof line, "{\"t\":\"_size\",\"w\":%d,\"h\":%d}",
+                rect.getWidth(), rect.getHeight());
+  sendLine(line);
+}
+
+void WebEditor::handleHelperLine(const std::string& line)
+{
+  if (line.empty())
     return;
-  const int w = rect.getWidth();
-  const int h = rect.getHeight();
-  if (w < 1 || h < 1)
+  if (jsonHasType(line.c_str(), "_ready"))
+  {
+    for (std::uint32_t i = 0; i < kMaxQueuedParams; ++i)
+      lastFlushedValid_[i] = false;
+    lastVizFlush_ = {};
+    lastEnvVizFlush_ = {};
+    pendingParamMask_.store(0, std::memory_order_relaxed);
+    onPageReady();
+    return;
+  }
+  onWebMessage(line.c_str());
+}
+
+void WebEditor::pumpSocket()
+{
+  if (sock_ < 0)
     return;
 
-  gtk_widget_set_size_request(plug_, w, h);
-  if (webview_)
+  char chunk[4096];
+  for (;;)
   {
-    webkit_web_view_set_zoom_level(webview_, 1.0);
-    gtk_widget_set_hexpand(GTK_WIDGET(webview_), TRUE);
-    gtk_widget_set_vexpand(GTK_WIDGET(webview_), TRUE);
-    gtk_widget_set_size_request(GTK_WIDGET(webview_), w, h);
+    const ssize_t n = ::read(sock_, chunk, sizeof chunk);
+    if (n < 0)
+    {
+      if (errno == EINTR)
+        continue;
+      if (errno == EAGAIN || errno == EWOULDBLOCK)
+        break;
+      logMsg("[calfnxt] socket read failed: %s\n", std::strerror(errno));
+      closeHelper();
+      return;
+    }
+    if (n == 0)
+    {
+      logMsg("[calfnxt] web-host socket closed\n");
+      closeHelper();
+      return;
+    }
+    readBuf_.append(chunk, static_cast<size_t>(n));
+    for (;;)
+    {
+      const auto pos = readBuf_.find('\n');
+      if (pos == std::string::npos)
+        break;
+      std::string line = readBuf_.substr(0, pos);
+      readBuf_.erase(0, pos + 1);
+      while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+        line.pop_back();
+      handleHelperLine(line);
+    }
   }
-  if (GdkWindow* win = gtk_widget_get_window(plug_))
-    gdk_window_resize(win, w, h);
-  gtk_widget_queue_resize(plug_);
+}
+
+bool WebEditor::openHelper(void* x11Parent)
+{
+  if (!x11Parent)
+    return false;
+
+  closeHelper();
+  fillWebRoot(webRoot_, sizeof webRoot_);
+
+  char helperPath[4096];
+  if (!findHelperPath(helperPath, sizeof helperPath))
+  {
+    std::fprintf(stderr, "[calfnxt] calfnxt-web-host not found next to plugin .so\n");
+    return false;
+  }
+
+  int sp[2] = {-1, -1};
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, sp) != 0)
+  {
+    std::fprintf(stderr, "[calfnxt] socketpair failed: %s\n", std::strerror(errno));
+    return false;
+  }
+
+  posix_spawn_file_actions_t actions;
+  if (posix_spawn_file_actions_init(&actions) != 0)
+  {
+    ::close(sp[0]);
+    ::close(sp[1]);
+    return false;
+  }
+  posix_spawn_file_actions_addclose(&actions, sp[0]);
+
+  char fdArg[32];
+  char parentArg[32];
+  char widthArg[32];
+  char heightArg[32];
+  std::snprintf(fdArg, sizeof fdArg, "%d", sp[1]);
+  std::snprintf(parentArg, sizeof parentArg, "%llu",
+                static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(x11Parent)));
+  std::snprintf(widthArg, sizeof widthArg, "%d", rect.getWidth());
+  std::snprintf(heightArg, sizeof heightArg, "%d", rect.getHeight());
+
+  char* argv[] = {
+    helperPath,
+    const_cast<char*>("--fd"),
+    fdArg,
+    const_cast<char*>("--parent"),
+    parentArg,
+    const_cast<char*>("--root"),
+    webRoot_,
+    const_cast<char*>("--entry"),
+    entryHtml_,
+    const_cast<char*>("--width"),
+    widthArg,
+    const_cast<char*>("--height"),
+    heightArg,
+    nullptr,
+  };
+
+  pid_t pid = -1;
+  const int rc = posix_spawn(&pid, helperPath, &actions, nullptr, argv, environ);
+  posix_spawn_file_actions_destroy(&actions);
+  ::close(sp[1]);
+
+  if (rc != 0)
+  {
+    std::fprintf(stderr, "[calfnxt] posix_spawn(%s) failed: %s\n", helperPath, std::strerror(rc));
+    ::close(sp[0]);
+    return false;
+  }
+
+  const int flags = fcntl(sp[0], F_GETFL, 0);
+  if (flags >= 0)
+    fcntl(sp[0], F_SETFL, flags | O_NONBLOCK);
+
+  sock_ = sp[0];
+  helperPid_ = pid;
+  pageReady_ = false;
+  readBuf_.clear();
+  logMsg("[calfnxt] spawned web-host pid=%d path=%s\n", static_cast<int>(pid), helperPath);
+  return true;
+}
+
+void WebEditor::closeHelper()
+{
+  if (timerRegistered_ && runLoop_)
+  {
+    runLoop_->unregisterTimer(this);
+    timerRegistered_ = false;
+  }
+  runLoop_ = nullptr;
+
+  if (sock_ >= 0)
+  {
+    ::shutdown(sock_, SHUT_RDWR);
+    ::close(sock_);
+    sock_ = -1;
+  }
+  readBuf_.clear();
+  pageReady_ = false;
+
+  if (helperPid_ > 0)
+  {
+    kill(helperPid_, SIGTERM);
+    for (int i = 0; i < 50; ++i)
+    {
+      int status = 0;
+      const pid_t r = waitpid(helperPid_, &status, WNOHANG);
+      if (r == helperPid_ || (r < 0 && errno == ECHILD))
+        break;
+      usleep(10 * 1000);
+    }
+    int status = 0;
+    if (waitpid(helperPid_, &status, WNOHANG) == 0)
+    {
+      kill(helperPid_, SIGKILL);
+      waitpid(helperPid_, &status, 0);
+    }
+    helperPid_ = -1;
+  }
 }
 
 void WebEditor::requestHostSize()
@@ -181,7 +425,7 @@ void WebEditor::requestHostSize()
   logMsg("[calfnxt] resizeView %dx%d (host result=%d)\n",
          wanted.getWidth(), wanted.getHeight(), static_cast<int>(r));
   requestingHostResize_ = false;
-  syncNativeSize();
+  sendSizeToHelper();
 }
 
 bool WebEditor::applyDesignScale(double scale, const char* reason)
@@ -195,7 +439,6 @@ bool WebEditor::applyDesignScale(double scale, const char* reason)
     scale = 1.0;
 
   viewportApplied_ = true;
-
   logMsg("[calfnxt] scale=%.3f via %s (design %dx%d)\n", scale,
          reason ? reason : "?", designWidth_, designHeight_);
 
@@ -222,24 +465,11 @@ bool WebEditor::applyCssViewport(int cssW, int cssH)
   if (cssW < 1 || cssH < 1)
     return false;
 
-  // Manual override wins over measurement (exotic display servers, etc.).
   if (const float envScale = envFloat("CALFNXT_UI_SCALE"))
     return applyDesignScale(envScale, "CALFNXT_UI_SCALE");
 
-  // Prefer live widget allocation when available (true embed pixels).
-  int hostW = rect.getWidth();
-  int hostH = rect.getHeight();
-  if (plug_ && gtk_widget_get_realized(plug_))
-  {
-    GtkAllocation alloc {};
-    gtk_widget_get_allocation(plug_, &alloc);
-    if (alloc.width > 1 && alloc.height > 1)
-    {
-      hostW = alloc.width;
-      hostH = alloc.height;
-    }
-  }
-
+  const int hostW = std::max(1, rect.getWidth());
+  const int hostH = std::max(1, rect.getHeight());
   const double scaleW = static_cast<double>(hostW) / static_cast<double>(cssW);
   const double scaleH = static_cast<double>(hostH) / static_cast<double>(cssH);
   double scale = 0.5 * (scaleW + scaleH);
@@ -248,265 +478,7 @@ bool WebEditor::applyCssViewport(int cssW, int cssH)
 
   logMsg("[calfnxt] viewport: host %dx%d / css %dx%d → scale=%.3f (design %dx%d)\n",
          hostW, hostH, cssW, cssH, scale, designWidth_, designHeight_);
-
   return applyDesignScale(scale, "viewport");
-}
-
-WebEditor::WebEditor(EditController* controller, ViewRect size, const char* entryHtml)
-: CPluginView(nullptr)
-, controller_(controller)
-{
-  designWidth_ = std::max<int32>(1, size.getWidth());
-  designHeight_ = std::max<int32>(1, size.getHeight());
-  // Open at design size; CSS viewport report may request a scaled host size later.
-  rect = ViewRect(0, 0, designWidth_, designHeight_);
-  std::snprintf(entryHtml_, sizeof entryHtml_, "%s", entryHtml ? entryHtml : "index.html");
-}
-
-WebEditor::~WebEditor()
-{
-  detachParamListeners();
-  closeWeb();
-}
-
-void WebEditor::ensureGtk()
-{
-  if (g_gtkReady)
-    return;
-  gdk_set_allowed_backends("x11");
-  g_gtkReady = gtk_init_check(nullptr, nullptr) == TRUE;
-}
-
-tresult PLUGIN_API WebEditor::isPlatformTypeSupported(FIDString type)
-{
-  if (type && std::strcmp(type, kPlatformTypeX11EmbedWindowID) == 0)
-    return kResultTrue;
-  return kResultFalse;
-}
-
-void WebEditor::onUriScheme(WebKitURISchemeRequest* request, gpointer userData)
-{
-  auto* self = static_cast<WebEditor*>(userData);
-  const char* path = webkit_uri_scheme_request_get_path(request);
-  if (!path || !path[0] || !std::strcmp(path, "/"))
-    path = "/index.html";
-  std::string rel = path;
-  if (!rel.empty() && rel[0] == '/')
-    rel.erase(0, 1);
-  if (rel.rfind("bundle/", 0) == 0)
-    rel.erase(0, 7);
-  if (rel.empty())
-    rel = "index.html";
-  // Hash routes are client-side only.
-  if (const auto hash = rel.find('#'); hash != std::string::npos)
-    rel.resize(hash);
-  if (rel.empty())
-    rel = "index.html";
-
-  char full[4096];
-  std::snprintf(full, sizeof full, "%s/%s", self->webRoot_, rel.c_str());
-
-  GError* err = nullptr;
-  GFile* file = g_file_new_for_path(full);
-  GFileInputStream* stream = g_file_read(file, nullptr, &err);
-  if (!stream)
-  {
-    webkit_uri_scheme_request_finish_error(request, err);
-    if (err)
-      g_error_free(err);
-    g_object_unref(file);
-    return;
-  }
-  GFileInfo* info =
-    g_file_query_info(file, G_FILE_ATTRIBUTE_STANDARD_SIZE, G_FILE_QUERY_INFO_NONE, nullptr, nullptr);
-  const goffset size = info ? g_file_info_get_size(info) : -1;
-  if (info)
-    g_object_unref(info);
-
-  const char* mime = "text/html";
-  if (std::strstr(full, ".js"))
-    mime = "text/javascript";
-  else if (std::strstr(full, ".css"))
-    mime = "text/css";
-  else if (std::strstr(full, ".svg"))
-    mime = "image/svg+xml";
-  else if (std::strstr(full, ".png"))
-    mime = "image/png";
-  else if (std::strstr(full, ".woff2"))
-    mime = "font/woff2";
-  else if (std::strstr(full, ".ttf"))
-    mime = "font/ttf";
-
-  auto* headers = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
-  soup_message_headers_append(headers, "Access-Control-Allow-Origin", "*");
-  auto* response = webkit_uri_scheme_response_new(G_INPUT_STREAM(stream), size);
-  webkit_uri_scheme_response_set_status(response, SOUP_STATUS_OK, nullptr);
-  webkit_uri_scheme_response_set_content_type(response, mime);
-  webkit_uri_scheme_response_set_http_headers(response, headers);
-  webkit_uri_scheme_request_finish_with_response(request, response);
-  g_object_unref(response);
-  g_object_unref(stream);
-  g_object_unref(file);
-}
-
-void WebEditor::onScriptMessage(WebKitUserContentManager*, WebKitJavascriptResult* js, gpointer userData)
-{
-  auto* self = static_cast<WebEditor*>(userData);
-  JSCValue* value = webkit_javascript_result_get_js_value(js);
-  if (!value)
-    return;
-
-  char* s = jsc_value_is_string(value) ? jsc_value_to_string(value) : jsc_value_to_json(value, 0);
-  if (!s)
-    return;
-  self->onWebMessage(s);
-  g_free(s);
-}
-
-bool WebEditor::openWeb(void* x11Parent)
-{
-  ensureGtk();
-  if (!g_gtkReady || !x11Parent)
-    return false;
-
-  fillWebRoot(webRoot_, sizeof webRoot_);
-
-  ctx_ = webkit_web_context_new();
-  webkit_web_context_register_uri_scheme(ctx_, "calfnxt", onUriScheme, this, nullptr);
-  auto* sec = webkit_web_context_get_security_manager(ctx_);
-  webkit_security_manager_register_uri_scheme_as_local(sec, "calfnxt");
-  webkit_security_manager_register_uri_scheme_as_secure(sec, "calfnxt");
-  webkit_security_manager_register_uri_scheme_as_cors_enabled(sec, "calfnxt");
-
-  auto* ucm = webkit_user_content_manager_new();
-  g_signal_connect(ucm, "script-message-received::calfnxt", G_CALLBACK(onScriptMessage), this);
-  webkit_user_content_manager_register_script_message_handler(ucm, "calfnxt");
-
-  // UI→host: set uses fixed-point q/d; viewport/vizcfg keep integer payloads.
-  static const char bridge[] =
-    "window.__calfnxtHostQ=window.__calfnxtHostQ||[];"
-    "window.__calfnxtOnHost=window.__calfnxtOnHost||function(m){window.__calfnxtHostQ.push(m);};"
-    "window.calfnxtNative={post:function(m){"
-    "var src=typeof m==='string'?JSON.parse(m):m;"
-    "var o={t:src.t};"
-    "if(src.id!=null&&src.t!=='vizcfg')o.id=src.id|0;"
-    "if(src.t==='set'&&typeof src.v==='number'){o.q=Math.round(src.v*1e6);o.d=1e6;}"
-    "if(src.t==='viewport'){"
-    "if(src.w!=null)o.w=src.w|0;if(src.h!=null)o.h=src.h|0;"
-    "}"
-    "if(src.t==='vizcfg'){"
-    "if(src.id!=null)o.id=String(src.id);if(src.bins!=null)o.bins=src.bins|0;"
-    "}"
-    "window.webkit.messageHandlers.calfnxt.postMessage(JSON.stringify(o));}};"
-    ;
-  auto* script = webkit_user_script_new(bridge, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
-                                        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, nullptr, nullptr);
-  webkit_user_content_manager_add_script(ucm, script);
-  webkit_user_script_unref(script);
-
-  webview_ = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "web-context", ctx_,
-                                          "user-content-manager", ucm, nullptr));
-  g_object_unref(ucm);
-
-  auto* settings = webkit_web_view_get_settings(webview_);
-  // GPU compositing helps SVG/canvas viz. Opt out with CALFNXT_WEB_NO_GPU=1 if
-  // the X11 GtkPlug embed flickers or WebKit crashes on a given host/GPU.
-  const bool noGpu = envFlag("CALFNXT_WEB_NO_GPU");
-  webkit_settings_set_hardware_acceleration_policy(
-    settings,
-    noGpu ? WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER
-          : WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
-  logMsg("[calfnxt] WebKit hardware acceleration: %s\n",
-         noGpu ? "never (CALFNXT_WEB_NO_GPU)" : "always");
-  const bool webDebug = envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR");
-  webkit_settings_set_enable_developer_extras(settings, webDebug ? TRUE : FALSE);
-  if (webDebug)
-    webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
-
-  const auto parent = static_cast<Window>(reinterpret_cast<uintptr_t>(x11Parent));
-  plug_ = gtk_plug_new(parent);
-  gtk_widget_set_size_request(plug_, rect.getWidth(), rect.getHeight());
-  gtk_container_add(GTK_CONTAINER(plug_), GTK_WIDGET(webview_));
-  gtk_widget_set_hexpand(GTK_WIDGET(webview_), TRUE);
-  gtk_widget_set_vexpand(GTK_WIDGET(webview_), TRUE);
-  gtk_widget_show_all(plug_);
-  syncNativeSize();
-
-  g_signal_connect(webview_, "load-changed", G_CALLBACK(onLoadChanged), this);
-  g_signal_connect(webview_, "web-process-terminated",
-                   G_CALLBACK(onWebProcessTerminatedCb), this);
-  g_signal_connect(webview_, "load-failed",
-                   G_CALLBACK(+[](WebKitWebView*, WebKitLoadEvent, const gchar* failingUri,
-                                  GError* error, gpointer) -> gboolean {
-                     std::fprintf(stderr, "[calfnxt] load-failed: %s (%s)\n",
-                                  failingUri ? failingUri : "?",
-                                  error && error->message ? error->message : "?");
-                     return FALSE;
-                   }),
-                   nullptr);
-
-  char uri[512];
-  std::snprintf(uri, sizeof uri, "calfnxt://bundle/%s", entryHtml_);
-  webkit_web_view_load_uri(webview_, uri);
-
-  if (envFlag("CALFNXT_WEB_INSPECTOR"))
-  {
-    auto* inspector = webkit_web_view_get_inspector(webview_);
-    webkit_web_inspector_show(inspector);
-  }
-  return true;
-}
-
-void WebEditor::onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer userData)
-{
-  if (ev == WEBKIT_LOAD_FINISHED)
-    static_cast<WebEditor*>(userData)->onPageReady();
-}
-
-void WebEditor::onWebProcessTerminatedCb(WebKitWebView*, WebKitWebProcessTerminationReason reason,
-                                         gpointer userData)
-{
-  static_cast<WebEditor*>(userData)->onWebProcessTerminated(reason);
-}
-
-void WebEditor::onWebProcessTerminated(WebKitWebProcessTerminationReason reason)
-{
-  std::fprintf(stderr,
-               "[calfnxt] web process terminated (reason=%d) — reloading editor\n",
-               static_cast<int>(reason));
-  // Reset flush bookkeeping so a fresh page gets a full param/viz sync.
-  for (std::uint32_t i = 0; i < kMaxQueuedParams; ++i)
-    lastFlushedValid_[i] = false;
-  lastVizFlush_ = {};
-  pendingParamMask_.store(0, std::memory_order_relaxed);
-
-  if (!webview_)
-    return;
-  char uri[512];
-  std::snprintf(uri, sizeof uri, "calfnxt://bundle/%s", entryHtml_);
-  webkit_web_view_load_uri(webview_, uri);
-}
-
-void WebEditor::closeWeb()
-{
-  if (timerRegistered_ && runLoop_)
-  {
-    runLoop_->unregisterTimer(this);
-    timerRegistered_ = false;
-  }
-  runLoop_ = nullptr;
-
-  if (plug_)
-  {
-    gtk_widget_destroy(plug_);
-    plug_ = nullptr;
-    webview_ = nullptr;
-  }
-  if (ctx_)
-  {
-    g_object_unref(ctx_);
-    ctx_ = nullptr;
-  }
 }
 
 tresult PLUGIN_API WebEditor::attached(void* parent, FIDString type)
@@ -517,7 +489,7 @@ tresult PLUGIN_API WebEditor::attached(void* parent, FIDString type)
   viewportApplied_ = false;
   rect = ViewRect(0, 0, designWidth_, designHeight_);
 
-  if (!openWeb(parent))
+  if (!openHelper(parent))
     return kResultFalse;
 
   if (plugFrame)
@@ -531,7 +503,6 @@ tresult PLUGIN_API WebEditor::attached(void* parent, FIDString type)
         timerRegistered_ = true;
     }
     requestHostSize();
-    // Env override can apply immediately (no need to wait for UI viewport).
     if (const float envScale = envFloat("CALFNXT_UI_SCALE"))
       applyDesignScale(envScale, "CALFNXT_UI_SCALE");
   }
@@ -541,7 +512,7 @@ tresult PLUGIN_API WebEditor::attached(void* parent, FIDString type)
 tresult PLUGIN_API WebEditor::removed()
 {
   detachParamListeners();
-  closeWeb();
+  closeHelper();
   return CPluginView::removed();
 }
 
@@ -575,14 +546,15 @@ tresult PLUGIN_API WebEditor::onSize(ViewRect* newSize)
     checkSizeConstraint(&constrained);
     rect = constrained;
   }
-  syncNativeSize();
+  sendSizeToHelper();
   return kResultTrue;
 }
 
 void PLUGIN_API WebEditor::onTimer()
 {
-  while (gtk_events_pending())
-    gtk_main_iteration_do(FALSE);
+  pumpSocket();
+  if (sock_ < 0 || !pageReady_)
+    return;
   pollParamsFromController();
   flushPendingParams();
   flushViz();
@@ -590,28 +562,14 @@ void PLUGIN_API WebEditor::onTimer()
 
 void WebEditor::evalJs(const char* js)
 {
-  if (!webview_ || !js)
+  if (!js || sock_ < 0)
     return;
-  webkit_web_view_evaluate_javascript(
-    webview_, js, -1, nullptr, nullptr, nullptr,
-    +[](GObject* object, GAsyncResult* result, gpointer) {
-      GError* error = nullptr;
-      JSCValue* value =
-        webkit_web_view_evaluate_javascript_finish(WEBKIT_WEB_VIEW(object), result, &error);
-      if (error)
-      {
-        std::fprintf(stderr, "[calfnxt] evalJs: %s\n", error->message);
-        g_error_free(error);
-      }
-      if (value)
-        g_object_unref(value);
-    },
-    nullptr);
+  sendLine(js);
 }
 
 void WebEditor::pushParamPlain(ParamID id, double plain)
 {
-  if (!webview_ || id >= kMaxQueuedParams)
+  if (sock_ < 0 || id >= kMaxQueuedParams)
     return;
   pendingParamPlain_[id].store(plain, std::memory_order_relaxed);
   pendingParamMask_.fetch_or(1u << id, std::memory_order_acq_rel);
@@ -619,7 +577,7 @@ void WebEditor::pushParamPlain(ParamID id, double plain)
 
 void WebEditor::pollParamsFromController()
 {
-  if (suppressParamPush_ || !controller_ || !webview_)
+  if (suppressParamPush_ || !controller_ || sock_ < 0)
     return;
   const int32 n = controller_->getParameterCount();
   for (int32 i = 0; i < n; ++i)
@@ -650,7 +608,6 @@ void WebEditor::flushPendingParams()
     if (id >= kMaxQueuedParams)
       continue;
     const double plain = pendingParamPlain_[id].load(std::memory_order_relaxed);
-    // Locale-safe via to_chars (never snprintf %.g under de_DE).
     char num[64];
     const auto [endp, ec] = std::to_chars(num, num + sizeof num, plain,
                                           std::chars_format::general, 17);
@@ -674,12 +631,9 @@ void WebEditor::flushVizLevels(const char* streamId, float* levels, int n)
 
 void WebEditor::flushVizArray(const char* streamId, const char* kind, float* values, int n)
 {
-  if (!webview_ || !streamId || !kind || n < 0)
+  if (sock_ < 0 || !streamId || !kind || n < 0)
     return;
 
-  // try/catch so a UI exception cannot tear down the WebKit process.
-  // Envelope display can be ~1280 floats; keep headroom for to_chars + commas.
-  // n==0 is valid (clear display, e.g. bypass).
   constexpr size_t kJsCap = 24576;
   char js[kJsCap];
   char* p = js;
@@ -712,18 +666,17 @@ void WebEditor::flushVizArray(const char* streamId, const char* kind, float* val
 
 void WebEditor::flushViz()
 {
-  if (!vizSource_ || !webview_)
+  if (!vizSource_ || sock_ < 0)
     return;
 
   using clock = std::chrono::steady_clock;
   const auto now = clock::now();
 
-  // Envelope chart: software WebKit struggles with high-rate SVG path updates.
   if (lastEnvVizFlush_.time_since_epoch().count() == 0
       || now - lastEnvVizFlush_ >= std::chrono::milliseconds(1000 / kEnvVizHz))
   {
     lastEnvVizFlush_ = now;
-    constexpr int kMaxEnvFloats = 256 * 5 + 1; // slots x channels + scroll phase
+    constexpr int kMaxEnvFloats = 256 * 5 + 1;
     float envBuf[kMaxEnvFloats];
     const int nEnv = vizSource_->takeEnvelopeDisplay(envBuf, kMaxEnvFloats);
     if (nEnv > 0)
@@ -910,7 +863,7 @@ int WebEditor::queryIoChannelCount() const
 
 void WebEditor::pushIoChannels()
 {
-  if (!webview_)
+  if (sock_ < 0)
     return;
   const int ch = queryIoChannelCount();
   char js[128];
@@ -921,12 +874,14 @@ void WebEditor::pushIoChannels()
 
 void WebEditor::onPageReady()
 {
+  pageReady_ = true;
   logMsg("[calfnxt] page ready (design %dx%d, rect %dx%d)\n", designWidth_, designHeight_,
          rect.getWidth(), rect.getHeight());
   attachParamListeners();
   pushAllParams();
   pushIoChannels();
   flushPendingParams();
+  sendSizeToHelper();
 }
 
 bool WebEditor::onWebMessage(const char* json)
@@ -998,7 +953,6 @@ bool WebEditor::onWebMessage(const char* json)
     if (auto* p = controller_->getParameterObject(id))
     {
       const ParamValue n = p->toNormalized(plain);
-      // Suppress echo while hosts may call setParamNormalized inside performEdit.
       {
         SuppressParamPush guard(suppressParamPush_);
         controller_->setParamNormalized(id, n);
