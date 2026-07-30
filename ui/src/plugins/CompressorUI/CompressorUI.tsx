@@ -267,21 +267,6 @@ export function CompressorUI(props: CompressorUIProps) {
 
       <div className="block chart">
         <div className="title">Transfer</div>
-        <DynamicsChart
-          threshold$={host.threshold$}
-          ratio$={host.ratio$}
-          makeup$={host.makeup$}
-          knee$={host.knee$}
-          point$={host.point$}
-          beginEdit={() => {
-            host.beginEdit(paramIds.threshold);
-            host.beginEdit(paramIds.ratio);
-          }}
-          endEdit={() => {
-            host.endEdit(paramIds.threshold);
-            host.endEdit(paramIds.ratio);
-          }}
-        />
         <LevelMeter
           className="gr"
           value$={host.gr$}
@@ -300,6 +285,21 @@ export function CompressorUI(props: CompressorUIProps) {
             { value: 0, color: '#0066ff' },
             { value: 60, color: '#ff0066' },
           ]}
+        />
+        <DynamicsChart
+          threshold$={host.threshold$}
+          ratio$={host.ratio$}
+          makeup$={host.makeup$}
+          knee$={host.knee$}
+          point$={host.point$}
+          beginEdit={() => {
+            host.beginEdit(paramIds.threshold);
+            host.beginEdit(paramIds.ratio);
+          }}
+          endEdit={() => {
+            host.endEdit(paramIds.threshold);
+            host.endEdit(paramIds.ratio);
+          }}
         />
       </div>
     </div>
