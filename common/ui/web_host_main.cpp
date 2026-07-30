@@ -35,6 +35,7 @@ struct HostState
   char pendingUri[512] {};
   int width = 360;
   int height = 420;
+  unsigned long long parentXid = 0;
   GtkWidget* plug = nullptr;
   WebKitWebView* webview = nullptr;
   WebKitWebContext* ctx = nullptr;
@@ -133,20 +134,78 @@ void resizeX11Window(GdkWindow* win, int w, int h)
     ch.height = h;
     XConfigureWindow(dpy, xid, CWWidth | CWHeight, &ch);
     XResizeWindow(dpy, xid, static_cast<unsigned>(w), static_cast<unsigned>(h));
-    // XEmbed: embedder socket often stays 1×1 unless resized too.
+    XFlush(dpy);
+  }
+#endif
+}
+
+/** Resize the embedder socket and any undersized X ancestors (Qt often keeps 1×1). */
+void resizeX11EmbedderChain(int w, int h)
+{
+  if (w < 1 || h < 1)
+    return;
+#if defined(GDK_WINDOWING_X11)
+  Display* dpy = nullptr;
+  Window start = 0;
+  if (g.plug)
+  {
+    if (GdkWindow* win = gtk_widget_get_window(g.plug))
+    {
+      if (GDK_IS_X11_WINDOW(win))
+      {
+        dpy = GDK_WINDOW_XDISPLAY(win);
+        start = GDK_WINDOW_XID(win);
+      }
+    }
+  }
+  if (!dpy && g.parentXid)
+  {
+    dpy = gdk_x11_get_default_xdisplay();
+    start = static_cast<Window>(g.parentXid);
+  }
+  if (!dpy)
+    return;
+
+  XWindowChanges ch {};
+  ch.width = w;
+  ch.height = h;
+
+  // Always hit the host-provided embedder XID first.
+  if (g.parentXid)
+  {
+    const Window sock = static_cast<Window>(g.parentXid);
+    XConfigureWindow(dpy, sock, CWWidth | CWHeight, &ch);
+    XResizeWindow(dpy, sock, static_cast<unsigned>(w), static_cast<unsigned>(h));
+  }
+
+  Window cur = start;
+  for (int depth = 0; cur && depth < 8; ++depth)
+  {
     Window root = 0;
     Window parent = 0;
     Window* kids = nullptr;
     unsigned n = 0;
-    if (XQueryTree(dpy, xid, &root, &parent, &kids, &n) && parent && parent != root)
-    {
-      XConfigureWindow(dpy, parent, CWWidth | CWHeight, &ch);
-      XResizeWindow(dpy, parent, static_cast<unsigned>(w), static_cast<unsigned>(h));
-    }
+    if (!XQueryTree(dpy, cur, &root, &parent, &kids, &n))
+      break;
     if (kids)
       XFree(kids);
-    XFlush(dpy);
+    if (!parent || parent == root)
+      break;
+
+    Window r2 = 0;
+    int x = 0, y = 0;
+    unsigned pw = 0, ph = 0, bw = 0, d = 0;
+    if (XGetGeometry(dpy, parent, &r2, &x, &y, &pw, &ph, &bw, &d))
+    {
+      // Stop once an ancestor already matches the host editor frame.
+      if (static_cast<int>(pw) >= w && static_cast<int>(ph) >= h)
+        break;
+    }
+    XConfigureWindow(dpy, parent, CWWidth | CWHeight, &ch);
+    XResizeWindow(dpy, parent, static_cast<unsigned>(w), static_cast<unsigned>(h));
+    cur = parent;
   }
+  XFlush(dpy);
 #endif
 }
 
@@ -195,6 +254,7 @@ void syncNativeSize()
     if (GdkWindow* win = gtk_widget_get_window(GTK_WIDGET(g.webview)))
       resizeX11Window(win, w, h);
   }
+  resizeX11EmbedderChain(w, h);
 
   gtk_widget_queue_resize(g.plug);
   gtk_widget_queue_draw(g.plug);
@@ -547,6 +607,7 @@ int main(int argc, char** argv)
     return 2;
   }
   g.sock = fd;
+  g.parentXid = parentXid;
   {
     const int flags = fcntl(g.sock, F_GETFL, 0);
     if (flags >= 0)
@@ -564,6 +625,8 @@ int main(int argc, char** argv)
     return 1;
   }
 
+  // Stamp proves ~/.vst3 helper was updated (tester logs often still show old binaries).
+  hostLog("[calfnxt-web-host] build=geom-kick-2\n");
   hostLog("[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d dmabuf=%s\n",
           static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width, g.height,
           envFlag("CALFNXT_WEB_DMABUF") ? "on" : "off");
