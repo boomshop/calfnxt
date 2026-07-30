@@ -31,15 +31,19 @@ struct HostState
   std::string readBuf;
   char webRoot[4096] {};
   char entryHtml[256] {};
+  char pendingUri[512] {};
   int width = 360;
   int height = 420;
   GtkWidget* plug = nullptr;
   WebKitWebView* webview = nullptr;
   WebKitWebContext* ctx = nullptr;
   guint sockSource = 0;
+  bool loadStarted = false;
 };
 
 HostState g;
+
+void syncNativeSize();
 
 bool envFlag(const char* name)
 {
@@ -64,6 +68,43 @@ void hostLog(const char* fmt, ...)
     (void)::write(fd, buf, static_cast<size_t>(std::strlen(buf)));
     ::close(fd);
   }
+}
+
+void logAlloc(const char* why)
+{
+  const int pw = g.plug ? gtk_widget_get_allocated_width(g.plug) : -1;
+  const int ph = g.plug ? gtk_widget_get_allocated_height(g.plug) : -1;
+  const int vw = g.webview ? gtk_widget_get_allocated_width(GTK_WIDGET(g.webview)) : -1;
+  const int vh = g.webview ? gtk_widget_get_allocated_height(GTK_WIDGET(g.webview)) : -1;
+  const int emb = (g.plug && gtk_plug_get_embedded(GTK_PLUG(g.plug))) ? 1 : 0;
+  hostLog("[calfnxt-web-host] alloc %s plug=%dx%d webview=%dx%d embedded=%d\n", why, pw, ph, vw,
+          vh, emb);
+}
+
+void startLoadIfReady(const char* why)
+{
+  if (g.loadStarted || !g.webview || !g.pendingUri[0])
+    return;
+  logAlloc(why);
+  const int vw = gtk_widget_get_allocated_width(GTK_WIDGET(g.webview));
+  const int vh = gtk_widget_get_allocated_height(GTK_WIDGET(g.webview));
+  // WebKitGTK 2.52+ in XEmbed often stays blank if the first load happens at 0×0.
+  if (vw < 2 || vh < 2)
+    return;
+  g.loadStarted = true;
+  hostLog("[calfnxt-web-host] load %s (alloc %dx%d via %s)\n", g.pendingUri, vw, vh, why);
+  webkit_web_view_load_uri(g.webview, g.pendingUri);
+}
+
+void forceLoad(const char* why)
+{
+  if (g.loadStarted || !g.webview || !g.pendingUri[0])
+    return;
+  syncNativeSize();
+  logAlloc(why);
+  g.loadStarted = true;
+  hostLog("[calfnxt-web-host] load %s (forced via %s)\n", g.pendingUri, why);
+  webkit_web_view_load_uri(g.webview, g.pendingUri);
 }
 
 bool sendLine(const char* line)
@@ -258,8 +299,9 @@ void onScriptMessage(WebKitUserContentManager*, WebKitJavascriptResult* js, gpoi
   char* s = jsc_value_is_string(value) ? jsc_value_to_string(value) : jsc_value_to_json(value, 0);
   if (!s)
     return;
-  if (std::strstr(s, "\"t\":\"_jserr\"") || std::strstr(s, "\"t\": \"_jserr\""))
-    hostLog("[calfnxt-web-host] JS error: %s\n", s);
+  if (std::strstr(s, "\"t\":\"_jserr\"") || std::strstr(s, "\"t\": \"_jserr\"")
+      || std::strstr(s, "\"t\":\"_diag\"") || std::strstr(s, "\"t\": \"_diag\""))
+    hostLog("[calfnxt-web-host] UI msg: %s\n", s);
   sendLine(s);
   g_free(s);
 }
@@ -272,6 +314,7 @@ void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
     hostLog("[calfnxt-web-host] load-committed\n");
   else if (ev == WEBKIT_LOAD_FINISHED)
   {
+    logAlloc("load-finished");
     hostLog("[calfnxt-web-host] load-finished → _ready\n");
     sendLine("{\"t\":\"_ready\"}");
   }
@@ -449,6 +492,11 @@ int main(int argc, char** argv)
     "if(src.t==='vizcfg'){"
     "if(src.id!=null)o.id=String(src.id);if(src.bins!=null)o.bins=src.bins|0;"
     "}"
+    "if(src.t==='_diag'||src.t==='_jserr'){"
+    "if(src.message!=null)o.message=String(src.message);"
+    "if(src.source!=null)o.source=String(src.source);"
+    "if(src.line!=null)o.line=src.line|0;"
+    "}"
     "window.webkit.messageHandlers.calfnxt.postMessage(JSON.stringify(o));}};"
     ;
   auto* script = webkit_user_script_new(bridge, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
@@ -487,20 +535,25 @@ int main(int argc, char** argv)
   gtk_container_add(GTK_CONTAINER(g.plug), GTK_WIDGET(g.webview));
   gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
   gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
+  gtk_widget_set_size_request(GTK_WIDGET(g.webview), g.width, g.height);
 
   g_signal_connect(g.plug, "embedded",
                    G_CALLBACK(+[](GtkPlug*, gpointer) {
                      hostLog("[calfnxt-web-host] GtkPlug embedded into parent\n");
+                     syncNativeSize();
+                     startLoadIfReady("embedded");
                    }),
                    nullptr);
-
-  gtk_widget_show_all(g.plug);
-  syncNativeSize();
-  if (!gtk_plug_get_embedded(GTK_PLUG(g.plug)))
-  {
-    hostLog("[calfnxt-web-host] warning: GtkPlug not embedded yet (parent=0x%llx)\n",
-            static_cast<unsigned long long>(parentXid));
-  }
+  g_signal_connect(g.plug, "size-allocate",
+                   G_CALLBACK(+[](GtkWidget*, GdkRectangle*, gpointer) {
+                     startLoadIfReady("plug-size-allocate");
+                   }),
+                   nullptr);
+  g_signal_connect(GTK_WIDGET(g.webview), "size-allocate",
+                   G_CALLBACK(+[](GtkWidget*, GdkRectangle*, gpointer) {
+                     startLoadIfReady("webview-size-allocate");
+                   }),
+                   nullptr);
 
   g_signal_connect(g.webview, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
   g_signal_connect(g.webview, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
@@ -514,10 +567,21 @@ int main(int argc, char** argv)
                    }),
                    nullptr);
 
-  char uri[512];
-  std::snprintf(uri, sizeof uri, "calfnxt://bundle/%s", g.entryHtml);
-  hostLog("[calfnxt-web-host] load %s\n", uri);
-  webkit_web_view_load_uri(g.webview, uri);
+  std::snprintf(g.pendingUri, sizeof g.pendingUri, "calfnxt://bundle/%s", g.entryHtml);
+  gtk_widget_show_all(g.plug);
+  syncNativeSize();
+  logAlloc("show_all");
+  if (!gtk_plug_get_embedded(GTK_PLUG(g.plug)))
+  {
+    hostLog("[calfnxt-web-host] warning: GtkPlug not embedded yet (parent=0x%llx)\n",
+            static_cast<unsigned long long>(parentXid));
+  }
+  startLoadIfReady("show_all");
+  // Fallback: some hosts allocate late; don't hang forever without a document.
+  g_timeout_add(750, +[](gpointer) -> gboolean {
+    forceLoad("timeout-750ms");
+    return G_SOURCE_REMOVE;
+  }, nullptr);
 
   if (envFlag("CALFNXT_WEB_INSPECTOR"))
   {

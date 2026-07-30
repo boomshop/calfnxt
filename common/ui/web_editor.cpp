@@ -278,9 +278,9 @@ void WebEditor::handleHelperLine(const std::string& line)
     onPageReady();
     return;
   }
-  if (jsonHasType(line.c_str(), "_jserr"))
+  if (jsonHasType(line.c_str(), "_jserr") || jsonHasType(line.c_str(), "_diag"))
   {
-    logBoth("[calfnxt] UI JS error: %s\n", line.c_str());
+    logBoth("[calfnxt] UI %s\n", line.c_str());
     return;
   }
   onWebMessage(line.c_str());
