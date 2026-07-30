@@ -125,7 +125,8 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 `calfnxt-web-host`: HW accel **off** by default (XEmbed+GPU often paints a blank/transparent
 hole); opt in with `CALFNXT_WEB_GPU=1` (or force off with `CALFNXT_WEB_NO_GPU=1`). Also sets
 `WEBKIT_DISABLE_DMABUF_RENDERER=1` by default (WebKitGTK 2.42+ blank-window workaround; opt
-in DMA-BUF with `CALFNXT_WEB_DMABUF=1`). Diagnostics always append to `/tmp/calfnxt-ui.log`.
+in DMA-BUF with `CALFNXT_WEB_DMABUF=1`). Do not force `WEBKIT_DISABLE_COMPOSITING_MODE` by
+default. Diagnostics always append to `/tmp/calfnxt-ui.log` (URI misses, JS errors).
 GtkPlug size sync, `web-process-terminated` → reload + `{t:"_ready"}`.
 Verify Ardour-safe link: `ldd …/*.so` must not list `libgtk-3` / `libwebkit`.
 

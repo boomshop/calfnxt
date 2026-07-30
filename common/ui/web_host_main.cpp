@@ -180,6 +180,7 @@ void handlePluginLine(const std::string& line)
 
 void onUriScheme(WebKitURISchemeRequest* request, gpointer)
 {
+  const char* reqUri = webkit_uri_scheme_request_get_uri(request);
   const char* path = webkit_uri_scheme_request_get_path(request);
   if (!path || !path[0] || !std::strcmp(path, "/"))
     path = "/index.html";
@@ -203,24 +204,28 @@ void onUriScheme(WebKitURISchemeRequest* request, gpointer)
   GFileInputStream* stream = g_file_read(file, nullptr, &err);
   if (!stream)
   {
-    std::fprintf(stderr, "[calfnxt-web-host] uri scheme missing file: %s (%s)\n",
-                 full, err && err->message ? err->message : "?");
-    std::fflush(stderr);
+    hostLog("[calfnxt-web-host] uri-scheme MISS %s → %s (%s)\n",
+            reqUri ? reqUri : "?", full, err && err->message ? err->message : "?");
     webkit_uri_scheme_request_finish_error(request, err);
     if (err)
       g_error_free(err);
     g_object_unref(file);
     return;
   }
+
+  if (envFlag("CALFNXT_WEB_DEBUG"))
+    hostLog("[calfnxt-web-host] uri-scheme OK %s → %s\n", reqUri ? reqUri : "?", full);
+
   GFileInfo* info =
     g_file_query_info(file, G_FILE_ATTRIBUTE_STANDARD_SIZE, G_FILE_QUERY_INFO_NONE, nullptr, nullptr);
   const goffset size = info ? g_file_info_get_size(info) : -1;
   if (info)
     g_object_unref(info);
 
+  // ES modules on custom schemes are picky about MIME (esp. WebKitGTK ≥ 2.46).
   const char* mime = "text/html";
-  if (std::strstr(full, ".js"))
-    mime = "text/javascript";
+  if (std::strstr(full, ".js") || std::strstr(full, ".mjs"))
+    mime = "application/javascript";
   else if (std::strstr(full, ".css"))
     mime = "text/css";
   else if (std::strstr(full, ".svg"))
@@ -234,6 +239,7 @@ void onUriScheme(WebKitURISchemeRequest* request, gpointer)
 
   auto* headers = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
   soup_message_headers_append(headers, "Access-Control-Allow-Origin", "*");
+  soup_message_headers_append(headers, "Cache-Control", "no-cache");
   auto* response = webkit_uri_scheme_response_new(G_INPUT_STREAM(stream), size);
   webkit_uri_scheme_response_set_status(response, SOUP_STATUS_OK, nullptr);
   webkit_uri_scheme_response_set_content_type(response, mime);
@@ -252,6 +258,8 @@ void onScriptMessage(WebKitUserContentManager*, WebKitJavascriptResult* js, gpoi
   char* s = jsc_value_is_string(value) ? jsc_value_to_string(value) : jsc_value_to_json(value, 0);
   if (!s)
     return;
+  if (std::strstr(s, "\"t\":\"_jserr\"") || std::strstr(s, "\"t\": \"_jserr\""))
+    hostLog("[calfnxt-web-host] JS error: %s\n", s);
   sendLine(s);
   g_free(s);
 }
@@ -341,10 +349,10 @@ int main(int argc, char** argv)
 
   // WebKitGTK 2.42+ DMA-BUF renderer often paints a blank/transparent window on
   // X11 (NVIDIA and some other GPUs). Disable unless explicitly re-enabled.
+  // Do NOT force WEBKIT_DISABLE_COMPOSITING_MODE here — with a successful load that
+  // can leave an empty XEmbed surface while the web process still reports _ready.
   if (!envFlag("CALFNXT_WEB_DMABUF") && !std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER"))
     setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", 1);
-  if (!envFlag("CALFNXT_WEB_GPU") && !std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE"))
-    setenv("WEBKIT_DISABLE_COMPOSITING_MODE", "1", 1);
 
   for (int i = 1; i < argc; ++i)
   {
@@ -422,6 +430,14 @@ int main(int argc, char** argv)
   static const char bridge[] =
     "window.__calfnxtHostQ=window.__calfnxtHostQ||[];"
     "window.__calfnxtOnHost=window.__calfnxtOnHost||function(m){window.__calfnxtHostQ.push(m);};"
+    "window.addEventListener('error',function(e){"
+    "try{window.webkit.messageHandlers.calfnxt.postMessage(JSON.stringify({"
+    "t:'_jserr',message:String(e.message||e),source:String(e.filename||''),line:e.lineno|0"
+    "}));}catch(_e){}});"
+    "window.addEventListener('unhandledrejection',function(e){"
+    "try{window.webkit.messageHandlers.calfnxt.postMessage(JSON.stringify({"
+    "t:'_jserr',message:String(e.reason&&e.reason.message||e.reason||'rejection')"
+    "}));}catch(_e){}});"
     "window.calfnxtNative={post:function(m){"
     "var src=typeof m==='string'?JSON.parse(m):m;"
     "var o={t:src.t};"
@@ -443,6 +459,12 @@ int main(int argc, char** argv)
   g.webview = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "web-context", g.ctx,
                                           "user-content-manager", ucm, nullptr));
   g_object_unref(ucm);
+
+  // Opaque surface so a failed JS paint is a solid panel, not a transparent XEmbed hole.
+  {
+    GdkRGBA bg {0.11, 0.11, 0.12, 1.0};
+    webkit_web_view_set_background_color(g.webview, &bg);
+  }
 
   auto* settings = webkit_web_view_get_settings(g.webview);
   // XEmbed+WebKit GPU frequently paints a transparent "background hole". Default
