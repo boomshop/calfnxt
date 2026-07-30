@@ -6,6 +6,8 @@ export type calfNXTMsg =
   | { t: "sync" }
   /** UI→host: measured CSS viewport (window.innerWidth/Height), once at startup. */
   | { t: "viewport"; w: number; h: number }
+  /** UI→host: diagnostic only (logged by WebEditor, not a param). */
+  | { t: "_diag"; msg?: string; w?: number; h?: number }
   /** Host→UI: active audio channel count (from bus arrangement). */
   | { t: "io"; ch: number }
   /** DSP→UI telemetry (meters now; spectrum arrays later). */

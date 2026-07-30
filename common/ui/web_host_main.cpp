@@ -90,6 +90,24 @@ bool sendLine(const char* line)
   return true;
 }
 
+void logAlloc(const char* why)
+{
+  const int pw = g.plug ? gtk_widget_get_allocated_width(g.plug) : -1;
+  const int ph = g.plug ? gtk_widget_get_allocated_height(g.plug) : -1;
+  const int vw = g.webview ? gtk_widget_get_allocated_width(GTK_WIDGET(g.webview)) : -1;
+  const int vh = g.webview ? gtk_widget_get_allocated_height(GTK_WIDGET(g.webview)) : -1;
+  const int emb = (g.plug && gtk_plug_get_embedded(GTK_PLUG(g.plug))) ? 1 : 0;
+  int gdkW = -1;
+  int gdkH = -1;
+  if (g.plug)
+  {
+    if (GdkWindow* win = gtk_widget_get_window(g.plug))
+      gdk_window_get_geometry(win, nullptr, nullptr, &gdkW, &gdkH);
+  }
+  hostLog("[calfnxt-web-host] alloc %s plug=%dx%d webview=%dx%d gdk=%dx%d embedded=%d want=%dx%d\n",
+          why, pw, ph, vw, vh, gdkW, gdkH, emb, g.width, g.height);
+}
+
 void syncNativeSize()
 {
   if (!g.plug)
@@ -203,15 +221,16 @@ void onUriScheme(WebKitURISchemeRequest* request, gpointer)
   GFileInputStream* stream = g_file_read(file, nullptr, &err);
   if (!stream)
   {
-    std::fprintf(stderr, "[calfnxt-web-host] uri scheme missing file: %s (%s)\n",
-                 full, err && err->message ? err->message : "?");
-    std::fflush(stderr);
+    hostLog("[calfnxt-web-host] uri-scheme MISS %s (%s)\n", full,
+            err && err->message ? err->message : "?");
     webkit_uri_scheme_request_finish_error(request, err);
     if (err)
       g_error_free(err);
     g_object_unref(file);
     return;
   }
+  if (envFlag("CALFNXT_WEB_DEBUG"))
+    hostLog("[calfnxt-web-host] uri-scheme OK calfnxt://bundle/%s → %s\n", rel.c_str(), full);
   GFileInfo* info =
     g_file_query_info(file, G_FILE_ATTRIBUTE_STANDARD_SIZE, G_FILE_QUERY_INFO_NONE, nullptr, nullptr);
   const goffset size = info ? g_file_info_get_size(info) : -1;
@@ -258,15 +277,22 @@ void onScriptMessage(WebKitUserContentManager*, WebKitJavascriptResult* js, gpoi
 
 void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
 {
-  if (ev == WEBKIT_LOAD_FINISHED)
+  if (ev == WEBKIT_LOAD_STARTED)
+    hostLog("[calfnxt-web-host] load-started\n");
+  else if (ev == WEBKIT_LOAD_COMMITTED)
+    hostLog("[calfnxt-web-host] load-committed\n");
+  else if (ev == WEBKIT_LOAD_FINISHED)
+  {
+    hostLog("[calfnxt-web-host] load-finished → _ready\n");
+    logAlloc("load-finished");
     sendLine("{\"t\":\"_ready\"}");
+  }
 }
 
 void onWebProcessTerminated(WebKitWebView*, WebKitWebProcessTerminationReason reason, gpointer)
 {
-  std::fprintf(stderr,
-               "[calfnxt-web-host] web process terminated (reason=%d) — reloading\n",
-               static_cast<int>(reason));
+  hostLog("[calfnxt-web-host] web process terminated (reason=%d) — reloading\n",
+          static_cast<int>(reason));
   if (!g.webview)
     return;
   char uri[512];
@@ -387,10 +413,8 @@ int main(int argc, char** argv)
     return 1;
   }
 
-  std::fprintf(stderr, "[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d\n",
-               static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width,
-               g.height);
-  std::fflush(stderr);
+  hostLog("[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d\n",
+          static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width, g.height);
 
   g.ctx = webkit_web_context_new();
   webkit_web_context_register_uri_scheme(g.ctx, "calfnxt", onUriScheme, nullptr, nullptr);
@@ -412,6 +436,10 @@ int main(int argc, char** argv)
     "if(src.id!=null&&src.t!=='vizcfg')o.id=src.id|0;"
     "if(src.t==='set'&&typeof src.v==='number'){o.q=Math.round(src.v*1e6);o.d=1e6;}"
     "if(src.t==='viewport'){"
+    "if(src.w!=null)o.w=src.w|0;if(src.h!=null)o.h=src.h|0;"
+    "}"
+    "if(src.t==='_diag'){"
+    "if(src.msg!=null)o.msg=String(src.msg);"
     "if(src.w!=null)o.w=src.w|0;if(src.h!=null)o.h=src.h|0;"
     "}"
     "if(src.t==='vizcfg'){"
@@ -439,8 +467,13 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=restore-gpu-default hw-accel=%s\n",
-          noGpu ? "never" : "always");
+  hostLog("[calfnxt-web-host] build=diag-lean-1 hw-accel=%s\n", noGpu ? "never" : "always");
+
+  // Opaque default — transparent XEmbed + empty/0×0 WebView reads as a "background hole".
+  {
+    GdkRGBA bg {0.0, 0.0, 0.0, 1.0};
+    webkit_web_view_set_background_color(g.webview, &bg);
+  }
 
   g.plug = gtk_plug_new(static_cast<Window>(parentXid));
   gtk_widget_set_size_request(g.plug, g.width, g.height);
@@ -449,21 +482,32 @@ int main(int argc, char** argv)
   gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
   gtk_widget_show_all(g.plug);
   syncNativeSize();
+  logAlloc("show_all");
+  // Two delayed samples only (no geometry forcing).
+  g_timeout_add(500, +[](gpointer) -> gboolean {
+    logAlloc("t+500ms");
+    return G_SOURCE_REMOVE;
+  }, nullptr);
+  g_timeout_add(2000, +[](gpointer) -> gboolean {
+    logAlloc("t+2s");
+    return G_SOURCE_REMOVE;
+  }, nullptr);
 
   g_signal_connect(g.webview, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
   g_signal_connect(g.webview, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
   g_signal_connect(g.webview, "load-failed",
                    G_CALLBACK(+[](WebKitWebView*, WebKitLoadEvent, const gchar* failingUri,
                                   GError* error, gpointer) -> gboolean {
-                     std::fprintf(stderr, "[calfnxt-web-host] load-failed: %s (%s)\n",
-                                  failingUri ? failingUri : "?",
-                                  error && error->message ? error->message : "?");
+                     hostLog("[calfnxt-web-host] load-failed: %s (%s)\n",
+                             failingUri ? failingUri : "?",
+                             error && error->message ? error->message : "?");
                      return FALSE;
                    }),
                    nullptr);
 
   char uri[512];
   std::snprintf(uri, sizeof uri, "calfnxt://bundle/%s", g.entryHtml);
+  hostLog("[calfnxt-web-host] load %s\n", uri);
   webkit_web_view_load_uri(g.webview, uri);
 
   if (envFlag("CALFNXT_WEB_INSPECTOR"))
