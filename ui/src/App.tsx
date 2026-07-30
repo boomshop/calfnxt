@@ -7,6 +7,7 @@ import {
   pluginIdFromHash,
   type PluginId,
 } from './plugins/registry';
+import { editorSizes } from './dev/editorSizes';
 import { reportCssViewportOnce } from './reportViewport';
 import { Loading } from './widgets';
 
@@ -32,8 +33,11 @@ export function App() {
   const [pluginId, setPluginId] = useState(() => pluginIdFromHash());
 
   useEffect(() => {
-    reportCssViewportOnce();
-  }, []);
+    if (isPluginId(pluginId))
+      reportCssViewportOnce(editorSizes[pluginId as PluginId]);
+    else
+      reportCssViewportOnce();
+  }, [pluginId]);
 
   useEffect(() => {
     const onHash = () => setPluginId(pluginIdFromHash());
