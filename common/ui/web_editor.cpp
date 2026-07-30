@@ -561,6 +561,30 @@ bool WebEditor::applyCssViewport(int cssW, int cssH)
 
   logMsg("[calfnxt] viewport: host %dx%d / css %dx%d → scale=%.3f (design %dx%d)\n",
          hostW, hostH, cssW, cssH, scale, designWidth_, designHeight_);
+
+  // Fractional GTK/WebKit scaling: CSS ≈ design/factor inside a design-sized
+  // embedder. Growing resizeView letterboxes the UI (content stays ~design px).
+  // Keep host size and zoom the page so the design layout fits the CSS viewport.
+  if (cssW < designWidth_ && cssH < designHeight_ && scale > 1.02)
+  {
+    const double fillW = static_cast<double>(cssW) / static_cast<double>(designWidth_);
+    const double fillH = static_cast<double>(cssH) / static_cast<double>(designHeight_);
+    const bool consistent = std::fabs(scaleW - scaleH) < 0.1
+                            && std::fabs(fillW - fillH) < 0.1;
+    if (consistent && fillW > 0.45 && fillW < 0.98)
+    {
+      viewportApplied_ = true;
+      const double z = std::min(fillW, fillH);
+      logMsg("[calfnxt] viewport: keep host %dx%d, web zoom=%.3f (fractional scale)\n",
+             hostW, hostH, z);
+      char line[128];
+      std::snprintf(line, sizeof line, "{\"t\":\"_zoom\",\"z\":%.6f,\"dw\":%d,\"dh\":%d}",
+                    z, designWidth_, designHeight_);
+      sendLine(line);
+      return true;
+    }
+  }
+
   return applyDesignScale(scale, "viewport");
 }
 

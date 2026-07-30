@@ -44,6 +44,7 @@ struct HostState
   bool syncingSize = false;
   /** Monotonic ms deadline for size-kick timer (0 = inactive). */
   gint64 kickUntilMs = 0;
+  double zoom = 1.0;
 };
 
 HostState g;
@@ -257,7 +258,7 @@ void syncNativeSize()
 
   if (g.webview)
   {
-    webkit_web_view_set_zoom_level(g.webview, 1.0);
+    webkit_web_view_set_zoom_level(g.webview, g.zoom > 0.05 ? g.zoom : 1.0);
     gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
     gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
     gtk_widget_set_size_request(GTK_WIDGET(g.webview), w, h);
@@ -407,8 +408,40 @@ void handlePluginLine(const std::string& line)
       logAlloc("host-_size");
       armSizeKick(8000);
       startLoadIfReady("host-_size");
-      // Nudge JS layout after HiDPI resizeView.
       evalJs("try{window.dispatchEvent(new Event('resize'));}catch(e){}");
+    }
+    return;
+  }
+  if (jsonHasType(line.c_str(), "_zoom"))
+  {
+    double z = 1.0;
+    double dw = 0.0;
+    double dh = 0.0;
+    if (jsonNumberAfterKey(line.c_str(), "\"z\"", z) && z > 0.05 && z < 8.0)
+    {
+      g.zoom = z;
+      hostLog("[calfnxt-web-host] zoom=%.4f\n", g.zoom);
+      if (g.webview)
+        webkit_web_view_set_zoom_level(g.webview, g.zoom);
+    }
+    // Lock layout to design CSS px so zoom fits the fractional CSS viewport.
+    if (jsonNumberAfterKey(line.c_str(), "\"dw\"", dw)
+        && jsonNumberAfterKey(line.c_str(), "\"dh\"", dh)
+        && dw >= 160.0 && dh >= 120.0)
+    {
+      char js[512];
+      std::snprintf(
+        js, sizeof js,
+        "try{"
+        "var r=document.documentElement,b=document.body,o=document.getElementById('root');"
+        "r.style.width='%dpx';r.style.height='%dpx';r.style.overflow='hidden';"
+        "if(b){b.style.width='%dpx';b.style.height='%dpx';b.style.margin='0';}"
+        "if(o){o.style.width='%dpx';o.style.height='%dpx';}"
+        "}catch(e){}",
+        static_cast<int>(dw), static_cast<int>(dh),
+        static_cast<int>(dw), static_cast<int>(dh),
+        static_cast<int>(dw), static_cast<int>(dh));
+      evalJs(js);
     }
     return;
   }
@@ -653,7 +686,7 @@ int main(int argc, char** argv)
   }
 
   // Stamp proves ~/.vst3 helper was updated (tester logs often still show old binaries).
-  hostLog("[calfnxt-web-host] build=geom-kick-5\n");
+  hostLog("[calfnxt-web-host] build=geom-kick-6\n");
   hostLog("[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d dmabuf=%s\n",
           static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width, g.height,
           envFlag("CALFNXT_WEB_DMABUF") ? "on" : "off");
