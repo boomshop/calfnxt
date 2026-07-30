@@ -46,6 +46,9 @@ target_link_libraries(calfnxt-web-host
 target_compile_features(calfnxt-web-host PRIVATE cxx_std_17)
 
 # Copy helper next to each plugin .so (Contents/<arch>/calfnxt-web-host).
+# Plugin POST_BUILD alone is not enough: rebuilding only calfnxt-web-host leaves
+# stale helpers in build/VST3/…, and install-user-vst3 then overwrites ~/.vst3.
+# Root CMakeLists creates calfnxt-web-host-bundles from CALFNXT_WEB_HOST_PLUGIN_TARGETS.
 function(calfnxt_copy_web_host target)
   add_custom_command(
     TARGET ${target} POST_BUILD
@@ -56,4 +59,5 @@ function(calfnxt_copy_web_host target)
     VERBATIM
   )
   add_dependencies(${target} calfnxt-web-host)
+  set_property(GLOBAL APPEND PROPERTY CALFNXT_WEB_HOST_PLUGIN_TARGETS "${target}")
 endfunction()

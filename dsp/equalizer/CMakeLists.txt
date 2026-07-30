@@ -76,7 +76,12 @@ add_custom_target(install-user-vst3
   COMMAND ${CMAKE_COMMAND} -E copy_directory
     "$<TARGET_FILE_DIR:calfnxt-transients>/../.."
     "$ENV{HOME}/.vst3/calfNXTTransients.vst3"
-  COMMENT "Install Equalizer + Stereo + Transients VST3 → ~/.vst3"
+  COMMAND ${CMAKE_COMMAND} -E rm -rf
+    "$ENV{HOME}/.vst3/calfNXTCompressor.vst3"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "$<TARGET_FILE_DIR:calfnxt-compressor>/../.."
+    "$ENV{HOME}/.vst3/calfNXTCompressor.vst3"
+  COMMENT "Install Equalizer + Stereo + Transients + Compressor VST3 → ~/.vst3"
   DEPENDS
     calfnxt-equalizer
     calfnxt-equalizer-resources
@@ -84,5 +89,8 @@ add_custom_target(install-user-vst3
     calfnxt-stereo-resources
     calfnxt-transients
     calfnxt-transients-resources
+    calfnxt-compressor
+    calfnxt-compressor-resources
     calfnxt-web-host
+    calfnxt-web-host-bundles
 )
