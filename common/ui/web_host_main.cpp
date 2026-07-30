@@ -138,7 +138,9 @@ void resizeX11Window(GdkWindow* win, int w, int h)
     XConfigureWindow(dpy, xid, CWWidth | CWHeight, &ch);
     XResizeWindow(dpy, xid, static_cast<unsigned>(w), static_cast<unsigned>(h));
     XSync(dpy, False);
-    (void)gdk_x11_display_error_trap_pop(gd);
+    const int err = gdk_x11_display_error_trap_pop(gd);
+    if (err)
+      hostLog("[calfnxt-web-host] resize-self X error code=%d (ignored)\n", err);
   }
 #endif
 }
