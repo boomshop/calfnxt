@@ -2,7 +2,7 @@
   display: grid;
   grid-template-areas: 'graph bands' 'controls controls';
   grid-template-columns: 1fr auto;
-  grid-template-rows: 1fr 160px;
+  grid-template-rows: 1fr 168px;
   gap: var(--gap);
   align-items: stretch;
 
@@ -39,13 +39,13 @@
     }
 
     > .dyn {
-      width: 204px;
+      width: 212px;
       display: grid;
       grid-template-columns: auto auto auto;
-      // align-items: center;
       align-content: space-evenly;
       justify-content: space-evenly;
       align-items: center;
+      gap: var(--gap) 16px;
     }
   }
 
@@ -55,7 +55,7 @@
     gap: 4px;
     grid-template-columns: 1fr 1fr;
     position: relative;
-    width: 208px;
+    width: 216px;
     margin: -2px;
 
     > .band {

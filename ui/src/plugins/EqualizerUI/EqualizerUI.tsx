@@ -58,6 +58,45 @@ const EQ_Q_LABELS = [
   { pos: 20, label: '20' },
 ];
 
+/** Dyn section — keep in sync with CompressorUI knob scales. */
+const EQ_DYN_ATTACK_DOTS = [0.1, 1, 5, 10, 20, 50, 100, 250, 500];
+const EQ_DYN_ATTACK_LABELS = [
+  { pos: 0.1, label: '0.1' },
+  { pos: 1, label: '1' },
+  { pos: 10, label: '10' },
+  { pos: 50, label: '50' },
+  { pos: 100, label: '100' },
+  { pos: 250, label: '250' },
+  { pos: 500, label: '500' },
+];
+
+const EQ_DYN_RELEASE_DOTS = [1, 10, 50, 100, 200, 500, 1000, 2000];
+const EQ_DYN_RELEASE_LABELS = [
+  { pos: 1, label: '1' },
+  { pos: 100, label: '100' },
+  { pos: 200, label: '200' },
+  { pos: 500, label: '500' },
+  { pos: 1000, label: '1s' },
+  { pos: 2000, label: '2s' },
+];
+
+const EQ_DYN_THRESH_DOTS = [-60, -48, -36, -24, -12, -6, 0];
+const EQ_DYN_THRESH_LABELS = [
+  { pos: -60, label: '−60' },
+  { pos: -48, label: '−48' },
+  { pos: -36, label: '−36' },
+  { pos: -24, label: '−24' },
+  { pos: -12, label: '−12' },
+  { pos: -6, label: '−6' },
+  { pos: 0, label: '0' },
+];
+
+const EQ_DYN_RATIO_DOTS = [1, 2, 4, 8, 12, 20];
+const EQ_DYN_RATIO_LABELS = EQ_DYN_RATIO_DOTS.map((n) => ({
+  pos: n,
+  label: String(n),
+}));
+
 export interface EqualizerUIProps {
   host: IEqualizerHost;
 }
@@ -202,6 +241,8 @@ function BandControls(props: { band: IEqualizerBand }) {
             size="small"
             scale="log2"
             log_factor={4}
+            dots={EQ_DYN_ATTACK_DOTS}
+            labels={EQ_DYN_ATTACK_LABELS}
             {...{
               'value.format': (v: number) => `${v.toFixed(1)}`,
             }}
@@ -215,6 +256,8 @@ function BandControls(props: { band: IEqualizerBand }) {
             size="small"
             scale="log2"
             log_factor={4}
+            dots={EQ_DYN_RELEASE_DOTS}
+            labels={EQ_DYN_RELEASE_LABELS}
             {...{
               'value.format': (v: number) => `${v.toFixed(0)}`,
             }}
@@ -227,6 +270,9 @@ function BandControls(props: { band: IEqualizerBand }) {
             reset={band.defaults.dynThreshold}
             label="Thresh"
             size="small"
+            base={0}
+            dots={EQ_DYN_THRESH_DOTS}
+            labels={EQ_DYN_THRESH_LABELS}
             {...{
               'value.format': (v: number) => v.toFixed(1),
             }}
@@ -240,6 +286,8 @@ function BandControls(props: { band: IEqualizerBand }) {
             size="small"
             scale="log2"
             log_factor={4}
+            dots={EQ_DYN_RATIO_DOTS}
+            labels={EQ_DYN_RATIO_LABELS}
             {...{
               'value.format': (v: number) => `${v.toFixed(1)}:1`,
             }}
