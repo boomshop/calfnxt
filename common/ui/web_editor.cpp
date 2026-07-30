@@ -561,25 +561,6 @@ bool WebEditor::applyCssViewport(int cssW, int cssH)
 
   logMsg("[calfnxt] viewport: host %dx%d / css %dx%d → scale=%.3f (design %dx%d)\n",
          hostW, hostH, cssW, cssH, scale, designWidth_, designHeight_);
-
-  // Fractional GTK/WebKit scaling (css ≈ design/factor). resizeView upscale
-  // letterboxes; CSS transform and WebKit zoom both paint black with
-  // hw-accel=never. Keep the design-sized host and let the SPA fill 100%.
-  if (cssW < designWidth_ && cssH < designHeight_ && scale > 1.02)
-  {
-    const double fillW = static_cast<double>(cssW) / static_cast<double>(designWidth_);
-    const double fillH = static_cast<double>(cssH) / static_cast<double>(designHeight_);
-    const bool consistent = std::fabs(scaleW - scaleH) < 0.1
-                            && std::fabs(fillW - fillH) < 0.1;
-    if (consistent && fillW > 0.45 && fillW < 0.98)
-    {
-      viewportApplied_ = true;
-      logMsg("[calfnxt] viewport: keep host %dx%d (fractional ~%.3f, no zoom)\n",
-             hostW, hostH, scale);
-      return true;
-    }
-  }
-
   return applyDesignScale(scale, "viewport");
 }
 
