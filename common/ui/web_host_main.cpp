@@ -37,6 +37,11 @@ struct HostState
   WebKitWebView* webview = nullptr;
   WebKitWebContext* ctx = nullptr;
   guint sockSource = 0;
+  /** Guard: gtk_widget_size_allocate must not re-enter sync/force paths. */
+  bool inSizeAllocate = false;
+  /** Idle coalescing when the embedder keeps handing us 1×1. */
+  guint forceAllocIdle = 0;
+  int forceAllocTries = 0;
 };
 
 HostState g;
@@ -90,6 +95,16 @@ bool sendLine(const char* line)
   return true;
 }
 
+void plugGdkSize(int& outW, int& outH)
+{
+  outW = -1;
+  outH = -1;
+  if (!g.plug)
+    return;
+  if (GdkWindow* win = gtk_widget_get_window(g.plug))
+    gdk_window_get_geometry(win, nullptr, nullptr, &outW, &outH);
+}
+
 void logAlloc(const char* why)
 {
   const int pw = g.plug ? gtk_widget_get_allocated_width(g.plug) : -1;
@@ -99,18 +114,113 @@ void logAlloc(const char* why)
   const int emb = (g.plug && gtk_plug_get_embedded(GTK_PLUG(g.plug))) ? 1 : 0;
   int gdkW = -1;
   int gdkH = -1;
-  if (g.plug)
-  {
-    if (GdkWindow* win = gtk_widget_get_window(g.plug))
-      gdk_window_get_geometry(win, nullptr, nullptr, &gdkW, &gdkH);
-  }
+  plugGdkSize(gdkW, gdkH);
   hostLog("[calfnxt-web-host] alloc %s plug=%dx%d webview=%dx%d gdk=%dx%d embedded=%d want=%dx%d\n",
           why, pw, ph, vw, vh, gdkW, gdkH, emb, g.width, g.height);
 }
 
-void syncNativeSize()
+/** True when GTK allocation is unusable for WebKit layout (< 2×2). */
+bool gtkAllocTiny()
 {
   if (!g.plug)
+    return true;
+  const int pw = gtk_widget_get_allocated_width(g.plug);
+  const int ph = gtk_widget_get_allocated_height(g.plug);
+  if (pw < 2 || ph < 2)
+    return true;
+  if (!g.webview)
+    return false;
+  const int vw = gtk_widget_get_allocated_width(GTK_WIDGET(g.webview));
+  const int vh = gtk_widget_get_allocated_height(GTK_WIDGET(g.webview));
+  return vw < 2 || vh < 2;
+}
+
+/**
+ * XEmbed/GtkPlug on some native-X11 hosts (e.g. Carla+XFCE): Gdk/X window is
+ * already design-sized, but GTK keeps allocating the plug/webview at 1×1 so
+ * WebKit lays out at zero CSS size → transparent "background hole".
+ *
+ * Fix: force gtk_widget_size_allocate to the Gdk size (else design want).
+ * Do NOT XResize the foreign embedder/parent — that caused BadAccess earlier.
+ */
+bool forceGtkAllocation(const char* why)
+{
+  if (!g.plug || g.inSizeAllocate)
+    return false;
+  if (!gtkAllocTiny())
+    return false;
+
+  int gdkW = -1;
+  int gdkH = -1;
+  plugGdkSize(gdkW, gdkH);
+
+  int w = g.width;
+  int h = g.height;
+  if (gdkW >= 2 && gdkH >= 2)
+  {
+    w = gdkW;
+    h = gdkH;
+  }
+  if (w < 2 || h < 2)
+    return false;
+
+  const int pw = gtk_widget_get_allocated_width(g.plug);
+  const int ph = gtk_widget_get_allocated_height(g.plug);
+  const int vw = g.webview ? gtk_widget_get_allocated_width(GTK_WIDGET(g.webview)) : -1;
+  const int vh = g.webview ? gtk_widget_get_allocated_height(GTK_WIDGET(g.webview)) : -1;
+
+  g.inSizeAllocate = true;
+  hostLog("[calfnxt-web-host] force-alloc %s plug=%dx%d webview=%dx%d → %dx%d (gdk=%dx%d want=%dx%d)\n",
+          why, pw, ph, vw, vh, w, h, gdkW, gdkH, g.width, g.height);
+
+  GtkAllocation a {};
+  a.x = 0;
+  a.y = 0;
+  a.width = w;
+  a.height = h;
+  gtk_widget_size_allocate(g.plug, &a);
+  if (g.webview)
+  {
+    GtkAllocation child = a;
+    gtk_widget_size_allocate(GTK_WIDGET(g.webview), &child);
+  }
+  g.inSizeAllocate = false;
+
+  logAlloc(why);
+  return !gtkAllocTiny();
+}
+
+gboolean onForceAllocIdle(gpointer)
+{
+  g.forceAllocIdle = 0;
+  if (!g.plug)
+    return G_SOURCE_REMOVE;
+  if (!gtkAllocTiny())
+    return G_SOURCE_REMOVE;
+  ++g.forceAllocTries;
+  char why[32];
+  std::snprintf(why, sizeof why, "idle-%d", g.forceAllocTries);
+  forceGtkAllocation(why);
+  // Embedder may overwrite with 1×1 again — retry briefly, then stop.
+  if (gtkAllocTiny() && g.forceAllocTries < 30)
+  {
+    g.forceAllocIdle = g_timeout_add(100, onForceAllocIdle, nullptr);
+  }
+  return G_SOURCE_REMOVE;
+}
+
+void scheduleForceAlloc()
+{
+  if (g.forceAllocIdle || !g.plug || g.inSizeAllocate)
+    return;
+  if (!gtkAllocTiny())
+    return;
+  g.forceAllocIdle = g_idle_add(onForceAllocIdle, nullptr);
+}
+
+void syncNativeSize()
+{
+  if (!g.plug || g.inSizeAllocate)
     return;
   const int w = g.width;
   const int h = g.height;
@@ -127,6 +237,9 @@ void syncNativeSize()
   if (GdkWindow* win = gtk_widget_get_window(g.plug))
     gdk_window_resize(win, w, h);
   gtk_widget_queue_resize(g.plug);
+  // If queue_resize left us at 1×1 while Gdk is already large, force now.
+  if (gtkAllocTiny())
+    forceGtkAllocation("sync");
 }
 
 void evalJs(const char* js)
@@ -284,7 +397,10 @@ void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
   else if (ev == WEBKIT_LOAD_FINISHED)
   {
     hostLog("[calfnxt-web-host] load-finished → _ready\n");
-    logAlloc("load-finished");
+    if (gtkAllocTiny())
+      forceGtkAllocation("load-finished");
+    else
+      logAlloc("load-finished");
     sendLine("{\"t\":\"_ready\"}");
   }
 }
@@ -467,7 +583,7 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=diag-lean-1 hw-accel=%s\n", noGpu ? "never" : "always");
+  hostLog("[calfnxt-web-host] build=alloc-fix-1 hw-accel=%s\n", noGpu ? "never" : "always");
 
   // Opaque default — transparent XEmbed + empty/0×0 WebView reads as a "background hole".
   {
@@ -480,16 +596,36 @@ int main(int argc, char** argv)
   gtk_container_add(GTK_CONTAINER(g.plug), GTK_WIDGET(g.webview));
   gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
   gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
+
+  // If the socket keeps handing us 1×1, re-apply Gdk-sized allocation on idle.
+  g_signal_connect(g.plug, "size-allocate",
+                   G_CALLBACK(+[](GtkWidget*, GdkRectangle* allocation, gpointer) {
+                     if (g.inSizeAllocate)
+                       return;
+                     if (allocation && allocation->width >= 2 && allocation->height >= 2)
+                       return;
+                     scheduleForceAlloc();
+                   }),
+                   nullptr);
+
   gtk_widget_show_all(g.plug);
   syncNativeSize();
   logAlloc("show_all");
-  // Two delayed samples only (no geometry forcing).
+  if (gtkAllocTiny())
+    scheduleForceAlloc();
+
   g_timeout_add(500, +[](gpointer) -> gboolean {
-    logAlloc("t+500ms");
+    if (gtkAllocTiny())
+      forceGtkAllocation("t+500ms");
+    else
+      logAlloc("t+500ms");
     return G_SOURCE_REMOVE;
   }, nullptr);
   g_timeout_add(2000, +[](gpointer) -> gboolean {
-    logAlloc("t+2s");
+    if (gtkAllocTiny())
+      forceGtkAllocation("t+2s");
+    else
+      logAlloc("t+2s");
     return G_SOURCE_REMOVE;
   }, nullptr);
 
