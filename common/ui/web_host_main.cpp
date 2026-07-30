@@ -15,6 +15,7 @@
 #include <webkit2/webkit2.h>
 
 #include <cerrno>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -44,6 +45,25 @@ bool envFlag(const char* name)
 {
   const char* s = std::getenv(name);
   return s != nullptr && s[0] != '\0';
+}
+
+void hostLog(const char* fmt, ...)
+{
+  char buf[1024];
+  va_list ap;
+  va_start(ap, fmt);
+  const int n = std::vsnprintf(buf, sizeof buf, fmt, ap);
+  va_end(ap);
+  if (n <= 0)
+    return;
+  std::fputs(buf, stderr);
+  std::fflush(stderr);
+  const int fd = ::open("/tmp/calfnxt-ui.log", O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+  if (fd >= 0)
+  {
+    (void)::write(fd, buf, static_cast<size_t>(std::strlen(buf)));
+    ::close(fd);
+  }
 }
 
 bool sendLine(const char* line)
@@ -238,15 +258,21 @@ void onScriptMessage(WebKitUserContentManager*, WebKitJavascriptResult* js, gpoi
 
 void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
 {
-  if (ev == WEBKIT_LOAD_FINISHED)
+  if (ev == WEBKIT_LOAD_STARTED)
+    hostLog("[calfnxt-web-host] load-started\n");
+  else if (ev == WEBKIT_LOAD_COMMITTED)
+    hostLog("[calfnxt-web-host] load-committed\n");
+  else if (ev == WEBKIT_LOAD_FINISHED)
+  {
+    hostLog("[calfnxt-web-host] load-finished → _ready\n");
     sendLine("{\"t\":\"_ready\"}");
+  }
 }
 
 void onWebProcessTerminated(WebKitWebView*, WebKitWebProcessTerminationReason reason, gpointer)
 {
-  std::fprintf(stderr,
-               "[calfnxt-web-host] web process terminated (reason=%d) — reloading\n",
-               static_cast<int>(reason));
+  hostLog("[calfnxt-web-host] web process terminated (reason=%d) — reloading\n",
+          static_cast<int>(reason));
   if (!g.webview)
     return;
   char uri[512];
@@ -313,12 +339,19 @@ int main(int argc, char** argv)
   unsigned long long parentXid = 0;
   int fd = -1;
 
+  // WebKitGTK 2.42+ DMA-BUF renderer often paints a blank/transparent window on
+  // X11 (NVIDIA and some other GPUs). Disable unless explicitly re-enabled.
+  if (!envFlag("CALFNXT_WEB_DMABUF") && !std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER"))
+    setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", 1);
+  if (!envFlag("CALFNXT_WEB_GPU") && !std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE"))
+    setenv("WEBKIT_DISABLE_COMPOSITING_MODE", "1", 1);
+
   for (int i = 1; i < argc; ++i)
   {
     auto need = [&](const char* opt) -> const char* {
       if (i + 1 >= argc)
       {
-        std::fprintf(stderr, "[calfnxt-web-host] missing value for %s\n", opt);
+        hostLog("[calfnxt-web-host] missing value for %s\n", opt);
         std::exit(2);
       }
       return argv[++i];
@@ -342,7 +375,7 @@ int main(int argc, char** argv)
     }
     else
     {
-      std::fprintf(stderr, "[calfnxt-web-host] unknown arg: %s\n", argv[i]);
+      hostLog("[calfnxt-web-host] unknown arg: %s\n", argv[i]);
       printUsage(argv[0]);
       return 2;
     }
@@ -366,16 +399,14 @@ int main(int argc, char** argv)
   gdk_set_allowed_backends("x11");
   if (!gtk_init_check(&argc, &argv))
   {
-    std::fprintf(stderr,
-                 "[calfnxt-web-host] gtk_init_check failed (need X11 DISPLAY / XWayland; "
-                 "GDK_BACKEND=x11)\n");
+    hostLog("[calfnxt-web-host] gtk_init_check failed (need X11 DISPLAY / XWayland; "
+            "GDK_BACKEND=x11)\n");
     return 1;
   }
 
-  std::fprintf(stderr, "[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d\n",
-               static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width,
-               g.height);
-  std::fflush(stderr);
+  hostLog("[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d dmabuf=%s\n",
+          static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width, g.height,
+          envFlag("CALFNXT_WEB_DMABUF") ? "on" : "off");
 
   g.ctx = webkit_web_context_new();
   webkit_web_context_register_uri_scheme(g.ctx, "calfnxt", onUriScheme, nullptr, nullptr);
@@ -414,38 +445,56 @@ int main(int argc, char** argv)
   g_object_unref(ucm);
 
   auto* settings = webkit_web_view_get_settings(g.webview);
-  const bool noGpu = envFlag("CALFNXT_WEB_NO_GPU");
+  // XEmbed+WebKit GPU frequently paints a transparent "background hole". Default
+  // software; opt in with CALFNXT_WEB_GPU=1 (CALFNXT_WEB_NO_GPU=1 still forces off).
+  const bool wantGpu = envFlag("CALFNXT_WEB_GPU") && !envFlag("CALFNXT_WEB_NO_GPU");
   webkit_settings_set_hardware_acceleration_policy(
     settings,
-    noGpu ? WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER
-          : WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
+    wantGpu ? WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS
+            : WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER);
   const bool webDebug = envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR");
   webkit_settings_set_enable_developer_extras(settings, webDebug ? TRUE : FALSE);
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
+
+  hostLog("[calfnxt-web-host] hw-accel=%s debug=%d\n",
+          wantGpu ? "always" : "never", webDebug ? 1 : 0);
 
   g.plug = gtk_plug_new(static_cast<Window>(parentXid));
   gtk_widget_set_size_request(g.plug, g.width, g.height);
   gtk_container_add(GTK_CONTAINER(g.plug), GTK_WIDGET(g.webview));
   gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
   gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
+
+  g_signal_connect(g.plug, "embedded",
+                   G_CALLBACK(+[](GtkPlug*, gpointer) {
+                     hostLog("[calfnxt-web-host] GtkPlug embedded into parent\n");
+                   }),
+                   nullptr);
+
   gtk_widget_show_all(g.plug);
   syncNativeSize();
+  if (!gtk_plug_get_embedded(GTK_PLUG(g.plug)))
+  {
+    hostLog("[calfnxt-web-host] warning: GtkPlug not embedded yet (parent=0x%llx)\n",
+            static_cast<unsigned long long>(parentXid));
+  }
 
   g_signal_connect(g.webview, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
   g_signal_connect(g.webview, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
   g_signal_connect(g.webview, "load-failed",
                    G_CALLBACK(+[](WebKitWebView*, WebKitLoadEvent, const gchar* failingUri,
                                   GError* error, gpointer) -> gboolean {
-                     std::fprintf(stderr, "[calfnxt-web-host] load-failed: %s (%s)\n",
-                                  failingUri ? failingUri : "?",
-                                  error && error->message ? error->message : "?");
+                     hostLog("[calfnxt-web-host] load-failed: %s (%s)\n",
+                             failingUri ? failingUri : "?",
+                             error && error->message ? error->message : "?");
                      return FALSE;
                    }),
                    nullptr);
 
   char uri[512];
   std::snprintf(uri, sizeof uri, "calfnxt://bundle/%s", g.entryHtml);
+  hostLog("[calfnxt-web-host] load %s\n", uri);
   webkit_web_view_load_uri(g.webview, uri);
 
   if (envFlag("CALFNXT_WEB_INSPECTOR"))

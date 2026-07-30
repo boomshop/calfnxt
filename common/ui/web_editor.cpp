@@ -34,6 +34,32 @@ namespace {
 
 void dlAnchor() {}
 
+/** Always-visible diagnostics: stderr may be swallowed by bridged hosts. */
+void logMsgFile(const char* line)
+{
+  if (!line || !line[0])
+    return;
+  const int fd = ::open("/tmp/calfnxt-ui.log", O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+  if (fd < 0)
+    return;
+  (void)::write(fd, line, std::strlen(line));
+  ::close(fd);
+}
+
+void logBoth(const char* fmt, ...)
+{
+  char buf[1024];
+  va_list ap;
+  va_start(ap, fmt);
+  const int n = std::vsnprintf(buf, sizeof buf, fmt, ap);
+  va_end(ap);
+  if (n <= 0)
+    return;
+  std::fputs(buf, stderr);
+  std::fflush(stderr);
+  logMsgFile(buf);
+}
+
 struct SuppressParamPush
 {
   bool& flag;
@@ -117,13 +143,14 @@ int clampPx(int v, int lo, int hi)
 
 void logMsg(const char* fmt, ...)
 {
-  if (!envFlag("CALFNXT_WEB_DEBUG"))
-    return;
   char buf[512];
   va_list ap;
   va_start(ap, fmt);
   std::vsnprintf(buf, sizeof buf, fmt, ap);
   va_end(ap);
+  logMsgFile(buf);
+  if (!envFlag("CALFNXT_WEB_DEBUG"))
+    return;
   std::fputs(buf, stderr);
   std::fflush(stderr);
 }
@@ -305,14 +332,13 @@ bool WebEditor::openHelper(void* x11Parent)
   char helperPath[4096];
   if (!findHelperPath(helperPath, sizeof helperPath))
   {
-    std::fprintf(stderr, "[calfnxt] calfnxt-web-host not found next to plugin .so\n");
+    logBoth("[calfnxt] calfnxt-web-host not found next to plugin .so\n");
     return false;
   }
 
   // Always log attach paths — empty editor windows are otherwise silent in hosts.
-  std::fprintf(stderr, "[calfnxt] editor: helper=%s root=%s entry=%s\n",
-               helperPath, webRoot_, entryHtml_);
-  std::fflush(stderr);
+  logBoth("[calfnxt] editor: helper=%s root=%s entry=%s\n",
+          helperPath, webRoot_, entryHtml_);
 
   // entry may be "index.html#plugin" (URI fragment for SPA routing) — not a filesystem name.
   char entryFile[256];
@@ -328,16 +354,14 @@ bool WebEditor::openHelper(void* x11Parent)
   std::snprintf(indexPath, sizeof indexPath, "%s/%s", webRoot_, entryFile);
   if (access(indexPath, R_OK) != 0)
   {
-    std::fprintf(stderr,
-                 "[calfnxt] editor UI missing: %s (build *-resources / install-user-vst3)\n",
-                 indexPath);
-    std::fflush(stderr);
+    logBoth("[calfnxt] editor UI missing: %s (build *-resources / install-user-vst3)\n",
+            indexPath);
   }
 
   int sp[2] = {-1, -1};
   if (socketpair(AF_UNIX, SOCK_STREAM, 0, sp) != 0)
   {
-    std::fprintf(stderr, "[calfnxt] socketpair failed: %s\n", std::strerror(errno));
+    logBoth("[calfnxt] socketpair failed: %s\n", std::strerror(errno));
     return false;
   }
 
@@ -384,7 +408,7 @@ bool WebEditor::openHelper(void* x11Parent)
 
   if (rc != 0)
   {
-    std::fprintf(stderr, "[calfnxt] posix_spawn(%s) failed: %s\n", helperPath, std::strerror(rc));
+    logBoth("[calfnxt] posix_spawn(%s) failed: %s\n", helperPath, std::strerror(rc));
     ::close(sp[0]);
     return false;
   }
@@ -397,8 +421,7 @@ bool WebEditor::openHelper(void* x11Parent)
   helperPid_ = pid;
   pageReady_ = false;
   readBuf_.clear();
-  std::fprintf(stderr, "[calfnxt] spawned web-host pid=%d\n", static_cast<int>(pid));
-  std::fflush(stderr);
+  logBoth("[calfnxt] spawned web-host pid=%d\n", static_cast<int>(pid));
 
   // Catch immediate helper failure (missing libs / gtk_init / bad DISPLAY) before
   // the host paints an empty embed forever. Dynamic-linker errors go to the child's
@@ -411,17 +434,14 @@ bool WebEditor::openHelper(void* x11Parent)
     {
       if (WIFEXITED(status))
       {
-        std::fprintf(stderr,
-                     "[calfnxt] web-host exited immediately (code=%d) — check deps "
-                     "(webkit2gtk-4.1, gtk-3) and DISPLAY/X11; try: %s --help\n",
-                     WEXITSTATUS(status), helperPath);
+        logBoth("[calfnxt] web-host exited immediately (code=%d) — check deps "
+                "(webkit2gtk-4.1, gtk-3) and DISPLAY/X11; try: %s --help\n",
+                WEXITSTATUS(status), helperPath);
       }
       else if (WIFSIGNALED(status))
       {
-        std::fprintf(stderr, "[calfnxt] web-host died immediately (signal=%d)\n",
-                     WTERMSIG(status));
+        logBoth("[calfnxt] web-host died immediately (signal=%d)\n", WTERMSIG(status));
       }
-      std::fflush(stderr);
       ::close(sock_);
       sock_ = -1;
       helperPid_ = -1;
@@ -541,14 +561,29 @@ bool WebEditor::applyCssViewport(int cssW, int cssH)
 
 tresult PLUGIN_API WebEditor::attached(void* parent, FIDString type)
 {
+  logBoth("[calfnxt] attached parent=%p type=%s\n", parent, type ? type : "(null)");
+
   if (isPlatformTypeSupported(type) != kResultTrue)
+  {
+    logBoth("[calfnxt] attached: unsupported platform type '%s' (need X11EmbedWindowID)\n",
+            type ? type : "(null)");
     return kResultFalse;
+  }
+
+  if (!parent)
+  {
+    logBoth("[calfnxt] attached: null X11 parent\n");
+    return kResultFalse;
+  }
 
   viewportApplied_ = false;
   rect = ViewRect(0, 0, designWidth_, designHeight_);
 
   if (!openHelper(parent))
+  {
+    logBoth("[calfnxt] attached: openHelper failed\n");
     return kResultFalse;
+  }
 
   if (plugFrame)
   {
@@ -560,22 +595,17 @@ tresult PLUGIN_API WebEditor::attached(void* parent, FIDString type)
       if (runLoop_->registerTimer(this, 16) == kResultOk)
         timerRegistered_ = true;
       else
-      {
-        std::fprintf(stderr,
-                     "[calfnxt] IRunLoop::registerTimer failed — UI bridge will not pump\n");
-        std::fflush(stderr);
-      }
+        logBoth("[calfnxt] IRunLoop::registerTimer failed — UI bridge will not pump\n");
     }
     else
-    {
-      std::fprintf(stderr,
-                   "[calfnxt] host has no Linux::IRunLoop — UI bridge will not pump\n");
-      std::fflush(stderr);
-    }
+      logBoth("[calfnxt] host has no Linux::IRunLoop — UI bridge will not pump\n");
     requestHostSize();
     if (const float envScale = envFloat("CALFNXT_UI_SCALE"))
       applyDesignScale(envScale, "CALFNXT_UI_SCALE");
   }
+  else
+    logBoth("[calfnxt] attached: plugFrame is null\n");
+
   return CPluginView::attached(parent, type);
 }
 
@@ -849,6 +879,7 @@ void WebEditor::flushViz()
     }
     flushVizArray(vizSource_->vizStereoFieldId(), "gonio", gonio, nGonio);
   }
+
 }
 
 void WebEditor::pushAllParams()
