@@ -149,7 +149,6 @@ body,
   --aux-meter-gridgap: 0 4px;
   --aux-multimeter-labelwidth: 20px;
 
-  min-width: 48px !important;
   margin: 0;
 
   > .aux-bar {
@@ -170,6 +169,7 @@ body,
   }
 
   &.aux-horizontal {
+    min-width: 48px !important;
     --aux-meter-gridgap: 2px 4px;
 
     > .aux-bar {
