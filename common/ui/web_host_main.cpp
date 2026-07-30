@@ -42,11 +42,14 @@ struct HostState
   guint sockSource = 0;
   bool loadStarted = false;
   bool syncingSize = false;
+  /** Monotonic ms deadline for size-kick timer (0 = inactive). */
+  gint64 kickUntilMs = 0;
 };
 
 HostState g;
 
 void syncNativeSize();
+void armSizeKick(int ms = 8000);
 
 bool envFlag(const char* name)
 {
@@ -147,14 +150,14 @@ void resizeX11Window(GdkWindow* win, int w, int h)
 }
 
 /**
- * Optionally try to grow the host XEmbed socket / undersized ancestors.
- * Off by default: XResizeWindow on a foreign (Carla/Qt) window often yields
- * BadAccess and the default X handler kills calfnxt-web-host → black editor.
- * Opt in: CALFNXT_WEB_RESIZE_PARENT=1 (still error-trapped).
+ * Grow the host XEmbed socket / undersized ancestors to match the editor size.
+ * Always error-trapped (foreign XResize can BadAccess). Disable with
+ * CALFNXT_WEB_NO_RESIZE_PARENT=1. Opt-out only — grow is required after HiDPI
+ * resizeView so the plug fills the larger host frame.
  */
 void resizeX11EmbedderChain(int w, int h)
 {
-  if (w < 1 || h < 1 || !envFlag("CALFNXT_WEB_RESIZE_PARENT"))
+  if (w < 1 || h < 1 || envFlag("CALFNXT_WEB_NO_RESIZE_PARENT"))
     return;
 #if defined(GDK_WINDOWING_X11)
   GdkDisplay* gd = gdk_display_get_default();
@@ -185,8 +188,16 @@ void resizeX11EmbedderChain(int w, int h)
   if (g.parentXid)
   {
     const Window sock = static_cast<Window>(g.parentXid);
-    XConfigureWindow(dpy, sock, CWWidth | CWHeight, &ch);
-    XResizeWindow(dpy, sock, static_cast<unsigned>(w), static_cast<unsigned>(h));
+    Window r2 = 0;
+    int x = 0, y = 0;
+    unsigned pw = 0, ph = 0, bw = 0, d = 0;
+    // Grow-only: never shrink a host socket that is already large enough.
+    if (!XGetGeometry(dpy, sock, &r2, &x, &y, &pw, &ph, &bw, &d)
+        || static_cast<int>(pw) < w || static_cast<int>(ph) < h)
+    {
+      XConfigureWindow(dpy, sock, CWWidth | CWHeight, &ch);
+      XResizeWindow(dpy, sock, static_cast<unsigned>(w), static_cast<unsigned>(h));
+    }
   }
 
   Window cur = start;
@@ -220,6 +231,11 @@ void resizeX11EmbedderChain(int w, int h)
   if (err)
     hostLog("[calfnxt-web-host] resize-parent X error code=%d (ignored)\n", err);
 #endif
+}
+
+void armSizeKick(int ms)
+{
+  g.kickUntilMs = g_get_monotonic_time() / 1000 + ms;
 }
 
 void syncNativeSize()
@@ -388,7 +404,11 @@ void handlePluginLine(const std::string& line)
       g.height = static_cast<int>(h);
       hostLog("[calfnxt-web-host] host _size %dx%d\n", g.width, g.height);
       syncNativeSize();
+      logAlloc("host-_size");
+      armSizeKick(8000);
       startLoadIfReady("host-_size");
+      // Nudge JS layout after HiDPI resizeView.
+      evalJs("try{window.dispatchEvent(new Event('resize'));}catch(e){}");
     }
     return;
   }
@@ -633,7 +653,7 @@ int main(int argc, char** argv)
   }
 
   // Stamp proves ~/.vst3 helper was updated (tester logs often still show old binaries).
-  hostLog("[calfnxt-web-host] build=geom-kick-4\n");
+  hostLog("[calfnxt-web-host] build=geom-kick-5\n");
   hostLog("[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d dmabuf=%s\n",
           static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width, g.height,
           envFlag("CALFNXT_WEB_DMABUF") ? "on" : "off");
@@ -770,8 +790,9 @@ int main(int argc, char** argv)
     forceLoad("timeout-750ms");
     return G_SOURCE_REMOVE;
   }, nullptr);
-  // Carla/Qt often leaves the XEmbed socket at 1×1; keep forcing design size until
-  // GTK/Gdk report a usable allocation (or give up after ~5 s).
+  // Carla/Qt often leaves the XEmbed socket undersized after resizeView; keep
+  // syncing until gdk matches want (or kick deadline expires).
+  armSizeKick(8000);
   g_timeout_add(100, +[](gpointer) -> gboolean {
     static int ticks = 0;
     ++ticks;
@@ -785,12 +806,23 @@ int main(int argc, char** argv)
       if (GdkWindow* win = gtk_widget_get_window(g.plug))
         gdk_window_get_geometry(win, nullptr, nullptr, &gdkW, &gdkH);
     }
-    const bool ok = (pw >= 2 && ph >= 2) || (gdkW >= 2 && gdkH >= 2);
-    if (ticks == 1 || ticks == 5 || ticks == 15 || ticks == 30 || (!ok && ticks % 10 == 0))
-      logAlloc(ok ? "kick-ok" : "kick");
-    if (ok && ticks >= 2)
+    const bool usable = (pw >= 2 && ph >= 2) || (gdkW >= 2 && gdkH >= 2);
+    const bool matched = usable
+      && gdkW >= g.width - 2 && gdkW <= g.width + 2
+      && gdkH >= g.height - 2 && gdkH <= g.height + 2;
+    if (ticks == 1 || ticks == 5 || ticks == 15 || ticks % 20 == 0 || matched)
+      logAlloc(matched ? "kick-match" : (usable ? "kick" : "kick-tiny"));
+    const gint64 now = g_get_monotonic_time() / 1000;
+    // Stay alive briefly after a match so a later HiDPI _size can re-arm via armSizeKick.
+    if (matched)
+    {
+      const gint64 soon = now + 800;
+      if (g.kickUntilMs <= 0 || g.kickUntilMs > soon)
+        g.kickUntilMs = soon;
+    }
+    if (g.kickUntilMs > 0 && now > g.kickUntilMs)
       return G_SOURCE_REMOVE;
-    return ticks < 50 ? G_SOURCE_CONTINUE : G_SOURCE_REMOVE;
+    return G_SOURCE_CONTINUE;
   }, nullptr);
 
   if (envFlag("CALFNXT_WEB_INSPECTOR"))
