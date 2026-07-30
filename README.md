@@ -32,6 +32,7 @@ will follow.
 | **Equalizer** | `calfNXTEqualizer.vst3` | 16-band parametric / dyn EQ |
 | **Stereo** | `calfNXTStereo.vst3` | Width, M/S, decorrelation, imaging |
 | **Transients** | `calfNXTTransients.vst3` | Attack / release shaping |
+| **Compressor** | `calfNXTCompressor.vst3` | Feed-forward dynamics (threshold / ratio / knee) |
 
 ### Equalizer
 
@@ -54,6 +55,15 @@ will follow.
 - Optional **lookahead** (reported to the host for PDC; wet/dry stay in phase)
 - Detector **HP/LP** (12/24/36 dB) + listen; wet/dry **mix**
 - Live **envelope chart** (input / output / envelope overlays, selectable display window)
+
+### Compressor
+
+- Calf-heritage **feed-forward** gain reduction (shared `GainReduction` with DynEQ)
+- **Peak / RMS / Opto** detector modes; **Max / Avg / Mid** stereo link; adjustable **PDR**
+- Sidechain **HP/LP** (shared `SidechainFilter` + `FrequencyRange` UI) with listen
+- Threshold, ratio, soft **knee**, attack / release, makeup, wet/dry **mix**, bypass
+- **GR meter** + AUX transfer curve with live DSP operating point
+- Scrolling **history** chart (audio peak + GR over time, selectable window)
 
 ---
 
@@ -171,6 +181,7 @@ Then rescan plugins in your host. Bundles appear as:
 | Equalizer | `~/.vst3/calfNXTEqualizer.vst3` |
 | Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
 | Transients | `~/.vst3/calfNXTTransients.vst3` |
+| Compressor | `~/.vst3/calfNXTCompressor.vst3` |
 
 ---
 
@@ -196,6 +207,7 @@ UI pack. `install-user-vst3` then copies the bundles into `~/.vst3/`:
 | Equalizer | `~/.vst3/calfNXTEqualizer.vst3` |
 | Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
 | Transients | `~/.vst3/calfNXTTransients.vst3` |
+| Compressor | `~/.vst3/calfNXTCompressor.vst3` |
 
 Rescan / reload the plugins in the host after install.
 
@@ -248,6 +260,7 @@ This is useful for layout and widget work. It does **not** replace installing in
 | Single plugin (Equalizer)   | `cmake --build build --target calfnxt-equalizer calfnxt-equalizer-resources -j` |
 | Single plugin (Stereo)      | `cmake --build build --target calfnxt-stereo calfnxt-stereo-resources -j` |
 | Single plugin (Transients)  | `cmake --build build --target calfnxt-transients calfnxt-transients-resources -j` |
+| Single plugin (Compressor)  | `cmake --build build --target calfnxt-compressor calfnxt-compressor-resources -j` |
 | UI HMR in the browser       | `cd ui && npm run dev` |
 
 ---
@@ -256,5 +269,5 @@ This is useful for layout and widget work. It does **not** replace installing in
 
 - Codegen runs as part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++ params + `ui/src/generated/`).
 - Install also removes obsolete `calfNXTVolume.vst3` / `calfNXTBalance.vst3` / `calfNXTStereoTools.vst3` if still present from earlier builds.
-- Env flags: `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_WEB_GPU`, `CALFNXT_WEB_DMABUF` (see `AGENTS.md`).
+- Env flags: `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_WEB_GPU` (see `AGENTS.md`).
 - The editor UI runs **out-of-process** (`calfnxt-web-host` next to the `.so`) so Ardour does not load GTK3 into its process. Embed is still X11 `GtkPlug`; Wayland-only sessions may need `GDK_BACKEND=x11` for the host/helper.

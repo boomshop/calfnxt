@@ -1,6 +1,7 @@
 import { DynamicValue } from '@deutschesoft/awml';
 import { paramIds, pluginMeta } from '../generated/transientsModel';
 import { bindBoolParamToHost, bindParamToHost, bindVizEnvelope, postBegin, postEnd } from '../bind_param';
+import { FREQUENCY_RANGE_MODE_ENTRIES } from '../widgets/FrequencyRange';
 
 export const TRANSIENTS_VIEW_ENTRIES = [
   { label: 'Output', value: 0 },
@@ -12,12 +13,8 @@ export const TRANSIENTS_VIEW_ENTRIES = [
 /** Discrete display window lengths (ms) — keep in sync with DSP snapDisplayMs. */
 export const TRANSIENTS_DISPLAY_MS = [100, 250, 500, 1000, 2500, 5000] as const;
 
-export const TRANSIENTS_FILTER_MODE_ENTRIES = [
-  { label: 'Off', value: 0 },
-  { label: '12 dB', value: 1 },
-  { label: '24 dB', value: 2 },
-  { label: '36 dB', value: 3 },
-];
+/** @deprecated Prefer FREQUENCY_RANGE_MODE_ENTRIES from FrequencyRange. */
+export const TRANSIENTS_FILTER_MODE_ENTRIES = FREQUENCY_RANGE_MODE_ENTRIES;
 
 export type ITransientsHost = {
   meta: typeof pluginMeta;

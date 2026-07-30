@@ -82,7 +82,7 @@ ui/
   index.html            # SPA shell
   src/
     App.tsx             # hash router
-    plugins/            # EqualizerUI, StereoUI, TransientsUI, registry
+    plugins/            # EqualizerUI, StereoUI, TransientsUI, CompressorUI, registry
     generated/          # codegen TS models
 external/vst3sdk/
 ```
@@ -90,7 +90,7 @@ external/vst3sdk/
 ## Intentionally deferred
 
 - Spectrum / analyzer arrays (`kind:"spectrum"` + UI→host `vizcfg` bin count)
-- Additional Calf-heritage plugins beyond Equalizer / Stereo / Transients
+- Additional Calf-heritage plugins beyond Equalizer / Stereo / Transients / Compressor
 - Full AUX catalog beyond current widgets (Fader/Knob/MultiMeter/EQChart/…)
 - macOS / Windows WebView hosts
 - Shared Resources across `.vst3` bundles (each still embeds a SPA copy)

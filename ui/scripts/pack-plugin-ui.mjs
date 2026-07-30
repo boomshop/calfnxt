@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uiRoot = path.resolve(__dirname, '..');
 const dist = path.join(uiRoot, 'dist');
-const plugins = ['equalizer', 'stereo', 'transients'];
+const plugins = ['equalizer', 'stereo', 'transients', 'compressor'];
 
 function readManifest() {
   const candidates = [

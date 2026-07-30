@@ -15,11 +15,11 @@
 
   > .EQChart {
     flex: 1;
+    min-height: 100px;
   }
 
   .filter {
     display: flex;
-    flex-wrap: wrap;
     gap: 16px;
     align-items: center;
   }

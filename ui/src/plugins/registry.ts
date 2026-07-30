@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 
-export type PluginId = "equalizer" | "stereo" | "transients";
+export type PluginId = "equalizer" | "stereo" | "transients" | "compressor";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
 
@@ -9,6 +9,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   equalizer: () => import("./EqualizerUI/BoundEqualizerUI"),
   stereo: () => import("./StereoUI/BoundStereoUI"),
   transients: () => import("./TransientsUI/BoundTransientsUI"),
+  compressor: () => import("./CompressorUI/BoundCompressorUI"),
 };
 
 export function isPluginId(id: string): id is PluginId {

@@ -21,6 +21,8 @@ export type UseChartGradientOptions = {
   paint?: 'stroke' | 'fill';
   /** Height for userSpaceOnUse y1/y2. Defaults to svg clientHeight. */
   getHeight?: (svg: SVGSVGElement) => number;
+  /** Swap blue/red vertically (top = blue, bottom = red). */
+  reverse?: boolean;
 };
 
 /**
@@ -37,6 +39,7 @@ export function useChartGradient(
     targets,
     paint = 'stroke',
     getHeight,
+    reverse = false,
   } = options;
   const gradId = `chart-level-grad-${useId().replace(/:/g, '')}`;
   const applyRef = useRef<() => void>(() => {});
@@ -91,9 +94,14 @@ export function useChartGradient(
         1,
         getHeight?.(svg) || svg.clientHeight || 1,
       );
-      // Bottom = cut/low (blue), top = boost/high (red).
-      grad!.setAttribute('y1', String(h));
-      grad!.setAttribute('y2', '0');
+      // Default: bottom = cut/low (blue), top = boost/high (red).
+      if (reverse) {
+        grad!.setAttribute('y1', '0');
+        grad!.setAttribute('y2', String(h));
+      } else {
+        grad!.setAttribute('y1', String(h));
+        grad!.setAttribute('y2', '0');
+      }
     };
     syncGeom();
     apply();
@@ -110,7 +118,7 @@ export function useChartGradient(
       grad?.remove();
       if (defs && !defs.childElementCount) defs.remove();
     };
-  }, [svg, enabled, cssVar, gradId, getHeight, targets, paint]);
+  }, [svg, enabled, cssVar, gradId, getHeight, targets, paint, reverse]);
 
   return useCallback(() => applyRef.current(), []);
 }

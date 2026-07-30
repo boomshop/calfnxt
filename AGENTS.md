@@ -19,7 +19,7 @@ internalized toolkit collides with system GTK3 — `GdkDisplay` GType abort).
 (GtkPlug + WebKit, XEmbed into the host XID) and forwards the JSON bridge over a
 Unix socketpair. Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`).
 More Calf-heritage processors planned.
 
 ---
@@ -34,9 +34,9 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Display / vendor | `calfNXT` |
 | C++ namespace | `calfNXT` |
 | CMake project / libs | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui` |
-| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients` |
-| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients` (must match; Carla/JUCE) |
-| Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3`, `calfNXTTransients.vst3` |
+| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor` |
+| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor` (must match; Carla/JUCE) |
+| Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3`, `calfNXTTransients.vst3`, `calfNXTCompressor.vst3` |
 | URI scheme | `calfnxt://bundle/...` |
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
 | Script message handler | `webkit.messageHandlers.calfnxt` |
@@ -55,8 +55,9 @@ common/dsp/    EffectBase (SingleComponentEffect), peak_hold.h
 dsp/equalizer/ equalizer.plugin.json + DSP + codegen
 dsp/stereo/    stereo.plugin.json + DSP + codegen
 dsp/transients/ transients.plugin.json + DSP + codegen
+dsp/compressor/ compressor.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
-ui/            React SPA (Vite), hash router #equalizer / #stereo / #transients
+ui/            React SPA (Vite), hash router #equalizer / #stereo / #transients / #compressor
 external/vst3sdk/
 ```
 
@@ -154,12 +155,12 @@ Verify Ardour-safe link: `ldd …/*.so` must not list `libgtk-3` / `libwebkit`.
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target calfnxt-plugins -j
 # embed UI after ui changes (or use ./tools/install-user-vst3.sh):
-cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resources -j
+cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resources calfnxt-transients-resources calfnxt-compressor-resources -j
 # user install:
 cmake --build build --target install-user-vst3
 ```
 
-Install paths: `~/.vst3/calfNXTEqualizer.vst3`, `~/.vst3/calfNXTStereo.vst3`, `~/.vst3/calfNXTTransients.vst3` (also removes obsolete Volume/Balance bundles if present).
+Install paths: `~/.vst3/calfNXTEqualizer.vst3`, `~/.vst3/calfNXTStereo.vst3`, `~/.vst3/calfNXTTransients.vst3`, `~/.vst3/calfNXTCompressor.vst3` (also removes obsolete Volume/Balance bundles if present).
 
 Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
@@ -209,6 +210,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 | Equalizer DSP | `dsp/equalizer/source/*_dsp.*` |
 | Stereo DSP | `dsp/stereo/source/*_dsp.*` |
 | Transients DSP | `dsp/transients/source/*_dsp.*`, `common/dsp/transients.h` |
+| Compressor DSP | `dsp/compressor/source/*_dsp.*`, `common/dsp/compressor.h`, `common/dsp/sidechain_filter.h` |
 | Param bind | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts` |
 | Header I/O | `ui/src/components/Header/*`, `host/headerMeters.ts` |
 | Meters | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*` |

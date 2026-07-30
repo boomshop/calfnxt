@@ -17,7 +17,7 @@ const LevelMeterBindings = {
 const LevelMeterOptions = {
   'scale.labels': (v: number) => v.toFixed(0),
   gap_labels: 20,
-  gap_dots: 20,
+  gap_dots: 5,
   levels: [3, 6, 12],
   show_clip: false,
   label: false,
@@ -35,7 +35,7 @@ const LevelMeterOptions = {
   show_scale: true,
   show_value: false,
   scale: 'linear',
-  foreground: '#1a1c1e',
+  foreground: '#000000',
   gradient: [
     { value: -96, color: '#0066ff' },
     { value: 0, color: '#ff0066' },

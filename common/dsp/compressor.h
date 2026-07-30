@@ -37,9 +37,26 @@ inline float hermiteInterpolation(float x, float x0, float x1, float p0, float p
   return ct3 * t3 + ct2 * t2 + ct1 * t + ct0;
 }
 
+/** Peak / RMS level; Opto = peak + photocell-like ballistics. */
+enum class DetectorMode : int
+{
+  Peak = 0,
+  Rms = 1,
+  Opto = 2,
+};
+
+/** Max = max(|L|,|R|); Average = 0.5*(|L|+|R|); Mid = |0.5*(L+R)|. */
+enum class StereoLink : int
+{
+  Max = 0,
+  Average = 1,
+  Mid = 2,
+};
+
 /**
- * Feed-forward compressor gain reduction (peak detector, max stereo link).
- * Soft knee fixed at 2; makeup is always 1 (DynEQ applies GR to filter gain).
+ * Feed-forward compressor gain reduction.
+ * Soft knee configurable (default ~6 dB AUX width). Makeup is applied by the
+ * host plugin (DynEQ applies GR to filter gain instead).
  */
 class GainReduction
 {
@@ -52,34 +69,85 @@ public:
   void reset()
   {
     linSlope_ = 0.f;
-  lastGr_ = 1.f;
+    rmsSq_ = 0.f;
+    lastGr_ = 1.f;
   }
 
-  /** thresholdDb → linear amplitude; ratio 1…20 (or kRatioInfinity). */
-  void setParams(float attackMs, float releaseMs, float thresholdDb, float ratio)
+  /**
+   * thresholdDb → linear amplitude; ratio 1…20 (or kRatioInfinity).
+   * kneeDb = AUX-style soft-knee width (0 = hard).
+   * pdrAmount 0…1 stretches release when GR is deep (0 = classic fixed release).
+   */
+  void setParams(float attackMs, float releaseMs, float thresholdDb, float ratio,
+                 float kneeDb = 6.f, DetectorMode mode = DetectorMode::Peak,
+                 StereoLink link = StereoLink::Max, float pdrAmount = 0.f)
   {
     attackMs_ = std::max(0.1f, attackMs);
     releaseMs_ = std::max(0.1f, releaseMs);
     thresholdLin_ = dbToLin(thresholdDb);
     ratio_ = std::max(1.f, ratio);
+    knee_ = kneeDb <= 0.01f ? 1.f : std::pow(10.f, kneeDb / 20.f);
+    mode_ = mode;
+    link_ = link;
+    pdrAmount_ = std::clamp(pdrAmount, 0.f, 1.f);
     updateCurve();
   }
 
   /**
    * Advance envelope from stereo detector samples; return linear GR in (0, 1].
-   * Does not modify audio.
+   * Does not modify audio. Samples should already be sidechain-filtered.
    */
   float processDetector(float detL, float detR)
   {
-    const float attackCoeff =
-      std::min(1.f, 1.f / (attackMs_ * sampleRate_ / 4000.f));
-    const float releaseCoeff =
-      std::min(1.f, 1.f / (releaseMs_ * sampleRate_ / 4000.f));
+    const float grDepth = 1.f - lastGr_; // 0 = none, ~1 = full squash
 
-    float absample = std::max(std::fabs(detL), std::fabs(detR));
-    sanitize(linSlope_);
-    linSlope_ +=
-      (absample - linSlope_) * (absample > linSlope_ ? attackCoeff : releaseCoeff);
+    float attackScale = 1.f;
+    float releaseScale = 1.f + pdrAmount_ * 4.f * grDepth;
+
+    if (mode_ == DetectorMode::Opto)
+    {
+      // Photocell-ish: attack slows when already compressing; release grows
+      // with GR depth even without extra PDR.
+      attackScale *= 1.f + 2.f * grDepth;
+      releaseScale *= 1.f + 2.5f * grDepth;
+    }
+
+    const float attackCoeff = std::min(
+      1.f, 1.f / (attackMs_ * attackScale * sampleRate_ / 4000.f));
+    const float releaseCoeff = std::min(
+      1.f, 1.f / (releaseMs_ * releaseScale * sampleRate_ / 4000.f));
+
+    float linked = 0.f;
+    switch (link_)
+    {
+      case StereoLink::Average:
+        linked = 0.5f * (std::fabs(detL) + std::fabs(detR));
+        break;
+      case StereoLink::Mid:
+        linked = std::fabs(0.5f * (detL + detR));
+        break;
+      case StereoLink::Max:
+      default:
+        linked = std::max(std::fabs(detL), std::fabs(detR));
+        break;
+    }
+
+    float absample = linked;
+    if (mode_ == DetectorMode::Rms)
+    {
+      // Power smoother is the RMS envelope (attack/release on squared level).
+      const float sq = linked * linked;
+      sanitize(rmsSq_);
+      rmsSq_ += (sq - rmsSq_) * (sq > rmsSq_ ? attackCoeff : releaseCoeff);
+      absample = std::sqrt(std::max(0.f, rmsSq_));
+      linSlope_ = absample;
+    }
+    else
+    {
+      sanitize(linSlope_);
+      linSlope_ +=
+        (absample - linSlope_) * (absample > linSlope_ ? attackCoeff : releaseCoeff);
+    }
 
     float gain = 1.f;
     if (linSlope_ > 0.f)
@@ -89,6 +157,8 @@ public:
   }
 
   float lastGainReduction() const { return lastGr_; }
+  /** Peak detector level (linear) after last processDetector. */
+  float lastDetectorLin() const { return linSlope_; }
 
 private:
   void updateCurve()
@@ -136,8 +206,12 @@ private:
   float releaseMs_ = 200.f;
   float thresholdLin_ = 0.1f;
   float ratio_ = 4.f;
-  float knee_ = 2.f; // soft knee (fixed)
+  float knee_ = 2.f;
+  DetectorMode mode_ = DetectorMode::Peak;
+  StereoLink link_ = StereoLink::Max;
+  float pdrAmount_ = 0.f;
   float linSlope_ = 0.f;
+  float rmsSq_ = 0.f;
   float linKneeStart_ = 0.f;
   float thres_ = 0.f;
   float kneeStart_ = 0.f;

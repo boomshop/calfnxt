@@ -12,6 +12,9 @@ namespace Ui {
  *   {t:"viz", id:"eq", kind:"gains", v:[...dB]}  // per-band applied gain (EQ)
  *   {t:"viz", id:"stereo", kind:"corr", v:[c]}   // correlation −1…1
  *   {t:"viz", id:"stereo", kind:"gonio", v:[l,r,…]} // interleaved L/R
+ *   {t:"viz", id:"comp", kind:"gr", v:[grDb]}       // gain reduction ≤0 dB
+ *   {t:"viz", id:"comp", kind:"point", v:[inDb,outDb]} // transfer operating point
+ *   {t:"viz", id:"comp", kind:"envelope", v:[…]}   // history: audio, GR (2×slots + phase)
  * Future:
  *   {t:"viz", id:"fft", kind:"spectrum", v:[...]}
  *   UI→host {t:"vizcfg", id:"fft", bins:N} after measuring pixel width.
@@ -63,6 +66,22 @@ public:
     return -1;
   }
 
+  /** Gain reduction in dB (≤0). Returns 1 if available, else 0. */
+  virtual int takeGainReductionDb(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Dynamics transfer operating point: [inDb, outDb]. Returns 2 if available. */
+  virtual int takeDynamicsPoint(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
   /** Stream id for input levels (e.g. "in"). */
   virtual const char* vizInputLevelsId() const { return "in"; }
   /** Stream id for output levels (e.g. "out"). */
@@ -71,6 +90,8 @@ public:
   virtual const char* vizBandGainsId() const { return "eq"; }
   /** Stream id for stereo field (correlation + gonio). */
   virtual const char* vizStereoFieldId() const { return "stereo"; }
+  /** Stream id for compressor GR + transfer point. */
+  virtual const char* vizDynamicsId() const { return "comp"; }
 
   /** Envelope display buffer (transient shaper: input, output, envelope,
    *  attack, release — 5 floats per slot, N slots), plus a trailing scroll

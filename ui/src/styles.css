@@ -39,6 +39,7 @@
 
   --aux-scale-markersize: 3px;
   --aux-scale-minheight: 15px;
+  --aux-scale-minwidth: 20px;
 }
 
 /* Kill UA focus, apply ours only for keyboard / :focus-visible. */
@@ -87,6 +88,8 @@ body,
   padding: var(--gap);
   overflow: hidden;
   border: 1px solid var(--background-lesser);
+  display: flex;
+  gap: var(--gap);
 
   > .title {
     position: absolute;

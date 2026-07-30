@@ -33,6 +33,7 @@ export default defineConfig({
         equalizer: path.resolve(root, "src/html/equalizer.html"),
         stereo: path.resolve(root, "src/html/stereo.html"),
         transients: path.resolve(root, "src/html/transients.html"),
+        compressor: path.resolve(root, "src/html/compressor.html"),
       },
     },
   },

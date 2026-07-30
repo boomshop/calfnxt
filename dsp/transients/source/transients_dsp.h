@@ -3,8 +3,8 @@
 #include "effect_base.h"
 #include "io_stage.h"
 #include "transients.h"
+#include "sidechain_filter.h"
 #include "viz_source.h"
-#include "biquad.h"
 
 #include "transients_params.h"
 
@@ -61,14 +61,10 @@ private:
     bool listen = false;
     bool neutral = true;
     bool bypass = false;
-    int hpStages = 0;
-    int lpStages = 0;
   };
 
-  void updateFilters();
   void updateLatency(bool bypass, int lookaheadSamples);
   BlockState makeBlockState() const;
-  float filterDetector(float s, const BlockState& state);
   void processSample(const BlockState& state, float& L, float& R);
   void processSilence(const BlockState& state, int nFrames);
   void resetProcessing();
@@ -80,12 +76,7 @@ private:
   double sampleRate_ = 44100.0;
   Steinberg::uint32 latencySamples_ = 0;
   Dsp::Transients transients_;
-  Dsp::BiquadD1 hp_[3];
-  Dsp::BiquadD1 lp_[3];
-  float lastHpFreq_ = -1.f;
-  float lastLpFreq_ = -1.f;
-  int lastHpStages_ = -1;
-  int lastLpStages_ = -1;
+  Dsp::SidechainFilter sc_;
 
   // Envelope display ring buffer (written in process, snapshot for UI)
   float envBuf_[kEnvBufSize] {};

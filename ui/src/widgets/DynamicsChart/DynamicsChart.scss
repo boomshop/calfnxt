@@ -1,0 +1,39 @@
+.DynamicsChart {
+  min-width: 200px;
+  min-height: 200px;
+
+  > svg {
+    > .aux-graphs {
+      > .aux-response {
+        stroke: var(--chart-level-stroke, var(--color-accent));
+        stroke-width: 2px;
+      }
+
+      > .aux-steady {
+        stroke: var(--color-least);
+        stroke-width: 1px;
+        stroke-dasharray: 2 3;
+      }
+    }
+
+    > .aux-handles {
+      > .aux-operating {
+        /* Operating-point marker — style in plugin SCSS if needed. */
+        pointer-events: none;
+
+        > .aux-handle {
+          fill: var(--chart-level-stroke, var(--color-accent));
+          fill-opacity: 0.85;
+          stroke: none;
+        }
+      }
+
+      > .aux-charthandle {
+        > .aux-handle {
+          fill: var(--color);
+          fill-opacity: 0.33;
+        }
+      }
+    }
+  }
+}

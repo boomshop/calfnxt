@@ -1,0 +1,60 @@
+.CompressorUI {
+  display: grid;
+  grid-template-rows: 120px 1fr;
+  grid-template-columns: auto 1fr auto;
+  align-items: stretch;
+
+  > .history {
+    grid-column: 1 / 4;
+  }
+
+  > .detector {
+    flex-direction: column;
+
+    > .selects {
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+      align-items: stretch;
+
+      > .Buttons {
+        > .Button {
+          flex: 1;
+          height: auto;
+          min-height: 0;
+        }
+      }
+    }
+
+    > .FrequencyRange {
+      flex: 1;
+      margin-bottom: var(--gap);
+
+      > .EQChart {
+        background: var(--background);
+      }
+    }
+  }
+
+  > .chart {
+    gap: 0;
+
+    > .DynamicsChart {
+      flex: 0 0 296px;
+      width: 296px;
+      height: 296px;
+      background: var(--background);
+    }
+  }
+
+  > .compressor {
+    flex-direction: column;
+    justify-content: space-between;
+
+    > div {
+      display: flex;
+      align-items: center;
+      justify-content: space-evenly;
+    }
+  }
+}

@@ -15,6 +15,7 @@ declare module '@deutschesoft/aux-widgets/src/index.pure.js' {
   export const Icon: new (...args: unknown[]) => unknown;
   export const PhaseMeter: new (...args: unknown[]) => unknown;
   export const Chart: new (...args: unknown[]) => unknown;
+  export const Compressor: new (...args: unknown[]) => unknown;
 }
 
 declare module '@deutschesoft/aux-widgets/src/widgets/icon.js' {

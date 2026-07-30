@@ -885,6 +885,26 @@ void WebEditor::flushViz()
     flushVizArray(vizSource_->vizStereoFieldId(), "gonio", gonio, nGonio);
   }
 
+  float grDb = 0.f;
+  if (vizSource_->takeGainReductionDb(&grDb, 1) > 0)
+  {
+    if (!std::isfinite(grDb))
+      grDb = 0.f;
+    grDb = std::clamp(grDb, -60.f, 0.f);
+    flushVizArray(vizSource_->vizDynamicsId(), "gr", &grDb, 1);
+  }
+
+  float point[2] {};
+  if (vizSource_->takeDynamicsPoint(point, 2) >= 2)
+  {
+    for (float& v : point)
+    {
+      if (!std::isfinite(v))
+        v = -96.f;
+      v = std::clamp(v, -96.f, 24.f);
+    }
+    flushVizArray(vizSource_->vizDynamicsId(), "point", point, 2);
+  }
 }
 
 void WebEditor::pushAllParams()

@@ -59,15 +59,8 @@ void TransientsPlugin::resetProcessing()
   transients_.setChannels(2);
   transients_.setSampleRate(sampleRate_);
   transients_.resetState();
-  for (auto& f : hp_)
-    f.reset();
-  for (auto& f : lp_)
-    f.reset();
-  lastHpFreq_ = -1.f;
-  lastLpFreq_ = -1.f;
-  lastHpStages_ = -1;
-  lastLpStages_ = -1;
-  updateFilters();
+  sc_.setSampleRate(static_cast<float>(sampleRate_));
+  sc_.reset();
 
   std::memset(envBuf_, 0, sizeof(envBuf_));
   envPos_ = 0;
@@ -102,51 +95,15 @@ tresult PLUGIN_API TransientsPlugin::setupProcessing(ProcessSetup& newSetup)
   return EffectBase::setupProcessing(newSetup);
 }
 
-void TransientsPlugin::updateFilters()
+void TransientsPlugin::updateLatency(bool bypass, int lookaheadSamples)
 {
-  const int hpStages = static_cast<int>(
-    std::lround(std::clamp(params_[kParamHpMode], 0.f, 3.f)));
-  const int lpStages = static_cast<int>(
-    std::lround(std::clamp(params_[kParamLpMode], 0.f, 3.f)));
-
-  if (hpStages != lastHpStages_)
-  {
-    if (hpStages == 0)
-    {
-      for (auto& f : hp_)
-        f.reset();
-    }
-    lastHpStages_ = hpStages;
-    lastHpFreq_ = -1.f; // force coeff refresh when re-enabled
-  }
-  if (lpStages != lastLpStages_)
-  {
-    if (lpStages == 0)
-    {
-      for (auto& f : lp_)
-        f.reset();
-    }
-    lastLpStages_ = lpStages;
-    lastLpFreq_ = -1.f;
-  }
-
-  const float hpFreq = params_[kParamHipass];
-  const float lpFreq = params_[kParamLopass];
-  const float sr = static_cast<float>(sampleRate_);
-  if (hpStages > 0 && hpFreq != lastHpFreq_)
-  {
-    hp_[0].setHpRbj(hpFreq, 0.707f, sr, 1.f);
-    hp_[1].copyCoeffs(hp_[0]);
-    hp_[2].copyCoeffs(hp_[0]);
-    lastHpFreq_ = hpFreq;
-  }
-  if (lpStages > 0 && lpFreq != lastLpFreq_)
-  {
-    lp_[0].setLpRbj(lpFreq, 0.707f, sr, 1.f);
-    lp_[1].copyCoeffs(lp_[0]);
-    lp_[2].copyCoeffs(lp_[0]);
-    lastLpFreq_ = lpFreq;
-  }
+  const uint32 want =
+    bypass ? 0u : static_cast<uint32>(std::clamp(lookaheadSamples, 0, Dsp::Transients::kMaxLookaheadSamples));
+  if (want == latencySamples_)
+    return;
+  latencySamples_ = want;
+  if (componentHandler)
+    componentHandler->restartComponent(kLatencyChanged);
 }
 
 TransientsPlugin::BlockState TransientsPlugin::makeBlockState() const
@@ -156,33 +113,15 @@ TransientsPlugin::BlockState TransientsPlugin::makeBlockState() const
   state.dry = 1.f - state.mix;
   state.listen = params_[kParamListen] >= 0.5f;
   state.bypass = params_[kParamBypass] >= 0.5f;
-  state.hpStages = static_cast<int>(std::lround(std::clamp(params_[kParamHpMode], 0.f, 3.f)));
-  state.lpStages = static_cast<int>(std::lround(std::clamp(params_[kParamLpMode], 0.f, 3.f)));
   state.neutral = transients_.isNeutral();
   return state;
-}
-
-float TransientsPlugin::filterDetector(float s, const BlockState& state)
-{
-  for (int i = 0; i < state.hpStages; ++i)
-  {
-    s = static_cast<float>(hp_[i].process(s));
-    hp_[i].sanitize();
-  }
-  for (int i = 0; i < state.lpStages; ++i)
-  {
-    s = static_cast<float>(lp_[i].process(s));
-    lp_[i].sanitize();
-  }
-  return s;
 }
 
 void TransientsPlugin::processSample(const BlockState& state, float& L, float& R)
 {
   const float inL = L;
   const float inR = R;
-  float detector = 0.5f * (L + R);
-  detector = filterDetector(detector, state);
+  float detector = sc_.processMono(0.5f * (L + R));
 
   if (state.listen && !state.bypass)
   {
@@ -212,22 +151,11 @@ void TransientsPlugin::processSilence(const BlockState& state, int nFrames)
   // Decay filters + shaper and keep the envelope chart scrolling on silence.
   for (int i = 0; i < nFrames; ++i)
   {
-    float detector = filterDetector(0.f, state);
+    float detector = sc_.processMono(0.f);
     float values[2] = {0.f, 0.f};
     (void)transients_.processFrame(values, detector);
     envBufFeedSample(0.f, 0.f);
   }
-}
-
-void TransientsPlugin::updateLatency(bool bypass, int lookaheadSamples)
-{
-  const uint32 want =
-    bypass ? 0u : static_cast<uint32>(std::clamp(lookaheadSamples, 0, Dsp::Transients::kMaxLookaheadSamples));
-  if (want == latencySamples_)
-    return;
-  latencySamples_ = want;
-  if (componentHandler)
-    componentHandler->restartComponent(kLatencyChanged);
 }
 
 uint32 PLUGIN_API TransientsPlugin::getLatencySamples()
@@ -311,7 +239,12 @@ void TransientsPlugin::configureVizBins(const char* id, int bins)
 tresult PLUGIN_API TransientsPlugin::process(ProcessData& data)
 {
   syncParamPlains(data, params_, kParamCount);
-  updateFilters();
+  sc_.setSampleRate(static_cast<float>(sampleRate_));
+  sc_.setParams(
+    params_[kParamHipass],
+    params_[kParamLopass],
+    Dsp::filterModeToStages(params_[kParamHpMode]),
+    Dsp::filterModeToStages(params_[kParamLpMode]));
   const int lookahead = static_cast<int>(
     std::lround(std::clamp(params_[kParamLookahead], 0.f, 100.f)));
   transients_.setParams(
@@ -418,7 +351,12 @@ tresult PLUGIN_API TransientsPlugin::setState(IBStream* state)
       p->setNormalized(p->toNormalized(plains[i]));
   }
   readParamPlains(params_, kParamCount);
-  updateFilters();
+  sc_.setSampleRate(static_cast<float>(sampleRate_));
+  sc_.setParams(
+    params_[kParamHipass],
+    params_[kParamLopass],
+    Dsp::filterModeToStages(params_[kParamHpMode]),
+    Dsp::filterModeToStages(params_[kParamLpMode]));
   updateLatency(
     params_[kParamBypass] >= 0.5f,
     static_cast<int>(std::lround(std::clamp(params_[kParamLookahead], 0.f, 100.f))));

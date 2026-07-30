@@ -11,6 +11,8 @@ const vizGainsApplies = new Map<string, VizLevelsApply>();
 const vizCorrApplies = new Map<string, HostApply>();
 const vizGonioApplies = new Map<string, VizLevelsApply>();
 const vizEnvelopeApplies = new Map<string, (v: Float32Array) => void>();
+const vizGrApplies = new Map<string, HostApply>();
+const vizPointApplies = new Map<string, VizLevelsApply>();
 const channelCountApplies = new Set<ChannelCountApply>();
 let hostWired = false;
 
@@ -41,6 +43,10 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizGonioApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "envelope" && Array.isArray(msg.v))
     vizEnvelopeApplies.get(msg.id)?.(new Float32Array(msg.v));
+  if (msg.t === "viz" && msg.kind === "gr" && Array.isArray(msg.v) && typeof msg.v[0] === "number")
+    vizGrApplies.get(msg.id)?.(msg.v[0]);
+  if (msg.t === "viz" && msg.kind === "point" && Array.isArray(msg.v))
+    vizPointApplies.get(msg.id)?.(msg.v);
 }
 
 function ensureHostWire(): void {
@@ -152,6 +158,36 @@ export function bindVizEnvelope(dv: DynamicValue<Float32Array | null>, id: strin
   vizEnvelopeApplies.set(id, (v) => dv.set(v));
   return () => {
     vizEnvelopeApplies.delete(id);
+  };
+}
+
+/** Wire gain reduction magnitude (0…60 dB) from DSP viz (id e.g. "comp").
+ *  DSP sends ≤0 dB; UI meters use positive amount + reverse. */
+export function bindVizGr(dv: DynamicValue<number>, id: string): () => void {
+  ensureHostWire();
+  vizGrApplies.set(id, (v) => {
+    const x = typeof v === "number" && Number.isFinite(v) ? v : 0;
+    // DSP: ≤0 dB reduction → meter: 0…60 (no reduction … deep GR).
+    dv.set(Math.min(60, Math.max(0, -x)));
+  });
+  return () => {
+    vizGrApplies.delete(id);
+  };
+}
+
+/** Wire dynamics operating point [inDb, outDb] from DSP viz (id e.g. "comp"). */
+export function bindVizPoint(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizPointApplies.set(id, (v) => {
+    const clean = v.map((x) => {
+      if (typeof x !== "number" || !Number.isFinite(x))
+        return -96;
+      return Math.min(24, Math.max(-96, x));
+    });
+    dv.set(clean);
+  });
+  return () => {
+    vizPointApplies.delete(id);
   };
 }
 
