@@ -41,6 +41,7 @@ struct HostState
   WebKitWebContext* ctx = nullptr;
   guint sockSource = 0;
   bool loadStarted = false;
+  bool syncingSize = false;
 };
 
 HostState g;
@@ -223,12 +224,16 @@ void resizeX11EmbedderChain(int w, int h)
 
 void syncNativeSize()
 {
-  if (!g.plug)
+  if (!g.plug || g.syncingSize)
     return;
   const int w = g.width;
   const int h = g.height;
   if (w < 1 || h < 1)
     return;
+
+  // Re-entrancy guard: size-allocate handlers call startLoadIfReady → syncNativeSize.
+  // Forcing gtk_widget_size_allocate here previously recursed until SIGSEGV.
+  g.syncingSize = true;
 
   gtk_widget_set_size_request(g.plug, w, h);
   if (GTK_IS_WINDOW(g.plug))
@@ -242,26 +247,12 @@ void syncNativeSize()
     gtk_widget_set_size_request(GTK_WIDGET(g.webview), w, h);
   }
 
-  gtk_widget_realize(g.plug);
-  if (g.webview)
-    gtk_widget_realize(GTK_WIDGET(g.webview));
-
-  // Carla/Qt XEmbed sockets sometimes never allocate the plug; force GTK + X11 size.
-  GtkAllocation plugAlloc {};
-  plugAlloc.x = 0;
-  plugAlloc.y = 0;
-  plugAlloc.width = w;
-  plugAlloc.height = h;
-  gtk_widget_size_allocate(g.plug, &plugAlloc);
-  if (g.webview)
+  if (gtk_widget_get_realized(g.plug))
   {
-    GtkAllocation viewAlloc = plugAlloc;
-    gtk_widget_size_allocate(GTK_WIDGET(g.webview), &viewAlloc);
+    if (GdkWindow* win = gtk_widget_get_window(g.plug))
+      resizeX11Window(win, w, h);
   }
-
-  if (GdkWindow* win = gtk_widget_get_window(g.plug))
-    resizeX11Window(win, w, h);
-  if (g.webview)
+  if (g.webview && gtk_widget_get_realized(GTK_WIDGET(g.webview)))
   {
     if (GdkWindow* win = gtk_widget_get_window(GTK_WIDGET(g.webview)))
       resizeX11Window(win, w, h);
@@ -272,6 +263,8 @@ void syncNativeSize()
   gtk_widget_queue_draw(g.plug);
   if (g.webview)
     gtk_widget_queue_draw(GTK_WIDGET(g.webview));
+
+  g.syncingSize = false;
 }
 
 bool sendLine(const char* line)
@@ -302,7 +295,9 @@ void startLoadIfReady(const char* why)
 {
   if (g.loadStarted || !g.webview || !g.pendingUri[0])
     return;
-  syncNativeSize();
+  // Avoid sync↔size-allocate recursion; allocation may already be in progress.
+  if (!g.syncingSize)
+    syncNativeSize();
   logAlloc(why);
   const int vw = gtk_widget_get_allocated_width(GTK_WIDGET(g.webview));
   const int vh = gtk_widget_get_allocated_height(GTK_WIDGET(g.webview));
@@ -638,7 +633,7 @@ int main(int argc, char** argv)
   }
 
   // Stamp proves ~/.vst3 helper was updated (tester logs often still show old binaries).
-  hostLog("[calfnxt-web-host] build=geom-kick-3\n");
+  hostLog("[calfnxt-web-host] build=geom-kick-4\n");
   hostLog("[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d dmabuf=%s\n",
           static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width, g.height,
           envFlag("CALFNXT_WEB_DMABUF") ? "on" : "off");
