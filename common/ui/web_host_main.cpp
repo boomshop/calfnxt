@@ -13,6 +13,7 @@
 #include <gtk/gtkx.h>
 #include <jsc/jsc.h>
 #include <webkit2/webkit2.h>
+#include <X11/Xlib.h>
 
 #include <cerrno>
 #include <cstdarg>
@@ -77,34 +78,128 @@ void logAlloc(const char* why)
   const int vw = g.webview ? gtk_widget_get_allocated_width(GTK_WIDGET(g.webview)) : -1;
   const int vh = g.webview ? gtk_widget_get_allocated_height(GTK_WIDGET(g.webview)) : -1;
   const int emb = (g.plug && gtk_plug_get_embedded(GTK_PLUG(g.plug))) ? 1 : 0;
-  hostLog("[calfnxt-web-host] alloc %s plug=%dx%d webview=%dx%d embedded=%d\n", why, pw, ph, vw,
-          vh, emb);
+  int gdkW = -1;
+  int gdkH = -1;
+  int parW = -1;
+  int parH = -1;
+  if (g.plug)
+  {
+    if (GdkWindow* win = gtk_widget_get_window(g.plug))
+    {
+      gdk_window_get_geometry(win, nullptr, nullptr, &gdkW, &gdkH);
+#if defined(GDK_WINDOWING_X11)
+      if (GDK_IS_X11_WINDOW(win))
+      {
+        Display* dpy = GDK_WINDOW_XDISPLAY(win);
+        const Window xid = GDK_WINDOW_XID(win);
+        Window root = 0;
+        Window parent = 0;
+        Window* kids = nullptr;
+        unsigned n = 0;
+        if (XQueryTree(dpy, xid, &root, &parent, &kids, &n) && parent && parent != root)
+        {
+          Window r2 = 0;
+          int x = 0, y = 0;
+          unsigned w = 0, h = 0, bw = 0, depth = 0;
+          if (XGetGeometry(dpy, parent, &r2, &x, &y, &w, &h, &bw, &depth))
+          {
+            parW = static_cast<int>(w);
+            parH = static_cast<int>(h);
+          }
+        }
+        if (kids)
+          XFree(kids);
+      }
+#endif
+    }
+  }
+  hostLog("[calfnxt-web-host] alloc %s plug=%dx%d webview=%dx%d gdk=%dx%d parent=%dx%d "
+          "embedded=%d want=%dx%d\n",
+          why, pw, ph, vw, vh, gdkW, gdkH, parW, parH, emb, g.width, g.height);
 }
 
-void startLoadIfReady(const char* why)
+void resizeX11Window(GdkWindow* win, int w, int h)
 {
-  if (g.loadStarted || !g.webview || !g.pendingUri[0])
+  if (!win || w < 1 || h < 1)
     return;
-  logAlloc(why);
-  const int vw = gtk_widget_get_allocated_width(GTK_WIDGET(g.webview));
-  const int vh = gtk_widget_get_allocated_height(GTK_WIDGET(g.webview));
-  // WebKitGTK 2.52+ in XEmbed often stays blank if the first load happens at 0×0.
-  if (vw < 2 || vh < 2)
-    return;
-  g.loadStarted = true;
-  hostLog("[calfnxt-web-host] load %s (alloc %dx%d via %s)\n", g.pendingUri, vw, vh, why);
-  webkit_web_view_load_uri(g.webview, g.pendingUri);
+  gdk_window_resize(win, w, h);
+#if defined(GDK_WINDOWING_X11)
+  if (GDK_IS_X11_WINDOW(win))
+  {
+    Display* dpy = GDK_WINDOW_XDISPLAY(win);
+    const Window xid = GDK_WINDOW_XID(win);
+    XWindowChanges ch {};
+    ch.width = w;
+    ch.height = h;
+    XConfigureWindow(dpy, xid, CWWidth | CWHeight, &ch);
+    XResizeWindow(dpy, xid, static_cast<unsigned>(w), static_cast<unsigned>(h));
+    // XEmbed: embedder socket often stays 1×1 unless resized too.
+    Window root = 0;
+    Window parent = 0;
+    Window* kids = nullptr;
+    unsigned n = 0;
+    if (XQueryTree(dpy, xid, &root, &parent, &kids, &n) && parent && parent != root)
+    {
+      XConfigureWindow(dpy, parent, CWWidth | CWHeight, &ch);
+      XResizeWindow(dpy, parent, static_cast<unsigned>(w), static_cast<unsigned>(h));
+    }
+    if (kids)
+      XFree(kids);
+    XFlush(dpy);
+  }
+#endif
 }
 
-void forceLoad(const char* why)
+void syncNativeSize()
 {
-  if (g.loadStarted || !g.webview || !g.pendingUri[0])
+  if (!g.plug)
     return;
-  syncNativeSize();
-  logAlloc(why);
-  g.loadStarted = true;
-  hostLog("[calfnxt-web-host] load %s (forced via %s)\n", g.pendingUri, why);
-  webkit_web_view_load_uri(g.webview, g.pendingUri);
+  const int w = g.width;
+  const int h = g.height;
+  if (w < 1 || h < 1)
+    return;
+
+  gtk_widget_set_size_request(g.plug, w, h);
+  if (GTK_IS_WINDOW(g.plug))
+    gtk_window_resize(GTK_WINDOW(g.plug), w, h);
+
+  if (g.webview)
+  {
+    webkit_web_view_set_zoom_level(g.webview, 1.0);
+    gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
+    gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
+    gtk_widget_set_size_request(GTK_WIDGET(g.webview), w, h);
+  }
+
+  gtk_widget_realize(g.plug);
+  if (g.webview)
+    gtk_widget_realize(GTK_WIDGET(g.webview));
+
+  // Carla/Qt XEmbed sockets sometimes never allocate the plug; force GTK + X11 size.
+  GtkAllocation plugAlloc {};
+  plugAlloc.x = 0;
+  plugAlloc.y = 0;
+  plugAlloc.width = w;
+  plugAlloc.height = h;
+  gtk_widget_size_allocate(g.plug, &plugAlloc);
+  if (g.webview)
+  {
+    GtkAllocation viewAlloc = plugAlloc;
+    gtk_widget_size_allocate(GTK_WIDGET(g.webview), &viewAlloc);
+  }
+
+  if (GdkWindow* win = gtk_widget_get_window(g.plug))
+    resizeX11Window(win, w, h);
+  if (g.webview)
+  {
+    if (GdkWindow* win = gtk_widget_get_window(GTK_WIDGET(g.webview)))
+      resizeX11Window(win, w, h);
+  }
+
+  gtk_widget_queue_resize(g.plug);
+  gtk_widget_queue_draw(g.plug);
+  if (g.webview)
+    gtk_widget_queue_draw(GTK_WIDGET(g.webview));
 }
 
 bool sendLine(const char* line)
@@ -131,25 +226,37 @@ bool sendLine(const char* line)
   return true;
 }
 
-void syncNativeSize()
+void startLoadIfReady(const char* why)
 {
-  if (!g.plug)
+  if (g.loadStarted || !g.webview || !g.pendingUri[0])
     return;
-  const int w = g.width;
-  const int h = g.height;
-  if (w < 1 || h < 1)
+  syncNativeSize();
+  logAlloc(why);
+  const int vw = gtk_widget_get_allocated_width(GTK_WIDGET(g.webview));
+  const int vh = gtk_widget_get_allocated_height(GTK_WIDGET(g.webview));
+  int gdkW = -1;
+  int gdkH = -1;
+  if (GdkWindow* win = gtk_widget_get_window(GTK_WIDGET(g.webview)))
+    gdk_window_get_geometry(win, nullptr, nullptr, &gdkW, &gdkH);
+  // Prefer GTK allocation; fall back to Gdk/X geometry after forced resize.
+  const int useW = vw >= 2 ? vw : gdkW;
+  const int useH = vh >= 2 ? vh : gdkH;
+  if (useW < 2 || useH < 2)
     return;
-  gtk_widget_set_size_request(g.plug, w, h);
-  if (g.webview)
-  {
-    webkit_web_view_set_zoom_level(g.webview, 1.0);
-    gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
-    gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
-    gtk_widget_set_size_request(GTK_WIDGET(g.webview), w, h);
-  }
-  if (GdkWindow* win = gtk_widget_get_window(g.plug))
-    gdk_window_resize(win, w, h);
-  gtk_widget_queue_resize(g.plug);
+  g.loadStarted = true;
+  hostLog("[calfnxt-web-host] load %s (alloc %dx%d via %s)\n", g.pendingUri, useW, useH, why);
+  webkit_web_view_load_uri(g.webview, g.pendingUri);
+}
+
+void forceLoad(const char* why)
+{
+  if (g.loadStarted || !g.webview || !g.pendingUri[0])
+    return;
+  syncNativeSize();
+  logAlloc(why);
+  g.loadStarted = true;
+  hostLog("[calfnxt-web-host] load %s (forced via %s)\n", g.pendingUri, why);
+  webkit_web_view_load_uri(g.webview, g.pendingUri);
 }
 
 void evalJs(const char* js)
@@ -212,7 +319,9 @@ void handlePluginLine(const std::string& line)
     {
       g.width = static_cast<int>(w);
       g.height = static_cast<int>(h);
+      hostLog("[calfnxt-web-host] host _size %dx%d\n", g.width, g.height);
       syncNativeSize();
+      startLoadIfReady("host-_size");
     }
     return;
   }
@@ -581,6 +690,28 @@ int main(int argc, char** argv)
   g_timeout_add(750, +[](gpointer) -> gboolean {
     forceLoad("timeout-750ms");
     return G_SOURCE_REMOVE;
+  }, nullptr);
+  // Carla/Qt often leaves the XEmbed socket at 1×1; keep forcing design size until
+  // GTK/Gdk report a usable allocation (or give up after ~5 s).
+  g_timeout_add(100, +[](gpointer) -> gboolean {
+    static int ticks = 0;
+    ++ticks;
+    syncNativeSize();
+    const int pw = g.plug ? gtk_widget_get_allocated_width(g.plug) : 0;
+    const int ph = g.plug ? gtk_widget_get_allocated_height(g.plug) : 0;
+    int gdkW = 0;
+    int gdkH = 0;
+    if (g.plug)
+    {
+      if (GdkWindow* win = gtk_widget_get_window(g.plug))
+        gdk_window_get_geometry(win, nullptr, nullptr, &gdkW, &gdkH);
+    }
+    const bool ok = (pw >= 2 && ph >= 2) || (gdkW >= 2 && gdkH >= 2);
+    if (ticks == 1 || ticks == 5 || ticks == 15 || ticks == 30 || (!ok && ticks % 10 == 0))
+      logAlloc(ok ? "kick-ok" : "kick");
+    if (ok && ticks >= 2)
+      return G_SOURCE_REMOVE;
+    return ticks < 50 ? G_SOURCE_CONTINUE : G_SOURCE_REMOVE;
   }, nullptr);
 
   if (envFlag("CALFNXT_WEB_INSPECTOR"))
