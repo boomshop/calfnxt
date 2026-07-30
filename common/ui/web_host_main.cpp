@@ -127,50 +127,58 @@ void resizeX11Window(GdkWindow* win, int w, int h)
 #if defined(GDK_WINDOWING_X11)
   if (GDK_IS_X11_WINDOW(win))
   {
+    GdkDisplay* gd = gdk_window_get_display(win);
     Display* dpy = GDK_WINDOW_XDISPLAY(win);
     const Window xid = GDK_WINDOW_XID(win);
+    // Trap: resizing our own XID is fine; never let X errors abort the helper.
+    gdk_x11_display_error_trap_push(gd);
     XWindowChanges ch {};
     ch.width = w;
     ch.height = h;
     XConfigureWindow(dpy, xid, CWWidth | CWHeight, &ch);
     XResizeWindow(dpy, xid, static_cast<unsigned>(w), static_cast<unsigned>(h));
-    XFlush(dpy);
+    XSync(dpy, False);
+    (void)gdk_x11_display_error_trap_pop(gd);
   }
 #endif
 }
 
-/** Resize the embedder socket and any undersized X ancestors (Qt often keeps 1×1). */
+/**
+ * Optionally try to grow the host XEmbed socket / undersized ancestors.
+ * Off by default: XResizeWindow on a foreign (Carla/Qt) window often yields
+ * BadAccess and the default X handler kills calfnxt-web-host → black editor.
+ * Opt in: CALFNXT_WEB_RESIZE_PARENT=1 (still error-trapped).
+ */
 void resizeX11EmbedderChain(int w, int h)
 {
-  if (w < 1 || h < 1)
+  if (w < 1 || h < 1 || !envFlag("CALFNXT_WEB_RESIZE_PARENT"))
     return;
 #if defined(GDK_WINDOWING_X11)
-  Display* dpy = nullptr;
+  GdkDisplay* gd = gdk_display_get_default();
+  Display* dpy = gd ? gdk_x11_display_get_xdisplay(gd) : nullptr;
+  if (!dpy)
+    return;
+
   Window start = 0;
   if (g.plug)
   {
     if (GdkWindow* win = gtk_widget_get_window(g.plug))
     {
       if (GDK_IS_X11_WINDOW(win))
-      {
-        dpy = GDK_WINDOW_XDISPLAY(win);
         start = GDK_WINDOW_XID(win);
-      }
     }
   }
-  if (!dpy && g.parentXid)
-  {
-    dpy = gdk_x11_get_default_xdisplay();
+  if (!start && g.parentXid)
     start = static_cast<Window>(g.parentXid);
-  }
-  if (!dpy)
+  if (!start)
     return;
 
   XWindowChanges ch {};
   ch.width = w;
   ch.height = h;
 
-  // Always hit the host-provided embedder XID first.
+  gdk_x11_display_error_trap_push(gd);
+
   if (g.parentXid)
   {
     const Window sock = static_cast<Window>(g.parentXid);
@@ -197,7 +205,6 @@ void resizeX11EmbedderChain(int w, int h)
     unsigned pw = 0, ph = 0, bw = 0, d = 0;
     if (XGetGeometry(dpy, parent, &r2, &x, &y, &pw, &ph, &bw, &d))
     {
-      // Stop once an ancestor already matches the host editor frame.
       if (static_cast<int>(pw) >= w && static_cast<int>(ph) >= h)
         break;
     }
@@ -205,7 +212,10 @@ void resizeX11EmbedderChain(int w, int h)
     XResizeWindow(dpy, parent, static_cast<unsigned>(w), static_cast<unsigned>(h));
     cur = parent;
   }
-  XFlush(dpy);
+  XSync(dpy, False);
+  const int err = gdk_x11_display_error_trap_pop(gd);
+  if (err)
+    hostLog("[calfnxt-web-host] resize-parent X error code=%d (ignored)\n", err);
 #endif
 }
 
@@ -626,7 +636,7 @@ int main(int argc, char** argv)
   }
 
   // Stamp proves ~/.vst3 helper was updated (tester logs often still show old binaries).
-  hostLog("[calfnxt-web-host] build=geom-kick-2\n");
+  hostLog("[calfnxt-web-host] build=geom-kick-3\n");
   hostLog("[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d dmabuf=%s\n",
           static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width, g.height,
           envFlag("CALFNXT_WEB_DMABUF") ? "on" : "off");
@@ -702,7 +712,14 @@ int main(int argc, char** argv)
   hostLog("[calfnxt-web-host] hw-accel=%s debug=%d\n",
           wantGpu ? "always" : "never", webDebug ? 1 : 0);
 
+  hostLog("[calfnxt-web-host] creating GtkPlug for parent=0x%llx\n",
+          static_cast<unsigned long long>(parentXid));
   g.plug = gtk_plug_new(static_cast<Window>(parentXid));
+  if (!g.plug)
+  {
+    hostLog("[calfnxt-web-host] gtk_plug_new failed\n");
+    return 1;
+  }
   gtk_widget_set_size_request(g.plug, g.width, g.height);
   gtk_container_add(GTK_CONTAINER(g.plug), GTK_WIDGET(g.webview));
   gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
@@ -740,7 +757,9 @@ int main(int argc, char** argv)
                    nullptr);
 
   std::snprintf(g.pendingUri, sizeof g.pendingUri, "calfnxt://bundle/%s", g.entryHtml);
+  hostLog("[calfnxt-web-host] show_all…\n");
   gtk_widget_show_all(g.plug);
+  hostLog("[calfnxt-web-host] syncNativeSize…\n");
   syncNativeSize();
   logAlloc("show_all");
   if (!gtk_plug_get_embedded(GTK_PLUG(g.plug)))
