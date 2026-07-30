@@ -105,8 +105,9 @@ def gen_cpp(desc: dict[str, Any], ns: str) -> str:
     editor = desc.get("editor") or {}
     width = int(editor.get("width", 360))
     height = int(editor.get("height", 420))
-    # SPA shell + hash route (plugin id). Optional editor.entry overrides fully.
-    entry = editor.get("entry") or f"index.html#{desc['id']}"
+    # Production embeds a per-plugin index.html (no hash router needed).
+    # Optional editor.entry may still use a fragment (e.g. index.html#equalizer) for a shared SPA.
+    entry = editor.get("entry") or "index.html"
     band_count = int(desc.get("band_count") or 0)
     params_per_band = int(desc.get("params_per_band") or 0)
 

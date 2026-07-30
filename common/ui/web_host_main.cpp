@@ -360,10 +360,15 @@ int main(int argc, char** argv)
       fcntl(g.sock, F_SETFL, flags | O_NONBLOCK);
   }
 
+  // XEmbed / GtkPlug requires X11. Force the backend before GTK touches the display
+  // (Wayland-only sessions without XWayland will fail gtk_init_check below).
+  setenv("GDK_BACKEND", "x11", 1);
   gdk_set_allowed_backends("x11");
   if (!gtk_init_check(&argc, &argv))
   {
-    std::fprintf(stderr, "[calfnxt-web-host] gtk_init_check failed\n");
+    std::fprintf(stderr,
+                 "[calfnxt-web-host] gtk_init_check failed (need X11 DISPLAY / XWayland; "
+                 "GDK_BACKEND=x11)\n");
     return 1;
   }
 

@@ -314,8 +314,18 @@ bool WebEditor::openHelper(void* x11Parent)
                helperPath, webRoot_, entryHtml_);
   std::fflush(stderr);
 
+  // entry may be "index.html#plugin" (URI fragment for SPA routing) — not a filesystem name.
+  char entryFile[256];
+  std::snprintf(entryFile, sizeof entryFile, "%s", entryHtml_);
+  if (char* hash = std::strchr(entryFile, '#'))
+    *hash = '\0';
+  if (char* query = std::strchr(entryFile, '?'))
+    *query = '\0';
+  if (!entryFile[0])
+    std::snprintf(entryFile, sizeof entryFile, "index.html");
+
   char indexPath[4224];
-  std::snprintf(indexPath, sizeof indexPath, "%s/%s", webRoot_, entryHtml_);
+  std::snprintf(indexPath, sizeof indexPath, "%s/%s", webRoot_, entryFile);
   if (access(indexPath, R_OK) != 0)
   {
     std::fprintf(stderr,
@@ -389,6 +399,38 @@ bool WebEditor::openHelper(void* x11Parent)
   readBuf_.clear();
   std::fprintf(stderr, "[calfnxt] spawned web-host pid=%d\n", static_cast<int>(pid));
   std::fflush(stderr);
+
+  // Catch immediate helper failure (missing libs / gtk_init / bad DISPLAY) before
+  // the host paints an empty embed forever. Dynamic-linker errors go to the child's
+  // stderr (same terminal); we only see the exit here.
+  for (int i = 0; i < 10; ++i)
+  {
+    int status = 0;
+    const pid_t r = waitpid(helperPid_, &status, WNOHANG);
+    if (r == helperPid_)
+    {
+      if (WIFEXITED(status))
+      {
+        std::fprintf(stderr,
+                     "[calfnxt] web-host exited immediately (code=%d) — check deps "
+                     "(webkit2gtk-4.1, gtk-3) and DISPLAY/X11; try: %s --help\n",
+                     WEXITSTATUS(status), helperPath);
+      }
+      else if (WIFSIGNALED(status))
+      {
+        std::fprintf(stderr, "[calfnxt] web-host died immediately (signal=%d)\n",
+                     WTERMSIG(status));
+      }
+      std::fflush(stderr);
+      ::close(sock_);
+      sock_ = -1;
+      helperPid_ = -1;
+      return false;
+    }
+    if (r < 0 && errno == ECHILD)
+      break;
+    usleep(10 * 1000);
+  }
   return true;
 }
 
@@ -517,6 +559,18 @@ tresult PLUGIN_API WebEditor::attached(void* parent, FIDString type)
       rl->release();
       if (runLoop_->registerTimer(this, 16) == kResultOk)
         timerRegistered_ = true;
+      else
+      {
+        std::fprintf(stderr,
+                     "[calfnxt] IRunLoop::registerTimer failed — UI bridge will not pump\n");
+        std::fflush(stderr);
+      }
+    }
+    else
+    {
+      std::fprintf(stderr,
+                   "[calfnxt] host has no Linux::IRunLoop — UI bridge will not pump\n");
+      std::fflush(stderr);
     }
     requestHostSize();
     if (const float envScale = envFloat("CALFNXT_UI_SCALE"))
