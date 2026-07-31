@@ -524,6 +524,13 @@ int main(int argc, char** argv)
   if (!wantDmabuf && !std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER"))
     setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", 1);
 
+  // Separate from DMA-BUF: accelerated compositing can leave a fully transparent
+  // XEmbed surface even when DOM layout is correct (iw/ih ok, React mounted).
+  // Default off for the GtkPlug path; opt in with CALFNXT_WEB_COMPOSITING=1.
+  const bool wantCompositing = envFlag("CALFNXT_WEB_COMPOSITING");
+  if (!wantCompositing && !std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE"))
+    setenv("WEBKIT_DISABLE_COMPOSITING_MODE", "1", 1);
+
   unsigned long long parentXid = 0;
   int fd = -1;
 
@@ -645,8 +652,9 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=paint-fix-1 hw-accel=%s dmabuf=%s\n",
-          noGpu ? "never" : "always", wantDmabuf ? "on" : "off");
+  hostLog("[calfnxt-web-host] build=paint-fix-2 hw-accel=%s dmabuf=%s compositing=%s\n",
+          noGpu ? "never" : "always", wantDmabuf ? "on" : "off",
+          wantCompositing ? "on" : "off");
 
   // Opaque default — transparent XEmbed + failed present reads as a "background hole".
   {
@@ -655,6 +663,18 @@ int main(int argc, char** argv)
   }
 
   g.plug = gtk_plug_new(static_cast<Window>(parentXid));
+  // Prefer opaque system visual over RGBA — ARGB XEmbed children often show the
+  // host "through" the plug when WebKit fails to present into an alpha window.
+  if (GdkScreen* screen = gdk_screen_get_default())
+  {
+    if (GdkVisual* visual = gdk_screen_get_system_visual(screen))
+    {
+      gtk_widget_set_visual(g.plug, visual);
+      gtk_widget_set_visual(GTK_WIDGET(g.webview), visual);
+    }
+  }
+  gtk_widget_set_app_paintable(g.plug, FALSE);
+  gtk_widget_set_app_paintable(GTK_WIDGET(g.webview), FALSE);
   gtk_widget_set_size_request(g.plug, g.width, g.height);
   gtk_container_add(GTK_CONTAINER(g.plug), GTK_WIDGET(g.webview));
   gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
@@ -676,6 +696,28 @@ int main(int argc, char** argv)
   logAlloc("show_all");
   if (gtkAllocTiny())
     scheduleForceAlloc();
+
+  // After realize: mark the X window opaque so the compositor doesn't treat it
+  // as a full-window alpha hole.
+  if (GdkWindow* win = gtk_widget_get_window(g.plug))
+  {
+    cairo_rectangle_int_t r {0, 0, g.width, g.height};
+    cairo_region_t* region = cairo_region_create_rectangle(&r);
+    gdk_window_set_opaque_region(win, region);
+    cairo_region_destroy(region);
+    GdkRGBA bg {0.0, 0.0, 0.0, 1.0};
+    gdk_window_set_background_rgba(win, &bg);
+  }
+  if (g.webview)
+  {
+    if (GdkWindow* win = gtk_widget_get_window(GTK_WIDGET(g.webview)))
+    {
+      cairo_rectangle_int_t r {0, 0, g.width, g.height};
+      cairo_region_t* region = cairo_region_create_rectangle(&r);
+      gdk_window_set_opaque_region(win, region);
+      cairo_region_destroy(region);
+    }
+  }
 
   g_timeout_add(500, +[](gpointer) -> gboolean {
     if (gtkAllocTiny())
