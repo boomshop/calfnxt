@@ -54,8 +54,23 @@ target_compile_features(${target} PUBLIC cxx_std_17)
 calfnxt_copy_plugin_ui(${target} equalizer)
 calfnxt_copy_web_host(${target})
 
-# TARGET_FILE_DIR = …/<plugin>.vst3/Contents/<arch> → bundle root is ../..
+# Install to ~/.vst3. Always force a fresh SPA embed: clearing stamps must happen
+# *before* rebuilding *-resources (listing them in DEPENDS would rebuild with
+# stale stamps first, then copy old UI — what testers kept hitting).
 add_custom_target(install-user-vst3
+  COMMAND ${CMAKE_COMMAND}
+    -DCALFNXT_UI_DIST_STAMP=${CALFNXT_UI_DIST_STAMP}
+    -DCALFNXT_BINARY_DIR=${CMAKE_BINARY_DIR}
+    -P "${CMAKE_SOURCE_DIR}/tools/cmake/clear_ui_stamps.cmake"
+  COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}" --target
+    calfnxt_web_ui
+    calfnxt-equalizer-resources
+    calfnxt-stereo-resources
+    calfnxt-transients-resources
+    calfnxt-compressor-resources
+    calfnxt-deesser-resources
+    calfnxt-web-host-bundles
+    --parallel
   COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.vst3"
   COMMAND ${CMAKE_COMMAND} -E rm -rf
     "$ENV{HOME}/.vst3/calfNXTVolume.vst3"
@@ -81,16 +96,17 @@ add_custom_target(install-user-vst3
   COMMAND ${CMAKE_COMMAND} -E copy_directory
     "$<TARGET_FILE_DIR:calfnxt-compressor>/../.."
     "$ENV{HOME}/.vst3/calfNXTCompressor.vst3"
-  COMMENT "Install Equalizer + Stereo + Transients + Compressor VST3 → ~/.vst3"
+  COMMAND ${CMAKE_COMMAND} -E rm -rf
+    "$ENV{HOME}/.vst3/calfNXTDeesser.vst3"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "$<TARGET_FILE_DIR:calfnxt-deesser>/../.."
+    "$ENV{HOME}/.vst3/calfNXTDeesser.vst3"
+  COMMENT "Force UI rebuild + install all calfNXT VST3 → ~/.vst3"
   DEPENDS
     calfnxt-equalizer
-    calfnxt-equalizer-resources
     calfnxt-stereo
-    calfnxt-stereo-resources
     calfnxt-transients
-    calfnxt-transients-resources
     calfnxt-compressor
-    calfnxt-compressor-resources
+    calfnxt-deesser
     calfnxt-web-host
-    calfnxt-web-host-bundles
 )

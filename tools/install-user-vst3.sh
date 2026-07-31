@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Force-rebuild the SPA UI, embed into VST3 Resources, install to ~/.vst3.
+# Build plugins + force-rebuild SPA UI into VST3 Resources, install to ~/.vst3.
+# Prefer this (or cmake --target install-user-vst3) over bare *-resources copies:
+# install-user-vst3 always clears UI stamps so testers cannot keep stale assets.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,10 +14,6 @@ if [[ ! -d "$BUILD" ]]; then
   exit 1
 fi
 
-# UI embed only runs when stamps are stale; clear them after manual UI edits.
-rm -f "$ROOT/ui/dist/.stamp"
-rm -f "$BUILD"/calfnxt-*.resources.stamp
-
-echo "==> build + install-user-vst3 (-j$JOBS)"
+echo "==> install-user-vst3 (forces UI rebuild) (-j$JOBS)"
 cmake --build "$BUILD" --target install-user-vst3 -j"$JOBS"
 echo "==> done → ~/.vst3 (reload plugins in host)"

@@ -19,7 +19,7 @@ internalized toolkit collides with system GTK3 — `GdkDisplay` GType abort).
 (GtkPlug + WebKit, XEmbed into the host XID) and forwards the JSON bridge over a
 Unix socketpair. Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **DeEsser** (`#deesser`).
 More Calf-heritage processors planned.
 
 ---
@@ -34,9 +34,9 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Display / vendor | `calfNXT` |
 | C++ namespace | `calfNXT` |
 | CMake project / libs | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui` |
-| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor` |
-| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor` (must match; Carla/JUCE) |
-| Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3`, `calfNXTTransients.vst3`, `calfNXTCompressor.vst3` |
+| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-deesser` |
+| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTDeesser` (must match; Carla/JUCE) |
+| Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3`, `calfNXTTransients.vst3`, `calfNXTCompressor.vst3`, `calfNXTDeesser.vst3` |
 | URI scheme | `calfnxt://bundle/...` |
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
 | Script message handler | `webkit.messageHandlers.calfnxt` |
@@ -154,10 +154,9 @@ Verify Ardour-safe link: `ldd …/*.so` must not list `libgtk-3` / `libwebkit`.
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target calfnxt-plugins -j
-# embed UI after ui changes (or use ./tools/install-user-vst3.sh):
-cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resources calfnxt-transients-resources calfnxt-compressor-resources -j
-# user install:
-cmake --build build --target install-user-vst3
+# user install (always force-rebuilds SPA + embeds into Resources, then ~/.vst3):
+cmake --build build --target install-user-vst3 -j
+# same: ./tools/install-user-vst3.sh
 ```
 
 Install paths: `~/.vst3/calfNXTEqualizer.vst3`, `~/.vst3/calfNXTStereo.vst3`, `~/.vst3/calfNXTTransients.vst3`, `~/.vst3/calfNXTCompressor.vst3` (also removes obsolete Volume/Balance bundles if present).
@@ -180,7 +179,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
 - Fixed **16** VST slots (`b01_…`…`b16_…`: active/type/slope/freq/gain/q + dyn/dyn_attack/dyn_release/dyn_threshold/dyn_ratio/dyn_listen). No add/remove in UI.
 - UI type change keeps per-type gain/Q/slope memory (first visit → safe defaults); host/preset type sync does not rewrite siblings.
-- DSP: `common/dsp/biquad.h` (Calf/RBJ) + `eq_band.h` (LP/HP cascade 12/24/36 with Q as resonance at fc; Freq/Q/Gain glide) + `compressor.h` (Thor gain reduction for DynEQ).
+- DSP: `common/dsp/biquad.h` (Calf/RBJ) + `eq_band.h` (LP/HP cascade 12/24/36/48 with Q as resonance at fc; Freq/Q/Gain glide) + `compressor.h` (Thor gain reduction for DynEQ).
 - **Dynamic EQ** (per band): type-matched detector (BP / LP / HP) → `GainReduction` → `effectiveDb = staticGain + 20*log10(GR)` on peaking/shelf/BP gain. Pass filters keep dyn params but GR does not affect audio until type uses gain.
 - **Listen** (`dyn_listen`): solos that band’s detector into the output (EQ bypassed); only one band at a time. Band icon uses `--color-warn` while listening.
 - UI curves: handle EqBands use static `gain$`; ghost EqBands + baseline use DSP `effectiveGain$` via viz `{t:"viz",id:"eq",kind:"gains",v:[…]}` (all 16 bands, static or dyn).
