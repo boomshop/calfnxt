@@ -33,10 +33,11 @@ will follow.
 | **Stereo** | `calfNXTStereo.vst3` | Width, M/S, decorrelation, imaging |
 | **Transients** | `calfNXTTransients.vst3` | Attack / release shaping |
 | **Compressor** | `calfNXTCompressor.vst3` | Feed-forward dynamics (threshold / ratio / knee) |
+| **DeEsser** | `calfNXTDeesser.vst3` | Sibilance control (Wide / Split) |
 
 ### Equalizer
 
-- Fixed **16 bands** (peaking, shelves, LP/HP with 12/24/36 dB slopes, band-pass)
+- Fixed **16 bands** (peaking, shelves, LP/HP with 12/24/36/48 dB slopes, band-pass)
 - Per-band **Dynamic EQ** (detector-matched GR on peaking / shelves / BP)
 - **Listen** solos one band’s detector into the output
 - Interactive frequency response (static handles + dyn effective-gain ghosts)
@@ -53,7 +54,7 @@ will follow.
 
 - Independent **attack / release** boost with time constants and sustain threshold
 - Optional **lookahead** (reported to the host for PDC; wet/dry stay in phase)
-- Detector **HP/LP** (12/24/36 dB) + listen; wet/dry **mix**
+- Detector **HP/LP** (12/24/36/48 dB) + listen; wet/dry **mix**
 - Live **envelope chart** (input / output / envelope overlays, selectable display window)
 
 ### Compressor
@@ -64,6 +65,14 @@ will follow.
 - Threshold, ratio, soft **knee**, attack / release, makeup, wet/dry **mix**, bypass
 - **GR meter** + AUX transfer curve with live DSP operating point
 - Scrolling **history** chart (audio peak + GR over time, selectable window)
+
+### DeEsser
+
+- Calf-heritage sibilance control: **Wide** (full-band GR) or **Split** (Linkwitz-Riley high band only)
+- Detection chain: multi-slope **HP** (12/24/48 dB, resonant Q) + **peaking** EQ; Peak / RMS / Opto
+- Threshold, ratio, **laxity** (attack/release), makeup, listen (detector solo)
+- **GR meter** + history (input / filtered detector / GR)
+- Shared In/Out gain + peak meters
 
 ---
 
@@ -182,6 +191,7 @@ Then rescan plugins in your host. Bundles appear as:
 | Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
 | Transients | `~/.vst3/calfNXTTransients.vst3` |
 | Compressor | `~/.vst3/calfNXTCompressor.vst3` |
+| DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
 
 ---
 
@@ -199,7 +209,7 @@ cmake --build build --target install-user-vst3
 #   ./tools/install-user-vst3.sh
 ```
 
-`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, …) and embeds each
+`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, Compressor, DeEsser, …) and embeds each
 UI pack. `install-user-vst3` then copies the bundles into `~/.vst3/`:
 
 | Plugin    | Path                         |
@@ -208,6 +218,7 @@ UI pack. `install-user-vst3` then copies the bundles into `~/.vst3/`:
 | Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
 | Transients | `~/.vst3/calfNXTTransients.vst3` |
 | Compressor | `~/.vst3/calfNXTCompressor.vst3` |
+| DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
 
 Rescan / reload the plugins in the host after install.
 
@@ -219,7 +230,7 @@ You must copy the SPA into each bundle’s `Resources/`:
 ```bash
 ./tools/install-user-vst3.sh
 # or manually:
-cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resources calfnxt-transients-resources -j
+cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resources calfnxt-transients-resources calfnxt-compressor-resources calfnxt-deesser-resources -j
 cmake --build build --target install-user-vst3
 ```
 
@@ -244,7 +255,7 @@ cd ui && npm install   # once
 cd ui && npm run dev
 ```
 
-Open e.g. http://localhost:5173/#equalizer or http://localhost:5173/#stereo or http://localhost:5173/#transients  
+Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` 
 
 This is useful for layout and widget work. It does **not** replace installing into `~/.vst3` for Carla / other hosts.
 
@@ -261,6 +272,7 @@ This is useful for layout and widget work. It does **not** replace installing in
 | Single plugin (Stereo)      | `cmake --build build --target calfnxt-stereo calfnxt-stereo-resources -j` |
 | Single plugin (Transients)  | `cmake --build build --target calfnxt-transients calfnxt-transients-resources -j` |
 | Single plugin (Compressor)  | `cmake --build build --target calfnxt-compressor calfnxt-compressor-resources -j` |
+| Single plugin (DeEsser)     | `cmake --build build --target calfnxt-deesser calfnxt-deesser-resources -j` |
 | UI HMR in the browser       | `cd ui && npm run dev` |
 
 ---

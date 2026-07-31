@@ -56,8 +56,9 @@ dsp/equalizer/ equalizer.plugin.json + DSP + codegen
 dsp/stereo/    stereo.plugin.json + DSP + codegen
 dsp/transients/ transients.plugin.json + DSP + codegen
 dsp/compressor/ compressor.plugin.json + DSP + codegen
+dsp/deesser/   deesser.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
-ui/            React SPA (Vite), hash router #equalizer / #stereo / #transients / #compressor
+ui/            React SPA (Vite), hash router #equalizer / #stereo / #transients / #compressor / #deesser
 external/vst3sdk/
 ```
 
@@ -159,7 +160,7 @@ cmake --build build --target calfnxt-plugins -j
 # (close the plugin host first if ~/.vst3 remove fails with Permission denied)
 ```
 
-Install paths: `~/.vst3/calfNXTEqualizer.vst3`, `~/.vst3/calfNXTStereo.vst3`, `~/.vst3/calfNXTTransients.vst3`, `~/.vst3/calfNXTCompressor.vst3` (also removes obsolete Volume/Balance bundles if present).
+Install paths: `~/.vst3/calfNXTEqualizer.vst3`, `~/.vst3/calfNXTStereo.vst3`, `~/.vst3/calfNXTTransients.vst3`, `~/.vst3/calfNXTCompressor.vst3`, `~/.vst3/calfNXTDeesser.vst3` (also removes obsolete Volume/Balance bundles if present).
 
 Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
@@ -210,6 +211,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 | Stereo DSP | `dsp/stereo/source/*_dsp.*` |
 | Transients DSP | `dsp/transients/source/*_dsp.*`, `common/dsp/transients.h` |
 | Compressor DSP | `dsp/compressor/source/*_dsp.*`, `common/dsp/compressor.h`, `common/dsp/sidechain_filter.h` |
+| DeEsser DSP | `dsp/deesser/source/*_dsp.*`, `common/dsp/deesser_detector.h`, `common/dsp/band_splitter.h` |
 | Param bind | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts` |
 | Header I/O | `ui/src/components/Header/*`, `host/headerMeters.ts` |
 | Meters | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*` |
