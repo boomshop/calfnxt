@@ -11,6 +11,8 @@ plugin `.so` stays free of GTK — required for hosts like Ardour. Parts of the
 classic Calf DSP are reused but substantially reworked; more processors will
 follow over time.
 
+Project site: [https://calfnxt.org](https://calfnxt.org/)
+
 Branding / namespace: **calfNXT**. Shared React SPA UI, packed per plugin into
 each `.vst3` bundle’s `Resources/`.
 
