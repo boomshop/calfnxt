@@ -68,7 +68,6 @@ add_custom_target(install-user-vst3
     calfnxt-stereo-resources
     calfnxt-transients-resources
     calfnxt-compressor-resources
-    calfnxt-deesser-resources
     calfnxt-web-host-bundles
     --parallel
   COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.vst3"
@@ -96,17 +95,11 @@ add_custom_target(install-user-vst3
   COMMAND ${CMAKE_COMMAND} -E copy_directory
     "$<TARGET_FILE_DIR:calfnxt-compressor>/../.."
     "$ENV{HOME}/.vst3/calfNXTCompressor.vst3"
-  COMMAND ${CMAKE_COMMAND} -E rm -rf
-    "$ENV{HOME}/.vst3/calfNXTDeesser.vst3"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "$<TARGET_FILE_DIR:calfnxt-deesser>/../.."
-    "$ENV{HOME}/.vst3/calfNXTDeesser.vst3"
-  COMMENT "Force UI rebuild + install all calfNXT VST3 → ~/.vst3"
+  COMMENT "Force UI rebuild + install Equalizer/Stereo/Transients/Compressor → ~/.vst3"
   DEPENDS
     calfnxt-equalizer
     calfnxt-stereo
     calfnxt-transients
     calfnxt-compressor
-    calfnxt-deesser
     calfnxt-web-host
 )
