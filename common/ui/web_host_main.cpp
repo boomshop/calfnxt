@@ -119,6 +119,99 @@ void logAlloc(const char* why)
           why, pw, ph, vw, vh, gdkW, gdkH, emb, g.width, g.height);
 }
 
+/** X11 attributes for realized widgets — present/compositing diagnosis. */
+void logX11Window(const char* label, GtkWidget* widget)
+{
+  if (!widget)
+  {
+    hostLog("[calfnxt-web-host] x11 %s: (null widget)\n", label);
+    return;
+  }
+  GdkWindow* gdkWin = gtk_widget_get_window(widget);
+  if (!gdkWin)
+  {
+    hostLog("[calfnxt-web-host] x11 %s: unrealized\n", label);
+    return;
+  }
+
+  const Window xid = gdk_x11_window_get_xid(gdkWin);
+  Display* dpy = GDK_WINDOW_XDISPLAY(gdkWin);
+  XWindowAttributes wa {};
+  if (!dpy || !XGetWindowAttributes(dpy, xid, &wa))
+  {
+    hostLog("[calfnxt-web-host] x11 %s: xid=0x%lx attrs-fail\n", label,
+            static_cast<unsigned long>(xid));
+    return;
+  }
+
+  const char* mapState = "Unmapped";
+  if (wa.map_state == IsUnviewable)
+    mapState = "Unviewable";
+  else if (wa.map_state == IsViewable)
+    mapState = "Viewable";
+
+  const int depth = wa.depth;
+  const int cls = wa.c_class; // InputOutput=1, InputOnly=2
+  const char* clsName = cls == InputOutput ? "InputOutput" : (cls == InputOnly ? "InputOnly" : "?");
+
+  int visualType = -1;
+  int bitsRgb = -1;
+  if (wa.visual)
+  {
+    visualType = wa.visual->c_class; // StaticGray…TrueColor…
+    bitsRgb = wa.visual->bits_per_rgb;
+  }
+
+  GdkScreen* screen = gtk_widget_get_screen(widget);
+  const int hasRgba = (screen && gdk_screen_get_rgba_visual(screen)) ? 1 : 0;
+  GdkVisual* widgetVisual = gdk_window_get_visual(gdkWin);
+  GdkVisual* systemVisual = screen ? gdk_screen_get_system_visual(screen) : nullptr;
+  const int isSystemVisual =
+    (widgetVisual && systemVisual && widgetVisual == systemVisual) ? 1 : 0;
+  const int isRgbaVisual =
+    (screen && widgetVisual && widgetVisual == gdk_screen_get_rgba_visual(screen)) ? 1 : 0;
+
+  hostLog("[calfnxt-web-host] x11 %s xid=0x%lx %dx%d+%d+%d depth=%d class=%s map=%s "
+          "visual_class=%d bits_rgb=%d system_visual=%d rgba_visual=%d screen_has_rgba=%d "
+          "viewable_hint=%d\n",
+          label, static_cast<unsigned long>(xid), wa.width, wa.height, wa.x, wa.y, depth, clsName,
+          mapState, visualType, bitsRgb, isSystemVisual, isRgbaVisual, hasRgba,
+          gtk_widget_get_mapped(widget) ? 1 : 0);
+
+  // Immediate children (WebKit often uses an extra child X window for content).
+  Window root = 0;
+  Window parent = 0;
+  Window* children = nullptr;
+  unsigned nchildren = 0;
+  if (XQueryTree(dpy, xid, &root, &parent, &children, &nchildren))
+  {
+    hostLog("[calfnxt-web-host] x11 %s parent=0x%lx children=%u\n", label,
+            static_cast<unsigned long>(parent), nchildren);
+    for (unsigned i = 0; i < nchildren && i < 8; ++i)
+    {
+      XWindowAttributes cwa {};
+      if (!XGetWindowAttributes(dpy, children[i], &cwa))
+        continue;
+      const char* cmap = "Unmapped";
+      if (cwa.map_state == IsUnviewable)
+        cmap = "Unviewable";
+      else if (cwa.map_state == IsViewable)
+        cmap = "Viewable";
+      hostLog("[calfnxt-web-host] x11 %s child[%u]=0x%lx %dx%d depth=%d map=%s\n", label, i,
+              static_cast<unsigned long>(children[i]), cwa.width, cwa.height, cwa.depth, cmap);
+    }
+    if (children)
+      XFree(children);
+  }
+}
+
+void logX11Surface(const char* why)
+{
+  hostLog("[calfnxt-web-host] x11-surface %s\n", why);
+  logX11Window("plug", g.plug);
+  logX11Window("webview", g.webview ? GTK_WIDGET(g.webview) : nullptr);
+}
+
 /** True when GTK allocation is unusable for WebKit layout (< 2×2). */
 bool gtkAllocTiny()
 {
@@ -444,6 +537,7 @@ void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
       forceGtkAllocation("load-finished");
     else
       logAlloc("load-finished");
+    logX11Surface("load-finished");
     sendLine("{\"t\":\"_ready\"}");
     probeJsSize("load-finished");
     scheduleJsProbes();
@@ -517,20 +611,6 @@ void printUsage(const char* argv0)
 
 int main(int argc, char** argv)
 {
-  // WebKitGTK 2.4x/2.5x: DMA-BUF renderer often yields a blank/transparent view
-  // on X11 (NVIDIA widely, also some Intel/Mesa). Hardware-accel NEVER is not
-  // the same switch. Default off; opt back in with CALFNXT_WEB_DMABUF=1.
-  const bool wantDmabuf = envFlag("CALFNXT_WEB_DMABUF");
-  if (!wantDmabuf && !std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER"))
-    setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", 1);
-
-  // Separate from DMA-BUF: accelerated compositing can leave a fully transparent
-  // XEmbed surface even when DOM layout is correct (iw/ih ok, React mounted).
-  // Default off for the GtkPlug path; opt in with CALFNXT_WEB_COMPOSITING=1.
-  const bool wantCompositing = envFlag("CALFNXT_WEB_COMPOSITING");
-  if (!wantCompositing && !std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE"))
-    setenv("WEBKIT_DISABLE_COMPOSITING_MODE", "1", 1);
-
   unsigned long long parentXid = 0;
   int fd = -1;
 
@@ -652,29 +732,21 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=paint-fix-2 hw-accel=%s dmabuf=%s compositing=%s\n",
-          noGpu ? "never" : "always", wantDmabuf ? "on" : "off",
-          wantCompositing ? "on" : "off");
+  hostLog("[calfnxt-web-host] build=diag-x11-1 hw-accel=%s\n", noGpu ? "never" : "always");
+  hostLog("[calfnxt-web-host] env dmabuf_disable=%s compositing_disable=%s no_gpu=%s\n",
+          std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER") ? std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER")
+                                                          : "(unset)",
+          std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE") ? std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE")
+                                                         : "(unset)",
+          noGpu ? "1" : "(unset)");
 
-  // Opaque default — transparent XEmbed + failed present reads as a "background hole".
+  // Opaque WebView clear color (does not fix XEmbed present; helps if paint works).
   {
     GdkRGBA bg {0.0, 0.0, 0.0, 1.0};
     webkit_web_view_set_background_color(g.webview, &bg);
   }
 
   g.plug = gtk_plug_new(static_cast<Window>(parentXid));
-  // Prefer opaque system visual over RGBA — ARGB XEmbed children often show the
-  // host "through" the plug when WebKit fails to present into an alpha window.
-  if (GdkScreen* screen = gdk_screen_get_default())
-  {
-    if (GdkVisual* visual = gdk_screen_get_system_visual(screen))
-    {
-      gtk_widget_set_visual(g.plug, visual);
-      gtk_widget_set_visual(GTK_WIDGET(g.webview), visual);
-    }
-  }
-  gtk_widget_set_app_paintable(g.plug, FALSE);
-  gtk_widget_set_app_paintable(GTK_WIDGET(g.webview), FALSE);
   gtk_widget_set_size_request(g.plug, g.width, g.height);
   gtk_container_add(GTK_CONTAINER(g.plug), GTK_WIDGET(g.webview));
   gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
@@ -696,34 +768,14 @@ int main(int argc, char** argv)
   logAlloc("show_all");
   if (gtkAllocTiny())
     scheduleForceAlloc();
-
-  // After realize: mark the X window opaque so the compositor doesn't treat it
-  // as a full-window alpha hole.
-  if (GdkWindow* win = gtk_widget_get_window(g.plug))
-  {
-    cairo_rectangle_int_t r {0, 0, g.width, g.height};
-    cairo_region_t* region = cairo_region_create_rectangle(&r);
-    gdk_window_set_opaque_region(win, region);
-    cairo_region_destroy(region);
-    GdkRGBA bg {0.0, 0.0, 0.0, 1.0};
-    gdk_window_set_background_rgba(win, &bg);
-  }
-  if (g.webview)
-  {
-    if (GdkWindow* win = gtk_widget_get_window(GTK_WIDGET(g.webview)))
-    {
-      cairo_rectangle_int_t r {0, 0, g.width, g.height};
-      cairo_region_t* region = cairo_region_create_rectangle(&r);
-      gdk_window_set_opaque_region(win, region);
-      cairo_region_destroy(region);
-    }
-  }
+  logX11Surface("show_all");
 
   g_timeout_add(500, +[](gpointer) -> gboolean {
     if (gtkAllocTiny())
       forceGtkAllocation("t+500ms");
     else
       logAlloc("t+500ms");
+    logX11Surface("t+500ms");
     return G_SOURCE_REMOVE;
   }, nullptr);
   g_timeout_add(2000, +[](gpointer) -> gboolean {
@@ -731,6 +783,7 @@ int main(int argc, char** argv)
       forceGtkAllocation("t+2s");
     else
       logAlloc("t+2s");
+    logX11Surface("t+2s");
     return G_SOURCE_REMOVE;
   }, nullptr);
 
