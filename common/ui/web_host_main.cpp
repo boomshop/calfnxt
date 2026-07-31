@@ -186,6 +186,11 @@ bool forceGtkAllocation(const char* why)
   }
   g.inSizeAllocate = false;
 
+  if (g.plug)
+    gtk_widget_queue_draw(g.plug);
+  if (g.webview)
+    gtk_widget_queue_draw(GTK_WIDGET(g.webview));
+
   logAlloc(why);
   return !gtkAllocTiny();
 }
@@ -254,13 +259,51 @@ void evalJs(const char* js)
         webkit_web_view_evaluate_javascript_finish(WEBKIT_WEB_VIEW(object), result, &error);
       if (error)
       {
-        std::fprintf(stderr, "[calfnxt-web-host] evalJs: %s\n", error->message);
+        hostLog("[calfnxt-web-host] evalJs: %s\n", error->message);
         g_error_free(error);
       }
       if (value)
         g_object_unref(value);
     },
     nullptr);
+}
+
+/** Probe DOM/CSS sizes after load — distinguishes layout-0 vs paint/compositing hole. */
+void probeJsSize(const char* why)
+{
+  if (!g.webview || !why)
+    return;
+  char js[900];
+  std::snprintf(
+    js, sizeof js,
+    "(function(){"
+    "var r=document.getElementById('root');"
+    "var iw=(window.innerWidth)|0, ih=(window.innerHeight)|0;"
+    "var cw=document.documentElement?document.documentElement.clientWidth|0:0;"
+    "var ch=document.documentElement?document.documentElement.clientHeight|0:0;"
+    "var rw=r?r.clientWidth|0:-1, rh=r?r.clientHeight|0:-1, kids=r?r.children.length:-1;"
+    "var msg='%s|iw='+iw+'|ih='+ih+'|cw='+cw+'|ch='+ch+'|rw='+rw+'|rh='+rh+'|kids='+kids;"
+    "if(window.calfnxtNative&&window.calfnxtNative.post)"
+    "window.calfnxtNative.post({t:'_diag',msg:msg,w:iw,h:ih});"
+    "})();",
+    why);
+  evalJs(js);
+}
+
+void scheduleJsProbes()
+{
+  g_timeout_add(100, +[](gpointer) -> gboolean {
+    probeJsSize("t+100ms");
+    return G_SOURCE_REMOVE;
+  }, nullptr);
+  g_timeout_add(500, +[](gpointer) -> gboolean {
+    probeJsSize("t+500ms");
+    return G_SOURCE_REMOVE;
+  }, nullptr);
+  g_timeout_add(1500, +[](gpointer) -> gboolean {
+    probeJsSize("t+1.5s");
+    return G_SOURCE_REMOVE;
+  }, nullptr);
 }
 
 bool jsonHasType(const char* s, const char* type)
@@ -402,6 +445,8 @@ void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
     else
       logAlloc("load-finished");
     sendLine("{\"t\":\"_ready\"}");
+    probeJsSize("load-finished");
+    scheduleJsProbes();
   }
 }
 
@@ -472,6 +517,13 @@ void printUsage(const char* argv0)
 
 int main(int argc, char** argv)
 {
+  // WebKitGTK 2.4x/2.5x: DMA-BUF renderer often yields a blank/transparent view
+  // on X11 (NVIDIA widely, also some Intel/Mesa). Hardware-accel NEVER is not
+  // the same switch. Default off; opt back in with CALFNXT_WEB_DMABUF=1.
+  const bool wantDmabuf = envFlag("CALFNXT_WEB_DMABUF");
+  if (!wantDmabuf && !std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER"))
+    setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", 1);
+
   unsigned long long parentXid = 0;
   int fd = -1;
 
@@ -568,6 +620,16 @@ int main(int argc, char** argv)
   webkit_user_content_manager_add_script(ucm, script);
   webkit_user_script_unref(script);
 
+  // Ensure page chrome is opaque even if the SPA CSS loads late.
+  {
+    static const char css[] =
+      "html,body,#root{background:#000!important;min-width:100%;min-height:100%;}";
+    auto* style = webkit_user_style_sheet_new(css, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+                                              WEBKIT_USER_STYLE_LEVEL_AUTHOR, nullptr, nullptr);
+    webkit_user_content_manager_add_style_sheet(ucm, style);
+    webkit_user_style_sheet_unref(style);
+  }
+
   g.webview = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "web-context", g.ctx,
                                           "user-content-manager", ucm, nullptr));
   g_object_unref(ucm);
@@ -583,9 +645,10 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=alloc-fix-1 hw-accel=%s\n", noGpu ? "never" : "always");
+  hostLog("[calfnxt-web-host] build=paint-fix-1 hw-accel=%s dmabuf=%s\n",
+          noGpu ? "never" : "always", wantDmabuf ? "on" : "off");
 
-  // Opaque default — transparent XEmbed + empty/0×0 WebView reads as a "background hole".
+  // Opaque default — transparent XEmbed + failed present reads as a "background hole".
   {
     GdkRGBA bg {0.0, 0.0, 0.0, 1.0};
     webkit_web_view_set_background_color(g.webview, &bg);
