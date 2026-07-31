@@ -143,7 +143,7 @@ private:
   BiquadD1 peakL_;
   BiquadD1 peakR_;
   float sr_ = 44100.f;
-  float hpHz_ = 6000.f;
+  float hpHz_ = 4000.f;
   float hpQ_ = 0.707f;
   float peakHz_ = 4500.f;
   float peakGainDb_ = 12.f;

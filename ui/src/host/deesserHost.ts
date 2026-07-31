@@ -162,7 +162,7 @@ export function createBoundDeesserHost(): IDeesserHost {
   bindVizGr(gr$, 'deess');
   bindVizEnvelope(historyData$, 'deess');
 
-  const splitFreq$ = bindNum('split_freq', 6000);
+  const splitFreq$ = bindNum('split_freq', 4000);
   const hpQ$ = bindNum('hp_q', 0.707);
   const peakFreq$ = bindNum('peak_freq', 4500);
   const peakGain$ = bindNum('peak_gain', 12);

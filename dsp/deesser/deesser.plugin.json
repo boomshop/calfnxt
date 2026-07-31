@@ -126,7 +126,7 @@
       "unit": "Hz",
       "min": 20.0,
       "max": 20000.0,
-      "default": 6000.0,
+      "default": 4000.0,
       "scale": "log",
       "precision": 0
     },
