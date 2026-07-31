@@ -194,7 +194,26 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 ## Open / deferred
 
 1. Analyzer arrays (`viz` + `vizcfg` bins).
-2. More plugins.
+2. **Plugin backlog** (Calf heritage → calfNXT name; order not fixed):
+   - Multi Chorus → **Chorus**
+   - **Phaser**
+   - **Flanger**
+   - **Pulsator**
+   - **Ring Modulator**
+   - **Reverb**
+   - Vintage Delay → **Delay**
+   - **Multiband Compressor**
+   - Gate / Sidechain Gate → **Expander**
+   - **Limiter**
+   - **Multiband Limiter**
+   - Filter / Envelope Filter → **Filter**
+   - Saturator / Exciter / Bass Enhancer → **Saturator** (name may still change)
+   - **Vinyl**
+   - **Crusher**
+   - **Analyzer**
+   - **Mono Input**
+   - Optional: **Vocoder** (FIR-based if done)
+   - Optional: **Crossovers** (dynamic band count if done)
 3. macOS / Windows WebView hosts.
 4. Optional: compare `examples/auxvst` WebView hosting; optional SVF upgrade if steep bass still artifacts.
 
