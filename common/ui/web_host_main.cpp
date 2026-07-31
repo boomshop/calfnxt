@@ -42,9 +42,18 @@ struct HostState
   /** Idle coalescing when the embedder keeps handing us 1×1. */
   guint forceAllocIdle = 0;
   int forceAllocTries = 0;
+  /** Poll until XEmbed plug/webview are X11-Viewable, then stop. */
+  guint mapPollSource = 0;
+  int mapPollTries = 0;
+  bool mapOk = false;
 };
 
 HostState g;
+
+/** Map-poll interval: ~one frame, cheap, snappy for XEmbed hosts that never map. */
+constexpr int kMapPollMs = 16;
+/** Give up after ~2s so a stuck embedder cannot spin forever. */
+constexpr int kMapPollMaxTries = 2000 / kMapPollMs;
 
 bool envFlag(const char* name)
 {
@@ -207,6 +216,8 @@ void logX11Window(const char* label, GtkWidget* widget)
 
 void logX11Surface(const char* why)
 {
+  if (!envFlag("CALFNXT_WEB_DEBUG"))
+    return;
   hostLog("[calfnxt-web-host] x11-surface %s\n", why);
   logX11Window("plug", g.plug);
   logX11Window("webview", g.webview ? GTK_WIDGET(g.webview) : nullptr);
@@ -233,24 +244,13 @@ bool x11IsViewable(GtkWidget* widget)
   return x11MapState(widget) == IsViewable;
 }
 
-/**
- * Evidence (tester vs working host): after XEmbed, both start Unmapped;
- * working host becomes Viewable within ~500ms, tester stays Unmapped forever
- * → transparent socket hole despite healthy DOM.
- *
- * If still not Viewable, ask GDK/X to map the plug (and webview). No-op when
- * already Viewable (normal path on working hosts).
- */
-void ensureX11Mapped(const char* why)
+bool surfaceX11Viewable()
 {
-  if (!g.plug)
-    return;
-  if (x11IsViewable(g.plug) && (!g.webview || x11IsViewable(GTK_WIDGET(g.webview))))
-    return;
+  return g.plug && x11IsViewable(g.plug) && (!g.webview || x11IsViewable(GTK_WIDGET(g.webview)));
+}
 
-  hostLog("[calfnxt-web-host] map-ensure %s: not Viewable (plug=%d webview=%d) — show/map\n",
-          why, x11MapState(g.plug), g.webview ? x11MapState(GTK_WIDGET(g.webview)) : -1);
-
+void mapX11Windows()
+{
   auto mapOne = [](GtkWidget* widget) {
     if (!widget)
       return;
@@ -270,7 +270,65 @@ void ensureX11Mapped(const char* why)
 
   mapOne(g.plug);
   mapOne(g.webview ? GTK_WIDGET(g.webview) : nullptr);
-  logX11Surface(why);
+}
+
+/**
+ * Evidence (tester vs working host): after XEmbed, both start Unmapped;
+ * working host becomes Viewable within ~500ms, tester stays Unmapped forever
+ * → transparent socket hole despite healthy DOM.
+ *
+ * Poll every kMapPollMs, map if needed, stop once Viewable (or after timeout).
+ */
+gboolean onMapPoll(gpointer)
+{
+  ++g.mapPollTries;
+
+  if (surfaceX11Viewable())
+  {
+    hostLog("[calfnxt-web-host] map-ok after %d poll(s) (~%d ms)\n", g.mapPollTries,
+            g.mapPollTries * kMapPollMs);
+    g.mapOk = true;
+    g.mapPollSource = 0;
+    return G_SOURCE_REMOVE;
+  }
+
+  if (g.mapPollTries == 1)
+    hostLog("[calfnxt-web-host] map-poll: not Viewable yet — show/map (every %dms)\n", kMapPollMs);
+
+  mapX11Windows();
+
+  if (surfaceX11Viewable())
+  {
+    hostLog("[calfnxt-web-host] map-ok via ensure after %d poll(s) (~%d ms)\n", g.mapPollTries,
+            g.mapPollTries * kMapPollMs);
+    g.mapOk = true;
+    g.mapPollSource = 0;
+    return G_SOURCE_REMOVE;
+  }
+
+  if (g.mapPollTries >= kMapPollMaxTries)
+  {
+    hostLog("[calfnxt-web-host] map-give-up after %d polls (~%d ms) plug=%d webview=%d\n",
+            g.mapPollTries, g.mapPollTries * kMapPollMs, x11MapState(g.plug),
+            g.webview ? x11MapState(GTK_WIDGET(g.webview)) : -1);
+    g.mapPollSource = 0;
+    return G_SOURCE_REMOVE;
+  }
+
+  return G_SOURCE_CONTINUE;
+}
+
+void startMapPoll()
+{
+  if (g.mapPollSource || g.mapOk)
+    return;
+  if (surfaceX11Viewable())
+  {
+    g.mapOk = true;
+    return;
+  }
+  g.mapPollTries = 0;
+  g.mapPollSource = g_timeout_add(kMapPollMs, onMapPoll, nullptr);
 }
 
 /** True when GTK allocation is unusable for WebKit layout (< 2×2). */
@@ -588,21 +646,27 @@ void onScriptMessage(WebKitUserContentManager*, WebKitJavascriptResult* js, gpoi
 void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
 {
   if (ev == WEBKIT_LOAD_STARTED)
-    hostLog("[calfnxt-web-host] load-started\n");
+  {
+    if (envFlag("CALFNXT_WEB_DEBUG"))
+      hostLog("[calfnxt-web-host] load-started\n");
+  }
   else if (ev == WEBKIT_LOAD_COMMITTED)
-    hostLog("[calfnxt-web-host] load-committed\n");
+  {
+    if (envFlag("CALFNXT_WEB_DEBUG"))
+      hostLog("[calfnxt-web-host] load-committed\n");
+  }
   else if (ev == WEBKIT_LOAD_FINISHED)
   {
     hostLog("[calfnxt-web-host] load-finished → _ready\n");
     if (gtkAllocTiny())
       forceGtkAllocation("load-finished");
-    else
-      logAlloc("load-finished");
-    logX11Surface("load-finished");
-    ensureX11Mapped("load-finished");
+    startMapPoll();
     sendLine("{\"t\":\"_ready\"}");
-    probeJsSize("load-finished");
-    scheduleJsProbes();
+    if (envFlag("CALFNXT_WEB_DEBUG"))
+    {
+      probeJsSize("load-finished");
+      scheduleJsProbes();
+    }
   }
 }
 
@@ -794,13 +858,16 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=map-fix-1 hw-accel=%s\n", noGpu ? "never" : "always");
-  hostLog("[calfnxt-web-host] env dmabuf_disable=%s compositing_disable=%s no_gpu=%s\n",
-          std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER") ? std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER")
-                                                          : "(unset)",
-          std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE") ? std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE")
-                                                         : "(unset)",
-          noGpu ? "1" : "(unset)");
+  hostLog("[calfnxt-web-host] build=map-fix-2 hw-accel=%s\n", noGpu ? "never" : "always");
+  if (envFlag("CALFNXT_WEB_DEBUG"))
+  {
+    hostLog("[calfnxt-web-host] env dmabuf_disable=%s compositing_disable=%s no_gpu=%s\n",
+            std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER") ? std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER")
+                                                            : "(unset)",
+            std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE") ? std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE")
+                                                           : "(unset)",
+            noGpu ? "1" : "(unset)");
+  }
 
   // Opaque WebView clear color (does not fix XEmbed present; helps if paint works).
   {
@@ -827,30 +894,10 @@ int main(int argc, char** argv)
 
   gtk_widget_show_all(g.plug);
   syncNativeSize();
-  logAlloc("show_all");
   if (gtkAllocTiny())
     scheduleForceAlloc();
-  logX11Surface("show_all");
-
-  g_timeout_add(500, +[](gpointer) -> gboolean {
-    if (gtkAllocTiny())
-      forceGtkAllocation("t+500ms");
-    else
-      logAlloc("t+500ms");
-    logX11Surface("t+500ms");
-    // Working hosts are Viewable by now; tester stayed Unmapped — map explicitly.
-    ensureX11Mapped("t+500ms");
-    return G_SOURCE_REMOVE;
-  }, nullptr);
-  g_timeout_add(2000, +[](gpointer) -> gboolean {
-    if (gtkAllocTiny())
-      forceGtkAllocation("t+2s");
-    else
-      logAlloc("t+2s");
-    logX11Surface("t+2s");
-    ensureX11Mapped("t+2s");
-    return G_SOURCE_REMOVE;
-  }, nullptr);
+  // Start ASAP: tester never becomes Viewable without an explicit map.
+  startMapPoll();
 
   g_signal_connect(g.webview, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
   g_signal_connect(g.webview, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
