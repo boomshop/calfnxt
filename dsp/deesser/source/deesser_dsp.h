@@ -53,7 +53,7 @@ protected:
 private:
   // History: input peak, detector peak, GR (lin) + trailing phase.
   static constexpr int kHistChannels = 3;
-  static constexpr int kHistSlots = 256;
+  static constexpr int kHistSlots = 512;
   static constexpr int kHistMinSlots = 48;
   static constexpr int kHistBufSize = kHistSlots * kHistChannels;
   static constexpr float kHistoryDisplayMs = 10000.f;

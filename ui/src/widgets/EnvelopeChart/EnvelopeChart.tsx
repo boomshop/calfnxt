@@ -232,8 +232,8 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
 
   const sendVizBins = useCallback((el: Element) => {
     const width = Math.round(el.getBoundingClientRect().width);
-    // Cap path complexity — software WebKit redraws the full SVG graph each frame.
-    const bins = Math.max(48, Math.min(128, width));
+    // Aim for ~1 sample per CSS pixel; DSP ring is capped at 512 slots.
+    const bins = Math.max(48, Math.min(512, width));
     postToHost({ t: 'vizcfg', id: 'env', bins });
   }, []);
 

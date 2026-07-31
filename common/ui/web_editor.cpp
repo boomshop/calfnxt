@@ -781,7 +781,7 @@ void WebEditor::flushViz()
       || now - lastEnvVizFlush_ >= std::chrono::milliseconds(1000 / kEnvVizHz))
   {
     lastEnvVizFlush_ = now;
-    constexpr int kMaxEnvFloats = 256 * 5 + 1;
+    constexpr int kMaxEnvFloats = 512 * 5 + 1;
     float envBuf[kMaxEnvFloats];
     const int nEnv = vizSource_->takeEnvelopeDisplay(envBuf, kMaxEnvFloats);
     if (nEnv > 0)

@@ -50,7 +50,7 @@ protected:
 private:
   // 5 values per display slot: input peak, output peak, envelope, attack, release
   static constexpr int kEnvChannels = 5;
-  static constexpr int kEnvSlots = 256;
+  static constexpr int kEnvSlots = 512;
   static constexpr int kEnvMinSlots = 48;
   static constexpr int kEnvBufSize = kEnvSlots * kEnvChannels;
 

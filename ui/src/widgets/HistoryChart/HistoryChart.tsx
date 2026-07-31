@@ -199,8 +199,9 @@ export function HistoryChart(props: HistoryChartProps) {
 
   const sendVizBins = useCallback(
     (el: Element) => {
+      // Aim for ~1 sample per CSS pixel; DSP ring is capped at 512 slots.
       const width = Math.round(el.getBoundingClientRect().width);
-      const bins = Math.max(48, Math.min(128, width));
+      const bins = Math.max(48, Math.min(512, width));
       postToHost({ t: 'vizcfg', id: vizId, bins });
     },
     [vizId],

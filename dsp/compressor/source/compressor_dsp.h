@@ -53,7 +53,7 @@ protected:
 private:
   // History slots: audio peak (lin), GR (lin) — keep in sync with CompressorHistoryChart.
   static constexpr int kHistChannels = 2;
-  static constexpr int kHistSlots = 256;
+  static constexpr int kHistSlots = 512;
   static constexpr int kHistMinSlots = 48;
   static constexpr int kHistBufSize = kHistSlots * kHistChannels;
 
