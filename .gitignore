@@ -29,3 +29,6 @@ dsp/*/web/
 
 # Reference / vendor trees kept locally, not in this repo
 /examples/
+
+# Website
+/website/
