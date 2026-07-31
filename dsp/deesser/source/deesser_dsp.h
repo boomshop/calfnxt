@@ -2,27 +2,28 @@
 
 #include "effect_base.h"
 #include "io_stage.h"
+#include "band_splitter.h"
 #include "compressor.h"
+#include "deesser_detector.h"
 #include "gr_meter.h"
-#include "sidechain_filter.h"
 #include "viz_source.h"
 
-#include "compressor_params.h"
+#include "deesser_params.h"
 
 #include <cstring>
 #include <mutex>
 
 namespace calfNXT {
-namespace Compressor {
+namespace Deesser {
 
-class CompressorPlugin : public Plugin::EffectBase, public Ui::IVizSource
+class DeesserPlugin : public Plugin::EffectBase, public Ui::IVizSource
 {
 public:
-  CompressorPlugin();
+  DeesserPlugin();
 
   static Steinberg::FUnknown* createInstance(void*)
   {
-    return static_cast<Steinberg::Vst::IAudioProcessor*>(new CompressorPlugin);
+    return static_cast<Steinberg::Vst::IAudioProcessor*>(new DeesserPlugin);
   }
 
   Steinberg::tresult PLUGIN_API initialize(Steinberg::FUnknown* context) SMTG_OVERRIDE;
@@ -36,13 +37,12 @@ public:
   int takeInputLevelsDb(float* out, int maxOut) override { return io_.takeInputLevelsDb(out, maxOut); }
   int takeOutputLevelsDb(float* out, int maxOut) override { return io_.takeOutputLevelsDb(out, maxOut); }
   int takeGainReductionDb(float* out, int maxOut) override;
-  int takeDynamicsPoint(float* out, int maxOut) override;
-  const char* vizDynamicsId() const override { return "comp"; }
+  const char* vizDynamicsId() const override { return "deess"; }
   int takeEnvelopeDisplay(float* out, int maxOut) override;
-  const char* vizEnvelopeId() const override { return "comp"; }
+  const char* vizEnvelopeId() const override { return "deess"; }
   void configureVizBins(const char* id, int bins) override;
 
-  OBJ_METHODS(CompressorPlugin, Plugin::EffectBase)
+  OBJ_METHODS(DeesserPlugin, Plugin::EffectBase)
   DEFINE_INTERFACES
   END_DEFINE_INTERFACES(Plugin::EffectBase)
   REFCOUNT_METHODS(Plugin::EffectBase)
@@ -51,38 +51,37 @@ protected:
   const char* editorHtml() const override { return kEditorHtml; }
 
 private:
-  // History slots: audio peak (lin), GR (lin) — keep in sync with CompressorHistoryChart.
-  static constexpr int kHistChannels = 2;
+  // History: input peak, detector peak, GR (lin) + trailing phase.
+  static constexpr int kHistChannels = 3;
   static constexpr int kHistSlots = 256;
   static constexpr int kHistMinSlots = 48;
   static constexpr int kHistBufSize = kHistSlots * kHistChannels;
+  static constexpr float kHistoryDisplayMs = 10000.f;
+  static constexpr float kFixedKneeDb = 9.f;
 
   struct BlockState
   {
-    float mix = 1.f;
-    float dry = 0.f;
     float makeupLin = 1.f;
-    float makeupDb = 0.f;
     bool bypass = false;
     bool listen = false;
-    Dsp::StereoLink link = Dsp::StereoLink::Max;
+    bool split = false;
   };
 
   BlockState makeBlockState() const;
   void processSample(const BlockState& state, float& L, float& R);
   void resetProcessing();
-  void histFeedSample(float audioPeakLin, float grLin);
+  void histFeedSample(float audioPeakLin, float detPeakLin, float grLin);
   void publishHistSnapshot();
 
   float params_[kParamCount] {};
   Dsp::IoStage io_;
   double sampleRate_ = 44100.0;
+
   Dsp::GainReduction gr_;
-  Dsp::SidechainFilter sc_;
+  Dsp::DeesserDetector detector_;
+  Dsp::BandSplitter splitL_;
+  Dsp::BandSplitter splitR_;
   Dsp::GrMeter grMeter_;
-  std::mutex vizMutex_;
-  float pointInDb_ = -96.f;
-  float pointOutDb_ = -96.f;
 
   float histBuf_[kHistBufSize] {};
   int histPos_ = 0;
@@ -96,5 +95,5 @@ private:
   int histVisibleSlots_ = 160;
 };
 
-} // namespace Compressor
+} // namespace Deesser
 } // namespace calfNXT

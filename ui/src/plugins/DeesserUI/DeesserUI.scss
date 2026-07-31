@@ -1,0 +1,77 @@
+.DeesserUI {
+  display: grid;
+  grid-template-areas: 'hist hist' 'dynamics filter';
+  grid-template-rows: 120px 1fr;
+  grid-template-columns: auto 1fr;
+  gap: var(--gap);
+  justify-content: stretch;
+  align-items: stretch;
+
+  > .HistoryChart {
+    grid-area: hist;
+    background: var(--background-less);
+    > svg {
+      > .aux-graphs {
+        > .hist-audio {
+          stroke: var(--color-accent);
+          fill: var(--color-accent);
+        }
+      }
+    }
+  }
+
+  > .filters {
+    display: flex;
+    gap: var(--gap);
+    align-items: stretch;
+
+    > .EQChart {
+      flex: 1;
+      background: var(--background);
+    }
+
+    > .knobs {
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+      margin: 0 16px;
+    }
+
+    > .Toggle {
+      position: absolute;
+      top: 36px;
+      left: 16px;
+      background: transparent;
+      z-index: 10;
+    }
+  }
+
+  > .dynamics {
+    display: grid;
+    gap: 0;
+    grid-template-areas: 'upper gr' 'lower gr' 'buttons gr';
+    justify-items: stretch;
+
+    > .top {
+      display: flex;
+      gap: var(--gap);
+      justify-content: space-evenly;
+    }
+
+    > .bottom {
+      display: flex;
+      gap: var(--gap);
+      justify-content: space-evenly;
+      margin-bottom: var(--gap);
+    }
+
+    > .buttons {
+      display: flex;
+      gap: 16px;
+    }
+
+    > .LevelMeter {
+      grid-area: gr;
+    }
+  }
+}

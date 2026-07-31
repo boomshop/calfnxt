@@ -1,6 +1,6 @@
 #pragma once
 
-// Mono/stereo sidechain HP→LP cascade (12/24/36 dB via 1–3 RBJ biquads).
+// Mono/stereo sidechain HP→LP cascade (12/24/36/48 dB via 1–4 RBJ biquads).
 // Shared by Transients detector and Compressor sidechain.
 
 #include "biquad.h"
@@ -12,19 +12,21 @@
 namespace calfNXT {
 namespace Dsp {
 
-/** Mode 0 = off, 1/2/3 = 12/24/36 dB/oct. */
+/** Mode 0 = off, 1/2/3/4 = 12/24/36/48 dB/oct. */
 inline int filterModeToStages(float modePlain)
 {
-  return static_cast<int>(std::lround(std::clamp(modePlain, 0.f, 3.f)));
+  return static_cast<int>(std::lround(std::clamp(modePlain, 0.f, 4.f)));
 }
 
 /**
- * Detector / sidechain band-limit: optional HP then LP, up to 3 stages each.
+ * Detector / sidechain band-limit: optional HP then LP, up to 4 stages each.
  * Stereo channels keep independent filter state (shared coeffs).
  */
 class SidechainFilter
 {
 public:
+  static constexpr int kMaxStages = 4;
+
   void setSampleRate(float sr)
   {
     sampleRate_ = sr > 0.f ? sr : 44100.f;
@@ -47,11 +49,11 @@ public:
     lastLpStages_ = -1;
   }
 
-  /** hp/lp stages in 0…3; freqs in Hz. Safe to call every block. */
+  /** hp/lp stages in 0…4; freqs in Hz. Safe to call every block. */
   void setParams(float hpHz, float lpHz, int hpStages, int lpStages)
   {
-    hpStages = std::clamp(hpStages, 0, 3);
-    lpStages = std::clamp(lpStages, 0, 3);
+    hpStages = std::clamp(hpStages, 0, kMaxStages);
+    lpStages = std::clamp(lpStages, 0, kMaxStages);
     hpHz = std::clamp(hpHz, 20.f, 20000.f);
     lpHz = std::clamp(lpHz, 20.f, 20000.f);
 
@@ -85,8 +87,8 @@ public:
       {
         if (ch > 0)
           hp_[ch][0].copyCoeffs(hp_[0][0]);
-        hp_[ch][1].copyCoeffs(hp_[ch][0]);
-        hp_[ch][2].copyCoeffs(hp_[ch][0]);
+        for (int s = 1; s < kMaxStages; ++s)
+          hp_[ch][s].copyCoeffs(hp_[ch][0]);
       }
       lastHpFreq_ = hpHz;
     }
@@ -97,8 +99,8 @@ public:
       {
         if (ch > 0)
           lp_[ch][0].copyCoeffs(lp_[0][0]);
-        lp_[ch][1].copyCoeffs(lp_[ch][0]);
-        lp_[ch][2].copyCoeffs(lp_[ch][0]);
+        for (int s = 1; s < kMaxStages; ++s)
+          lp_[ch][s].copyCoeffs(lp_[ch][0]);
       }
       lastLpFreq_ = lpHz;
     }
@@ -131,8 +133,8 @@ public:
 
 private:
   float sampleRate_ = 44100.f;
-  BiquadD1 hp_[2][3];
-  BiquadD1 lp_[2][3];
+  BiquadD1 hp_[2][kMaxStages];
+  BiquadD1 lp_[2][kMaxStages];
   float lastHpFreq_ = -1.f;
   float lastLpFreq_ = -1.f;
   int lastHpStages_ = -1;

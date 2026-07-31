@@ -95,7 +95,7 @@ export function lowPassRbj(O: EqFilterOpts) {
   };
 }
 
-/** High-pass — matches setHpRbj (unity gain). */
+/** High-pass — matches setHpRbj (unity gain). EQ pass bands ignore gain. */
 export function highPassRbj(O: EqFilterOpts) {
   const w0 = (2 * Math.PI * O.freq) / O.sample_rate;
   const alpha = Math.sin(w0) / (2 * O.q);
@@ -150,4 +150,17 @@ export const auxHighpass36 = biquadFilter(
   withDrawSr(highPassRbj),
   withDrawSr(highPassRbj),
   withDrawSr(highPassRbj),
+);
+export const auxHighpass48 = biquadFilter(
+  withDrawSr(highPassRbj),
+  withDrawSr(highPassRbj),
+  withDrawSr(highPassRbj),
+  withDrawSr(highPassRbj),
+);
+
+export const auxLowpass48 = biquadFilter(
+  withDrawSr(lowPassRbj),
+  withDrawSr(lowPassRbj),
+  withDrawSr(lowPassRbj),
+  withDrawSr(lowPassRbj),
 );

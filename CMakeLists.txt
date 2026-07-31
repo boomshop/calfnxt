@@ -34,6 +34,7 @@ add_subdirectory(dsp/equalizer)
 add_subdirectory(dsp/stereo)
 add_subdirectory(dsp/transients)
 add_subdirectory(dsp/compressor)
+add_subdirectory(dsp/deesser)
 
 # After every plugin registered via calfnxt_copy_web_host: refresh helpers whenever
 # calfnxt-web-host is rebuilt (plugin .so may be unchanged).
@@ -54,7 +55,7 @@ add_custom_target(calfnxt-web-host-bundles
 )
 
 # UI build needs generated models from every plugin descriptor
-add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen)
+add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen deesser_codegen)
 
 # Meta-target: all plugins + embedded UI packs (add new plugins here).
 add_custom_target(calfnxt-plugins
@@ -67,6 +68,8 @@ add_custom_target(calfnxt-plugins
     calfnxt-transients-resources
     calfnxt-compressor
     calfnxt-compressor-resources
+    calfnxt-deesser
+    calfnxt-deesser-resources
     calfnxt-web-host
     calfnxt-web-host-bundles
   COMMENT "Build all calfNXT VST3 plugins (+ embedded UI + web-host)"
@@ -134,5 +137,5 @@ if(_calfnxt_install_n GREATER 0)
   file(WRITE "${CMAKE_BINARY_DIR}/calfnxt-install-resources.txt" "${_calfnxt_res_list}")
 endif()
 
-message(STATUS "calfnxt: common/{ui,dsp} + dsp/{equalizer,stereo,transients,compressor} + shared ui/dist")
+message(STATUS "calfnxt: common/{ui,dsp} + dsp/{equalizer,stereo,transients,compressor,deesser} + shared ui/dist")
 message(STATUS "calfnxt: build all plugins with --target calfnxt-plugins")

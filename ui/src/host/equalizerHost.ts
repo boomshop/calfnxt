@@ -6,10 +6,12 @@ import {
   auxHighpass12,
   auxHighpass24,
   auxHighpass36,
+  auxHighpass48,
   auxLowShelf,
   auxLowpass12,
   auxLowpass24,
   auxLowpass36,
+  auxLowpass48,
   auxPeaking,
 } from '../dsp/eqFilters';
 import {
@@ -55,7 +57,7 @@ export const EQ_INDEX_TO_TYPE: EqFilterType[] = [
 ];
 
 /** Pass-filter slope in dB/oct (maps to cascaded RBJ stages, matching DSP). */
-export type EqPassSlope = 12 | 24 | 36;
+export type EqPassSlope = 12 | 24 | 36 | 48;
 
 /** ChartHandle mode per UI filter type. */
 export const EQ_FILTER_MODES: Record<EqFilterType, string> = {
@@ -84,12 +86,14 @@ export function toAuxEqType(
     case 'bandpass':
       return auxBandPass;
     case 'lowpass':
-      if (slope === 24) return auxLowpass24;
+      if (slope === 48) return auxLowpass48;
       if (slope === 36) return auxLowpass36;
+      if (slope === 24) return auxLowpass24;
       return auxLowpass12;
     case 'highpass':
-      if (slope === 24) return auxHighpass24;
+      if (slope === 48) return auxHighpass48;
       if (slope === 36) return auxHighpass36;
+      if (slope === 24) return auxHighpass24;
       return auxHighpass12;
   }
 }
@@ -127,6 +131,7 @@ export const EQ_PASS_SLOPE_ENTRIES: { label: string; value: EqPassSlope }[] = [
   { label: '12 dB', value: 12 },
   { label: '24 dB', value: 24 },
   { label: '36 dB', value: 36 },
+  { label: '48 dB', value: 48 },
 ];
 
 export const EQ_MAX_BANDS = EQ_BAND_COUNT;
@@ -181,6 +186,7 @@ export interface IEqualizerBand {
 }
 
 function snapSlope(v: number): EqPassSlope {
+  if (v >= 42) return 48;
   if (v >= 30) return 36;
   if (v >= 18) return 24;
   return 12;

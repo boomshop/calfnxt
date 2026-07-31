@@ -9,12 +9,13 @@ import { EQChart, Knob, Select, Toggle } from '../';
 import type { AuxOnSet } from '../editGesture';
 import './FrequencyRange.scss';
 
-/** HP/LP mode plains: 0=off, 1/2/3 = 12/24/36 dB. */
+/** HP/LP mode plains: 0=off, 1/2/3/4 = 12/24/36/48 dB. */
 export const FREQUENCY_RANGE_MODE_ENTRIES = [
   { label: 'Off', value: 0 },
   { label: '12 dB', value: 1 },
   { label: '24 dB', value: 2 },
   { label: '36 dB', value: 3 },
+  { label: '48 dB', value: 4 },
 ];
 
 const HP_LP_DOTS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
@@ -26,8 +27,9 @@ const HP_LP_LABELS = [
   { pos: 20000, label: '20k' },
 ];
 
-/** Map DSP mode 0…3 → chart slope (mode 0 unused while inactive). */
+/** Map DSP mode 0…4 → chart slope (mode 0 unused while inactive). */
 function slopeFromMode(mode: number): EqPassSlope {
+  if (mode >= 4) return 48;
   if (mode >= 3) return 36;
   if (mode >= 2) return 24;
   return 12;

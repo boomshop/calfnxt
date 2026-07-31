@@ -116,7 +116,7 @@ body,
     color: var(--contrast-accent);
 
     &.warn {
-      background: var(--color-warn);
+      background: var(--color-warn) !important;
       color: var(--contrast-warn);
     }
   }

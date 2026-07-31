@@ -3,6 +3,7 @@ import { pluginMeta as equalizerMeta } from "../generated/equalizerModel";
 import { pluginMeta as stereoMeta } from "../generated/stereoModel";
 import { pluginMeta as transientsMeta } from "../generated/transientsModel";
 import { pluginMeta as compressorMeta } from "../generated/compressorModel";
+import { pluginMeta as deesserMeta } from "../generated/deesserModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
 export const editorSizes: Record<PluginId, { width: number; height: number }> = {
@@ -10,4 +11,5 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   stereo: stereoMeta.editor,
   transients: transientsMeta.editor,
   compressor: compressorMeta.editor,
+  deesser: deesserMeta.editor,
 };

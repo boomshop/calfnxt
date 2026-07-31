@@ -169,7 +169,7 @@
       "type": "float",
       "unit": "",
       "min": 0.0,
-      "max": 3.0,
+      "max": 4.0,
       "default": 0.0,
       "scale": "linear",
       "precision": 0
@@ -180,7 +180,7 @@
       "type": "float",
       "unit": "",
       "min": 0.0,
-      "max": 3.0,
+      "max": 4.0,
       "default": 0.0,
       "scale": "linear",
       "precision": 0

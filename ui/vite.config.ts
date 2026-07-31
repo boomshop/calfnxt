@@ -34,6 +34,7 @@ export default defineConfig({
         stereo: path.resolve(root, "src/html/stereo.html"),
         transients: path.resolve(root, "src/html/transients.html"),
         compressor: path.resolve(root, "src/html/compressor.html"),
+        deesser: path.resolve(root, "src/html/deesser.html"),
       },
     },
   },

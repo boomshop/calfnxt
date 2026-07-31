@@ -1,0 +1,39 @@
+.HistoryChart {
+  width: 100%;
+  height: 100%;
+  min-height: 80px;
+  background: var(--background);
+
+  .hist-audio,
+  .hist-audio-filtered {
+    fill: var(--color);
+    fill-opacity: 0.18;
+    stroke: var(--color);
+    stroke-width: 1px;
+    stroke-opacity: 0.45;
+  }
+
+  .hist-gr {
+    fill: none;
+    stroke: var(--chart-level-stroke, var(--color-accent));
+    stroke-width: 2px;
+    stroke-opacity: 1;
+  }
+
+  > svg {
+    > .aux-grid {
+      > .aux-gridlabel {
+        fill: rgb(from var(--color) r g b / 0.4);
+        font-size: 9px;
+      }
+
+      > .aux-gridlabel.aux-vertical {
+        padding: 2px 3px 0;
+      }
+
+      > .aux-gridlabel.aux-horizontal {
+        padding: 0 4px 0 0;
+      }
+    }
+  }
+}

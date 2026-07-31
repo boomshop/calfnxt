@@ -2,9 +2,9 @@ import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { Header } from '../../components';
 import {
   Buttons,
-  CompressorHistoryChart,
   DynamicsChart,
   FrequencyRange,
+  HistoryChart,
   Knob,
   LevelMeter,
   Toggle,
@@ -111,7 +111,14 @@ export function CompressorUI(props: CompressorUIProps) {
       </Header>
 
       <div className="history">
-        <CompressorHistoryChart data$={host.historyData$} />
+        <HistoryChart
+          data$={host.historyData$}
+          vizId="comp"
+          graphs={[
+            { className: 'hist-audio', mode: 'bottom' },
+            { className: 'hist-gr', mode: 'line', toFront: true, gradient: true },
+          ]}
+        />
       </div>
 
       <div className="block detector">

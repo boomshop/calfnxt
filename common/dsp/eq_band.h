@@ -22,12 +22,14 @@ enum class EqType : int
   BandPass = 5,
 };
 
-inline constexpr int kEqMaxStages = 3;
+inline constexpr int kEqMaxStages = 4;
 
-/** Stages for LP/HP slope (12 / 24 / 36 dB/oct → 1 / 2 / 3 biquads).
+/** Stages for LP/HP slope (12 / 24 / 36 / 48 dB/oct → 1 / 2 / 3 / 4 biquads).
  *  Each stage uses the band Q (AUX-style resonance at fc); Q≈0.707 ≈ flat. */
 inline int slopeToStages(float slopeDb)
 {
+  if (slopeDb >= 42.f)
+    return 4;
   if (slopeDb >= 30.f)
     return 3;
   if (slopeDb >= 18.f)

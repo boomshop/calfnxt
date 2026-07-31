@@ -22,7 +22,11 @@ public:
   static constexpr int kMaxSplits = kMaxBands - 1;
   static constexpr int kMaxStages = 4; // LR8 = 4 biquads per LP/HP
 
-  /** Approximate slope in dB/oct (Linkwitz-Riley). */
+  /**
+   * Approximate slope in dB/oct (Linkwitz-Riley).
+   * Only even orders: LR = Butterworth². No LR6 (36 dB) — odd order cannot
+   * sum LP+HP to a flat allpass (phase-coherent complementary split).
+   */
   enum class Slope : int
   {
     Db12 = 0, // LR2 — 1 biquad, Q=0.5

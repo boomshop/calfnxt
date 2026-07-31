@@ -1,4 +1,4 @@
-#include "compressor_dsp.h"
+#include "deesser_dsp.h"
 
 #include "base/source/fstreamer.h"
 #include "gain_util.h"
@@ -8,24 +8,14 @@
 #include <cstring>
 
 namespace calfNXT {
-namespace Compressor {
+namespace Deesser {
 
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
 namespace {
-constexpr uint32 kStateMagic = 0x434e5843u; // 'CNXC'
-constexpr uint32 kStateVersion = 5;
-
-/** Fixed history plot window (ms) — keep in sync with CompressorHistoryChart. */
-constexpr float kHistoryDisplayMs = 10000.f;
-
-float linToDbSafe(float lin)
-{
-  if (!(lin > 1.0e-12f))
-    return -96.f;
-  return 20.f * std::log10(lin);
-}
+constexpr uint32 kStateMagic = 0x434e5844u; // 'CNXD'
+constexpr uint32 kStateVersion = 1;
 
 Dsp::DetectorMode detectorModeFromPlain(float v)
 {
@@ -39,51 +29,37 @@ Dsp::DetectorMode detectorModeFromPlain(float v)
       return Dsp::DetectorMode::Peak;
   }
 }
-
-Dsp::StereoLink stereoLinkFromPlain(float v)
-{
-  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
-  {
-    case 1:
-      return Dsp::StereoLink::Average;
-    case 2:
-      return Dsp::StereoLink::Mid;
-    default:
-      return Dsp::StereoLink::Max;
-  }
-}
 } // namespace
 
-CompressorPlugin::CompressorPlugin()
-: Plugin::EffectBase(ViewRect(0, 0, kEditorWidth, kEditorHeight))
+DeesserPlugin::DeesserPlugin()
+  : Plugin::EffectBase(ViewRect(0, 0, kEditorWidth, kEditorHeight))
 {
 }
 
-tresult PLUGIN_API CompressorPlugin::initialize(FUnknown* context)
+tresult PLUGIN_API DeesserPlugin::initialize(FUnknown* context)
 {
-  tresult result = EffectBase::initialize(context);
-  if (result != kResultOk)
-    return result;
-
+  const tresult r = EffectBase::initialize(context);
+  if (r != kResultOk)
+    return r;
   addStereoIO();
   registerParameters(parameters);
   readParamPlains(params_, kParamCount);
   return kResultOk;
 }
 
-void CompressorPlugin::resetProcessing()
+void DeesserPlugin::resetProcessing()
 {
   gr_.setSampleRate(static_cast<float>(sampleRate_));
   gr_.reset();
-  sc_.setSampleRate(static_cast<float>(sampleRate_));
-  sc_.reset();
-  // ~20 dB/s fall — same idea as AUX LevelMeter falling=20 / 1000 ms.
+  detector_.setSampleRate(static_cast<float>(sampleRate_));
+  detector_.reset();
+  splitL_.setSampleRate(static_cast<float>(sampleRate_));
+  splitR_.setSampleRate(static_cast<float>(sampleRate_));
+  splitL_.setBands(2);
+  splitR_.setBands(2);
+  splitL_.reset();
+  splitR_.reset();
   grMeter_.reset(static_cast<float>(sampleRate_));
-  {
-    std::lock_guard<std::mutex> lock(vizMutex_);
-    pointInDb_ = -96.f;
-    pointOutDb_ = -96.f;
-  }
 
   std::memset(histBuf_, 0, sizeof(histBuf_));
   histPos_ = 0;
@@ -99,42 +75,39 @@ void CompressorPlugin::resetProcessing()
   }
 }
 
-tresult PLUGIN_API CompressorPlugin::setActive(TBool state)
+tresult PLUGIN_API DeesserPlugin::setActive(TBool state)
 {
   if (state)
     resetProcessing();
   return EffectBase::setActive(state);
 }
 
-tresult PLUGIN_API CompressorPlugin::setupProcessing(ProcessSetup& newSetup)
+tresult PLUGIN_API DeesserPlugin::setupProcessing(ProcessSetup& newSetup)
 {
   sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
   resetProcessing();
   return EffectBase::setupProcessing(newSetup);
 }
 
-CompressorPlugin::BlockState CompressorPlugin::makeBlockState() const
+DeesserPlugin::BlockState DeesserPlugin::makeBlockState() const
 {
   BlockState state;
-  state.mix = std::clamp(params_[kParamMix], 0.f, 1.f);
-  state.dry = 1.f - state.mix;
-  state.makeupDb = std::clamp(params_[kParamMakeup], 0.f, 24.f);
-  state.makeupLin = Dsp::dbToLin(state.makeupDb);
+  state.makeupLin = Dsp::dbToLin(std::clamp(params_[kParamMakeup], 0.f, 24.f));
   state.bypass = params_[kParamBypass] >= 0.5f;
   state.listen = params_[kParamListen] >= 0.5f;
-  state.link = stereoLinkFromPlain(params_[kParamLink]);
+  state.split = params_[kParamMode] >= 0.5f;
   return state;
 }
 
-void CompressorPlugin::histFeedSample(float audioPeakLin, float grLin)
+void DeesserPlugin::histFeedSample(float audioPeakLin, float detPeakLin, float grLin)
 {
   const int pos = histPos_;
   histBuf_[pos + 0] = std::max(audioPeakLin, histBuf_[pos + 0]);
-  // Most reduction within the slot (smallest linear GR).
-  if (histBuf_[pos + 1] <= 0.f)
-    histBuf_[pos + 1] = grLin;
+  histBuf_[pos + 1] = std::max(detPeakLin, histBuf_[pos + 1]);
+  if (histBuf_[pos + 2] <= 0.f)
+    histBuf_[pos + 2] = grLin;
   else
-    histBuf_[pos + 1] = std::min(grLin, histBuf_[pos + 1]);
+    histBuf_[pos + 2] = std::min(grLin, histBuf_[pos + 2]);
 
   histSampleCount_ += 1;
   if (histSampleCount_ >= histSamplesPerSlot_)
@@ -142,11 +115,12 @@ void CompressorPlugin::histFeedSample(float audioPeakLin, float grLin)
     histPos_ = (pos + kHistChannels) % kHistBufSize;
     histSampleCount_ = 0;
     histBuf_[histPos_ + 0] = audioPeakLin;
-    histBuf_[histPos_ + 1] = grLin;
+    histBuf_[histPos_ + 1] = detPeakLin;
+    histBuf_[histPos_ + 2] = grLin;
   }
 }
 
-void CompressorPlugin::publishHistSnapshot()
+void DeesserPlugin::publishHistSnapshot()
 {
   std::lock_guard<std::mutex> lock(histMutex_);
   std::memcpy(histSnapshot_, histBuf_, sizeof(histBuf_));
@@ -155,79 +129,60 @@ void CompressorPlugin::publishHistSnapshot()
   histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
 }
 
-void CompressorPlugin::processSample(const BlockState& state, float& L, float& R)
+void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
 {
   const float dryL = L;
   const float dryR = R;
   const float audioPeak = std::max(std::fabs(dryL), std::fabs(dryR));
 
-  float detL = dryL;
-  float detR = dryR;
-  if (state.link == Dsp::StereoLink::Mid)
-  {
-    const float mid = sc_.processMono(0.5f * (dryL + dryR));
-    detL = mid;
-    detR = mid;
-  }
-  else
-  {
-    detL = sc_.processChannel(0, dryL);
-    detR = sc_.processChannel(1, dryR);
-  }
+  float detL = 0.f;
+  float detR = 0.f;
+  detector_.processStereo(dryL, dryR, detL, detR);
+  const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
+
+  const float gr = gr_.processDetector(detL, detR);
+  grMeter_.process(gr);
+  histFeedSample(audioPeak, detPeak, gr);
 
   if (state.listen && !state.bypass)
   {
     L = detL;
     R = detR;
-    const float gr = gr_.processDetector(detL, detR);
-    grMeter_.process(gr);
-    histFeedSample(std::max(std::fabs(detL), std::fabs(detR)), gr);
     return;
-  }
-
-  const float gr = gr_.processDetector(detL, detR);
-  const float det = gr_.lastDetectorLin();
-  grMeter_.process(gr);
-  histFeedSample(audioPeak, gr);
-
-  const float inDb = linToDbSafe(det);
-  const float grDb = linToDbSafe(gr);
-  const float outDb = inDb + grDb + state.makeupDb;
-  {
-    std::lock_guard<std::mutex> lock(vizMutex_);
-    pointInDb_ = inDb;
-    pointOutDb_ = outDb;
   }
 
   if (state.bypass)
     return;
 
-  const float wetL = dryL * gr * state.makeupLin;
-  const float wetR = dryR * gr * state.makeupLin;
-  L = wetL * state.mix + dryL * state.dry;
-  R = wetR * state.mix + dryR * state.dry;
+  if (state.split)
+  {
+    float loL = 0.f;
+    float hiL = 0.f;
+    float loR = 0.f;
+    float hiR = 0.f;
+    splitL_.process2(dryL, loL, hiL);
+    splitR_.process2(dryR, loR, hiR);
+    hiL *= gr;
+    hiR *= gr;
+    L = (loL + hiL) * state.makeupLin;
+    R = (loR + hiR) * state.makeupLin;
+  }
+  else
+  {
+    L = dryL * gr * state.makeupLin;
+    R = dryR * gr * state.makeupLin;
+  }
 }
 
-int CompressorPlugin::takeGainReductionDb(float* out, int maxOut)
+int DeesserPlugin::takeGainReductionDb(float* out, int maxOut)
 {
   if (!out || maxOut < 1)
     return 0;
-  // Already ballistics-smoothed; never reset on poll.
   out[0] = grMeter_.takeDb();
   return 1;
 }
 
-int CompressorPlugin::takeDynamicsPoint(float* out, int maxOut)
-{
-  if (!out || maxOut < 2)
-    return 0;
-  std::lock_guard<std::mutex> lock(vizMutex_);
-  out[0] = pointInDb_;
-  out[1] = pointOutDb_;
-  return 2;
-}
-
-int CompressorPlugin::takeEnvelopeDisplay(float* out, int maxOut)
+int DeesserPlugin::takeEnvelopeDisplay(float* out, int maxOut)
 {
   const int slots = std::max(kHistMinSlots, std::min(kHistSlots, histVisibleSlots_));
   const int outCount = slots * kHistChannels;
@@ -245,47 +200,61 @@ int CompressorPlugin::takeEnvelopeDisplay(float* out, int maxOut)
     {
       const int srcIdx = (startPos + i * kHistChannels) % kHistBufSize;
       out[i * kHistChannels + 0] = std::fabs(histSnapshot_[srcIdx + 0]);
-      float gr = histSnapshot_[srcIdx + 1];
+      out[i * kHistChannels + 1] = std::fabs(histSnapshot_[srcIdx + 1]);
+      float gr = histSnapshot_[srcIdx + 2];
       if (!(gr > 0.f))
         gr = 1.f;
-      out[i * kHistChannels + 1] = std::clamp(gr, 1.0e-6f, 1.f);
+      out[i * kHistChannels + 2] = std::clamp(gr, 1.0e-6f, 1.f);
     }
   }
   out[outCount] = std::clamp(phase, 0.f, 1.f);
   return outCount + 1;
 }
 
-void CompressorPlugin::configureVizBins(const char* id, int bins)
+void DeesserPlugin::configureVizBins(const char* id, int bins)
 {
   if (!id || std::strcmp(id, vizEnvelopeId()) != 0)
     return;
   histVisibleSlots_ = std::max(kHistMinSlots, std::min(kHistSlots, bins));
 }
 
-tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
+tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
 {
   syncParamPlains(data, params_, kParamCount);
 
-  const auto mode = detectorModeFromPlain(params_[kParamMode]);
-  const auto link = stereoLinkFromPlain(params_[kParamLink]);
-
-  sc_.setSampleRate(static_cast<float>(sampleRate_));
-  sc_.setParams(
-    params_[kParamHipass],
-    params_[kParamLopass],
-    Dsp::filterModeToStages(params_[kParamHpMode]),
-    Dsp::filterModeToStages(params_[kParamLpMode]));
+  const float laxity = std::clamp(params_[kParamLaxity], 1.f, 100.f);
+  const float attackMs = laxity;
+  const float releaseMs = laxity * 1.33f;
+  const auto mode = detectorModeFromPlain(params_[kParamDetection]);
 
   gr_.setSampleRate(static_cast<float>(sampleRate_));
   gr_.setParams(
-    params_[kParamAttack],
-    params_[kParamRelease],
+    attackMs,
+    releaseMs,
     params_[kParamThreshold],
     params_[kParamRatio],
-    params_[kParamKnee],
+    kFixedKneeDb,
     mode,
-    link,
-    params_[kParamPdr]);
+    Dsp::StereoLink::Average,
+    0.f);
+
+  const float splitHz = params_[kParamSplitFreq];
+  splitL_.setSlopeDb(params_[kParamSlope]);
+  splitR_.setSlopeDb(params_[kParamSlope]);
+  splitL_.setFreq(0, splitHz);
+  splitR_.setFreq(0, splitHz);
+  splitL_.prepareBlock();
+  splitR_.prepareBlock();
+
+  detector_.setSampleRate(static_cast<float>(sampleRate_));
+  detector_.setParams(
+    splitHz,
+    params_[kParamHpQ],
+    params_[kParamPeakFreq],
+    params_[kParamPeakGain],
+    params_[kParamPeakQ],
+    splitL_.slope());
+  detector_.prepareBlock();
 
   const BlockState state = makeBlockState();
 
@@ -345,7 +314,7 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
   return kResultOk;
 }
 
-tresult PLUGIN_API CompressorPlugin::setState(IBStream* state)
+tresult PLUGIN_API DeesserPlugin::setState(IBStream* state)
 {
   if (!state)
     return kResultFalse;
@@ -377,7 +346,7 @@ tresult PLUGIN_API CompressorPlugin::setState(IBStream* state)
   return kResultOk;
 }
 
-tresult PLUGIN_API CompressorPlugin::getState(IBStream* state)
+tresult PLUGIN_API DeesserPlugin::getState(IBStream* state)
 {
   if (!state)
     return kResultFalse;
@@ -390,5 +359,5 @@ tresult PLUGIN_API CompressorPlugin::getState(IBStream* state)
   return kResultOk;
 }
 
-} // namespace Compressor
+} // namespace Deesser
 } // namespace calfNXT

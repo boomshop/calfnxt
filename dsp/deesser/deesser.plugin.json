@@ -1,0 +1,189 @@
+{
+  "id": "deesser",
+  "name": "calfNXT DeEsser",
+  "vendor": "calfNXT",
+  "vendor_url": "https://calf-studio-gear.org",
+  "vendor_email": "mailto:calf@calf-studio-gear.org",
+  "version": "0.1.0",
+  "category": "Fx|Dynamics",
+  "vst3_uid": [
+    "0xC4A1F007",
+    "0x0E11DE55",
+    "0xCA1F0007",
+    "0xB0000001"
+  ],
+  "editor": {
+    "width": 1024,
+    "height": 520
+  },
+  "buses": {
+    "audio_inputs": [
+      {
+        "name": "Stereo In",
+        "channels": 2
+      }
+    ],
+    "audio_outputs": [
+      {
+        "name": "Stereo Out",
+        "channels": 2
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "id": "bypass",
+      "name": "Bypass",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "mode",
+      "name": "Mode",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "detection",
+      "name": "Detection",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "slope",
+      "name": "Slope",
+      "type": "float",
+      "unit": "dB/oct",
+      "min": 12.0,
+      "max": 48.0,
+      "default": 24.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "threshold",
+      "name": "Threshold",
+      "type": "float",
+      "unit": "dB",
+      "min": -60.0,
+      "max": 0.0,
+      "default": -18.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "ratio",
+      "name": "Ratio",
+      "type": "float",
+      "unit": ":1",
+      "min": 1.0,
+      "max": 20.0,
+      "default": 3.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "laxity",
+      "name": "Laxity",
+      "type": "float",
+      "unit": "",
+      "min": 1.0,
+      "max": 100.0,
+      "default": 15.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "makeup",
+      "name": "Makeup",
+      "type": "float",
+      "unit": "dB",
+      "min": 0.0,
+      "max": 24.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 1
+    },
+    {
+      "id": "split_freq",
+      "name": "Split",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 6000.0,
+      "scale": "log",
+      "precision": 0
+    },
+    {
+      "id": "hp_q",
+      "name": "HP Q",
+      "type": "float",
+      "unit": "",
+      "min": 0.1,
+      "max": 20.0,
+      "default": 0.707,
+      "scale": "log",
+      "precision": 2
+    },
+    {
+      "id": "peak_freq",
+      "name": "Peak",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 4500.0,
+      "scale": "log",
+      "precision": 0
+    },
+    {
+      "id": "peak_gain",
+      "name": "Peak Gain",
+      "type": "float",
+      "unit": "dB",
+      "min": -24.0,
+      "max": 24.0,
+      "default": 12.0,
+      "scale": "linear",
+      "precision": 1
+    },
+    {
+      "id": "peak_q",
+      "name": "Peak Q",
+      "type": "float",
+      "unit": "",
+      "min": 0.1,
+      "max": 20.0,
+      "default": 1.0,
+      "scale": "log",
+      "precision": 2
+    },
+    {
+      "id": "listen",
+      "name": "Listen",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    }
+  ]
+}

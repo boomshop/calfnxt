@@ -8,7 +8,7 @@ export * from "./EQChart";
 export * from "./EnvelopeChart";
 export * from "./DynamicsChart";
 export * from "./FrequencyRange";
-export * from "./CompressorHistoryChart";
+export * from "./HistoryChart";
 export * from "./Toggle";
 export * from "./Select";
 export * from "./Button";
