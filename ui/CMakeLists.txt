@@ -2,7 +2,8 @@
 find_program(NPM_EXECUTABLE npm)
 
 set(CALFNXT_UI_DIST "${CMAKE_SOURCE_DIR}/ui/dist" CACHE PATH "Vite SPA UI output")
-set(CALFNXT_UI_DIST_STAMP "${CALFNXT_UI_DIST}/.stamp")
+# Must be visible to sibling dirs (e.g. install-user-vst3 in dsp/equalizer).
+set(CALFNXT_UI_DIST_STAMP "${CALFNXT_UI_DIST}/.stamp" CACHE INTERNAL "SPA build stamp path")
 
 # Track UI sources via glob so new/edited files invalidate the SPA stamp without
 # maintaining a brittle hand-written DEPENDS list.

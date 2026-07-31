@@ -154,9 +154,9 @@ Verify Ardour-safe link: `ldd …/*.so` must not list `libgtk-3` / `libwebkit`.
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target calfnxt-plugins -j
-# user install (always force-rebuilds SPA + embeds into Resources, then ~/.vst3):
-cmake --build build --target install-user-vst3 -j
-# same: ./tools/install-user-vst3.sh
+# user install — always force-rebuilds SPA, embeds Resources, copies ~/.vst3:
+./tools/install-user-vst3.sh
+# (close the plugin host first if ~/.vst3 remove fails with Permission denied)
 ```
 
 Install paths: `~/.vst3/calfNXTEqualizer.vst3`, `~/.vst3/calfNXTStereo.vst3`, `~/.vst3/calfNXTTransients.vst3`, `~/.vst3/calfNXTCompressor.vst3` (also removes obsolete Volume/Balance bundles if present).
