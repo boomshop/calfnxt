@@ -51,5 +51,5 @@ target_link_libraries(${target}
 
 target_compile_features(${target} PUBLIC cxx_std_17)
 
-calfnxt_copy_plugin_ui(${target} transients)
+calfnxt_copy_plugin_ui(${target} transients calfNXTTransients)
 calfnxt_copy_web_host(${target})

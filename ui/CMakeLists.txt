@@ -2,7 +2,7 @@
 find_program(NPM_EXECUTABLE npm)
 
 set(CALFNXT_UI_DIST "${CMAKE_SOURCE_DIR}/ui/dist" CACHE PATH "Vite SPA UI output")
-# Must be visible to sibling dirs (e.g. install-user-vst3 in dsp/equalizer).
+# Must be visible to sibling dirs (e.g. install-user-vst3 in root CMakeLists).
 set(CALFNXT_UI_DIST_STAMP "${CALFNXT_UI_DIST}/.stamp" CACHE INTERNAL "SPA build stamp path")
 
 # Track UI sources via glob so new/edited files invalidate the SPA stamp without
@@ -39,7 +39,10 @@ endif()
 # Embed only this plugin's packed SPA into the VST3 Resources directory.
 # Important: do NOT use POST_BUILD only — that skips the copy when the .so is
 # already up to date after a UI-only change.
-function(calfnxt_copy_plugin_ui target plugin_id)
+#
+# vst3_dirname: ~/.vst3/<name>.vst3 (e.g. calfNXTEqualizer). Registers the
+# plugin for install-user-vst3-copy (root CMakeLists, after all plugin subdirs).
+function(calfnxt_copy_plugin_ui target plugin_id vst3_dirname)
   add_dependencies(${target} calfnxt_web_ui)
 
   set(res_stamp "${CMAKE_BINARY_DIR}/${target}.resources.stamp")
@@ -66,4 +69,7 @@ function(calfnxt_copy_plugin_ui target plugin_id)
     VERBATIM
   )
   add_custom_target(${target}-resources ALL DEPENDS "${res_stamp}")
+
+  set_property(GLOBAL APPEND PROPERTY CALFNXT_INSTALL_TARGETS "${target}")
+  set_property(GLOBAL APPEND PROPERTY CALFNXT_INSTALL_VST3_NAMES "${vst3_dirname}")
 endfunction()

@@ -72,5 +72,67 @@ add_custom_target(calfnxt-plugins
   COMMENT "Build all calfNXT VST3 plugins (+ embedded UI + web-host)"
 )
 
+# Install → ~/.vst3 for every plugin registered via calfnxt_copy_plugin_ui.
+# Prefer ./tools/install-user-vst3.sh (clears stamps, rebuilds SPA, then this).
+get_property(_calfnxt_install_targets GLOBAL PROPERTY CALFNXT_INSTALL_TARGETS)
+get_property(_calfnxt_install_names GLOBAL PROPERTY CALFNXT_INSTALL_VST3_NAMES)
+list(LENGTH _calfnxt_install_targets _calfnxt_install_n)
+if(_calfnxt_install_n GREATER 0)
+  set(_calfnxt_install_copy_cmds
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.vst3"
+    COMMAND ${CMAKE_COMMAND} -E rm -rf
+      "$ENV{HOME}/.vst3/calfNXTVolume.vst3"
+      "$ENV{HOME}/.vst3/calfNXTBalance.vst3"
+      "$ENV{HOME}/.vst3/calfNXTStereoTools.vst3"
+  )
+  set(_calfnxt_install_copy_deps calfnxt-web-host calfnxt-web-host-bundles)
+  set(_calfnxt_install_force_cmds
+    COMMAND ${CMAKE_COMMAND}
+      -DCALFNXT_UI_DIST_STAMP=${CALFNXT_UI_DIST_STAMP}
+      -DCALFNXT_BINARY_DIR=${CMAKE_BINARY_DIR}
+      -P "${CMAKE_SOURCE_DIR}/tools/cmake/clear_ui_stamps.cmake"
+    COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}" --target calfnxt_web_ui --parallel
+  )
+  set(_calfnxt_install_force_deps calfnxt-web-host)
+  math(EXPR _calfnxt_install_last "${_calfnxt_install_n} - 1")
+  foreach(_i RANGE ${_calfnxt_install_last})
+    list(GET _calfnxt_install_targets ${_i} _t)
+    list(GET _calfnxt_install_names ${_i} _name)
+    list(APPEND _calfnxt_install_copy_cmds
+      COMMAND ${CMAKE_COMMAND} -E rm -rf "$ENV{HOME}/.vst3/${_name}.vst3"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "$<TARGET_FILE_DIR:${_t}>/../.."
+        "$ENV{HOME}/.vst3/${_name}.vst3"
+    )
+    list(APPEND _calfnxt_install_copy_deps ${_t} ${_t}-resources)
+    list(APPEND _calfnxt_install_force_cmds
+      COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}" --target ${_t}-resources --parallel
+    )
+    list(APPEND _calfnxt_install_force_deps ${_t})
+  endforeach()
+  list(APPEND _calfnxt_install_force_cmds
+    COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}" --target calfnxt-web-host-bundles --parallel
+    COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}" --target install-user-vst3-copy --parallel
+  )
+
+  add_custom_target(install-user-vst3-copy
+    ${_calfnxt_install_copy_cmds}
+    COMMENT "Install calfNXT plugins → ~/.vst3"
+    DEPENDS ${_calfnxt_install_copy_deps}
+  )
+  add_custom_target(install-user-vst3
+    ${_calfnxt_install_force_cmds}
+    COMMENT "Force UI rebuild + install → ~/.vst3"
+    DEPENDS ${_calfnxt_install_force_deps}
+  )
+
+  # For tools/install-user-vst3.sh: one resources target name per line.
+  set(_calfnxt_res_list "")
+  foreach(_t IN LISTS _calfnxt_install_targets)
+    string(APPEND _calfnxt_res_list "${_t}-resources\n")
+  endforeach()
+  file(WRITE "${CMAKE_BINARY_DIR}/calfnxt-install-resources.txt" "${_calfnxt_res_list}")
+endif()
+
 message(STATUS "calfnxt: common/{ui,dsp} + dsp/{equalizer,stereo,transients,compressor} + shared ui/dist")
 message(STATUS "calfnxt: build all plugins with --target calfnxt-plugins")
