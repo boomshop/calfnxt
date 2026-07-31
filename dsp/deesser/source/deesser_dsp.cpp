@@ -1,6 +1,7 @@
 #include "deesser_dsp.h"
 
 #include "base/source/fstreamer.h"
+#include "dsp_math.h"
 #include "gain_util.h"
 
 #include <algorithm>
@@ -138,11 +139,21 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
   float detL = 0.f;
   float detR = 0.f;
   detector_.processStereo(dryL, dryR, detL, detR);
+  Dsp::sanitizeDenormal(detL);
+  Dsp::sanitizeDenormal(detR);
   const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
 
   const float gr = gr_.processDetector(detL, detR);
   grMeter_.process(gr);
   histFeedSample(audioPeak, detPeak, gr);
+
+  // Always feed LR splitters so Wide↔Split stays continuous and states sanitize.
+  float loL = 0.f;
+  float hiL = 0.f;
+  float loR = 0.f;
+  float hiR = 0.f;
+  splitL_.process2(dryL, loL, hiL);
+  splitR_.process2(dryR, loR, hiR);
 
   if (state.listen && !state.bypass)
   {
@@ -156,22 +167,17 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
 
   if (state.split)
   {
-    float loL = 0.f;
-    float hiL = 0.f;
-    float loR = 0.f;
-    float hiR = 0.f;
-    splitL_.process2(dryL, loL, hiL);
-    splitR_.process2(dryR, loR, hiR);
-    hiL *= gr;
-    hiR *= gr;
-    L = (loL + hiL) * state.makeupLin;
-    R = (loR + hiR) * state.makeupLin;
+    L = (loL + hiL * gr) * state.makeupLin;
+    R = (loR + hiR * gr) * state.makeupLin;
   }
   else
   {
     L = dryL * gr * state.makeupLin;
     R = dryR * gr * state.makeupLin;
   }
+
+  Dsp::sanitizeDenormal(L);
+  Dsp::sanitizeDenormal(R);
 }
 
 int DeesserPlugin::takeGainReductionDb(float* out, int maxOut)
