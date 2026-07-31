@@ -212,6 +212,67 @@ void logX11Surface(const char* why)
   logX11Window("webview", g.webview ? GTK_WIDGET(g.webview) : nullptr);
 }
 
+/** X11 map_state of a realized widget; -1 if unknown. */
+int x11MapState(GtkWidget* widget)
+{
+  if (!widget)
+    return -1;
+  GdkWindow* gdkWin = gtk_widget_get_window(widget);
+  if (!gdkWin)
+    return -1;
+  Display* dpy = GDK_WINDOW_XDISPLAY(gdkWin);
+  const Window xid = gdk_x11_window_get_xid(gdkWin);
+  XWindowAttributes wa {};
+  if (!dpy || !XGetWindowAttributes(dpy, xid, &wa))
+    return -1;
+  return static_cast<int>(wa.map_state);
+}
+
+bool x11IsViewable(GtkWidget* widget)
+{
+  return x11MapState(widget) == IsViewable;
+}
+
+/**
+ * Evidence (tester vs working host): after XEmbed, both start Unmapped;
+ * working host becomes Viewable within ~500ms, tester stays Unmapped forever
+ * → transparent socket hole despite healthy DOM.
+ *
+ * If still not Viewable, ask GDK/X to map the plug (and webview). No-op when
+ * already Viewable (normal path on working hosts).
+ */
+void ensureX11Mapped(const char* why)
+{
+  if (!g.plug)
+    return;
+  if (x11IsViewable(g.plug) && (!g.webview || x11IsViewable(GTK_WIDGET(g.webview))))
+    return;
+
+  hostLog("[calfnxt-web-host] map-ensure %s: not Viewable (plug=%d webview=%d) — show/map\n",
+          why, x11MapState(g.plug), g.webview ? x11MapState(GTK_WIDGET(g.webview)) : -1);
+
+  auto mapOne = [](GtkWidget* widget) {
+    if (!widget)
+      return;
+    gtk_widget_show(widget);
+    GdkWindow* win = gtk_widget_get_window(widget);
+    if (!win)
+      return;
+    gdk_window_show(win);
+    Display* dpy = GDK_WINDOW_XDISPLAY(win);
+    const Window xid = gdk_x11_window_get_xid(win);
+    if (dpy && xid)
+    {
+      XMapWindow(dpy, xid);
+      XFlush(dpy);
+    }
+  };
+
+  mapOne(g.plug);
+  mapOne(g.webview ? GTK_WIDGET(g.webview) : nullptr);
+  logX11Surface(why);
+}
+
 /** True when GTK allocation is unusable for WebKit layout (< 2×2). */
 bool gtkAllocTiny()
 {
@@ -538,6 +599,7 @@ void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
     else
       logAlloc("load-finished");
     logX11Surface("load-finished");
+    ensureX11Mapped("load-finished");
     sendLine("{\"t\":\"_ready\"}");
     probeJsSize("load-finished");
     scheduleJsProbes();
@@ -732,7 +794,7 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=diag-x11-1 hw-accel=%s\n", noGpu ? "never" : "always");
+  hostLog("[calfnxt-web-host] build=map-fix-1 hw-accel=%s\n", noGpu ? "never" : "always");
   hostLog("[calfnxt-web-host] env dmabuf_disable=%s compositing_disable=%s no_gpu=%s\n",
           std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER") ? std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER")
                                                           : "(unset)",
@@ -776,6 +838,8 @@ int main(int argc, char** argv)
     else
       logAlloc("t+500ms");
     logX11Surface("t+500ms");
+    // Working hosts are Viewable by now; tester stayed Unmapped — map explicitly.
+    ensureX11Mapped("t+500ms");
     return G_SOURCE_REMOVE;
   }, nullptr);
   g_timeout_add(2000, +[](gpointer) -> gboolean {
@@ -784,6 +848,7 @@ int main(int argc, char** argv)
     else
       logAlloc("t+2s");
     logX11Surface("t+2s");
+    ensureX11Mapped("t+2s");
     return G_SOURCE_REMOVE;
   }, nullptr);
 
