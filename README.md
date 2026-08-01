@@ -20,7 +20,7 @@ This project is free software licensed under the **GNU General Public License
 v3 or later** — see [`LICENSE`](LICENSE) and [`COPYRIGHT`](COPYRIGHT).
 
 For architecture and agent handoff, see [`ARCHITECTURE.md`](ARCHITECTURE.md)
-and [`AGENTS.md`](AGENTS.md).
+and [`AGENTS.md`](AGENTS.md). Suite SemVer rules: [`VERSIONING.md`](VERSIONING.md).
 
 ---
 
@@ -103,7 +103,7 @@ Target platform today: **Linux + X11** (the editor forces the GDK X11 backend fo
 | **C/C++ toolchain** (GCC or Clang) | Compile plugins | C++17 |
 | **pkg-config** | Find GTK / WebKit | |
 | **Python 3** | Parameter codegen | Interpreter only |
-| **Node.js** + **npm** | React / Vite UI | Required for a normal UI build |
+| **Node.js** + **npm** | React / Vite UI | Required for a normal UI build; not needed with `CALFNXT_USE_PREBUILT_UI=ON` |
 
 Optional: **Ninja** (faster CMake generator).
 
@@ -133,13 +133,43 @@ VSTGUI is **disabled** in this project (`SMTG_ENABLE_VSTGUI_SUPPORT=OFF`); you o
 
 ### npm packages (UI)
 
-Installed automatically when CMake builds the UI (`npm install` in `ui/`), or manually:
+Installed automatically when CMake builds the UI (`npm ci` in `ui/` when
+`node_modules` is missing, otherwise `npm run build` only), or manually:
 
 ```bash
-cd ui && npm install
+cd ui && npm ci
 ```
 
 Main UI stack: React, Vite, TypeScript, Sass, `@deutschesoft/aux-widgets`, `@deutschesoft/awml`, `@deutschesoft/use-aux-widgets`.
+
+### Packaging / offline UI
+
+Distro builds often have **no network** during `%build`. calfNXT keeps `ui/dist`
+out of git and publishes a **prebuilt UI tarball** on each GitHub Release instead.
+
+1. **Source0** — sources for tag `vX.Y.Z` (e.g. `calfnxt-X.Y.Z.tar.gz` from the release, or a git archive).
+2. **Source1** — `calfnxt-X.Y.Z-ui-dist.tar.xz` (+ checksum from the matching `.sha256` asset).
+3. In `%prep`, unpack Source1 at the **source tree root** so `ui/dist/` (including `.stamp`) appears.
+4. Configure with prebuilt UI (no Node/npm required for the SPA):
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCALFNXT_USE_PREBUILT_UI=ON
+cmake --build build --target calfnxt-plugins -j
+```
+
+Fetching Source0/Source1 (with checksums) before the build is normal and allowed;
+what must stay offline is `npm install` / registry access during compile.
+The VST3 SDK remains a separate dependency (`external/vst3sdk` or a distro package).
+
+Upstream release helper (bumps version, tags, builds the ui-dist asset, pushes,
+creates the GitHub Release):
+
+```bash
+./tools/release.sh          # prints current version, then asks for the new one
+./tools/release.sh minor    # or patch / major / X.Y.Z
+```
+
+See [`VERSIONING.md`](VERSIONING.md) for when to bump patch vs minor vs major.
 
 ### Distro package examples
 
@@ -270,6 +300,7 @@ This is useful for layout and widget work. It does **not** replace installing in
 | Configure                   | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` |
 | Build **all** plugins (+ UI)| `cmake --build build --target calfnxt-plugins -j` |
 | Embed SPA + install         | `./tools/install-user-vst3.sh` or `cmake --build build --target install-user-vst3` |
+| Cut a GitHub release        | `./tools/release.sh` (see `VERSIONING.md`) |
 | Single plugin (Equalizer)   | `cmake --build build --target calfnxt-equalizer calfnxt-equalizer-resources -j` |
 | Single plugin (Stereo)      | `cmake --build build --target calfnxt-stereo calfnxt-stereo-resources -j` |
 | Single plugin (Transients)  | `cmake --build build --target calfnxt-transients calfnxt-transients-resources -j` |
@@ -282,6 +313,5 @@ This is useful for layout and widget work. It does **not** replace installing in
 ## Notes
 
 - Codegen runs as part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++ params + `ui/src/generated/`).
-- Install also removes obsolete `calfNXTVolume.vst3` / `calfNXTBalance.vst3` / `calfNXTStereoTools.vst3` if still present from earlier builds.
 - Env flags: `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_WEB_GPU` (see `AGENTS.md`).
 - The editor UI runs **out-of-process** (`calfnxt-web-host` next to the `.so`) so Ardour does not load GTK3 into its process. Embed is still X11 `GtkPlug`; Wayland-only sessions may need `GDK_BACKEND=x11` for the host/helper.

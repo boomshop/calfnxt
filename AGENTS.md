@@ -3,7 +3,8 @@
 Read this before continuing work. Project path: `/home/markus/Programmierung/calf/calfnxt`
 (renamed from `calf_next` on 2026-07-25). Chat history may not follow the rename in Cursor.
 
-Also see `ARCHITECTURE.md` for the high-level stack.
+Also see `ARCHITECTURE.md` for the high-level stack, and `VERSIONING.md`
+for suite SemVer / release rules (`tools/release.sh`).
 
 ---
 
@@ -32,6 +33,7 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Kind | Value |
 |------|--------|
 | Display / vendor | `calfNXT` |
+| Vendor URL / email | `https://calfnxt.org`, `mailto:schmidt@boomshop.net` |
 | C++ namespace | `calfNXT` |
 | CMake project / libs | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui` |
 | Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-deesser` |
@@ -158,9 +160,11 @@ cmake --build build --target calfnxt-plugins -j
 # user install — always force-rebuilds SPA, embeds Resources, copies ~/.vst3:
 ./tools/install-user-vst3.sh
 # (close the plugin host first if ~/.vst3 remove fails with Permission denied)
+# suite release (version bump, tag, ui-dist GitHub asset): see VERSIONING.md
+# ./tools/release.sh
 ```
 
-Install paths: `~/.vst3/calfNXTEqualizer.vst3`, `~/.vst3/calfNXTStereo.vst3`, `~/.vst3/calfNXTTransients.vst3`, `~/.vst3/calfNXTCompressor.vst3`, `~/.vst3/calfNXTDeesser.vst3` (also removes obsolete Volume/Balance bundles if present).
+Install paths: `~/.vst3/calfNXTEqualizer.vst3`, `~/.vst3/calfNXTStereo.vst3`, `~/.vst3/calfNXTTransients.vst3`, `~/.vst3/calfNXTCompressor.vst3`, `~/.vst3/calfNXTDeesser.vst3`.
 
 Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
@@ -235,3 +239,4 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 | Header I/O | `ui/src/components/Header/*`, `host/headerMeters.ts` |
 | Meters | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*` |
 | Codegen | `tools/codegen/generate_plugin.py` |
+| Release / SemVer | `VERSIONING.md`, `tools/release.sh` |

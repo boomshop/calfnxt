@@ -83,10 +83,6 @@ list(LENGTH _calfnxt_install_targets _calfnxt_install_n)
 if(_calfnxt_install_n GREATER 0)
   set(_calfnxt_install_copy_cmds
     COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.vst3"
-    COMMAND ${CMAKE_COMMAND} -E rm -rf
-      "$ENV{HOME}/.vst3/calfNXTVolume.vst3"
-      "$ENV{HOME}/.vst3/calfNXTBalance.vst3"
-      "$ENV{HOME}/.vst3/calfNXTStereoTools.vst3"
   )
   set(_calfnxt_install_copy_deps calfnxt-web-host calfnxt-web-host-bundles)
   set(_calfnxt_install_force_cmds

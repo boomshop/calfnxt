@@ -1,6 +1,10 @@
 # Shared React UI build (SPA → ui/dist; each VST3 embeds only its plugin pack)
 find_program(NPM_EXECUTABLE npm)
 
+option(CALFNXT_USE_PREBUILT_UI
+  "Use existing ui/dist (skip npm). For distro builds with a ui-dist source tarball."
+  OFF)
+
 set(CALFNXT_UI_DIST "${CMAKE_SOURCE_DIR}/ui/dist" CACHE PATH "Vite SPA UI output")
 # Must be visible to sibling dirs (e.g. install-user-vst3 in root CMakeLists).
 set(CALFNXT_UI_DIST_STAMP "${CALFNXT_UI_DIST}/.stamp" CACHE INTERNAL "SPA build stamp path")
@@ -19,15 +23,41 @@ list(APPEND CALFNXT_UI_SRC_DEPS
   "${CMAKE_SOURCE_DIR}/ui/tsconfig.json"
 )
 
-if(NPM_EXECUTABLE)
+if(CALFNXT_USE_PREBUILT_UI)
+  if(NOT EXISTS "${CALFNXT_UI_DIST_STAMP}")
+    message(FATAL_ERROR
+      "CALFNXT_USE_PREBUILT_UI=ON but missing ${CALFNXT_UI_DIST_STAMP}.\n"
+      "  Unpack the release ui-dist tarball so ui/dist/ exists (including .stamp), then reconfigure.")
+  endif()
+  if(NOT EXISTS "${CALFNXT_UI_DIST}/plugins")
+    message(FATAL_ERROR
+      "CALFNXT_USE_PREBUILT_UI=ON but missing ${CALFNXT_UI_DIST}/plugins/.\n"
+      "  Unpack calfnxt-*-ui-dist.tar.xz into the source tree (creates ui/dist/).")
+  endif()
+  add_custom_target(calfnxt_web_ui)
+  message(STATUS "calfnxt: using prebuilt UI from ${CALFNXT_UI_DIST}")
+elseif(NPM_EXECUTABLE)
+  # Offline-friendly: if node_modules is already present (vendored or prior
+  # install), only run the Vite build — no registry access.
+  if(EXISTS "${CMAKE_SOURCE_DIR}/ui/node_modules")
+    set(_calfnxt_ui_npm_cmds
+      COMMAND ${NPM_EXECUTABLE} run build
+    )
+    set(_calfnxt_ui_npm_comment "Build shared React UI → ui/dist (npm run build, existing node_modules)")
+  else()
+    set(_calfnxt_ui_npm_cmds
+      COMMAND ${NPM_EXECUTABLE} ci
+      COMMAND ${NPM_EXECUTABLE} run build
+    )
+    set(_calfnxt_ui_npm_comment "Build shared React UI → ui/dist (npm ci + build)")
+  endif()
   add_custom_command(
     OUTPUT "${CALFNXT_UI_DIST_STAMP}"
-    COMMAND ${NPM_EXECUTABLE} install
-    COMMAND ${NPM_EXECUTABLE} run build
+    ${_calfnxt_ui_npm_cmds}
     COMMAND ${CMAKE_COMMAND} -E touch "${CALFNXT_UI_DIST_STAMP}"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/ui"
     DEPENDS ${CALFNXT_UI_SRC_DEPS}
-    COMMENT "Build shared React UI → ui/dist (+ per-plugin packs)"
+    COMMENT "${_calfnxt_ui_npm_comment}"
     VERBATIM
   )
   add_custom_target(calfnxt_web_ui DEPENDS "${CALFNXT_UI_DIST_STAMP}")

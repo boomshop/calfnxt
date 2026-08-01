@@ -2,8 +2,8 @@
   "id": "stereo",
   "name": "calfNXT Stereo",
   "vendor": "calfNXT",
-  "vendor_url": "https://calf-studio-gear.org",
-  "vendor_email": "mailto:calf@calf-studio-gear.org",
+  "vendor_url": "https://calfnxt.org",
+  "vendor_email": "mailto:schmidt@boomshop.net",
   "version": "0.1.0",
   "category": "Fx|Spatial",
   "vst3_uid": [
