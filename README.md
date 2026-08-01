@@ -30,8 +30,8 @@ you too, great; if not, that’s fine. Bug reports and distro packaging help are
 welcome. Feature requests and pull requests for things outside this VST3/Linux
 scope (or that I simply don’t need) may be declined without a long debate —
 forking is explicitly encouraged. That narrower focus is intentional; classic
-Calf’s “take every request” culture is what this project is trying not to
-repeat.
+Calf’s “take every request” culture is one of the things this project is trying
+not to repeat.
 
 ---
 
