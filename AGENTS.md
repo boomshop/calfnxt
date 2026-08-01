@@ -43,6 +43,7 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
 | Script message handler | `webkit.messageHandlers.calfnxt` |
 | Env flags | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_WEB_GPU`, `CALFNXT_WEB_DMABUF` |
+| Install (packaging) | `cmake --install` → `${prefix}/${CALFNXT_VST3_INSTALL_DIR}` (default `lib/vst3`); user copy via `CALFNXT_VST3_DIR` / `./tools/install-user-vst3.sh [dest]` |
 | Msg type (TS) | `calfNXTMsg` |
 
 Classic upstream “Calf Studio Gear” may still be mentioned as the DSP heritage; that is not this product name.
@@ -157,14 +158,17 @@ Verify Ardour-safe link: `ldd …/*.so` must not list `libgtk-3` / `libwebkit`.
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target calfnxt-plugins -j
-# user install — always force-rebuilds SPA, embeds Resources, copies ~/.vst3:
+# user install — always force-rebuilds SPA, embeds Resources, copies ~/.vst3
+# (or: ./tools/install-user-vst3.sh /usr/lib/vst3):
 ./tools/install-user-vst3.sh
+# packaging: cmake --install build --prefix /usr   # → $prefix/lib/vst3
 # (close the plugin host first if ~/.vst3 remove fails with Permission denied)
 # suite release (version bump, tag, ui-dist GitHub asset): see VERSIONING.md
 # ./tools/release.sh
 ```
 
-Install paths: `~/.vst3/calfNXTEqualizer.vst3`, `~/.vst3/calfNXTStereo.vst3`, `~/.vst3/calfNXTTransients.vst3`, `~/.vst3/calfNXTCompressor.vst3`, `~/.vst3/calfNXTDeesser.vst3`.
+Install paths (user default): `~/.vst3/calfNXTEqualizer.vst3`, …  
+System / packaging: `${CMAKE_INSTALL_PREFIX}/${CALFNXT_VST3_INSTALL_DIR}/` (default `lib/vst3`).
 
 Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 

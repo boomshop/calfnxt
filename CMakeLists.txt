@@ -16,6 +16,25 @@ project(calfnxt
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+include(GNUInstallDirs)
+
+# Distro / cmake --install destination (under CMAKE_INSTALL_PREFIX; DESTDIR applies).
+# Override e.g. -DCALFNXT_VST3_INSTALL_DIR=lib64/vst3 if needed.
+set(CALFNXT_VST3_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/vst3" CACHE STRING
+  "Relative install dir for .vst3 bundles (under CMAKE_INSTALL_PREFIX)")
+
+# Developer convenience target install-user-vst3-copy (default: ~/.vst3).
+# Override at configure time, or at copy time via env/script:
+#   CALFNXT_VST3_DIR=/usr/lib/vst3 cmake --build build --target install-user-vst3-copy
+#   ./tools/install-user-vst3.sh /usr/lib/vst3
+if(DEFINED ENV{HOME} AND NOT "$ENV{HOME}" STREQUAL "")
+  set(_calfnxt_default_user_vst3 "$ENV{HOME}/.vst3")
+else()
+  set(_calfnxt_default_user_vst3 "${CMAKE_BINARY_DIR}/vst3-user-install")
+endif()
+set(CALFNXT_USER_VST3_DIR "${_calfnxt_default_user_vst3}" CACHE PATH
+  "Default destination for install-user-vst3-copy (overridable via CALFNXT_VST3_DIR env)")
+
 add_subdirectory(external/vst3sdk)
 
 # Not visible from the SDK subdir — needed for linuxmain.cpp / smtg_target_add_library_main
@@ -75,15 +94,42 @@ add_custom_target(calfnxt-plugins
   COMMENT "Build all calfNXT VST3 plugins (+ embedded UI + web-host)"
 )
 
-# Install → ~/.vst3 for every plugin registered via calfnxt_copy_plugin_ui.
-# Prefer ./tools/install-user-vst3.sh (clears stamps, rebuilds SPA, then this).
+# Install bundles: cmake --install (prefix/DESTDIR) and optional user copy target.
+# Prefer ./tools/install-user-vst3.sh for a force UI rebuild + copy to ~/.vst3
+# (or a custom path). Distros should use: cmake --install <build> [--prefix /usr]
 get_property(_calfnxt_install_targets GLOBAL PROPERTY CALFNXT_INSTALL_TARGETS)
 get_property(_calfnxt_install_names GLOBAL PROPERTY CALFNXT_INSTALL_VST3_NAMES)
 list(LENGTH _calfnxt_install_targets _calfnxt_install_n)
 if(_calfnxt_install_n GREATER 0)
-  set(_calfnxt_install_copy_cmds
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/.vst3"
-  )
+  set(_calfnxt_bundle_dirs_genex)
+  set(_calfnxt_bundle_names_list)
+  math(EXPR _calfnxt_install_last "${_calfnxt_install_n} - 1")
+  foreach(_i RANGE ${_calfnxt_install_last})
+    list(GET _calfnxt_install_targets ${_i} _t)
+    list(GET _calfnxt_install_names ${_i} _name)
+    # TARGET_FILE_DIR = …/<name>.vst3/Contents/<arch> → bundle root is ../..
+    list(APPEND _calfnxt_bundle_dirs_genex "$<TARGET_FILE_DIR:${_t}>/../..")
+    list(APPEND _calfnxt_bundle_names_list "${_name}")
+
+    # System / packaging install (CMAKE_INSTALL_PREFIX + DESTDIR).
+    # Do not use install(DIRECTORY …/../..) — the last path component would be "..".
+    install(CODE "
+      set(_src \"$<TARGET_FILE_DIR:${_t}>/../..\")
+      get_filename_component(_src \"\${_src}\" ABSOLUTE)
+      set(_dst \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CALFNXT_VST3_INSTALL_DIR}/${_name}.vst3\")
+      if(NOT EXISTS \"\${_src}\")
+        message(FATAL_ERROR \"calfnxt install: missing \${_src} — build target ${_t} first\")
+      endif()
+      message(STATUS \"calfnxt: cmake --install ${_name}.vst3 → \${_dst}\")
+      file(REMOVE_RECURSE \"\${_dst}\")
+      file(MAKE_DIRECTORY \"\${_dst}\")
+      file(COPY \"\${_src}/\" DESTINATION \"\${_dst}\")
+    " COMPONENT Runtime)
+  endforeach()
+
+  string(JOIN ";" _calfnxt_bundle_dirs_joined ${_calfnxt_bundle_dirs_genex})
+  list(JOIN _calfnxt_bundle_names_list ";" _calfnxt_bundle_names_joined)
+
   set(_calfnxt_install_copy_deps calfnxt-web-host calfnxt-web-host-bundles)
   set(_calfnxt_install_force_cmds
     COMMAND ${CMAKE_COMMAND}
@@ -93,16 +139,8 @@ if(_calfnxt_install_n GREATER 0)
     COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}" --target calfnxt_web_ui --parallel
   )
   set(_calfnxt_install_force_deps calfnxt-web-host)
-  math(EXPR _calfnxt_install_last "${_calfnxt_install_n} - 1")
   foreach(_i RANGE ${_calfnxt_install_last})
     list(GET _calfnxt_install_targets ${_i} _t)
-    list(GET _calfnxt_install_names ${_i} _name)
-    list(APPEND _calfnxt_install_copy_cmds
-      COMMAND ${CMAKE_COMMAND} -E rm -rf "$ENV{HOME}/.vst3/${_name}.vst3"
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "$<TARGET_FILE_DIR:${_t}>/../.."
-        "$ENV{HOME}/.vst3/${_name}.vst3"
-    )
     list(APPEND _calfnxt_install_copy_deps ${_t} ${_t}-resources)
     list(APPEND _calfnxt_install_force_cmds
       COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}" --target ${_t}-resources --parallel
@@ -114,23 +152,31 @@ if(_calfnxt_install_n GREATER 0)
     COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}" --target install-user-vst3-copy --parallel
   )
 
+  # Dest: env CALFNXT_VST3_DIR at copy time, else CALFNXT_USER_VST3_DIR (cache).
   add_custom_target(install-user-vst3-copy
-    ${_calfnxt_install_copy_cmds}
-    COMMENT "Install calfNXT plugins → ~/.vst3"
+    COMMAND ${CMAKE_COMMAND}
+      "-DCALFNXT_VST3_DIR_DEFAULT=${CALFNXT_USER_VST3_DIR}"
+      "-DCALFNXT_BUNDLE_DIRS=${_calfnxt_bundle_dirs_joined}"
+      "-DCALFNXT_BUNDLE_NAMES=${_calfnxt_bundle_names_joined}"
+      -P "${CMAKE_SOURCE_DIR}/tools/cmake/copy_vst3_bundles.cmake"
+    COMMENT "Install calfNXT plugins → \$CALFNXT_VST3_DIR or ${CALFNXT_USER_VST3_DIR}"
     DEPENDS ${_calfnxt_install_copy_deps}
+    VERBATIM
   )
   add_custom_target(install-user-vst3
     ${_calfnxt_install_force_cmds}
-    COMMENT "Force UI rebuild + install → ~/.vst3"
+    COMMENT "Force UI rebuild + install → ${CALFNXT_USER_VST3_DIR} (or \$CALFNXT_VST3_DIR)"
     DEPENDS ${_calfnxt_install_force_deps}
   )
 
-  # For tools/install-user-vst3.sh: one resources target name per line.
   set(_calfnxt_res_list "")
   foreach(_t IN LISTS _calfnxt_install_targets)
     string(APPEND _calfnxt_res_list "${_t}-resources\n")
   endforeach()
   file(WRITE "${CMAKE_BINARY_DIR}/calfnxt-install-resources.txt" "${_calfnxt_res_list}")
+
+  message(STATUS "calfnxt: cmake --install → \${PREFIX}/${CALFNXT_VST3_INSTALL_DIR}/")
+  message(STATUS "calfnxt: user copy default → ${CALFNXT_USER_VST3_DIR}")
 endif()
 
 message(STATUS "calfnxt: common/{ui,dsp} + dsp/{equalizer,stereo,transients,compressor,deesser} + shared ui/dist")

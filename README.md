@@ -166,6 +166,16 @@ out of git and publishes a **prebuilt UI tarball** on each GitHub Release instea
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCALFNXT_USE_PREBUILT_UI=ON
 cmake --build build --target calfnxt-plugins -j
+# system-wide (packaging): DESTDIR + prefix — default libdir/vst3 (e.g. /usr/lib/vst3)
+DESTDIR=/tmp/pkgroot cmake --install build --prefix /usr
+# optional override: -DCALFNXT_VST3_INSTALL_DIR=lib64/vst3
+```
+
+Developer / local install still defaults to `~/.vst3`. Override the destination:
+
+```bash
+./tools/install-user-vst3.sh /usr/lib/vst3
+# or: CALFNXT_VST3_DIR=/usr/lib/vst3 cmake --build build --target install-user-vst3-copy
 ```
 
 Fetching Source0/Source1 (with checksums) before the build is normal and allowed;
@@ -310,7 +320,8 @@ This is useful for layout and widget work. It does **not** replace installing in
 |-----------------------------|---------|
 | Configure                   | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` |
 | Build **all** plugins (+ UI)| `cmake --build build --target calfnxt-plugins -j` |
-| Embed SPA + install         | `./tools/install-user-vst3.sh` or `cmake --build build --target install-user-vst3` |
+| Embed SPA + install         | `./tools/install-user-vst3.sh` `[dest]` or `cmake --build build --target install-user-vst3` |
+| System install (packaging)  | `cmake --install build --prefix /usr` (→ `$prefix/lib/vst3`) |
 | Cut a GitHub release        | `./tools/release.sh` (see `VERSIONING.md`) |
 | Single plugin (Equalizer)   | `cmake --build build --target calfnxt-equalizer calfnxt-equalizer-resources -j` |
 | Single plugin (Stereo)      | `cmake --build build --target calfnxt-stereo calfnxt-stereo-resources -j` |
