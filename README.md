@@ -22,6 +22,17 @@ v3 or later** — see [`LICENSE`](LICENSE) and [`COPYRIGHT`](COPYRIGHT).
 For architecture and agent handoff, see [`ARCHITECTURE.md`](ARCHITECTURE.md)
 and [`AGENTS.md`](AGENTS.md). Suite SemVer rules: [`VERSIONING.md`](VERSIONING.md).
 
+### Scope
+
+calfNXT is a **personal studio project**: plugins I need for my own work, built
+in spare time — not a product roadmap or a community product org. If it helps
+you too, great; if not, that’s fine. Bug reports and distro packaging help are
+welcome. Feature requests and pull requests for things outside this VST3/Linux
+scope (or that I simply don’t need) may be declined without a long debate —
+forking is explicitly encouraged. That narrower focus is intentional; classic
+Calf’s “take every request” culture is what this project is trying not to
+repeat.
+
 ---
 
 ## Plugins
