@@ -346,8 +346,54 @@ This is useful for layout and widget work. It does **not** replace installing in
 
 ---
 
+## Environment variables
+
+Runtime / tooling knobs read from the process environment. Boolean-style flags
+are **on** when the variable is set to any non-empty value (e.g. `1`).
+
+### Editor / WebKit (`calfnxt-web-host`)
+
+Set these in the **plugin host** environment (the helper inherits it via
+`posix_spawn`). Example: `CALFNXT_WEB_DEBUG=1 carla …`.
+
+| Variable | Values | Effect |
+|----------|--------|--------|
+| `CALFNXT_UI_SCALE` | float ≈ `0.05`…`8` | Forces editor scale instead of measuring CSS vs host pixels (HiDPI). Examples: `1`, `1.35`, `2`. Invalid / out-of-range → ignored. |
+| `CALFNXT_WEB_DEBUG` | any non-empty | Extra logging to stderr; also enables WebKit developer extras and console→stdout. Diagnostics always append to `/tmp/calfnxt-ui.log`. |
+| `CALFNXT_WEB_INSPECTOR` | any non-empty | Opens the WebKit Web Inspector on editor load (also enables developer extras). |
+| `CALFNXT_WEB_NO_GPU` | any non-empty | WebKit hardware acceleration **off** (`NEVER`). Default without this flag is **on** (`ALWAYS`). Use if the embed paints blank/transparent on your GPU stack. |
+
+Related (not calfNXT-owned, but often useful with WebKitGTK / X11 embed):
+
+| Variable | Notes |
+|----------|--------|
+| `GDK_BACKEND=x11` | Force X11 for the helper when the session is Wayland-only. |
+| `WEBKIT_DISABLE_DMABUF_RENDERER` | WebKitGTK blank-window workaround on some drivers; set yourself if needed. |
+| `WEBKIT_DISABLE_COMPOSITING_MODE` | Last-resort WebKit compositing disable; not set by calfNXT. |
+| `DISPLAY` | Required for the X11 `GtkPlug` embed. |
+
+### Install / packaging helpers
+
+| Variable | Values | Effect |
+|----------|--------|--------|
+| `CALFNXT_VST3_DIR` | absolute path | Destination for `install-user-vst3-copy` / `./tools/install-user-vst3.sh` (default `~/.vst3`). Example: `CALFNXT_VST3_DIR=/usr/lib/vst3 ./tools/install-user-vst3.sh`. |
+| `BUILD_DIR` | path | Override build tree for `./tools/install-user-vst3.sh` (default `<repo>/build`). |
+| `JOBS` | integer | Parallelism for that script’s `cmake --build` (default `nproc`). |
+
+### CMake options (not environment variables)
+
+Configure-time `-D` flags, documented here so they are not confused with `getenv`:
+
+| Option | Effect |
+|--------|--------|
+| `CALFNXT_USE_PREBUILT_UI=ON` | Use committed/unpacked `ui/dist` (needs `.stamp`); no `npm` during build. |
+| `CALFNXT_VST3_INSTALL_DIR` | Relative path under prefix for `cmake --install` (default `${CMAKE_INSTALL_LIBDIR}/vst3`). |
+| `CALFNXT_USER_VST3_DIR` | Cache default for user-copy install when `CALFNXT_VST3_DIR` env is unset. |
+
+---
+
 ## Notes
 
 - Codegen runs as part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++ params + `ui/src/generated/`).
-- Env flags: `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_WEB_GPU` (see `AGENTS.md`).
+- Environment variables: see [Environment variables](#environment-variables) above.
 - The editor UI runs **out-of-process** (`calfnxt-web-host` next to the `.so`) so Ardour does not load GTK3 into its process. Embed is still X11 `GtkPlug`; Wayland-only sessions may need `GDK_BACKEND=x11` for the host/helper.

@@ -42,7 +42,7 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | URI scheme | `calfnxt://bundle/...` |
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
 | Script message handler | `webkit.messageHandlers.calfnxt` |
-| Env flags | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_WEB_GPU`, `CALFNXT_WEB_DMABUF` |
+| Env flags | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU` (full list in `README.md`) |
 | Install (packaging) | `cmake --install` → `${prefix}/${CALFNXT_VST3_INSTALL_DIR}` (default `lib/vst3`); user copy via `CALFNXT_VST3_DIR` / `./tools/install-user-vst3.sh [dest]` |
 | Msg type (TS) | `calfNXTMsg` |
 
@@ -129,11 +129,9 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 4. Optional override: `CALFNXT_UI_SCALE` (e.g. `1.35` or `1`) wins over measurement.
 
 `WebEditor` (proxy): IRunLoop ~16 ms pumps the socket + param/viz flush.
-`calfnxt-web-host`: HW accel **off** by default (XEmbed+GPU often paints a blank/transparent
-hole); opt in with `CALFNXT_WEB_GPU=1` (or force off with `CALFNXT_WEB_NO_GPU=1`). Also sets
-`WEBKIT_DISABLE_DMABUF_RENDERER=1` by default (WebKitGTK 2.42+ blank-window workaround; opt
-in DMA-BUF with `CALFNXT_WEB_DMABUF=1`). Do not force `WEBKIT_DISABLE_COMPOSITING_MODE` by
-default. Diagnostics always append to `/tmp/calfnxt-ui.log` (URI misses, JS errors).
+`calfnxt-web-host`: HW accel **on** by default (`ALWAYS`); force software with
+`CALFNXT_WEB_NO_GPU=1` if the embed paints blank/transparent. Diagnostics always
+append to `/tmp/calfnxt-ui.log` (URI misses, JS errors). Env reference: `README.md`.
 GtkPlug size sync, `web-process-terminated` → reload + `{t:"_ready"}`.
 Verify Ardour-safe link: `ldd …/*.so` must not list `libgtk-3` / `libwebkit`.
 
