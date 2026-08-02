@@ -4,18 +4,16 @@ set(target calfnxt-delay)
 set(DELAY_DESC "${CMAKE_CURRENT_SOURCE_DIR}/delay.plugin.json")
 set(DELAY_PARAMS_H "${CMAKE_CURRENT_BINARY_DIR}/generated/delay_params.h")
 set(DELAY_MODEL_TS "${CMAKE_SOURCE_DIR}/ui/src/generated/delayModel.ts")
-set(PLUGINS_REGISTRY "${CMAKE_BINARY_DIR}/plugins.registry.json")
 set(CODEGEN "${CMAKE_SOURCE_DIR}/tools/codegen/generate_plugin.py")
 
 add_custom_command(
-  OUTPUT "${DELAY_PARAMS_H}" "${DELAY_MODEL_TS}" "${PLUGINS_REGISTRY}"
+  OUTPUT "${DELAY_PARAMS_H}" "${DELAY_MODEL_TS}"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/ui/src/generated"
   COMMAND ${Python3_EXECUTABLE} "${CODEGEN}"
     --descriptor "${DELAY_DESC}"
     --cpp-out "${DELAY_PARAMS_H}"
     --ts-out "${DELAY_MODEL_TS}"
-    --registry-out "${PLUGINS_REGISTRY}"
     --namespace Delay
   DEPENDS "${DELAY_DESC}" "${CODEGEN}"
   COMMENT "Codegen delay plugin from descriptor"

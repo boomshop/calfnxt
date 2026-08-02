@@ -31,7 +31,9 @@ Codegen (`tools/codegen/generate_plugin.py`) produces:
 
 - C++: ParamIDs, FUID, `registerParameters()`, `kEditorHtml` (`index.html#<id>`)
 - TS: DynamicValues model for the React UI
-- Aggregated `plugins.registry.json` (build artifact)
+
+Optional `--registry-out` can write an aggregated `plugins.registry.json` for tooling;
+the CMake build does **not** emit it (Ninja forbids multiple rules sharing one OUTPUT).
 
 Hand-written: DSP algorithm + React layout (`ui/src/plugins/<Name>UI/`).
 

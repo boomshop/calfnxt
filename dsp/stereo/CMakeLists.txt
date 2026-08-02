@@ -4,18 +4,16 @@ set(target calfnxt-stereo)
 set(STEREO_DESC "${CMAKE_CURRENT_SOURCE_DIR}/stereo.plugin.json")
 set(STEREO_PARAMS_H "${CMAKE_CURRENT_BINARY_DIR}/generated/stereo_params.h")
 set(STEREO_MODEL_TS "${CMAKE_SOURCE_DIR}/ui/src/generated/stereoModel.ts")
-set(PLUGINS_REGISTRY "${CMAKE_BINARY_DIR}/plugins.registry.json")
 set(CODEGEN "${CMAKE_SOURCE_DIR}/tools/codegen/generate_plugin.py")
 
 add_custom_command(
-  OUTPUT "${STEREO_PARAMS_H}" "${STEREO_MODEL_TS}" "${PLUGINS_REGISTRY}"
+  OUTPUT "${STEREO_PARAMS_H}" "${STEREO_MODEL_TS}"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/ui/src/generated"
   COMMAND ${Python3_EXECUTABLE} "${CODEGEN}"
     --descriptor "${STEREO_DESC}"
     --cpp-out "${STEREO_PARAMS_H}"
     --ts-out "${STEREO_MODEL_TS}"
-    --registry-out "${PLUGINS_REGISTRY}"
     --namespace Stereo
   DEPENDS "${STEREO_DESC}" "${CODEGEN}"
   COMMENT "Codegen stereo plugin from descriptor"

@@ -344,7 +344,13 @@ def main() -> int:
     ap.add_argument("--descriptor", type=Path, required=True)
     ap.add_argument("--cpp-out", type=Path, required=True)
     ap.add_argument("--ts-out", type=Path, required=True)
-    ap.add_argument("--registry-out", type=Path, required=True)
+    ap.add_argument(
+        "--registry-out",
+        type=Path,
+        default=None,
+        help="Optional aggregated plugins.registry.json (do not share as a CMake "
+        "OUTPUT across plugins — Ninja forbids multiple rules for one file)",
+    )
     ap.add_argument("--namespace", default=None, help="C++ namespace (default: CamelCase id)")
     args = ap.parse_args()
 
@@ -357,10 +363,11 @@ def main() -> int:
     args.ts_out.parent.mkdir(parents=True, exist_ok=True)
     args.ts_out.write_text(gen_ts_model(desc), encoding="utf-8")
 
-    update_registry(args.registry_out, desc)
     print(f"generated {args.cpp_out}", file=sys.stderr)
     print(f"generated {args.ts_out}", file=sys.stderr)
-    print(f"updated {args.registry_out}", file=sys.stderr)
+    if args.registry_out is not None:
+        update_registry(args.registry_out, desc)
+        print(f"updated {args.registry_out}", file=sys.stderr)
     return 0
 
 

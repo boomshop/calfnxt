@@ -4,18 +4,16 @@ set(target calfnxt-deesser)
 set(DEESSER_DESC "${CMAKE_CURRENT_SOURCE_DIR}/deesser.plugin.json")
 set(DEESSER_PARAMS_H "${CMAKE_CURRENT_BINARY_DIR}/generated/deesser_params.h")
 set(DEESSER_MODEL_TS "${CMAKE_SOURCE_DIR}/ui/src/generated/deesserModel.ts")
-set(PLUGINS_REGISTRY "${CMAKE_BINARY_DIR}/plugins.registry.json")
 set(CODEGEN "${CMAKE_SOURCE_DIR}/tools/codegen/generate_plugin.py")
 
 add_custom_command(
-  OUTPUT "${DEESSER_PARAMS_H}" "${DEESSER_MODEL_TS}" "${PLUGINS_REGISTRY}"
+  OUTPUT "${DEESSER_PARAMS_H}" "${DEESSER_MODEL_TS}"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/ui/src/generated"
   COMMAND ${Python3_EXECUTABLE} "${CODEGEN}"
     --descriptor "${DEESSER_DESC}"
     --cpp-out "${DEESSER_PARAMS_H}"
     --ts-out "${DEESSER_MODEL_TS}"
-    --registry-out "${PLUGINS_REGISTRY}"
     --namespace Deesser
   DEPENDS "${DEESSER_DESC}" "${CODEGEN}"
   COMMENT "Codegen deesser plugin from descriptor"

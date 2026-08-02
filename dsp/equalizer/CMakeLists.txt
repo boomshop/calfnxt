@@ -4,18 +4,16 @@ set(target calfnxt-equalizer)
 set(EQUALIZER_DESC "${CMAKE_CURRENT_SOURCE_DIR}/equalizer.plugin.json")
 set(EQUALIZER_PARAMS_H "${CMAKE_CURRENT_BINARY_DIR}/generated/equalizer_params.h")
 set(EQUALIZER_MODEL_TS "${CMAKE_SOURCE_DIR}/ui/src/generated/equalizerModel.ts")
-set(PLUGINS_REGISTRY "${CMAKE_BINARY_DIR}/plugins.registry.json")
 set(CODEGEN "${CMAKE_SOURCE_DIR}/tools/codegen/generate_plugin.py")
 
 add_custom_command(
-  OUTPUT "${EQUALIZER_PARAMS_H}" "${EQUALIZER_MODEL_TS}" "${PLUGINS_REGISTRY}"
+  OUTPUT "${EQUALIZER_PARAMS_H}" "${EQUALIZER_MODEL_TS}"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/ui/src/generated"
   COMMAND ${Python3_EXECUTABLE} "${CODEGEN}"
     --descriptor "${EQUALIZER_DESC}"
     --cpp-out "${EQUALIZER_PARAMS_H}"
     --ts-out "${EQUALIZER_MODEL_TS}"
-    --registry-out "${PLUGINS_REGISTRY}"
     --namespace Equalizer
   DEPENDS "${EQUALIZER_DESC}" "${CODEGEN}"
   COMMENT "Codegen equalizer plugin from descriptor"

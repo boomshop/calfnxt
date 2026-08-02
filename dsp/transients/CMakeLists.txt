@@ -4,18 +4,16 @@ set(target calfnxt-transients)
 set(TRANSIENTS_DESC "${CMAKE_CURRENT_SOURCE_DIR}/transients.plugin.json")
 set(TRANSIENTS_PARAMS_H "${CMAKE_CURRENT_BINARY_DIR}/generated/transients_params.h")
 set(TRANSIENTS_MODEL_TS "${CMAKE_SOURCE_DIR}/ui/src/generated/transientsModel.ts")
-set(PLUGINS_REGISTRY "${CMAKE_BINARY_DIR}/plugins.registry.json")
 set(CODEGEN "${CMAKE_SOURCE_DIR}/tools/codegen/generate_plugin.py")
 
 add_custom_command(
-  OUTPUT "${TRANSIENTS_PARAMS_H}" "${TRANSIENTS_MODEL_TS}" "${PLUGINS_REGISTRY}"
+  OUTPUT "${TRANSIENTS_PARAMS_H}" "${TRANSIENTS_MODEL_TS}"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/ui/src/generated"
   COMMAND ${Python3_EXECUTABLE} "${CODEGEN}"
     --descriptor "${TRANSIENTS_DESC}"
     --cpp-out "${TRANSIENTS_PARAMS_H}"
     --ts-out "${TRANSIENTS_MODEL_TS}"
-    --registry-out "${PLUGINS_REGISTRY}"
     --namespace Transients
   DEPENDS "${TRANSIENTS_DESC}" "${CODEGEN}"
   COMMENT "Codegen transients plugin from descriptor"

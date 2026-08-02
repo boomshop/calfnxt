@@ -4,18 +4,16 @@ set(target calfnxt-compressor)
 set(COMPRESSOR_DESC "${CMAKE_CURRENT_SOURCE_DIR}/compressor.plugin.json")
 set(COMPRESSOR_PARAMS_H "${CMAKE_CURRENT_BINARY_DIR}/generated/compressor_params.h")
 set(COMPRESSOR_MODEL_TS "${CMAKE_SOURCE_DIR}/ui/src/generated/compressorModel.ts")
-set(PLUGINS_REGISTRY "${CMAKE_BINARY_DIR}/plugins.registry.json")
 set(CODEGEN "${CMAKE_SOURCE_DIR}/tools/codegen/generate_plugin.py")
 
 add_custom_command(
-  OUTPUT "${COMPRESSOR_PARAMS_H}" "${COMPRESSOR_MODEL_TS}" "${PLUGINS_REGISTRY}"
+  OUTPUT "${COMPRESSOR_PARAMS_H}" "${COMPRESSOR_MODEL_TS}"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/ui/src/generated"
   COMMAND ${Python3_EXECUTABLE} "${CODEGEN}"
     --descriptor "${COMPRESSOR_DESC}"
     --cpp-out "${COMPRESSOR_PARAMS_H}"
     --ts-out "${COMPRESSOR_MODEL_TS}"
-    --registry-out "${PLUGINS_REGISTRY}"
     --namespace Compressor
   DEPENDS "${COMPRESSOR_DESC}" "${CODEGEN}"
   COMMENT "Codegen compressor plugin from descriptor"
