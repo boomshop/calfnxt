@@ -17,14 +17,21 @@
     }
 
     > .aux-handles {
-      > .aux-operating {
-        /* Operating-point marker — style in plugin SCSS if needed. */
+      > .aux-charthandle.aux-operating {
+        /* Visible marker; not draggable (DSP drives x/y). */
         pointer-events: none;
 
         > .aux-handle {
           fill: var(--chart-level-stroke, var(--color-accent));
-          fill-opacity: 0.85;
-          stroke: none;
+          fill-opacity: 1;
+          stroke: var(--background);
+          stroke-width: 1.5px;
+          opacity: 1;
+        }
+
+        > .aux-label,
+        > .aux-line {
+          display: none;
         }
       }
 

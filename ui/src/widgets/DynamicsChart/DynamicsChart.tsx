@@ -113,31 +113,35 @@ export function DynamicsChart(props: DynamicsChartProps) {
 
       setChart(w);
 
-      // Non-interactive circular handle = live operating point on the curve.
+      // Live operating point on the curve. Keep `active: true` — AUX hides
+      // inactive ChartHandles (`display: none`). Dragging is blocked in CSS.
       if (typeof w.addHandle === 'function') {
         pointHandleRef.current = w.addHandle({
           class: 'aux-operating',
           mode: 'circular',
-          x: -96,
-          y: -96,
+          x: -60,
+          y: -60,
           z: 1,
+          min_size: 10,
+          max_size: 14,
           format_label: false,
-          // Keep it out of gesture paths; DSP drives x/y.
-          active: false,
+          label: '',
+          show_handle: true,
+          active: true,
         });
       }
 
       if (point$ && pointHandleRef.current) {
         const h = pointHandleRef.current;
-        pointUnsubRef.current = point$.subscribe((v) => {
+        const apply = (v: number[]) => {
           if (!Array.isArray(v) || v.length < 2) return;
           h.set('x', v[0]);
           h.set('y', v[1]);
-          // Keep gradient stroke if AUX rewrites path attrs.
           reassertRef.current();
-        });
-      }
-    },
+        };
+        apply(point$.value);
+        pointUnsubRef.current = point$.subscribe(apply, false);
+      }    },
     [detachPoint, point$],
   );
 
