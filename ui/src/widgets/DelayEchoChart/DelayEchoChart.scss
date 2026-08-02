@@ -1,0 +1,50 @@
+.DelayEchoChart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  width: 100%;
+
+  > .echo-pane {
+    flex: 1;
+    background: var(--background);
+
+    > svg {
+      > .aux-grid {
+        > .aux-gridline.echo-grid-beat {
+          stroke: var(--color);
+          stroke-opacity: 0.28;
+        }
+
+        > .aux-gridline.echo-grid-unit {
+          stroke: var(--color);
+          stroke-opacity: 0.1;
+        }
+
+        > .aux-gridlabel {
+          fill: rgb(from var(--color) r g b / 0.45);
+          font-size: 9px;
+        }
+
+        > .aux-gridlabel.aux-vertical {
+          padding: 2px 3px 0;
+        }
+
+        > .aux-gridlabel.aux-horizontal {
+          padding: 0 4px 0 0;
+        }
+      }
+    }
+
+    .echo-l {
+      fill: #0066ff;
+      fill-opacity: 0.85;
+      stroke: none;
+    }
+
+    .echo-r {
+      fill: #ff0066;
+      fill-opacity: 0.85;
+      stroke: none;
+    }
+  }
+}

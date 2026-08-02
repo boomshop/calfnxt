@@ -161,4 +161,8 @@
   &.over {
     --color-accent: var(--color-warn);
   }
+
+  &.warn {
+    --color-accent: var(--color-warn);
+  }
 }

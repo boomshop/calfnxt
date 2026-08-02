@@ -47,7 +47,8 @@
     display: flex;
     gap: var(--gap);
 
-    > .bypass {
+    > .bypass,
+    > .active {
       --aux-button-paddinghorizontal: 20px;
     }
   }

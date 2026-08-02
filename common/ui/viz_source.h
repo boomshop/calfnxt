@@ -113,6 +113,17 @@ public:
     (void)id;
     (void)bins;
   }
+
+  /** Host tempo: out[0]=valid(0/1), out[1]=bpm. Returns 2, or 0 if unused. */
+  virtual int takeHostTempo(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for host tempo (nullptr = do not flush). */
+  virtual const char* vizTempoId() const { return nullptr; }
 };
 
 } // namespace Ui

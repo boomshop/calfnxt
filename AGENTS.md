@@ -20,7 +20,7 @@ internalized toolkit collides with system GTK3 — `GdkDisplay` GType abort).
 (GtkPlug + WebKit, XEmbed into the host XID) and forwards the JSON bridge over a
 Unix socketpair. Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **DeEsser** (`#deesser`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **DeEsser** (`#deesser`), **Delay** (`#delay`).
 More Calf-heritage processors planned.
 
 ---
@@ -36,9 +36,9 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Vendor URL / email | `https://calfnxt.org`, `mailto:schmidt@boomshop.net` |
 | C++ namespace | `calfNXT` |
 | CMake project / libs | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui` |
-| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-deesser` |
-| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTDeesser` (must match; Carla/JUCE) |
-| Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3`, `calfNXTTransients.vst3`, `calfNXTCompressor.vst3`, `calfNXTDeesser.vst3` |
+| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-deesser`, `calfnxt-delay` |
+| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTDeesser`, `calfNXTDelay` (must match; Carla/JUCE) |
+| Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3`, `calfNXTTransients.vst3`, `calfNXTCompressor.vst3`, `calfNXTDeesser.vst3`, `calfNXTDelay.vst3` |
 | URI scheme | `calfnxt://bundle/...` |
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
 | Script message handler | `webkit.messageHandlers.calfnxt` |
@@ -60,8 +60,9 @@ dsp/stereo/    stereo.plugin.json + DSP + codegen
 dsp/transients/ transients.plugin.json + DSP + codegen
 dsp/compressor/ compressor.plugin.json + DSP + codegen
 dsp/deesser/   deesser.plugin.json + DSP + codegen
+dsp/delay/     delay.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
-ui/            React SPA (Vite), hash router #equalizer / #stereo / #transients / #compressor / #deesser
+ui/            React SPA (Vite), hash router #equalizer / #stereo / #transients / #compressor / #deesser / #delay
 external/vst3sdk/
 ```
 
@@ -113,6 +114,7 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 - Tap points: **in** after `in_gain`, **out** after processing + `out_gain`.
 - Plugin implements `Ui::IVizSource` (usually forwards to `io_`); `EffectBase::createView` → `WebEditor::setVizSource`.
 - ~**30 Hz** flush → `{t:"viz",id:"in"|"out",kind:"levels",v:[…]}`.
+- Optional host tempo (Delay): `IVizSource::takeHostTempo` / `vizTempoId()` → `{t:"viz",id:"delay",kind:"tempo",v:[valid,bpm]}` → `bindVizTempo`.
 - Host also pushes `{t:"io",ch:N}` (bus channel count).
 - Header (`createHeaderIo`) binds In/Out MultiMeters + In/Out gain knobs for all plugins.
 - Future analyzers: `kind:"spectrum"`; UI→host `{t:"vizcfg",id,bins:N}`. Prefer binary/base64 later for large arrays.
@@ -209,7 +211,6 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
    - **Pulsator**
    - **Ring Modulator**
    - **Reverb**
-   - Vintage Delay → **Delay**
    - **Multiband Compressor**
    - Gate / Sidechain Gate → **Expander**
    - **Limiter**
@@ -239,6 +240,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 | Transients DSP | `dsp/transients/source/*_dsp.*`, `common/dsp/transients.h` |
 | Compressor DSP | `dsp/compressor/source/*_dsp.*`, `common/dsp/compressor.h`, `common/dsp/sidechain_filter.h` |
 | DeEsser DSP | `dsp/deesser/source/*_dsp.*`, `common/dsp/deesser_detector.h`, `common/dsp/band_splitter.h` |
+| Delay DSP | `dsp/delay/source/*_dsp.*`, `common/dsp/sidechain_filter.h`, `common/dsp/smooth_gain.h` |
 | Param bind | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts` |
 | Header I/O | `ui/src/components/Header/*`, `host/headerMeters.ts` |
 | Meters | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*` |

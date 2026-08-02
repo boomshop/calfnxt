@@ -77,12 +77,15 @@ common/dsp/             # EffectBase + IoStage + peak_hold → calfnxt_dsp
 dsp/equalizer/          # descriptor + DSP
 dsp/stereo/
 dsp/transients/
+dsp/compressor/
+dsp/deesser/
+dsp/delay/
 tools/codegen/
 ui/
   index.html            # SPA shell
   src/
     App.tsx             # hash router
-    plugins/            # EqualizerUI, StereoUI, TransientsUI, CompressorUI, DeesserUI, registry
+    plugins/            # EqualizerUI, StereoUI, TransientsUI, CompressorUI, DeesserUI, DelayUI, registry
     generated/          # codegen TS models
 external/vst3sdk/
 ```
@@ -90,7 +93,7 @@ external/vst3sdk/
 ## Intentionally deferred
 
 - Spectrum / analyzer arrays (`kind:"spectrum"` + UI→host `vizcfg` bin count)
-- Additional Calf-heritage plugins beyond Equalizer / Stereo / Transients / Compressor / DeEsser
+- Additional Calf-heritage plugins beyond Equalizer / Stereo / Transients / Compressor / DeEsser / Delay
 - Full AUX catalog beyond current widgets (Fader/Knob/MultiMeter/EQChart/…)
 - macOS / Windows WebView hosts
 - Shared Resources across `.vst3` bundles (each still embeds a SPA copy)

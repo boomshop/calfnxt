@@ -13,6 +13,7 @@ const vizGonioApplies = new Map<string, VizLevelsApply>();
 const vizEnvelopeApplies = new Map<string, (v: Float32Array) => void>();
 const vizGrApplies = new Map<string, HostApply>();
 const vizPointApplies = new Map<string, VizLevelsApply>();
+const vizTempoApplies = new Map<string, VizLevelsApply>();
 const channelCountApplies = new Set<ChannelCountApply>();
 let hostWired = false;
 
@@ -47,6 +48,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizGrApplies.get(msg.id)?.(msg.v[0]);
   if (msg.t === "viz" && msg.kind === "point" && Array.isArray(msg.v))
     vizPointApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "tempo" && Array.isArray(msg.v))
+    vizTempoApplies.get(msg.id)?.(msg.v);
 }
 
 function ensureHostWire(): void {
@@ -172,6 +175,19 @@ export function bindVizGr(dv: DynamicValue<number>, id: string): () => void {
   });
   return () => {
     vizGrApplies.delete(id);
+  };
+}
+
+/** Wire host tempo [valid, bpm] from DSP viz (id e.g. "delay"). */
+export function bindVizTempo(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizTempoApplies.set(id, (v) => {
+    const valid = v[0] >= 0.5 ? 1 : 0;
+    const bpm = typeof v[1] === "number" && Number.isFinite(v[1]) ? v[1] : 120;
+    dv.set([valid, Math.min(300, Math.max(30, bpm))]);
+  });
+  return () => {
+    vizTempoApplies.delete(id);
   };
 }
 

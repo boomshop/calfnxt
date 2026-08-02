@@ -35,6 +35,7 @@ export default defineConfig({
         transients: path.resolve(root, "src/html/transients.html"),
         compressor: path.resolve(root, "src/html/compressor.html"),
         deesser: path.resolve(root, "src/html/deesser.html"),
+        delay: path.resolve(root, "src/html/delay.html"),
       },
     },
   },

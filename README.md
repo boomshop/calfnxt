@@ -47,6 +47,7 @@ will follow.
 | **Transients** | `calfNXTTransients.vst3` | Attack / release shaping |
 | **Compressor** | `calfNXTCompressor.vst3` | Feed-forward dynamics (threshold / ratio / knee) |
 | **DeEsser** | `calfNXTDeesser.vst3` | Sibilance control (Wide / Split) |
+| **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo / Ping-Pong / L-R) |
 
 ### Equalizer
 
@@ -85,6 +86,16 @@ will follow.
 - Detection chain: multi-slope **HP** (12/24/48 dB, resonant Q) + **peaking** EQ; Peak / RMS / Opto
 - Threshold, ratio, **laxity** (attack/release), makeup, listen (detector solo)
 - **GR meter** + history (input / filtered detector / GR)
+- Shared In/Out gain + peak meters
+
+### Delay
+
+- Calf-heritage dual delay: **Stereo** / **Ping-Pong** / **L then R** / **R then L**
+- Timing: linked **Tempo** ↔ **Beat ms**, optional **Host Sync** (shows host BPM), **Tap Tempo**
+- **Subdivide** + Time L/R; feedback, wet/dry levels, stereo width
+- **Active** gates delay-line input only (trails ring out)
+- Feedback **FrequencyRange** (HP/LP)
+- Predictive L/R **echo charts** (DSP-matched levels, hybrid time window, fixed bar width)
 - Shared In/Out gain + peak meters
 
 ---
@@ -245,6 +256,7 @@ Then rescan plugins in your host. Bundles appear as:
 | Transients | `~/.vst3/calfNXTTransients.vst3` |
 | Compressor | `~/.vst3/calfNXTCompressor.vst3` |
 | DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
+| Delay     | `~/.vst3/calfNXTDelay.vst3`     |
 
 ---
 
@@ -262,7 +274,7 @@ cmake --build build --target install-user-vst3
 #   ./tools/install-user-vst3.sh
 ```
 
-`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, Compressor, DeEsser, …) and embeds each
+`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, Compressor, DeEsser, Delay, …) and embeds each
 UI pack. `install-user-vst3` then copies the bundles into `~/.vst3/`:
 
 | Plugin    | Path                         |
@@ -272,6 +284,7 @@ UI pack. `install-user-vst3` then copies the bundles into `~/.vst3/`:
 | Transients | `~/.vst3/calfNXTTransients.vst3` |
 | Compressor | `~/.vst3/calfNXTCompressor.vst3` |
 | DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
+| Delay     | `~/.vst3/calfNXTDelay.vst3`     |
 
 Rescan / reload the plugins in the host after install.
 
@@ -283,7 +296,7 @@ You must copy the SPA into each bundle’s `Resources/`:
 ```bash
 ./tools/install-user-vst3.sh
 # or manually:
-cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resources calfnxt-transients-resources calfnxt-compressor-resources calfnxt-deesser-resources -j
+cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resources calfnxt-transients-resources calfnxt-compressor-resources calfnxt-deesser-resources calfnxt-delay-resources -j
 cmake --build build --target install-user-vst3
 ```
 
@@ -308,7 +321,7 @@ cd ui && npm install   # once
 cd ui && npm run dev
 ```
 
-Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` 
+Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` 
 
 This is useful for layout and widget work. It does **not** replace installing into `~/.vst3` for Carla / other hosts.
 
@@ -328,6 +341,7 @@ This is useful for layout and widget work. It does **not** replace installing in
 | Single plugin (Transients)  | `cmake --build build --target calfnxt-transients calfnxt-transients-resources -j` |
 | Single plugin (Compressor)  | `cmake --build build --target calfnxt-compressor calfnxt-compressor-resources -j` |
 | Single plugin (DeEsser)     | `cmake --build build --target calfnxt-deesser calfnxt-deesser-resources -j` |
+| Single plugin (Delay)       | `cmake --build build --target calfnxt-delay calfnxt-delay-resources -j` |
 | UI HMR in the browser       | `cd ui && npm run dev` |
 
 ---

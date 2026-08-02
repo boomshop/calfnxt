@@ -14,5 +14,6 @@ export interface ButtonProps {
 }
 
 export function Button(props: ButtonProps) {
-  return <ButtonWidget {...props} />;
+  // use-aux-widgets updateClassName() calls className.split — never pass undefined.
+  return <ButtonWidget {...props} className={props.className ?? ''} />;
 }

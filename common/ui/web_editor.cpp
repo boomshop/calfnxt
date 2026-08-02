@@ -805,6 +805,13 @@ void WebEditor::flushViz()
   }
   lastVizFlush_ = now;
 
+  if (const char* tempoId = vizSource_->vizTempoId())
+  {
+    float tempo[2] {};
+    if (vizSource_->takeHostTempo(tempo, 2) == 2)
+      flushVizArray(tempoId, "tempo", tempo, 2);
+  }
+
   constexpr int kMaxCh = 8;
   constexpr float kMinDb = -96.f;
   constexpr float kMaxDb = 12.f;

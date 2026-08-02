@@ -9,6 +9,7 @@ export * from "./EnvelopeChart";
 export * from "./DynamicsChart";
 export * from "./FrequencyRange";
 export * from "./HistoryChart";
+export * from "./DelayEchoChart";
 export * from "./Toggle";
 export * from "./Select";
 export * from "./Button";

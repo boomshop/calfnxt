@@ -5,7 +5,8 @@ export type PluginId =
   | "stereo"
   | "transients"
   | "compressor"
-  | "deesser";
+  | "deesser"
+  | "delay";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
 
@@ -16,6 +17,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   transients: () => import("./TransientsUI/BoundTransientsUI"),
   compressor: () => import("./CompressorUI/BoundCompressorUI"),
   deesser: () => import("./DeesserUI/BoundDeesserUI"),
+  delay: () => import("./DelayUI/BoundDelayUI"),
 };
 
 export function isPluginId(id: string): id is PluginId {
