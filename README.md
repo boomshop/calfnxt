@@ -300,8 +300,8 @@ cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resource
 cmake --build build --target install-user-vst3
 ```
 
-The `*-resources` targets run `npm run build` in `ui/` (MPA entries + per-plugin
-packs under `ui/dist/plugins/<id>/`) and embed only that plugin’s assets.
+The `*-resources` targets run `npm run build` in `ui/` (one Vite build per plugin →
+`ui/dist/plugins/<id>/`) and embed only that plugin’s assets.
 
 ### DSP / C++ only
 

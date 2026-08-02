@@ -15,34 +15,58 @@ function stripCrossorigin(): Plugin {
 }
 
 const root = path.resolve(__dirname);
+const pluginId = process.env.CALFNXT_PLUGIN?.trim() || "";
 
-export default defineConfig({
-  plugins: [react(), stripCrossorigin()],
-  base: "./",
-  root,
-  build: {
-    outDir: path.resolve(__dirname, "dist"),
-    emptyOutDir: true,
-    assetsDir: "assets",
-    manifest: true,
-    modulePreload: { polyfill: false },
-    rollupOptions: {
-      // Per-plugin HTML entries → VST3 packs only that entry's asset graph.
-      // Dev still uses index.html + hash router (not part of production input).
-      input: {
-        equalizer: path.resolve(root, "src/html/equalizer.html"),
-        stereo: path.resolve(root, "src/html/stereo.html"),
-        transients: path.resolve(root, "src/html/transients.html"),
-        compressor: path.resolve(root, "src/html/compressor.html"),
-        deesser: path.resolve(root, "src/html/deesser.html"),
-        delay: path.resolve(root, "src/html/delay.html"),
-      },
+const knownPlugins = [
+  "equalizer",
+  "stereo",
+  "transients",
+  "compressor",
+  "deesser",
+  "delay",
+] as const;
+
+export default defineConfig(({ command }) => {
+  if (command === "build") {
+    if (!pluginId || !(knownPlugins as readonly string[]).includes(pluginId)) {
+      throw new Error(
+        "Production UI build requires CALFNXT_PLUGIN=<id> " +
+          `(one of: ${knownPlugins.join(", ")}). Use: npm run build`,
+      );
+    }
+  }
+
+  return {
+    plugins: [react(), stripCrossorigin()],
+    base: "./",
+    root,
+    build: pluginId
+      ? {
+          // One build per plugin → single JS bundle + one CSS (+ fonts/logo).
+          outDir: path.resolve(root, `dist/plugins/${pluginId}`),
+          emptyOutDir: true,
+          assetsDir: "assets",
+          cssCodeSplit: false,
+          modulePreload: { polyfill: false },
+          rollupOptions: {
+            input: path.resolve(root, `src/html/${pluginId}.html`),
+            output: {
+              // Single-entry: inline any leftover dynamic imports into one JS.
+              inlineDynamicImports: true,
+              entryFileNames: "assets/[name]-[hash].js",
+              assetFileNames: "assets/[name]-[hash][extname]",
+            },
+          },
+        }
+      : {
+          // Dev server only (index.html). Not used for production.
+          outDir: path.resolve(root, "dist"),
+        },
+    server: {
+      host: "127.0.0.1",
+      port: 5173,
+      strictPort: true,
+      open: "/#equalizer",
     },
-  },
-  server: {
-    host: "127.0.0.1",
-    port: 5173,
-    strictPort: true,
-    open: "/#equalizer",
-  },
+  };
 });

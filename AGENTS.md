@@ -140,8 +140,8 @@ Verify Ardour-safe link: `ldd …/*.so` must not list `libgtk-3` / `libwebkit`.
 ## UI structure
 
 - Dev SPA: `ui/index.html` → `main.tsx` → `App.tsx` hash `#<pluginId>`.
-- Production: per-plugin entries (`src/html/<id>.html` → `src/entries/*`);
-  `pack-plugin-ui.mjs` writes `ui/dist/plugins/<id>/` (only that entry’s asset graph).
+- Production: per-plugin Vite builds (`src/html/<id>.html` → `src/entries/*`);
+  `build-plugins.mjs` writes `ui/dist/plugins/<id>/` (one JS + one CSS + fonts/logo).
   Each VST3 embeds `dist/plugins/<id>/` as `Resources/` (`calfnxt_copy_plugin_ui`).
 - `ui/src/plugins/registry.ts` lazy map (dev router).
 - `Bound*UI` creates host-bound model; `*UI` is presentational.
