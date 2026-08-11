@@ -24,6 +24,7 @@ const knownPlugins = [
   "compressor",
   "deesser",
   "delay",
+  "reverb",
 ] as const;
 
 export default defineConfig(({ command }) => {

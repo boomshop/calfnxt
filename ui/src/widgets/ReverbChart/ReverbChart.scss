@@ -1,0 +1,37 @@
+.ReverbChart {
+  width: 100%;
+  height: 100%;
+  min-height: 140px;
+  background: var(--background);
+
+  &.aux-reverb,
+  .aux-reverb {
+    width: 100%;
+    height: 100%;
+  }
+
+  svg > .aux-graphs {
+    > .aux-input {
+      fill: none;
+      stroke: var(--color);
+      stroke-width: 2px;
+      stroke-opacity: 0.85;
+    }
+
+    > .aux-reverb {
+      stroke: var(--chart-level-stroke, var(--color-accent));
+      stroke-width: 2px;
+      // Soft fill so ER strokes remain readable under the attack slope.
+      fill: var(--color-accent);
+      fill-opacity: 0.12;
+    }
+
+    > .aux-graph.aux-reflection,
+    > .aux-reflection {
+      fill: none !important;
+      stroke: var(--color);
+      stroke-width: 1.5px;
+      stroke-opacity: 0.33;
+    }
+  }
+}

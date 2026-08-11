@@ -10,6 +10,7 @@ export * from "./DynamicsChart";
 export * from "./FrequencyRange";
 export * from "./HistoryChart";
 export * from "./DelayEchoChart";
+export * from "./ReverbChart";
 export * from "./Toggle";
 export * from "./Select";
 export * from "./Button";

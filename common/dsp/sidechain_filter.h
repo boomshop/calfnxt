@@ -1,7 +1,8 @@
 #pragma once
 
-// Mono/stereo sidechain HP→LP cascade (12/24/36/48 dB via 1–4 RBJ biquads).
-// Shared by Transients detector and Compressor sidechain.
+// Mono/stereo HP→LP cascade (12/24/36/48 dB via 1–4 RBJ biquads).
+// Shared by Transients detector, Compressor sidechain, Delay feedback,
+// and Reverb tone-into-reverb.
 
 #include "biquad.h"
 #include "dsp_math.h"

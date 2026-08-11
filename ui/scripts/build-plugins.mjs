@@ -20,6 +20,7 @@ const plugins = [
   'compressor',
   'deesser',
   'delay',
+  'reverb',
 ];
 
 /** Point script/link hrefs at ./assets/… for a flat Resources layout. */

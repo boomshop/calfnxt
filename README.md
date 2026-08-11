@@ -48,6 +48,7 @@ will follow.
 | **Compressor** | `calfNXTCompressor.vst3` | Feed-forward dynamics (threshold / ratio / knee) |
 | **DeEsser** | `calfNXTDeesser.vst3` | Sibilance control (Wide / Split) |
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo / Ping-Pong / L-R) |
+| **Reverb** | `calfNXTReverb.vst3` | Algorithmic room (ER + late, no IR) |
 
 ### Equalizer
 
@@ -96,6 +97,17 @@ will follow.
 - **Active** gates delay-line input only (trails ring out)
 - Feedback **FrequencyRange** (HP/LP)
 - Predictive L/R **echo charts** (DSP-matched levels, hybrid time window, fixed bar width)
+- Shared In/Out gain + peak meters
+
+### Reverb
+
+- Algorithmic go-to room (no impulse responses): improved Calf **allpass-loop late** + switchable **Early Reflections**
+- ER modes: **Multi-Tap** / **Velvet**; path **Parallel** or **Serial** (ER→Late)
+- Continuous **room size** (meters), **distance** macro, ms/SR-correct delays, predelay **on late only**
+- Pre-late **diffusion**, HF/LF damp, air shelf, mod rate/depth
+- Wet **width**: Mid/Side, Haas, or decorrelate
+- **Duck**, **Gate** (hold/release), **Freeze**
+- AUX **Reverb** chart (dry / ER / predelay / late) + room presets (Booth / Room / Chamber / Hall / Plate / Arena / Gated)
 - Shared In/Out gain + peak meters
 
 ---
@@ -257,6 +269,7 @@ Then rescan plugins in your host. Bundles appear as:
 | Compressor | `~/.vst3/calfNXTCompressor.vst3` |
 | DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
 | Delay     | `~/.vst3/calfNXTDelay.vst3`     |
+| Reverb    | `~/.vst3/calfNXTReverb.vst3`    |
 
 ---
 
@@ -274,7 +287,7 @@ cmake --build build --target install-user-vst3
 #   ./tools/install-user-vst3.sh
 ```
 
-`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, Compressor, DeEsser, Delay, …) and embeds each
+`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, Compressor, DeEsser, Delay, Reverb, …) and embeds each
 UI pack. `install-user-vst3` then copies the bundles into `~/.vst3/`:
 
 | Plugin    | Path                         |
@@ -285,6 +298,7 @@ UI pack. `install-user-vst3` then copies the bundles into `~/.vst3/`:
 | Compressor | `~/.vst3/calfNXTCompressor.vst3` |
 | DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
 | Delay     | `~/.vst3/calfNXTDelay.vst3`     |
+| Reverb    | `~/.vst3/calfNXTReverb.vst3`    |
 
 Rescan / reload the plugins in the host after install.
 
