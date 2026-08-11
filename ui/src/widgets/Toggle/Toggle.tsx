@@ -5,6 +5,8 @@ import "./Toggle.scss";
 
 const ToggleBindings = {
   state$: { name: "state" },
+  disabled$: { name: "disabled" },
+  enabled$: { name: "disabled", transformReceive: (v: boolean) => !v },
 };
 
 const ToggleWidget = componentFromWidget(

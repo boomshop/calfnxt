@@ -9,6 +9,7 @@ import {
   FrequencyRange,
   Knob,
   Toggle,
+  WithInfo,
 } from '../../widgets';
 import { paramIds } from '../../generated/delayModel';
 import {
@@ -16,6 +17,7 @@ import {
   delayParamDefault,
   type IDelayHost,
 } from '../../host/delayHost';
+import { delayInfo } from './delayInfo';
 import '../PluginUI.scss';
 import './DelayUI.scss';
 
@@ -175,65 +177,75 @@ export function DelayUI(props: DelayUIProps) {
   return (
     <div className="DelayUI PluginUI">
       <Header title="Delay">
-        <Toggle state$={host.active$} icon="power" className="active" />
+        <WithInfo title={delayInfo.active}>
+          <Toggle state$={host.active$} icon="power" className="active" />
+        </WithInfo>
       </Header>
 
       <div className="top block">
         <div className="title">Delays</div>
-        <Buttons
-          entries={DELAY_MIX_MODE_ENTRIES}
-          value={mixMode}
-          onChange={(v) => {
-            host.beginEdit(paramIds.mix_mode);
-            host.mixMode$.set(v);
-            host.endEdit(paramIds.mix_mode);
-          }}
-        />
-        <Knob
-          label="Subdivide"
-          className="subdiv"
-          value$={host.subdiv$}
-          min={1}
-          max={16}
-          snap={1}
-          reset={delayParamDefault('subdiv')}
-          dots={SUBDIV_DOTS}
-          labels={SUBDIV_LABELS}
-          scale="log2"
-          log_factor={2}
-          size="large"
-          {...{ 'value.format': (v: number) => String(Math.round(v)) }}
-          {...edit(paramIds.subdiv)}
-        />
-        <Knob
-          label="Time L"
-          value$={host.timeL$}
-          min={1}
-          max={16}
-          snap={1}
-          reset={delayParamDefault('time_l')}
-          dots={TIME_DOTS}
-          labels={TIME_LABELS}
-          scale="log2"
-          log_factor={2}
-          {...{ 'value.format': (v: number) => String(Math.round(v)) }}
-          {...edit(paramIds.time_l)}
-        />
-        <Knob
-          label="Time R"
-          value$={host.timeR$}
-          min={1}
-          max={16}
-          snap={1}
-          reset={delayParamDefault('time_r')}
-          dots={TIME_DOTS}
-          labels={TIME_LABELS}
-          scale="log2"
-          log_factor={2}
-          className="warn"
-          {...{ 'value.format': (v: number) => String(Math.round(v)) }}
-          {...edit(paramIds.time_r)}
-        />
+        <WithInfo title={delayInfo.mixMode} className="info-block">
+          <Buttons
+            entries={DELAY_MIX_MODE_ENTRIES}
+            value={mixMode}
+            onChange={(v) => {
+              host.beginEdit(paramIds.mix_mode);
+              host.mixMode$.set(v);
+              host.endEdit(paramIds.mix_mode);
+            }}
+          />
+        </WithInfo>
+        <WithInfo title={delayInfo.subdiv}>
+          <Knob
+            label="Subdivide"
+            className="subdiv"
+            value$={host.subdiv$}
+            min={1}
+            max={16}
+            snap={1}
+            reset={delayParamDefault('subdiv')}
+            dots={SUBDIV_DOTS}
+            labels={SUBDIV_LABELS}
+            scale="log2"
+            log_factor={2}
+            size="large"
+            {...{ 'value.format': (v: number) => String(Math.round(v)) }}
+            {...edit(paramIds.subdiv)}
+          />
+        </WithInfo>
+        <WithInfo title={delayInfo.timeL}>
+          <Knob
+            label="Time L"
+            value$={host.timeL$}
+            min={1}
+            max={16}
+            snap={1}
+            reset={delayParamDefault('time_l')}
+            dots={TIME_DOTS}
+            labels={TIME_LABELS}
+            scale="log2"
+            log_factor={2}
+            {...{ 'value.format': (v: number) => String(Math.round(v)) }}
+            {...edit(paramIds.time_l)}
+          />
+        </WithInfo>
+        <WithInfo title={delayInfo.timeR}>
+          <Knob
+            label="Time R"
+            value$={host.timeR$}
+            min={1}
+            max={16}
+            snap={1}
+            reset={delayParamDefault('time_r')}
+            dots={TIME_DOTS}
+            labels={TIME_LABELS}
+            scale="log2"
+            log_factor={2}
+            className="warn"
+            {...{ 'value.format': (v: number) => String(Math.round(v)) }}
+            {...edit(paramIds.time_r)}
+          />
+        </WithInfo>
         <DelayEchoChart
           bpm$={chartBpm$}
           subdiv$={host.subdiv$}
@@ -248,92 +260,108 @@ export function DelayUI(props: DelayUIProps) {
 
       <div className="left block">
         <div className="title">Timing</div>
-        <Toggle
-          state$={host.sync$}
-          label={hostValid ? `Host Sync ${Math.round(hostBpm)}` : 'Host Sync'}
-          className="sync"
-        />
-        <Knob
-          label="Tempo"
-          value$={bpmView$}
-          min={30}
-          max={300}
-          reset={delayParamDefault('bpm')}
-          dots={BPM_DOTS}
-          labels={BPM_LABELS}
-          disabled={timingLocked}
-          {...edit(paramIds.bpm)}
-          className="bpm"
-        />
-        <Knob
-          label="Beat ms"
-          value$={msView$}
-          min={10}
-          max={2000}
-          reset={delayParamDefault('ms')}
-          dots={MS_DOTS}
-          labels={MS_LABELS}
-          disabled={timingLocked}
-          {...edit(paramIds.ms)}
-          className="ms"
-        />
-        <Button
-          label="Tap Tempo"
-          className={timingLocked ? 'disabled tap' : 'tap'}
-          onClick={onTap}
-          disabled={timingLocked}
-        />
+        <WithInfo title={delayInfo.sync}>
+          <Toggle
+            state$={host.sync$}
+            label={hostValid ? `Host Sync ${Math.round(hostBpm)}` : 'Host Sync'}
+            className="sync"
+          />
+        </WithInfo>
+        <WithInfo title={delayInfo.tempo}>
+          <Knob
+            label="Tempo"
+            value$={bpmView$}
+            min={30}
+            max={300}
+            reset={delayParamDefault('bpm')}
+            dots={BPM_DOTS}
+            labels={BPM_LABELS}
+            disabled={timingLocked}
+            {...edit(paramIds.bpm)}
+            className="bpm"
+          />
+        </WithInfo>
+        <WithInfo title={delayInfo.beatMs}>
+          <Knob
+            label="Beat ms"
+            value$={msView$}
+            min={10}
+            max={2000}
+            reset={delayParamDefault('ms')}
+            dots={MS_DOTS}
+            labels={MS_LABELS}
+            disabled={timingLocked}
+            {...edit(paramIds.ms)}
+            className="ms"
+          />
+        </WithInfo>
+        <WithInfo title={delayInfo.tap}>
+          <Button
+            label="Tap Tempo"
+            className={timingLocked ? 'disabled tap' : 'tap'}
+            onClick={onTap}
+            disabled={timingLocked}
+          />
+        </WithInfo>
       </div>
 
       <div className="center block">
         <div className="title">Mix</div>
-        <Knob
-          label="Feedback"
-          value$={host.feedback$}
-          min={0}
-          max={1}
-          reset={delayParamDefault('feedback')}
-          dots={FB_DOTS}
-          labels={FB_LABELS}
-          {...edit(paramIds.feedback)}
-        />
-        <Knob
-          label="Stereo Width"
-          value$={host.width$}
-          min={-1}
-          max={1}
-          reset={delayParamDefault('width')}
-          base={0}
-          dots={WIDTH_DOTS}
-          labels={WIDTH_LABELS}
-          {...edit(paramIds.width)}
-        />
-        <Knob
-          label="Dry Level"
-          value$={host.dry$}
-          min={-60}
-          max={12}
-          reset={delayParamDefault('dry')}
-          base={0}
-          scale="decibel"
-          log_factor={3}
-          dots={MIX_DB_DOTS}
-          labels={MIX_DB_LABELS}
-          {...edit(paramIds.dry)}
-        />
-        <Knob
-          label="Wet Level"
-          value$={host.amount$}
-          min={-60}
-          max={12}
-          reset={delayParamDefault('amount')}
-          base={0}
-          scale="decibel"
-          log_factor={3}
-          dots={MIX_DB_DOTS}
-          labels={MIX_DB_LABELS}
-          {...edit(paramIds.amount)}
-        />
+        <WithInfo title={delayInfo.feedback}>
+          <Knob
+            label="Feedback"
+            value$={host.feedback$}
+            min={0}
+            max={1}
+            reset={delayParamDefault('feedback')}
+            dots={FB_DOTS}
+            labels={FB_LABELS}
+            {...edit(paramIds.feedback)}
+          />
+        </WithInfo>
+        <WithInfo title={delayInfo.width}>
+          <Knob
+            label="Stereo Width"
+            value$={host.width$}
+            min={-1}
+            max={1}
+            reset={delayParamDefault('width')}
+            base={0}
+            dots={WIDTH_DOTS}
+            labels={WIDTH_LABELS}
+            {...edit(paramIds.width)}
+          />
+        </WithInfo>
+        <WithInfo title={delayInfo.dry}>
+          <Knob
+            label="Dry Level"
+            value$={host.dry$}
+            min={-60}
+            max={12}
+            reset={delayParamDefault('dry')}
+            base={0}
+            scale="decibel"
+            log_factor={3}
+            dots={MIX_DB_DOTS}
+            labels={MIX_DB_LABELS}
+            {...edit(paramIds.dry)}
+          />
+        </WithInfo>
+        <WithInfo title={delayInfo.wet}>
+          <Knob
+            label="Wet Level"
+            value$={host.amount$}
+            min={-60}
+            max={12}
+            reset={delayParamDefault('amount')}
+            base={0}
+            scale="decibel"
+            log_factor={3}
+            dots={MIX_DB_DOTS}
+            labels={MIX_DB_LABELS}
+            {...edit(paramIds.amount)}
+          />
+        </WithInfo>
       </div>
 
       <div className="right block">

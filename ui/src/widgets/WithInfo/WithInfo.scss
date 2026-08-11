@@ -1,0 +1,66 @@
+.WithInfo {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+
+  > .info-tip {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 2;
+    display: inline-flex;
+    cursor: help;
+    pointer-events: auto;
+    line-height: 0;
+    color: var(--color-warn);
+    background: var(--background-lesser);
+    border-radius: 50%;
+  }
+
+  &.info-block {
+    width: 100%;
+    // padding-right: 16px;
+  }
+
+  /* Fill grid/flex cells when wrapping stretchy widgets. */
+  &:has(> .FrequencyRange) {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    padding-right: 16px;
+
+    > .FrequencyRange {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+    }
+  }
+
+  &:has(> .Buttons) {
+    display: flex;
+
+    > .Buttons {
+      flex: 1;
+      min-height: 0;
+    }
+  }
+
+  &:has(> .LevelMeter) {
+    display: flex;
+    align-self: stretch;
+
+    > .LevelMeter {
+      flex: 1;
+      min-height: 0;
+    }
+  }
+}
+
+/* Toggled from Header via localStorage-backed showWidgetInfo$. */
+:root.calfnxt-widget-info-off .WithInfo > .info-tip {
+  display: none;
+}

@@ -17,8 +17,9 @@
       gap: var(--gap);
       align-items: stretch;
 
-      > .Buttons {
-        > .Button {
+      > .Buttons,
+      > .WithInfo:has(> .Buttons) {
+        .Button {
           flex: 1;
           height: auto;
           min-height: 0;

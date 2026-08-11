@@ -44,8 +44,9 @@
   > .mode {
     flex: 0 0 120px;
 
-    > .Buttons {
-      > .Button {
+    > .Buttons,
+    > .WithInfo:has(> .Buttons) {
+      .Button {
         --aux-button-paddinghorizontal: 16px;
       }
     }

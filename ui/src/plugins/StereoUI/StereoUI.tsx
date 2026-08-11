@@ -5,6 +5,7 @@ import {
   Toggle,
   CorrelationMeter,
   GonioMeter,
+  WithInfo,
 } from '../../widgets';
 import {
   STEREO_MODE_ENTRIES,
@@ -15,6 +16,7 @@ import {
 } from '../../host/stereoHost';
 import { paramIds } from '../../generated/stereoModel';
 import { Header } from '../../components';
+import { stereoInfo } from './stereoInfo';
 import '../PluginUI.scss';
 import './StereoUI.scss';
 
@@ -134,21 +136,25 @@ export function StereoUI(props: StereoUIProps) {
   return (
     <div className="StereoUI PluginUI">
       <Header title="Stereo">
-        <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        <WithInfo title={stereoInfo.bypass}>
+          <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
       </Header>
 
       <div className="block mode">
         <div className="title">Mode</div>
-        <Buttons
-          layout="vertical"
-          entries={STEREO_MODE_ENTRIES}
-          value={mode}
-          onChange={(v) => {
-            host.beginEdit(paramIds.mode);
-            host.mode$.set(v);
-            host.endEdit(paramIds.mode);
-          }}
-        />
+        <WithInfo title={stereoInfo.mode} className="info-block">
+          <Buttons
+            layout="vertical"
+            entries={STEREO_MODE_ENTRIES}
+            value={mode}
+            onChange={(v) => {
+              host.beginEdit(paramIds.mode);
+              host.mode$.set(v);
+              host.endEdit(paramIds.mode);
+            }}
+          />
+        </WithInfo>
       </div>
 
       {/* Input format expected by the plugin (trim targets for In). */}
@@ -156,28 +162,32 @@ export function StereoUI(props: StereoUIProps) {
 
       <div className="block in">
         <div className="title">In</div>
-        <Knob
-          label={bus.beforeMode[0]}
-          value$={host.levelL$}
-          min={-36}
-          max={36}
-          base={0}
-          reset={stereoParamDefault('level_l')}
-          dots={DB36_DOTS}
-          labels={DB36_LABELS}
-          {...edit(paramIds.level_l)}
-        />
-        <Knob
-          label={bus.beforeMode[1]}
-          value$={host.levelR$}
-          min={-36}
-          max={36}
-          base={0}
-          reset={stereoParamDefault('level_r')}
-          dots={DB36_DOTS}
-          labels={DB36_LABELS}
-          {...edit(paramIds.level_r)}
-        />
+        <WithInfo title={stereoInfo.levelL}>
+          <Knob
+            label={bus.beforeMode[0]}
+            value$={host.levelL$}
+            min={-36}
+            max={36}
+            base={0}
+            reset={stereoParamDefault('level_l')}
+            dots={DB36_DOTS}
+            labels={DB36_LABELS}
+            {...edit(paramIds.level_l)}
+          />
+        </WithInfo>
+        <WithInfo title={stereoInfo.levelR}>
+          <Knob
+            label={bus.beforeMode[1]}
+            value$={host.levelR$}
+            min={-36}
+            max={36}
+            base={0}
+            reset={stereoParamDefault('level_r')}
+            dots={DB36_DOTS}
+            labels={DB36_LABELS}
+            {...edit(paramIds.level_r)}
+          />
+        </WithInfo>
       </div>
 
       {/* Format after the mode matrix (DSP: levels → mode → …). */}
@@ -188,134 +198,154 @@ export function StereoUI(props: StereoUIProps) {
         <div className="mid lane">
           <div className="label">M</div>{' '}
           <div className="controls">
-            <Knob
-              label="M Lev"
-              size="small"
-              value$={host.mlev$}
-              min={-36}
-              max={36}
-              base={0}
-              reset={stereoParamDefault('mlev')}
-              dots={DB36_DOTS}
-              labels={DB36_LABELS}
-              {...edit(paramIds.mlev)}
-            />
-            <Knob
-              label="M Pan"
-              size="small"
-              value$={host.mpan$}
-              min={-1}
-              max={1}
-              base={0}
-              reset={stereoParamDefault('mpan')}
-              dots={UNIT_DOTS}
-              labels={BALANCE_LABELS}
-              {...{ 'value.format': formatBalance }}
-              {...edit(paramIds.mpan)}
-            />
+            <WithInfo title={stereoInfo.mlev}>
+              <Knob
+                label="M Lev"
+                size="small"
+                value$={host.mlev$}
+                min={-36}
+                max={36}
+                base={0}
+                reset={stereoParamDefault('mlev')}
+                dots={DB36_DOTS}
+                labels={DB36_LABELS}
+                {...edit(paramIds.mlev)}
+              />
+            </WithInfo>
+            <WithInfo title={stereoInfo.mpan}>
+              <Knob
+                label="M Pan"
+                size="small"
+                value$={host.mpan$}
+                min={-1}
+                max={1}
+                base={0}
+                reset={stereoParamDefault('mpan')}
+                dots={UNIT_DOTS}
+                labels={BALANCE_LABELS}
+                {...{ 'value.format': formatBalance }}
+                {...edit(paramIds.mpan)}
+              />
+            </WithInfo>
           </div>
         </div>
         <div className="side lane">
           <div className="label">S</div>
           <div className="controls">
-            <Knob
-              label="S Lev"
-              size="small"
-              value$={host.slev$}
-              min={-36}
-              max={36}
-              base={0}
-              reset={stereoParamDefault('slev')}
-              dots={DB36_DOTS}
-              labels={DB36_LABELS}
-              {...edit(paramIds.slev)}
-            />
-            <Knob
-              label="S Bal"
-              size="small"
-              value$={host.sbal$}
-              min={-1}
-              max={1}
-              base={0}
-              reset={stereoParamDefault('sbal')}
-              dots={UNIT_DOTS}
-              labels={BALANCE_LABELS}
-              {...{ 'value.format': formatBalance }}
-              {...edit(paramIds.sbal)}
-            />
+            <WithInfo title={stereoInfo.slev}>
+              <Knob
+                label="S Lev"
+                size="small"
+                value$={host.slev$}
+                min={-36}
+                max={36}
+                base={0}
+                reset={stereoParamDefault('slev')}
+                dots={DB36_DOTS}
+                labels={DB36_LABELS}
+                {...edit(paramIds.slev)}
+              />
+            </WithInfo>
+            <WithInfo title={stereoInfo.sbal}>
+              <Knob
+                label="S Bal"
+                size="small"
+                value$={host.sbal$}
+                min={-1}
+                max={1}
+                base={0}
+                reset={stereoParamDefault('sbal')}
+                dots={UNIT_DOTS}
+                labels={BALANCE_LABELS}
+                {...{ 'value.format': formatBalance }}
+                {...edit(paramIds.sbal)}
+              />
+            </WithInfo>
           </div>
         </div>
         <div className="decorr">
-          <Toggle state$={host.decorr$} label="Decorr" />
-          <Knob
-            label="Amount"
-            size="small"
-            value$={host.decorrAmount$}
-            min={0}
-            max={1}
-            reset={stereoParamDefault('decorr_amount')}
-            dots={UNIT01_DOTS}
-            labels={UNIT01_LABELS}
-            {...edit(paramIds.decorr_amount)}
-            active$={host.decorr$}
-          />
-          <Knob
-            label="Xover"
-            size="small"
-            value$={host.decorrXover$}
-            min={80}
-            max={2000}
-            reset={stereoParamDefault('decorr_xover')}
-            scale="frequency"
-            dots={XOVER_DOTS}
-            labels={XOVER_LABELS}
-            {...edit(paramIds.decorr_xover)}
-            active$={host.decorr$}
-          />
-          <Knob
-            label="Slope"
-            size="small"
-            value$={host.decorrSlope$}
-            min={12}
-            max={48}
-            reset={stereoParamDefault('decorr_slope')}
-            snap={[12, 24, 48]}
-            dots={SLOPE_DOTS}
-            labels={SLOPE_LABELS}
-            {...{
-              'value.format': (v: number) => `${snapSlopeDb(v)} dB`,
-            }}
-            {...edit(paramIds.decorr_slope)}
-            active$={host.decorr$}
-            scale="log2"
-            log_factor={2}
-          />
-          <Knob
-            label="Stages"
-            size="small"
-            value$={host.decorrStages$}
-            min={1}
-            max={8}
-            reset={stereoParamDefault('decorr_stages')}
-            snap={1}
-            dots={STAGES_DOTS}
-            labels={STAGES_LABELS}
-            {...{ 'value.format': (v: number) => v.toFixed(0) }}
-            {...edit(paramIds.decorr_stages)}
-            active$={host.decorr$}
-          />
-          <Knob
-            label="Spread"
-            size="small"
-            value$={host.decorrSpread$}
-            min={0}
-            max={1}
-            reset={stereoParamDefault('decorr_spread')}
-            dots={UNIT01_DOTS}
-            labels={UNIT01_LABELS}
-            {...edit(paramIds.decorr_spread)}
-            active$={host.decorr$}
-          />
+          <WithInfo title={stereoInfo.decorr}>
+            <Toggle state$={host.decorr$} label="Decorr" />
+          </WithInfo>
+          <WithInfo title={stereoInfo.decorrAmount}>
+            <Knob
+              label="Amount"
+              size="small"
+              value$={host.decorrAmount$}
+              min={0}
+              max={1}
+              reset={stereoParamDefault('decorr_amount')}
+              dots={UNIT01_DOTS}
+              labels={UNIT01_LABELS}
+              {...edit(paramIds.decorr_amount)}
+              active$={host.decorr$}
+            />
+          </WithInfo>
+          <WithInfo title={stereoInfo.decorrXover}>
+            <Knob
+              label="Xover"
+              size="small"
+              value$={host.decorrXover$}
+              min={80}
+              max={2000}
+              reset={stereoParamDefault('decorr_xover')}
+              scale="frequency"
+              dots={XOVER_DOTS}
+              labels={XOVER_LABELS}
+              {...edit(paramIds.decorr_xover)}
+              active$={host.decorr$}
+            />
+          </WithInfo>
+          <WithInfo title={stereoInfo.decorrSlope}>
+            <Knob
+              label="Slope"
+              size="small"
+              value$={host.decorrSlope$}
+              min={12}
+              max={48}
+              reset={stereoParamDefault('decorr_slope')}
+              snap={[12, 24, 48]}
+              dots={SLOPE_DOTS}
+              labels={SLOPE_LABELS}
+              {...{
+                'value.format': (v: number) => `${snapSlopeDb(v)} dB`,
+              }}
+              {...edit(paramIds.decorr_slope)}
+              active$={host.decorr$}
+              scale="log2"
+              log_factor={2}
+            />
+          </WithInfo>
+          <WithInfo title={stereoInfo.decorrStages}>
+            <Knob
+              label="Stages"
+              size="small"
+              value$={host.decorrStages$}
+              min={1}
+              max={8}
+              reset={stereoParamDefault('decorr_stages')}
+              snap={1}
+              dots={STAGES_DOTS}
+              labels={STAGES_LABELS}
+              {...{ 'value.format': (v: number) => v.toFixed(0) }}
+              {...edit(paramIds.decorr_stages)}
+              active$={host.decorr$}
+            />
+          </WithInfo>
+          <WithInfo title={stereoInfo.decorrSpread}>
+            <Knob
+              label="Spread"
+              size="small"
+              value$={host.decorrSpread$}
+              min={0}
+              max={1}
+              reset={stereoParamDefault('decorr_spread')}
+              dots={UNIT01_DOTS}
+              labels={UNIT01_LABELS}
+              {...edit(paramIds.decorr_spread)}
+              active$={host.decorr$}
+            />
+          </WithInfo>
         </div>
       </div>
 
@@ -324,22 +354,30 @@ export function StereoUI(props: StereoUIProps) {
       <div className="block channels">
         <div className="title">Channels</div>
         <div className="ch">
-          <Toggle
-            state$={host.muteL$}
-            icon="speaker"
-            icon_active="mute"
-            className="warn"
-          />
-          <Toggle state$={host.phaseL$} icon="phase" />
+          <WithInfo title={stereoInfo.muteL}>
+            <Toggle
+              state$={host.muteL$}
+              icon="speaker"
+              icon_active="mute"
+              className="warn"
+            />
+          </WithInfo>
+          <WithInfo title={stereoInfo.phaseL}>
+            <Toggle state$={host.phaseL$} icon="phase" />
+          </WithInfo>
         </div>
         <div className="ch">
-          <Toggle
-            state$={host.muteR$}
-            icon="speaker"
-            icon_active="mute"
-            className="warn"
-          />
-          <Toggle state$={host.phaseR$} icon="phase" />
+          <WithInfo title={stereoInfo.muteR}>
+            <Toggle
+              state$={host.muteR$}
+              icon="speaker"
+              icon_active="mute"
+              className="warn"
+            />
+          </WithInfo>
+          <WithInfo title={stereoInfo.phaseR}>
+            <Toggle state$={host.phaseR$} icon="phase" />
+          </WithInfo>
         </div>
       </div>
 
@@ -347,63 +385,71 @@ export function StereoUI(props: StereoUIProps) {
 
       <div className="block spatial">
         <div className="title">Spatial</div>
-        <Knob
-          label="Delay"
-          size="small"
-          value$={host.delay$}
-          min={-20}
-          max={20}
-          base={0}
-          reset={stereoParamDefault('delay')}
-          dots={DELAY_DOTS}
-          labels={DELAY_LABELS}
-          {...{
-            'value.format': (v: number) => formatDelayMs(v, bus.afterMode),
-          }}
-          {...edit(paramIds.delay)}
-        />
-        <Knob
-          label="Base"
-          size="medium"
-          value$={host.stereoBase$}
-          min={-1}
-          max={1}
-          base={0}
-          reset={stereoParamDefault('stereo_base')}
-          dots={UNIT_DOTS}
-          labels={UNIT_LABELS}
-          {...edit(paramIds.stereo_base)}
-        />
-        <Knob
-          label="Phase"
-          size="small"
-          value$={host.stereoPhase$}
-          min={0}
-          max={360}
-          reset={stereoParamDefault('stereo_phase')}
-          dots={PHASE_DOTS}
-          labels={PHASE_LABELS}
-          {...edit(paramIds.stereo_phase)}
-        />
+        <WithInfo title={stereoInfo.delay}>
+          <Knob
+            label="Delay"
+            size="small"
+            value$={host.delay$}
+            min={-20}
+            max={20}
+            base={0}
+            reset={stereoParamDefault('delay')}
+            dots={DELAY_DOTS}
+            labels={DELAY_LABELS}
+            {...{
+              'value.format': (v: number) => formatDelayMs(v, bus.afterMode),
+            }}
+            {...edit(paramIds.delay)}
+          />
+        </WithInfo>
+        <WithInfo title={stereoInfo.stereoBase}>
+          <Knob
+            label="Base"
+            size="medium"
+            value$={host.stereoBase$}
+            min={-1}
+            max={1}
+            base={0}
+            reset={stereoParamDefault('stereo_base')}
+            dots={UNIT_DOTS}
+            labels={UNIT_LABELS}
+            {...edit(paramIds.stereo_base)}
+          />
+        </WithInfo>
+        <WithInfo title={stereoInfo.stereoPhase}>
+          <Knob
+            label="Phase"
+            size="small"
+            value$={host.stereoPhase$}
+            min={0}
+            max={360}
+            reset={stereoParamDefault('stereo_phase')}
+            dots={PHASE_DOTS}
+            labels={PHASE_LABELS}
+            {...edit(paramIds.stereo_phase)}
+          />
+        </WithInfo>
       </div>
 
       <Bus pair={bus.afterMode} />
 
       <div className="block out">
         <div className="title">Out</div>
-        <Knob
-          label="Balance"
-          size="medium"
-          value$={host.balanceOut$}
-          min={-1}
-          max={1}
-          base={0}
-          reset={stereoParamDefault('balance_out')}
-          dots={UNIT_DOTS}
-          labels={BALANCE_LABELS}
-          {...{ 'value.format': formatBalance }}
-          {...edit(paramIds.balance_out)}
-        />
+        <WithInfo title={stereoInfo.balanceOut}>
+          <Knob
+            label="Balance"
+            size="medium"
+            value$={host.balanceOut$}
+            min={-1}
+            max={1}
+            base={0}
+            reset={stereoParamDefault('balance_out')}
+            dots={UNIT_DOTS}
+            labels={BALANCE_LABELS}
+            {...{ 'value.format': formatBalance }}
+            {...edit(paramIds.balance_out)}
+          />
+        </WithInfo>
         <GonioMeter samples$={host.gonio$} />
         <CorrelationMeter value$={host.corr$} />
       </div>

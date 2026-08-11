@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './Header.scss';
 import Logo from '../../images/calfNXT.svg';
-import { Knob, MultiMeter } from '../../widgets';
+import { Knob, MultiMeter, Toggle } from '../../widgets';
 import {
   createHeaderIo,
   ioGainMeta,
   labelsForChannelCount,
   type IHeaderIo,
 } from '../../host/headerMeters';
+import { showWidgetInfo$ } from '../../prefs/showWidgetInfo';
 import type { DynamicValue } from '@deutschesoft/awml';
 
 export interface HeaderProps {
@@ -90,6 +91,13 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
         />
         <span className="tag">Out</span>
       </div>
+
+      <Toggle
+        className="widget-info"
+        state$={showWidgetInfo$}
+        icon="info"
+        title="Show parameter info icons"
+      />
     </div>
   );
 }

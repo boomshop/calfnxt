@@ -19,19 +19,6 @@
           stroke: var(--color);
           stroke-opacity: 0.1;
         }
-
-        > .aux-gridlabel {
-          fill: rgb(from var(--color) r g b / 0.45);
-          font-size: 9px;
-        }
-
-        > .aux-gridlabel.aux-vertical {
-          padding: 2px 3px 0;
-        }
-
-        > .aux-gridlabel.aux-horizontal {
-          padding: 0 4px 0 0;
-        }
       }
     }
 

@@ -14,32 +14,10 @@
           stroke-opacity: 0.75;
         }
       }
-
-      > .aux-baseline {
-        fill: none;
-        stroke-width: 2px;
-        // Minis / fallback; main chart paints via SVG gain gradient (inline stroke).
-        stroke: var(--color-accent);
-      }
     }
 
     > .aux-handles {
       > .aux-charthandle {
-        > .aux-handle {
-          fill: var(--color);
-          fill-opacity: 0.25;
-        }
-
-        > .aux-line1 {
-          stroke: var(--color);
-          stroke-opacity: 0.25;
-        }
-
-        > .aux-label {
-          fill: var(--color);
-          fill-opacity: 0.33;
-        }
-
         &.aux-active,
         &.eq-selected {
           > .aux-handle {

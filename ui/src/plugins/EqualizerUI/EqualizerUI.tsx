@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { EQChart, Icon, Knob, Select, Toggle } from '../../widgets';
+import { EQChart, Icon, Knob, Select, Toggle, WithInfo } from '../../widgets';
 import {
   EQ_DEFAULT_SELECTED_INDEX,
   EQ_DYN_ATTACK_MAX,
@@ -28,6 +28,7 @@ import '../PluginUI.scss';
 import './EqualizerUI.scss';
 import { Header } from '../../components';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
+import { equalizerInfo } from './equalizerInfo';
 
 /** Ring ticks / labels for EQ control knobs (Circular `labels` / `dots`). */
 const EQ_FREQ_DOTS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
@@ -160,66 +161,76 @@ function BandControls(props: { band: IEqualizerBand }) {
   const filterType = useDynamicValueReadonly<EqFilterType>(band.type$, 'parametric');
   const pass = isPassFilter(filterType);
   const canDyn = bandSupportsDyn(filterType);
-  const doesDyn = useDynamicValueReadonly(band.dyn$, false);
-
   return (
     <div className="controls" data-band={band.id}>
       <div className="block eq">
-        <Select value$={band.type$} entries={EQ_FILTER_TYPE_ENTRIES} />
+        <WithInfo title={equalizerInfo.type}>
+          <Select value$={band.type$} entries={EQ_FILTER_TYPE_ENTRIES} />
+        </WithInfo>
         {pass ? (
-          <Select
-            className="slope"
-            value$={band.slope$}
-            entries={EQ_PASS_SLOPE_ENTRIES}
-          />
+          <WithInfo title={equalizerInfo.slope}>
+            <Select
+              className="slope"
+              value$={band.slope$}
+              entries={EQ_PASS_SLOPE_ENTRIES}
+            />
+          </WithInfo>
         ) : null}
-        <Knob
-          value$={band.frequency$}
-          min={EQ_FREQ_MIN}
-          max={EQ_FREQ_MAX}
-          reset={band.defaults.frequency}
-          label="Freq"
-          size={pass ? 'large' : 'medium'}
-          scale="frequency"
-          dots={EQ_FREQ_DOTS}
-          labels={EQ_FREQ_LABELS}
-          {...{
-            'value.format': (v: number) =>
-              v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0),
-          }}
-        />
-        {!pass ? (
+        <WithInfo title={equalizerInfo.freq}>
           <Knob
-            value$={band.gain$}
-            min={EQ_GAIN_MIN}
-            max={EQ_GAIN_MAX}
-            reset={band.defaults.gain}
-            label="Gain"
-            size="large"
-            base={0}
-            dots={EQ_GAIN_DOTS}
-            labels={EQ_GAIN_LABELS}
+            value$={band.frequency$}
+            min={EQ_FREQ_MIN}
+            max={EQ_FREQ_MAX}
+            reset={band.defaults.frequency}
+            label="Freq"
+            size={pass ? 'large' : 'medium'}
+            scale="frequency"
+            dots={EQ_FREQ_DOTS}
+            labels={EQ_FREQ_LABELS}
             {...{
-              'value.format': (v: number) => v.toFixed(1),
+              'value.format': (v: number) =>
+                v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0),
             }}
           />
+        </WithInfo>
+        {!pass ? (
+          <WithInfo title={equalizerInfo.gain}>
+            <Knob
+              value$={band.gain$}
+              min={EQ_GAIN_MIN}
+              max={EQ_GAIN_MAX}
+              reset={band.defaults.gain}
+              label="Gain"
+              size="large"
+              base={0}
+              dots={EQ_GAIN_DOTS}
+              labels={EQ_GAIN_LABELS}
+              {...{
+                'value.format': (v: number) => v.toFixed(1),
+              }}
+            />
+          </WithInfo>
         ) : null}
-        <Knob
-          value$={band.q$}
-          min={EQ_Q_MIN}
-          max={EQ_Q_MAX}
-          reset={band.defaults.q}
-          label="Q"
-          size="medium"
-          scale="log2"
-          log_factor={4}
-          dots={EQ_Q_DOTS}
-          labels={EQ_Q_LABELS}
-          {...{
-            'value.format': (v: number) => v.toFixed(2),
-          }}
-        />
-        <Toggle state$={band.active$} icon="power" />
+        <WithInfo title={equalizerInfo.q}>
+          <Knob
+            value$={band.q$}
+            min={EQ_Q_MIN}
+            max={EQ_Q_MAX}
+            reset={band.defaults.q}
+            label="Q"
+            size="medium"
+            scale="log2"
+            log_factor={4}
+            dots={EQ_Q_DOTS}
+            labels={EQ_Q_LABELS}
+            {...{
+              'value.format': (v: number) => v.toFixed(2),
+            }}
+          />
+        </WithInfo>
+        <WithInfo title={equalizerInfo.active}>
+          <Toggle state$={band.active$} icon="power" />
+        </WithInfo>
         <div className="label">Band {band.index + 1}</div>
         <Icon
           icon={filterType}
@@ -229,69 +240,90 @@ function BandControls(props: { band: IEqualizerBand }) {
         />
       </div>
       {canDyn ? (
-        <div className={doesDyn ? 'block dyn active' : 'block dyn inactive'}>
+        <div className="block dyn">
           <div className="title">Dynamics</div>
-          <Toggle state$={band.dyn$} icon="power" />
-          <Knob
-            value$={band.dynAttack$}
-            min={EQ_DYN_ATTACK_MIN}
-            max={EQ_DYN_ATTACK_MAX}
-            reset={band.defaults.dynAttack}
-            label="Attack"
-            size="small"
-            scale="log2"
-            log_factor={4}
-            dots={EQ_DYN_ATTACK_DOTS}
-            labels={EQ_DYN_ATTACK_LABELS}
-            {...{
-              'value.format': (v: number) => `${v.toFixed(1)}`,
-            }}
-          />
-          <Knob
-            value$={band.dynRelease$}
-            min={EQ_DYN_RELEASE_MIN}
-            max={EQ_DYN_RELEASE_MAX}
-            reset={band.defaults.dynRelease}
-            label="Release"
-            size="small"
-            scale="log2"
-            log_factor={4}
-            dots={EQ_DYN_RELEASE_DOTS}
-            labels={EQ_DYN_RELEASE_LABELS}
-            {...{
-              'value.format': (v: number) => `${v.toFixed(0)}`,
-            }}
-          />
-          <Toggle state$={band.listen$} icon="headphones" className="warn" />
-          <Knob
-            value$={band.dynThreshold$}
-            min={EQ_DYN_THRESH_MIN}
-            max={EQ_DYN_THRESH_MAX}
-            reset={band.defaults.dynThreshold}
-            label="Thresh"
-            size="small"
-            base={0}
-            dots={EQ_DYN_THRESH_DOTS}
-            labels={EQ_DYN_THRESH_LABELS}
-            {...{
-              'value.format': (v: number) => v.toFixed(1),
-            }}
-          />
-          <Knob
-            value$={band.dynRatio$}
-            min={EQ_DYN_RATIO_MIN}
-            max={EQ_DYN_RATIO_MAX}
-            reset={band.defaults.dynRatio}
-            label="Ratio"
-            size="small"
-            scale="log2"
-            log_factor={4}
-            dots={EQ_DYN_RATIO_DOTS}
-            labels={EQ_DYN_RATIO_LABELS}
-            {...{
-              'value.format': (v: number) => `${v.toFixed(1)}:1`,
-            }}
-          />
+          <WithInfo title={equalizerInfo.dyn}>
+            <Toggle state$={band.dyn$} icon="power" />
+          </WithInfo>
+          <WithInfo title={equalizerInfo.dynAttack}>
+            <Knob
+              value$={band.dynAttack$}
+              min={EQ_DYN_ATTACK_MIN}
+              max={EQ_DYN_ATTACK_MAX}
+              reset={band.defaults.dynAttack}
+              label="Attack"
+              size="small"
+              scale="log2"
+              log_factor={4}
+              dots={EQ_DYN_ATTACK_DOTS}
+              labels={EQ_DYN_ATTACK_LABELS}
+              enabled$={band.dyn$}
+              {...{
+                'value.format': (v: number) => `${v.toFixed(1)}`,
+              }}
+            />
+          </WithInfo>
+          <WithInfo title={equalizerInfo.dynRelease}>
+            <Knob
+              value$={band.dynRelease$}
+              min={EQ_DYN_RELEASE_MIN}
+              max={EQ_DYN_RELEASE_MAX}
+              reset={band.defaults.dynRelease}
+              label="Release"
+              size="small"
+              scale="log2"
+              log_factor={4}
+              dots={EQ_DYN_RELEASE_DOTS}
+              labels={EQ_DYN_RELEASE_LABELS}
+              enabled$={band.dyn$}
+              {...{
+                'value.format': (v: number) => `${v.toFixed(0)}`,
+              }}
+            />
+          </WithInfo>
+          <WithInfo title={equalizerInfo.listen}>
+            <Toggle
+              state$={band.listen$}
+              icon="headphones"
+              className="warn"
+              enabled$={band.dyn$}
+            />
+          </WithInfo>
+          <WithInfo title={equalizerInfo.dynThresh}>
+            <Knob
+              value$={band.dynThreshold$}
+              min={EQ_DYN_THRESH_MIN}
+              max={EQ_DYN_THRESH_MAX}
+              reset={band.defaults.dynThreshold}
+              label="Thresh"
+              size="small"
+              base={0}
+              dots={EQ_DYN_THRESH_DOTS}
+              labels={EQ_DYN_THRESH_LABELS}
+              enabled$={band.dyn$}
+              {...{
+                'value.format': (v: number) => v.toFixed(1),
+              }}
+            />
+          </WithInfo>
+          <WithInfo title={equalizerInfo.dynRatio}>
+            <Knob
+              value$={band.dynRatio$}
+              min={EQ_DYN_RATIO_MIN}
+              max={EQ_DYN_RATIO_MAX}
+              reset={band.defaults.dynRatio}
+              label="Ratio"
+              size="small"
+              scale="log2"
+              log_factor={4}
+              dots={EQ_DYN_RATIO_DOTS}
+              labels={EQ_DYN_RATIO_LABELS}
+              enabled$={band.dyn$}
+              {...{
+                'value.format': (v: number) => `${v.toFixed(1)}:1`,
+              }}
+            />
+          </WithInfo>
         </div>
       ) : null}
     </div>
@@ -322,7 +354,9 @@ export function EqualizerUI(props: EqualizerUIProps) {
   return (
     <div className="EqualizerUI PluginUI">
       <Header title="Equalizer">
-        <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        <WithInfo title={equalizerInfo.bypass}>
+          <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
       </Header>
 
       <EQChart

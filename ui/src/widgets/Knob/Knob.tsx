@@ -12,6 +12,7 @@ const KnobBindings = {
   value$: { name: 'value' },
   active$: { name: 'active' },
   disabled$: { name: 'disabled' },
+  enabled$: { name: 'disabled', transformReceive: (v: boolean) => !v },
 };
 
 const ringsize = 3;

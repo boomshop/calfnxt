@@ -21,7 +21,8 @@
 
     > .FrequencyRange {
       grid-area: chart;
-      > .EQChart {
+
+      .EQChart {
         background: var(--background);
       }
     }

@@ -2,7 +2,7 @@
   height: 56px;
   display: flex;
   gap: 16px;
-  padding: 0 16px;
+  padding: 0 10px 0 16px;
   align-items: center;
 
   > .logo {
@@ -48,8 +48,15 @@
     gap: var(--gap);
 
     > .bypass,
-    > .active {
+    > .active,
+    > .WithInfo:has(> .bypass),
+    > .WithInfo:has(> .active) {
       --aux-button-paddinghorizontal: 20px;
     }
+  }
+
+  > .widget-info {
+    flex-shrink: 0;
+    margin-left: 4px;
   }
 }

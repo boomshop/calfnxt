@@ -17,4 +17,5 @@ export * from "./Buttons";
 export * from "./ConfirmButton";
 export * from "./Loading";
 export * from "./Icon";
+export * from "./WithInfo";
 export * from "./editGesture";

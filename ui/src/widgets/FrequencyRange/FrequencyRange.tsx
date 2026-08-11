@@ -6,7 +6,9 @@ import {
   toAuxEqType,
 } from '../../host/equalizerHost';
 import { EQChart, Knob, Select, Toggle } from '../';
+import { WithInfo } from '../WithInfo';
 import type { AuxOnSet } from '../editGesture';
+import { frequencyRangeInfo } from './frequencyRangeInfo';
 import './FrequencyRange.scss';
 
 /** HP/LP mode plains: 0=off, 1/2/3/4 = 12/24/36/48 dB. */
@@ -158,7 +160,9 @@ export function FrequencyRange(props: FrequencyRangeProps) {
   return (
     <div className={cls}>
       {listen$ ? (
-        <Toggle state$={listen$} icon="headphones" className="listen warn" />
+        <WithInfo title={frequencyRangeInfo.listen}>
+          <Toggle state$={listen$} icon="headphones" className="listen warn" />
+        </WithInfo>
       ) : null}
       <EQChart
         bands={filterBands}
@@ -168,32 +172,40 @@ export function FrequencyRange(props: FrequencyRangeProps) {
         dbGrid={12}
       />
       <div className="filter">
-        <Select value$={hpMode$} entries={FREQUENCY_RANGE_MODE_ENTRIES} />
-        <Knob
-          label="HP Hz"
-          value$={hipass$}
-          min={20}
-          max={20000}
-          reset={hipassDefault}
-          scale="frequency"
-          dots={HP_LP_DOTS}
-          labels={HP_LP_LABELS}
-          size="small"
-          {...hipassEdit}
-        />
-        <Knob
-          label="LP Hz"
-          value$={lopass$}
-          min={20}
-          max={20000}
-          reset={lopassDefault}
-          scale="frequency"
-          dots={HP_LP_DOTS}
-          labels={HP_LP_LABELS}
-          size="small"
-          {...lopassEdit}
-        />
-        <Select value$={lpMode$} entries={FREQUENCY_RANGE_MODE_ENTRIES} />
+        <WithInfo title={frequencyRangeInfo.hpMode}>
+          <Select value$={hpMode$} entries={FREQUENCY_RANGE_MODE_ENTRIES} />
+        </WithInfo>
+        <WithInfo title={frequencyRangeInfo.hipass}>
+          <Knob
+            label="HP Hz"
+            value$={hipass$}
+            min={20}
+            max={20000}
+            reset={hipassDefault}
+            scale="frequency"
+            dots={HP_LP_DOTS}
+            labels={HP_LP_LABELS}
+            size="small"
+            {...hipassEdit}
+          />
+        </WithInfo>
+        <WithInfo title={frequencyRangeInfo.lopass}>
+          <Knob
+            label="LP Hz"
+            value$={lopass$}
+            min={20}
+            max={20000}
+            reset={lopassDefault}
+            scale="frequency"
+            dots={HP_LP_DOTS}
+            labels={HP_LP_LABELS}
+            size="small"
+            {...lopassEdit}
+          />
+        </WithInfo>
+        <WithInfo title={frequencyRangeInfo.lpMode}>
+          <Select value$={lpMode$} entries={FREQUENCY_RANGE_MODE_ENTRIES} />
+        </WithInfo>
       </div>
     </div>
   );

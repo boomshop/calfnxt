@@ -37,7 +37,8 @@
       margin: 0 16px;
     }
 
-    > .Toggle {
+    > .Toggle,
+    > .WithInfo:has(> .Toggle) {
       position: absolute;
       top: 36px;
       left: 16px;
@@ -71,7 +72,9 @@
       gap: 16px;
     }
 
-    > .LevelMeter {
+    > .LevelMeter,
+    > .WithInfo:has(> .LevelMeter),
+    > .gr {
       grid-area: gr;
     }
   }

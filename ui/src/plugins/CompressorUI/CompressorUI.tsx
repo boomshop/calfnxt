@@ -8,6 +8,7 @@ import {
   Knob,
   LevelMeter,
   Toggle,
+  WithInfo,
 } from '../../widgets';
 import { paramIds } from '../../generated/compressorModel';
 import {
@@ -18,6 +19,7 @@ import {
 } from '../../host/compressorHost';
 import '../PluginUI.scss';
 import './CompressorUI.scss';
+import { compressorInfo } from './compressorInfo';
 
 export interface CompressorUIProps {
   host: ICompressorHost;
@@ -107,7 +109,9 @@ export function CompressorUI(props: CompressorUIProps) {
   return (
     <div className="CompressorUI PluginUI">
       <Header title="Compressor">
-        <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        <WithInfo title={compressorInfo.bypass}>
+          <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
       </Header>
 
       <div className="history">
@@ -136,24 +140,28 @@ export function CompressorUI(props: CompressorUIProps) {
           lopassEdit={edit(paramIds.lopass)}
         />
         <div className="selects">
-          <Buttons
-            entries={COMPRESSOR_MODE_ENTRIES}
-            value={mode}
-            onChange={(v) => {
-              host.beginEdit(paramIds.mode);
-              host.mode$.set(v);
-              host.endEdit(paramIds.mode);
-            }}
-          />
-          <Buttons
-            entries={COMPRESSOR_LINK_ENTRIES}
-            value={link}
-            onChange={(v) => {
-              host.beginEdit(paramIds.link);
-              host.link$.set(v);
-              host.endEdit(paramIds.link);
-            }}
-          />
+          <WithInfo title={compressorInfo.mode} className="info-block">
+            <Buttons
+              entries={COMPRESSOR_MODE_ENTRIES}
+              value={mode}
+              onChange={(v) => {
+                host.beginEdit(paramIds.mode);
+                host.mode$.set(v);
+                host.endEdit(paramIds.mode);
+              }}
+            />
+          </WithInfo>
+          <WithInfo title={compressorInfo.link} className="info-block">
+            <Buttons
+              entries={COMPRESSOR_LINK_ENTRIES}
+              value={link}
+              onChange={(v) => {
+                host.beginEdit(paramIds.link);
+                host.link$.set(v);
+                host.endEdit(paramIds.link);
+              }}
+            />
+          </WithInfo>
         </div>
       </div>
 
@@ -161,138 +169,156 @@ export function CompressorUI(props: CompressorUIProps) {
         <div className="title">Compressor</div>
 
         <div className="upper">
-          <Knob
-            label="Thresh"
-            value$={host.threshold$}
-            min={-60}
-            max={0}
-            reset={compressorParamDefault('threshold')}
-            base={0}
-            dots={THRESH_DOTS}
-            labels={THRESH_LABELS}
-            {...edit(paramIds.threshold)}
-            size="large"
-            scale="decibel"
-            log_factor={3}
-          />
-          <Knob
-            label="Ratio"
-            value$={host.ratio$}
-            min={1}
-            max={20}
-            reset={compressorParamDefault('ratio')}
-            scale="log2"
-            log_factor={4}
-            dots={RATIO_DOTS}
-            labels={RATIO_LABELS}
-            {...{ 'value.format': (v: number) => `${v.toFixed(1)}:1` }}
-            {...edit(paramIds.ratio)}
-            size="large"
-          />
+          <WithInfo title={compressorInfo.threshold}>
+            <Knob
+              label="Thresh"
+              value$={host.threshold$}
+              min={-60}
+              max={0}
+              reset={compressorParamDefault('threshold')}
+              base={0}
+              dots={THRESH_DOTS}
+              labels={THRESH_LABELS}
+              {...edit(paramIds.threshold)}
+              size="large"
+              scale="decibel"
+              log_factor={3}
+            />
+          </WithInfo>
+          <WithInfo title={compressorInfo.ratio}>
+            <Knob
+              label="Ratio"
+              value$={host.ratio$}
+              min={1}
+              max={20}
+              reset={compressorParamDefault('ratio')}
+              scale="log2"
+              log_factor={4}
+              dots={RATIO_DOTS}
+              labels={RATIO_LABELS}
+              {...{ 'value.format': (v: number) => `${v.toFixed(1)}:1` }}
+              {...edit(paramIds.ratio)}
+              size="large"
+            />
+          </WithInfo>
         </div>
 
         <div className="center">
-          <Knob
-            label="Attack"
-            value$={host.attack$}
-            min={0.1}
-            max={500}
-            reset={compressorParamDefault('attack')}
-            scale="log2"
-            log_factor={4}
-            dots={ATTACK_DOTS}
-            labels={ATTACK_LABELS}
-            size="small"
-            {...{ 'value.format': (v: number) => `${v.toFixed(1)}` }}
-            {...edit(paramIds.attack)}
-          />
-          <Knob
-            label="Release"
-            value$={host.release$}
-            min={1}
-            max={2000}
-            reset={compressorParamDefault('release')}
-            scale="log2"
-            log_factor={4}
-            dots={RELEASE_DOTS}
-            labels={RELEASE_LABELS}
-            size="small"
-            {...{ 'value.format': (v: number) => `${v.toFixed(0)}` }}
-            {...edit(paramIds.release)}
-          />
-          <Knob
-            label="PDR"
-            value$={host.pdr$}
-            min={0}
-            max={1}
-            reset={compressorParamDefault('pdr')}
-            dots={PDR_DOTS}
-            labels={PDR_LABELS}
-            size="small"
-            {...{ 'value.format': (v: number) => `${Math.round(v * 100)} %` }}
-            {...edit(paramIds.pdr)}
-          />
+          <WithInfo title={compressorInfo.attack}>
+            <Knob
+              label="Attack"
+              value$={host.attack$}
+              min={0.1}
+              max={500}
+              reset={compressorParamDefault('attack')}
+              scale="log2"
+              log_factor={4}
+              dots={ATTACK_DOTS}
+              labels={ATTACK_LABELS}
+              size="small"
+              {...{ 'value.format': (v: number) => `${v.toFixed(1)}` }}
+              {...edit(paramIds.attack)}
+            />
+          </WithInfo>
+          <WithInfo title={compressorInfo.release}>
+            <Knob
+              label="Release"
+              value$={host.release$}
+              min={1}
+              max={2000}
+              reset={compressorParamDefault('release')}
+              scale="log2"
+              log_factor={4}
+              dots={RELEASE_DOTS}
+              labels={RELEASE_LABELS}
+              size="small"
+              {...{ 'value.format': (v: number) => `${v.toFixed(0)}` }}
+              {...edit(paramIds.release)}
+            />
+          </WithInfo>
+          <WithInfo title={compressorInfo.pdr}>
+            <Knob
+              label="PDR"
+              value$={host.pdr$}
+              min={0}
+              max={1}
+              reset={compressorParamDefault('pdr')}
+              dots={PDR_DOTS}
+              labels={PDR_LABELS}
+              size="small"
+              {...{ 'value.format': (v: number) => `${Math.round(v * 100)} %` }}
+              {...edit(paramIds.pdr)}
+            />
+          </WithInfo>
         </div>
         <div className="lower">
-          <Knob
-            label="Knee"
-            value$={host.knee$}
-            min={0}
-            max={24}
-            reset={compressorParamDefault('knee')}
-            dots={KNEE_DOTS}
-            labels={KNEE_LABELS}
-            {...edit(paramIds.knee)}
-            size="small"
-          />
-          <Knob
-            label="Makeup"
-            value$={host.makeup$}
-            min={0}
-            max={24}
-            reset={compressorParamDefault('makeup')}
-            base={0}
-            dots={MAKEUP_DOTS}
-            labels={MAKEUP_LABELS}
-            size="small"
-            {...edit(paramIds.makeup)}
-          />
-          <Knob
-            label="Mix"
-            size="small"
-            value$={host.mix$}
-            min={0}
-            max={1}
-            reset={compressorParamDefault('mix')}
-            dots={MIX_DOTS}
-            labels={MIX_LABELS}
-            {...{ 'value.format': (v: number) => `${Math.round(v * 100)} %` }}
-            {...edit(paramIds.mix)}
-          />
+          <WithInfo title={compressorInfo.knee}>
+            <Knob
+              label="Knee"
+              value$={host.knee$}
+              min={0}
+              max={24}
+              reset={compressorParamDefault('knee')}
+              dots={KNEE_DOTS}
+              labels={KNEE_LABELS}
+              {...edit(paramIds.knee)}
+              size="small"
+            />
+          </WithInfo>
+          <WithInfo title={compressorInfo.makeup}>
+            <Knob
+              label="Makeup"
+              value$={host.makeup$}
+              min={0}
+              max={24}
+              reset={compressorParamDefault('makeup')}
+              base={0}
+              dots={MAKEUP_DOTS}
+              labels={MAKEUP_LABELS}
+              size="small"
+              {...edit(paramIds.makeup)}
+            />
+          </WithInfo>
+          <WithInfo title={compressorInfo.mix}>
+            <Knob
+              label="Mix"
+              size="small"
+              value$={host.mix$}
+              min={0}
+              max={1}
+              reset={compressorParamDefault('mix')}
+              dots={MIX_DOTS}
+              labels={MIX_LABELS}
+              {...{ 'value.format': (v: number) => `${Math.round(v * 100)} %` }}
+              {...edit(paramIds.mix)}
+            />
+          </WithInfo>
         </div>
       </div>
 
       <div className="block chart">
         <div className="title">Transfer</div>
-        <LevelMeter
-          className="gr"
-          value$={host.gr$}
-          min={0}
-          max={60}
-          base={0}
-          reverse
-          label="GR"
-          show_scale
-          falling={0}
-          auto_hold={800}
-          scale="log2"
-          log_factor={5}
-          levels={[1, 3, 6, 12]}
-          gradient={[
-            { value: 0, color: '#0066ff' },
-            { value: 60, color: '#ff0066' },
-          ]}
-        />
+        <WithInfo title={compressorInfo.gr}>
+          <LevelMeter
+            className="gr"
+            value$={host.gr$}
+            min={0}
+            max={60}
+            base={0}
+            reverse
+            label="GR"
+            show_scale
+            falling={0}
+            auto_hold={800}
+            scale="log2"
+            log_factor={5}
+            levels={[1, 3, 6, 12]}
+            gradient={[
+              { value: 0, color: '#0066ff' },
+              { value: 60, color: '#ff0066' },
+            ]}
+          />
+        </WithInfo>
         <DynamicsChart
           threshold$={host.threshold$}
           ratio$={host.ratio$}

@@ -5,6 +5,7 @@ import {
   Knob,
   Select,
   Toggle,
+  WithInfo,
 } from '../../widgets';
 import { paramIds } from '../../generated/transientsModel';
 import {
@@ -15,6 +16,7 @@ import {
 } from '../../host/transientsHost';
 import '../PluginUI.scss';
 import './TransientsUI.scss';
+import { transientsInfo } from './transientsInfo';
 
 export interface TransientsUIProps {
   host: ITransientsHost;
@@ -115,19 +117,23 @@ export function TransientsUI(props: TransientsUIProps) {
   return (
     <div className="TransientsUI PluginUI">
       <Header title="Transients">
-        <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
-        <Knob
-          label="Mix"
-          value$={host.mix$}
-          min={0}
-          max={1}
-          reset={transientsParamDefault('mix')}
-          dots={MIX_DOTS}
-          labels={PERCENT_LABELS}
-          {...{ 'value.format': formatPercent }}
-          {...edit(paramIds.mix)}
-          size="tiny"
-        />
+        <WithInfo title={transientsInfo.bypass}>
+          <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
+        <WithInfo title={transientsInfo.mix}>
+          <Knob
+            label="Mix"
+            value$={host.mix$}
+            min={0}
+            max={1}
+            reset={transientsParamDefault('mix')}
+            dots={MIX_DOTS}
+            labels={PERCENT_LABELS}
+            {...{ 'value.format': formatPercent }}
+            {...edit(paramIds.mix)}
+            size="tiny"
+          />
+        </WithInfo>
       </Header>
 
       <div className="block envelope">
@@ -149,82 +155,94 @@ export function TransientsUI(props: TransientsUIProps) {
       <div className="block shape">
         <div className="title">Shape</div>
         <div className="upper">
-          <Knob
-            label="Attack"
-            value$={host.attackBoost$}
-            min={-1}
-            max={1}
-            base={0}
-            reset={transientsParamDefault('attack_boost')}
-            dots={BIPOLAR_DOTS}
-            labels={BIPOLAR_LABELS}
-            {...{ 'value.format': formatBipolarPercent }}
-            size="large"
-            {...edit(paramIds.attack_boost)}
-          />
-          <Knob
-            label="Look"
-            className="look"
-            value$={host.lookahead$}
-            min={0}
-            max={100}
-            reset={transientsParamDefault('lookahead')}
-            size="small"
-            dots={LOOKAHEAD_DOTS}
-            labels={LOOKAHEAD_LABELS}
-            {...{ 'value.format': (v: number) => v.toFixed(0) }}
-            {...edit(paramIds.lookahead)}
-          />
-          <Knob
-            label="Release"
-            value$={host.releaseBoost$}
-            min={-1}
-            max={1}
-            base={0}
-            reset={transientsParamDefault('release_boost')}
-            dots={BIPOLAR_DOTS}
-            labels={BIPOLAR_LABELS}
-            {...{ 'value.format': formatBipolarPercent }}
-            {...edit(paramIds.release_boost)}
-            size="large"
-          />
+          <WithInfo title={transientsInfo.attackBoost}>
+            <Knob
+              label="Attack"
+              value$={host.attackBoost$}
+              min={-1}
+              max={1}
+              base={0}
+              reset={transientsParamDefault('attack_boost')}
+              dots={BIPOLAR_DOTS}
+              labels={BIPOLAR_LABELS}
+              {...{ 'value.format': formatBipolarPercent }}
+              size="large"
+              {...edit(paramIds.attack_boost)}
+            />
+          </WithInfo>
+          <WithInfo title={transientsInfo.lookahead}>
+            <Knob
+              label="Look"
+              className="look"
+              value$={host.lookahead$}
+              min={0}
+              max={100}
+              reset={transientsParamDefault('lookahead')}
+              size="small"
+              dots={LOOKAHEAD_DOTS}
+              labels={LOOKAHEAD_LABELS}
+              {...{ 'value.format': (v: number) => v.toFixed(0) }}
+              {...edit(paramIds.lookahead)}
+            />
+          </WithInfo>
+          <WithInfo title={transientsInfo.releaseBoost}>
+            <Knob
+              label="Release"
+              value$={host.releaseBoost$}
+              min={-1}
+              max={1}
+              base={0}
+              reset={transientsParamDefault('release_boost')}
+              dots={BIPOLAR_DOTS}
+              labels={BIPOLAR_LABELS}
+              {...{ 'value.format': formatBipolarPercent }}
+              {...edit(paramIds.release_boost)}
+              size="large"
+            />
+          </WithInfo>
         </div>
         <div className="lower">
-          <Knob
-            label="Attack ms"
-            value$={host.attackTime$}
-            min={1}
-            max={500}
-            reset={transientsParamDefault('attack_time')}
-            scale="log2"
-            log_factor={4}
-            dots={ATTACK_MS_DOTS}
-            labels={ATTACK_MS_LABELS}
-            {...edit(paramIds.attack_time)}
-          />
-          <Knob
-            label="Sustain"
-            value$={host.sustainThreshold$}
-            min={-60}
-            max={0}
-            reset={transientsParamDefault('sustain_threshold')}
-            scale="decibel"
-            dots={SUSTAIN_DOTS}
-            labels={SUSTAIN_LABELS}
-            {...edit(paramIds.sustain_threshold)}
-          />
-          <Knob
-            label="Release ms"
-            value$={host.releaseTime$}
-            min={1}
-            max={5000}
-            reset={transientsParamDefault('release_time')}
-            scale="log2"
-            log_factor={6}
-            dots={RELEASE_MS_DOTS}
-            labels={RELEASE_MS_LABELS}
-            {...edit(paramIds.release_time)}
-          />
+          <WithInfo title={transientsInfo.attackTime}>
+            <Knob
+              label="Attack ms"
+              value$={host.attackTime$}
+              min={1}
+              max={500}
+              reset={transientsParamDefault('attack_time')}
+              scale="log2"
+              log_factor={4}
+              dots={ATTACK_MS_DOTS}
+              labels={ATTACK_MS_LABELS}
+              {...edit(paramIds.attack_time)}
+            />
+          </WithInfo>
+          <WithInfo title={transientsInfo.sustain}>
+            <Knob
+              label="Sustain"
+              value$={host.sustainThreshold$}
+              min={-60}
+              max={0}
+              reset={transientsParamDefault('sustain_threshold')}
+              scale="decibel"
+              dots={SUSTAIN_DOTS}
+              labels={SUSTAIN_LABELS}
+              {...edit(paramIds.sustain_threshold)}
+            />
+          </WithInfo>
+          <WithInfo title={transientsInfo.releaseTime}>
+            <Knob
+              label="Release ms"
+              value$={host.releaseTime$}
+              min={1}
+              max={5000}
+              reset={transientsParamDefault('release_time')}
+              scale="log2"
+              log_factor={6}
+              dots={RELEASE_MS_DOTS}
+              labels={RELEASE_MS_LABELS}
+              {...edit(paramIds.release_time)}
+            />
+          </WithInfo>
         </div>
       </div>
 
@@ -238,21 +256,25 @@ export function TransientsUI(props: TransientsUIProps) {
         />
 
         <div className="controls">
-          <Select value$={host.view$} entries={TRANSIENTS_VIEW_ENTRIES} />
-          <Knob
-            label="Window"
-            size="small"
-            value$={host.display$}
-            min={100}
-            max={5000}
-            reset={transientsParamDefault('display')}
-            scale="frequency"
-            snap={[...TRANSIENTS_DISPLAY_MS]}
-            dots={DISPLAY_DOTS}
-            labels={DISPLAY_LABELS}
-            {...{ 'value.format': formatDisplayMs }}
-            {...edit(paramIds.display)}
-          />
+          <WithInfo title={transientsInfo.view}>
+            <Select value$={host.view$} entries={TRANSIENTS_VIEW_ENTRIES} />
+          </WithInfo>
+          <WithInfo title={transientsInfo.window}>
+            <Knob
+              label="Window"
+              size="small"
+              value$={host.display$}
+              min={100}
+              max={5000}
+              reset={transientsParamDefault('display')}
+              scale="frequency"
+              snap={[...TRANSIENTS_DISPLAY_MS]}
+              dots={DISPLAY_DOTS}
+              labels={DISPLAY_LABELS}
+              {...{ 'value.format': formatDisplayMs }}
+              {...edit(paramIds.display)}
+            />
+          </WithInfo>
         </div>
       </div>
     </div>

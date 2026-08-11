@@ -107,6 +107,28 @@ body,
   }
 }
 
+.panel {
+  padding: 0;
+  gap: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+
+  > .panel-nav {
+    > .Button {
+      border-radius: 0;
+      height: auto;
+      min-height: 0;
+      flex: 1 1 auto;
+    }
+  }
+
+  > .panel-content {
+    flex: 1;
+    padding: var(--gap);
+  }
+}
+
 .aux-button {
   border-radius: var(--border-radius);
   background: var(--background-lesser);
@@ -129,16 +151,67 @@ body,
 .aux-chart {
   background: var(--background-less);
   border-radius: var(--border-radius);
+  border: 1px solid var(--background-lesser);
 
   > svg {
     > .aux-grid {
       > .aux-gridlabel {
         fill: var(--color-least);
+        font-size: 9px;
+      }
+
+      > .aux-gridlabel.aux-vertical {
+        padding: 2px 3px 0;
+      }
+
+      > .aux-gridlabel.aux-horizontal {
+        padding: 0 4px 0 0;
       }
 
       > .aux-gridline {
         stroke: var(--background-least);
         stroke-opacity: 0.7;
+      }
+    }
+
+    > .aux-graphs {
+      > .aux-baseline {
+        fill: none;
+        stroke-width: 2px;
+        stroke: var(--color-accent);
+      }
+    }
+
+    > .aux-handles {
+      > .aux-charthandle {
+        > .aux-handle {
+          fill: var(--color);
+          fill-opacity: 0.25;
+        }
+
+        > .aux-line1 {
+          stroke: var(--color);
+          stroke-opacity: 0.25;
+        }
+
+        > .aux-label {
+          fill: var(--color);
+          fill-opacity: 0.33;
+        }
+
+        &.aux-active {
+          > .aux-handle {
+            fill-opacity: 0.66;
+          }
+
+          > .aux-line1 {
+            stroke-opacity: 0.5;
+          }
+
+          > .aux-label {
+            fill-opacity: 1;
+          }
+        }
       }
     }
   }

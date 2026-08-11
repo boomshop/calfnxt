@@ -5,12 +5,16 @@
   align-items: center;
   position: relative;
 
-  > .listen {
+  > .listen,
+  > .WithInfo:has(> .listen) {
     position: absolute;
-    top: var(--gap);
-    left: var(--gap);
+    top: 0;
+    left: 0;
     z-index: 1;
-    background: transparent;
+
+    > .Toggle {
+      background: transparent;
+    }
   }
 
   > .EQChart {

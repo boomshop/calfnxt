@@ -14,21 +14,6 @@
         stroke: var(--color);
         stroke-opacity: 0.12;
       }
-
-      > .aux-gridlabel {
-        fill: rgb(from var(--color) r g b / 0.4);
-        font-size: 9px;
-      }
-
-      // Time labels sit on the bottom edge. Keep padding small — AUX reserves
-      // that strip and skips horizontal lines whose y falls inside it (e.g. -54).
-      > .aux-gridlabel.aux-vertical {
-        padding: 2px 3px 0;
-      }
-
-      > .aux-gridlabel.aux-horizontal {
-        padding: 0 4px 0 0;
-      }
     }
 
     .env-input-graph {

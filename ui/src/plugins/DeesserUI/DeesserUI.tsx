@@ -7,6 +7,7 @@ import {
   Knob,
   LevelMeter,
   Toggle,
+  WithInfo,
 } from '../../widgets';
 import { paramIds } from '../../generated/deesserModel';
 import {
@@ -16,6 +17,7 @@ import {
   deesserParamDefault,
   type IDeesserHost,
 } from '../../host/deesserHost';
+import { deesserInfo } from './deesserInfo';
 import '../PluginUI.scss';
 import './DeesserUI.scss';
 
@@ -98,7 +100,9 @@ export function DeesserUI(props: DeesserUIProps) {
   return (
     <div className="DeesserUI PluginUI">
       <Header title="DeEsser">
-        <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        <WithInfo title={deesserInfo.bypass}>
+          <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
       </Header>
 
       <HistoryChart
@@ -114,98 +118,114 @@ export function DeesserUI(props: DeesserUIProps) {
       <div className="block dynamics">
         <div className="title">Dynamics</div>
         <div className="top">
-          <Knob
-            label="Thresh"
-            value$={host.threshold$}
-            min={-60}
-            max={0}
-            reset={deesserParamDefault('threshold')}
-            base={0}
-            dots={THRESH_DOTS}
-            labels={THRESH_LABELS}
-            size="large"
-            {...edit(paramIds.threshold)}
-          />
-          <Knob
-            label="Ratio"
-            value$={host.ratio$}
-            min={1}
-            max={20}
-            reset={deesserParamDefault('ratio')}
-            scale="log2"
-            log_factor={4}
-            dots={RATIO_DOTS}
-            labels={RATIO_LABELS}
-            size="large"
-            {...{ 'value.format': (v: number) => `${v.toFixed(1)}:1` }}
-            {...edit(paramIds.ratio)}
-          />
+          <WithInfo title={deesserInfo.threshold}>
+            <Knob
+              label="Thresh"
+              value$={host.threshold$}
+              min={-60}
+              max={0}
+              reset={deesserParamDefault('threshold')}
+              base={0}
+              dots={THRESH_DOTS}
+              labels={THRESH_LABELS}
+              size="large"
+              {...edit(paramIds.threshold)}
+            />
+          </WithInfo>
+          <WithInfo title={deesserInfo.ratio}>
+            <Knob
+              label="Ratio"
+              value$={host.ratio$}
+              min={1}
+              max={20}
+              reset={deesserParamDefault('ratio')}
+              scale="log2"
+              log_factor={4}
+              dots={RATIO_DOTS}
+              labels={RATIO_LABELS}
+              size="large"
+              {...{ 'value.format': (v: number) => `${v.toFixed(1)}:1` }}
+              {...edit(paramIds.ratio)}
+            />
+          </WithInfo>
         </div>
         <div className="bottom">
-          <Knob
-            label="Laxity"
-            value$={host.laxity$}
-            min={1}
-            max={100}
-            reset={deesserParamDefault('laxity')}
-            dots={LAXITY_DOTS}
-            labels={LAXITY_LABELS}
-            size="small"
-            {...{ 'value.format': (v: number) => `${Math.round(v)}` }}
-            {...edit(paramIds.laxity)}
-          />
-          <Knob
-            label="Split"
-            value$={host.splitFreq$}
-            min={20}
-            max={20000}
-            reset={deesserParamDefault('split_freq')}
-            scale="frequency"
-            dots={FREQ_DOTS}
-            labels={FREQ_LABELS}
-            {...edit(paramIds.split_freq)}
-          />
-          <Knob
-            label="Makeup"
-            value$={host.makeup$}
-            min={0}
-            max={24}
-            reset={deesserParamDefault('makeup')}
-            base={0}
-            dots={MAKEUP_DOTS}
-            labels={MAKEUP_LABELS}
-            size="small"
-            {...edit(paramIds.makeup)}
-          />
+          <WithInfo title={deesserInfo.laxity}>
+            <Knob
+              label="Laxity"
+              value$={host.laxity$}
+              min={1}
+              max={100}
+              reset={deesserParamDefault('laxity')}
+              dots={LAXITY_DOTS}
+              labels={LAXITY_LABELS}
+              size="small"
+              {...{ 'value.format': (v: number) => `${Math.round(v)}` }}
+              {...edit(paramIds.laxity)}
+            />
+          </WithInfo>
+          <WithInfo title={deesserInfo.split}>
+            <Knob
+              label="Split"
+              value$={host.splitFreq$}
+              min={20}
+              max={20000}
+              reset={deesserParamDefault('split_freq')}
+              scale="frequency"
+              dots={FREQ_DOTS}
+              labels={FREQ_LABELS}
+              {...edit(paramIds.split_freq)}
+            />
+          </WithInfo>
+          <WithInfo title={deesserInfo.makeup}>
+            <Knob
+              label="Makeup"
+              value$={host.makeup$}
+              min={0}
+              max={24}
+              reset={deesserParamDefault('makeup')}
+              base={0}
+              dots={MAKEUP_DOTS}
+              labels={MAKEUP_LABELS}
+              size="small"
+              {...edit(paramIds.makeup)}
+            />
+          </WithInfo>
         </div>
         <div className="buttons">
-          <Buttons
-            entries={DEESSER_DETECTION_ENTRIES}
-            value={detection}
-            onChange={(v) => {
-              host.beginEdit(paramIds.detection);
-              host.detection$.set(v);
-              host.endEdit(paramIds.detection);
-            }}
-          />
-          <Buttons
-            entries={DEESSER_MODE_ENTRIES}
-            value={mode}
-            onChange={(v) => {
-              host.beginEdit(paramIds.mode);
-              host.mode$.set(v);
-              host.endEdit(paramIds.mode);
-            }}
-          />
-          <Buttons
-            entries={DEESSER_SLOPE_ENTRIES}
-            value={slope}
-            onChange={(v) => {
-              host.beginEdit(paramIds.slope);
-              host.slope$.set(v);
-              host.endEdit(paramIds.slope);
-            }}
-          />
+          <WithInfo title={deesserInfo.detection} className="info-block">
+            <Buttons
+              entries={DEESSER_DETECTION_ENTRIES}
+              value={detection}
+              onChange={(v) => {
+                host.beginEdit(paramIds.detection);
+                host.detection$.set(v);
+                host.endEdit(paramIds.detection);
+              }}
+            />
+          </WithInfo>
+          <WithInfo title={deesserInfo.mode} className="info-block">
+            <Buttons
+              entries={DEESSER_MODE_ENTRIES}
+              value={mode}
+              onChange={(v) => {
+                host.beginEdit(paramIds.mode);
+                host.mode$.set(v);
+                host.endEdit(paramIds.mode);
+              }}
+            />
+          </WithInfo>
+          <WithInfo title={deesserInfo.slope} className="info-block">
+            <Buttons
+              entries={DEESSER_SLOPE_ENTRIES}
+              value={slope}
+              onChange={(v) => {
+                host.beginEdit(paramIds.slope);
+                host.slope$.set(v);
+                host.endEdit(paramIds.slope);
+              }}
+            />
+          </WithInfo>
         </div>
         <LevelMeter
           className="gr"
@@ -238,59 +258,69 @@ export function DeesserUI(props: DeesserUIProps) {
           dbGrid={12}
         />
         <div className="knobs">
-          <Knob
-            label="HP Q"
-            value$={host.hpQ$}
-            min={0.1}
-            max={20}
-            reset={deesserParamDefault('hp_q')}
-            scale="log2"
-            log_factor={4}
-            dots={Q_DOTS}
-            labels={Q_LABELS}
-            size="small"
-            {...edit(paramIds.hp_q)}
-          />
-          <Knob
-            label="Peak"
-            value$={host.peakFreq$}
-            min={20}
-            max={20000}
-            reset={deesserParamDefault('peak_freq')}
-            scale="frequency"
-            dots={FREQ_DOTS}
-            labels={FREQ_LABELS}
-            size="small"
-            {...edit(paramIds.peak_freq)}
-          />
-          <Knob
-            label="Gain"
-            value$={host.peakGain$}
-            min={-24}
-            max={24}
-            reset={deesserParamDefault('peak_gain')}
-            base={0}
-            dots={GAIN_DOTS}
-            labels={GAIN_LABELS}
-            size="small"
-            {...edit(paramIds.peak_gain)}
-          />
-          <Knob
-            label="Q"
-            value$={host.peakQ$}
-            min={0.1}
-            max={20}
-            reset={deesserParamDefault('peak_q')}
-            scale="log2"
-            log_factor={4}
-            dots={Q_DOTS}
-            labels={Q_LABELS}
-            size="small"
-            {...edit(paramIds.peak_q)}
-          />
+          <WithInfo title={deesserInfo.hpQ}>
+            <Knob
+              label="HP Q"
+              value$={host.hpQ$}
+              min={0.1}
+              max={20}
+              reset={deesserParamDefault('hp_q')}
+              scale="log2"
+              log_factor={4}
+              dots={Q_DOTS}
+              labels={Q_LABELS}
+              size="small"
+              {...edit(paramIds.hp_q)}
+            />
+          </WithInfo>
+          <WithInfo title={deesserInfo.peakFreq}>
+            <Knob
+              label="Peak"
+              value$={host.peakFreq$}
+              min={20}
+              max={20000}
+              reset={deesserParamDefault('peak_freq')}
+              scale="frequency"
+              dots={FREQ_DOTS}
+              labels={FREQ_LABELS}
+              size="small"
+              {...edit(paramIds.peak_freq)}
+            />
+          </WithInfo>
+          <WithInfo title={deesserInfo.peakGain}>
+            <Knob
+              label="Gain"
+              value$={host.peakGain$}
+              min={-24}
+              max={24}
+              reset={deesserParamDefault('peak_gain')}
+              base={0}
+              dots={GAIN_DOTS}
+              labels={GAIN_LABELS}
+              size="small"
+              {...edit(paramIds.peak_gain)}
+            />
+          </WithInfo>
+          <WithInfo title={deesserInfo.peakQ}>
+            <Knob
+              label="Q"
+              value$={host.peakQ$}
+              min={0.1}
+              max={20}
+              reset={deesserParamDefault('peak_q')}
+              scale="log2"
+              log_factor={4}
+              dots={Q_DOTS}
+              labels={Q_LABELS}
+              size="small"
+              {...edit(paramIds.peak_q)}
+            />
+          </WithInfo>
         </div>
 
-        <Toggle state$={host.listen$} icon="headphones" className="warn" />
+        <WithInfo title={deesserInfo.listen}>
+          <Toggle state$={host.listen$} icon="headphones" className="warn" />
+        </WithInfo>
       </div>
     </div>
   );
