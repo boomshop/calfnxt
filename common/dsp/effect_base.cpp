@@ -5,6 +5,7 @@
 #include "pluginterfaces/base/ustring.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 
+#include <algorithm>
 #include <cstring>
 
 namespace calfNXT {
@@ -96,6 +97,23 @@ void EffectBase::readParamPlains(float* plains, int count)
 
 void EffectBase::syncParamPlains(ProcessData& data, float* plains, int count)
 {
+  // Ardour session load: setComponentHandler/Ports may queue defaults (or stale
+  // values) that arrive in process() *after* our setState restored the chunk.
+  // Preset recall holds the process lock so it does not hit this race.
+  int suppress = suppressHostParamSync_.load(std::memory_order_relaxed);
+  if (suppress > 0)
+  {
+    suppressHostParamSync_.store(suppress - 1, std::memory_order_relaxed);
+    const int n = std::min(count, static_cast<int>(restoredPlains_.size()));
+    for (int i = 0; i < n; ++i)
+    {
+      if (auto* p = getParameterObject(static_cast<ParamID>(i)))
+        p->setNormalized(p->toNormalized(restoredPlains_[static_cast<size_t>(i)]));
+    }
+    readParamPlains(plains, count);
+    return;
+  }
+
   // auxvst-style: walk each host queue once (not once per parameter).
   if (data.inputParameterChanges)
   {
@@ -147,6 +165,14 @@ void EffectBase::notifyHostParamValues()
 
 void EffectBase::notifyHostStateRestored()
 {
+  const int32 n = getParameterCount();
+  if (n > 0)
+  {
+    restoredPlains_.resize(static_cast<size_t>(n));
+    readParamPlains(restoredPlains_.data(), n);
+    // Enough blocks for engine spin-up + Ardour draining pre-setState queues.
+    suppressHostParamSync_.store(32, std::memory_order_relaxed);
+  }
   if (!componentHandler)
     return;
   componentHandler->restartComponent(kParamValuesChanged);

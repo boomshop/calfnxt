@@ -5,6 +5,9 @@
 
 #include "pluginterfaces/gui/iplugview.h"
 
+#include <atomic>
+#include <vector>
+
 namespace calfNXT {
 namespace Ui {
 class IVizSource;
@@ -57,8 +60,9 @@ protected:
    *  Some hosts (e.g. Carla) ignore defaultNormalizedValue and cache 0 (= plain min). */
   void notifyHostParamValues();
 
-  /** After setState: ask the host to refresh without begin/perform/end (avoids
-   *  huge undo storms on Equalizer etc.). Parameter objects are already updated. */
+  /** After setState: snapshot plains, ignore host param stomps for a few process
+   *  blocks, and ask the host to refresh (Ardour session load queues defaults /
+   *  Port values that would otherwise overwrite the chunk). */
   void notifyHostStateRestored();
 
   /** Single-component: processor state == controller parameter state.
@@ -73,6 +77,12 @@ protected:
   virtual Ui::IVizSource* vizSource() { return nullptr; }
 
   Steinberg::ViewRect editorSize_;
+
+private:
+  /** Plains captured at the end of setState; re-applied while suppress > 0. */
+  std::vector<float> restoredPlains_;
+  /** Process blocks to ignore host inputParameterChanges after setState. */
+  std::atomic<int> suppressHostParamSync_ {0};
 };
 
 } // namespace Plugin
