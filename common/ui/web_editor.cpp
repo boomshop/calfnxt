@@ -242,8 +242,9 @@ bool WebEditor::sendLine(const char* line)
         continue;
       if (errno == EAGAIN || errno == EWOULDBLOCK)
       {
+        // Bulk param sync can fill the socket; wait longer than one frame.
         pollfd pfd {sock_, POLLOUT, 0};
-        if (poll(&pfd, 1, 50) <= 0)
+        if (poll(&pfd, 1, 250) <= 0)
           return false;
         continue;
       }
@@ -709,22 +710,30 @@ void WebEditor::flushPendingParams()
 {
   for (std::uint32_t id = 0; id < kMaxQueuedParams; ++id)
   {
-    if (!pendingParamDirty_[id].exchange(false, std::memory_order_acq_rel))
+    if (!pendingParamDirty_[id].load(std::memory_order_acquire))
       continue;
     const double plain = pendingParamPlain_[id].load(std::memory_order_relaxed);
     char num[64];
     const auto [endp, ec] = std::to_chars(num, num + sizeof num, plain,
                                           std::chars_format::general, 17);
     if (ec != std::errc())
+    {
+      pendingParamDirty_[id].store(false, std::memory_order_release);
       continue;
+    }
     *endp = '\0';
-    lastFlushedPlain_[id] = plain;
-    lastFlushedValid_[id] = true;
     char js[256];
     std::snprintf(js, sizeof js,
                   "window.__calfnxtOnHost && window.__calfnxtOnHost({t:\"param\",id:%u,v:%s});",
                   id, num);
-    evalJs(js);
+    // Only clear dirty / record last-flushed after a successful write. A full
+    // push (EQ has ~195 params) can fill the socket; failed sends must retry
+    // on the next timer tick instead of being silently dropped forever.
+    if (!sendLine(js))
+      break;
+    pendingParamDirty_[id].store(false, std::memory_order_release);
+    lastFlushedPlain_[id] = plain;
+    lastFlushedValid_[id] = true;
   }
 }
 
@@ -1039,8 +1048,13 @@ bool WebEditor::onWebMessage(const char* json)
 
   if (jsonHasType(json, "sync"))
   {
+    // Force a full re-push even if values match the last attempt (UI may have
+    // missed earlier messages before hostApplies were registered).
+    for (std::uint32_t i = 0; i < kMaxQueuedParams; ++i)
+      lastFlushedValid_[i] = false;
     pushAllParams();
     pushIoChannels();
+    flushPendingParams();
     return true;
   }
 

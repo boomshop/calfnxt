@@ -6,6 +6,7 @@ type VizLevelsApply = (v: number[]) => void;
 type ChannelCountApply = (ch: number) => void;
 
 const hostApplies = new Map<number, HostApply>();
+const pendingHostParams = new Map<number, number>();
 const vizLevelsApplies = new Map<string, VizLevelsApply>();
 const vizGainsApplies = new Map<string, VizLevelsApply>();
 const vizCorrApplies = new Map<string, HostApply>();
@@ -26,7 +27,11 @@ function dispatchHost(msg: calfNXTMsg): void {
     const v = plainFromMsg(msg);
     if (v === undefined)
       return;
-    hostApplies.get(msg.id)?.(v);
+    const apply = hostApplies.get(msg.id);
+    if (apply)
+      apply(v);
+    else
+      pendingHostParams.set(msg.id, v);
     return;
   }
   if (msg.t === "io" && typeof msg.ch === "number" && Number.isFinite(msg.ch)) {
@@ -62,8 +67,6 @@ function ensureHostWire(): void {
 
 /** Wire an AWML DynamicValue to the VST3 host (plain values). */
 export function bindParamToHost(dv: DynamicValue<number>, id: number): () => void {
-  ensureHostWire();
-
   let fromHost = false;
   let lastSent: number | undefined;
 
@@ -77,7 +80,7 @@ export function bindParamToHost(dv: DynamicValue<number>, id: number): () => voi
     postToHost({ t: "set", id, v });
   }, false);
 
-  hostApplies.set(id, (v) => {
+  const apply = (v: number) => {
     if (lastSent !== undefined && nearlyEqual(lastSent, v))
       return;
     fromHost = true;
@@ -87,7 +90,15 @@ export function bindParamToHost(dv: DynamicValue<number>, id: number): () => voi
     } finally {
       fromHost = false;
     }
-  });
+  };
+  hostApplies.set(id, apply);
+  const pending = pendingHostParams.get(id);
+  if (pending !== undefined) {
+    pendingHostParams.delete(id);
+    apply(pending);
+  }
+  // Register apply before wiring so queued/sync messages are not dropped.
+  ensureHostWire();
 
   return () => {
     unsub();
@@ -234,8 +245,6 @@ export function bindBoolParamToHost(
   dv: DynamicValue<boolean>,
   id: number,
 ): () => void {
-  ensureHostWire();
-
   let fromHost = false;
   let lastSent: number | undefined;
 
@@ -249,7 +258,7 @@ export function bindBoolParamToHost(
     postToHost({ t: "set", id, v });
   }, false);
 
-  hostApplies.set(id, (v) => {
+  const apply = (v: number) => {
     const on = v >= 0.5;
     const norm = on ? 1 : 0;
     if (lastSent !== undefined && nearlyEqual(lastSent, norm) && dv.value === on)
@@ -261,7 +270,14 @@ export function bindBoolParamToHost(
     } finally {
       fromHost = false;
     }
-  });
+  };
+  hostApplies.set(id, apply);
+  const pending = pendingHostParams.get(id);
+  if (pending !== undefined) {
+    pendingHostParams.delete(id);
+    apply(pending);
+  }
+  ensureHostWire();
 
   return () => {
     unsub();

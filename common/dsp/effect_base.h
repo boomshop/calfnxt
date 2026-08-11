@@ -61,6 +61,11 @@ protected:
    *  huge undo storms on Equalizer etc.). Parameter objects are already updated. */
   void notifyHostStateRestored();
 
+  /** Single-component: processor state == controller parameter state.
+   *  Ardour calls this after IComponent::setState and treats kResultOk as
+   *  "synced" (otherwise shadow data may not refresh). */
+  Steinberg::tresult PLUGIN_API setComponentState(Steinberg::IBStream* state) SMTG_OVERRIDE;
+
   /** Entry HTML inside the bundle (Resources/). */
   virtual const char* editorHtml() const { return "index.html"; }
 

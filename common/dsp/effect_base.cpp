@@ -152,6 +152,14 @@ void EffectBase::notifyHostStateRestored()
   componentHandler->restartComponent(kParamValuesChanged);
 }
 
+tresult PLUGIN_API EffectBase::setComponentState(IBStream* state)
+{
+  // Same object implements IComponent + IEditController. Re-apply processor
+  // state so Parameter objects stay in sync; return kResultOk so hosts like
+  // Ardour mark the load as synced (kNotImplemented skips their shadow refresh).
+  return setState(state);
+}
+
 tresult PLUGIN_API EffectBase::setActive(TBool state)
 {
   const tresult r = SingleComponentEffect::setActive(state);
