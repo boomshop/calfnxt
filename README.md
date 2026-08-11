@@ -335,9 +335,20 @@ cd ui && npm install   # once
 cd ui && npm run dev
 ```
 
-Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` 
+Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` · `#reverb`
 
 This is useful for layout and widget work. It does **not** replace installing into `~/.vst3` for Carla / other hosts.
+
+### Website screenshots (optional Studio)
+
+Refresh `website/images/*.png` with static demo data (Playwright). Install only if
+you need it — see [`studio/README.md`](studio/README.md).
+
+```bash
+cd studio && npm install    # once (downloads Chromium)
+npm run studio              # from repo root — all plugins
+npm run studio -- reverb    # one plugin
+```
 
 ---
 
@@ -356,7 +367,9 @@ This is useful for layout and widget work. It does **not** replace installing in
 | Single plugin (Compressor)  | `cmake --build build --target calfnxt-compressor calfnxt-compressor-resources -j` |
 | Single plugin (DeEsser)     | `cmake --build build --target calfnxt-deesser calfnxt-deesser-resources -j` |
 | Single plugin (Delay)       | `cmake --build build --target calfnxt-delay calfnxt-delay-resources -j` |
+| Single plugin (Reverb)      | `cmake --build build --target calfnxt-reverb calfnxt-reverb-resources -j` |
 | UI HMR in the browser       | `cd ui && npm run dev` |
+| Website UI screenshots      | `cd studio && npm i` then `npm run studio` (see `studio/README.md`) |
 
 ---
 

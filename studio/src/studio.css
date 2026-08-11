@@ -1,0 +1,19 @@
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.StudioFrame {
+  position: relative;
+  overflow: hidden;
+  background: var(--background, #000);
+}
+
+/* Belt-and-suspenders: never show WithInfo tip chips in Studio captures. */
+.WithInfo > .info-tip {
+  display: none !important;
+}

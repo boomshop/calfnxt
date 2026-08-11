@@ -1,0 +1,17 @@
+{
+  "bypass": false,
+  "bands": [
+    { "index": 0, "active": true, "type": "parametric", "frequency": 350, "gain": -6, "q": 5 },
+    { "index": 1, "active": false },
+    { "index": 2, "active": false },
+    { "index": 3, "active": false },
+    { "index": 4, "active": true, "type": "parametric", "frequency": 1200, "gain": 6, "q": 0.5 },
+    { "index": 5, "active": true, "type": "parametric", "frequency": 2800, "gain": -24, "q": 10 },
+    { "index": 6, "active": true, "type": "parametric", "frequency": 2000, "gain": -3, "q": 2 },
+    { "index": 7, "active": false },
+    { "index": 12, "active": false },
+    { "index": 13, "active": true, "type": "highshelf", "frequency": 6000, "gain": 4, "q": 3 },
+    { "index": 14, "active": true, "type": "highpass", "frequency": 80, "gain": 0, "q": 2, "slope": 24 },
+    { "index": 15, "active": false }
+  ]
+}

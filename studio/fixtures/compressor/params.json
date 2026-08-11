@@ -1,0 +1,18 @@
+{
+  "bypass": false,
+  "threshold": -20,
+  "ratio": 4,
+  "knee": 6,
+  "attack": 20,
+  "release": 200,
+  "makeup": 0,
+  "mix": 1,
+  "mode": 1,
+  "link": 0,
+  "pdr": 0,
+  "hipass": 120,
+  "lopass": 5000,
+  "hp_mode": 2,
+  "lp_mode": 0,
+  "listen": false
+}

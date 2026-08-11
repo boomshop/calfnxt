@@ -1,0 +1,17 @@
+{
+  "bypass": false,
+  "mix": 1,
+  "attack_time": 30,
+  "attack_boost": 0.25,
+  "sustain_threshold": -24,
+  "release_time": 300,
+  "release_boost": -0.2,
+  "display": 1000,
+  "lookahead": 0,
+  "view": 0,
+  "hipass": 120,
+  "lopass": 8000,
+  "hp_mode": 2,
+  "lp_mode": 0,
+  "listen": false
+}

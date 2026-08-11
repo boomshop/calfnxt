@@ -22,6 +22,8 @@
 ui/src/generated/
 ui/node_modules/
 ui/dist/
+studio/node_modules/
+studio/dist/
 
 # Legacy per-plugin UI output (replaced by ui/dist)
 dsp/*/web/

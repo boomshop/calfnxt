@@ -1,0 +1,9 @@
+{
+  "name": "calfnxt",
+  "private": true,
+  "description": "Root scripts only — UI lives in ui/, screenshot studio in studio/",
+  "scripts": {
+    "studio": "npm --prefix studio run shot --",
+    "studio:install": "npm --prefix studio install && npm --prefix studio exec playwright install chromium"
+  }
+}
