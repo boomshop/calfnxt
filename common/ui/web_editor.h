@@ -109,8 +109,8 @@ private:
   Steinberg::int32 designWidth_ = 360;
   Steinberg::int32 designHeight_ = 420;
 
-  // Equalizer alone has 195 ParamIDs; keep headroom for future plugins.
-  static constexpr std::uint32_t kMaxQueuedParams = 256;
+  // Headroom for large plugins (EQ ~195 today; multiband / future analyzers).
+  static constexpr std::uint32_t kMaxQueuedParams = 1024;
   static constexpr int kVizHz = 30;
   static constexpr int kEnvVizHz = 30;
   std::atomic<bool> pendingParamDirty_[kMaxQueuedParams] {};
