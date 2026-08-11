@@ -22,8 +22,8 @@
       stroke: var(--chart-level-stroke, var(--color-accent));
       stroke-width: 2px;
       // Soft fill so ER strokes remain readable under the attack slope.
-      fill: var(--color-accent);
-      fill-opacity: 0.12;
+      fill: var(--color);
+      fill-opacity: 0.18;
     }
 
     > .aux-graph.aux-reflection,
