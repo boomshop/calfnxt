@@ -391,6 +391,7 @@ tresult PLUGIN_API DelayPlugin::setState(IBStream* state)
       p->setNormalized(p->toNormalized(plains[i]));
   }
   readParamPlains(params_, kParamCount);
+  notifyHostStateRestored();
   return kResultOk;
 }
 
@@ -402,6 +403,8 @@ tresult PLUGIN_API DelayPlugin::getState(IBStream* state)
   streamer.writeInt32u(kStateMagic);
   streamer.writeInt32u(kStateVersion);
   streamer.writeInt32(kParamCount);
+  // Parameter objects are authoritative (params_ only updates in process()).
+  readParamPlains(params_, kParamCount);
   for (int i = 0; i < kParamCount; ++i)
     streamer.writeFloat(params_[i]);
   return kResultOk;

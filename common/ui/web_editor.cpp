@@ -271,10 +271,12 @@ void WebEditor::handleHelperLine(const std::string& line)
   if (jsonHasType(line.c_str(), "_ready"))
   {
     for (std::uint32_t i = 0; i < kMaxQueuedParams; ++i)
+    {
       lastFlushedValid_[i] = false;
+      pendingParamDirty_[i].store(false, std::memory_order_relaxed);
+    }
     lastVizFlush_ = {};
     lastEnvVizFlush_ = {};
-    pendingParamMask_.store(0, std::memory_order_relaxed);
     onPageReady();
     return;
   }
@@ -677,7 +679,7 @@ void WebEditor::pushParamPlain(ParamID id, double plain)
   if (sock_ < 0 || id >= kMaxQueuedParams)
     return;
   pendingParamPlain_[id].store(plain, std::memory_order_relaxed);
-  pendingParamMask_.fetch_or(1u << id, std::memory_order_acq_rel);
+  pendingParamDirty_[id].store(true, std::memory_order_release);
 }
 
 void WebEditor::pollParamsFromController()
@@ -705,12 +707,9 @@ void WebEditor::pollParamsFromController()
 
 void WebEditor::flushPendingParams()
 {
-  std::uint32_t mask = pendingParamMask_.exchange(0, std::memory_order_acq_rel);
-  while (mask != 0)
+  for (std::uint32_t id = 0; id < kMaxQueuedParams; ++id)
   {
-    const unsigned id = static_cast<unsigned>(__builtin_ctz(mask));
-    mask &= mask - 1u;
-    if (id >= kMaxQueuedParams)
+    if (!pendingParamDirty_[id].exchange(false, std::memory_order_acq_rel))
       continue;
     const double plain = pendingParamPlain_[id].load(std::memory_order_relaxed);
     char num[64];

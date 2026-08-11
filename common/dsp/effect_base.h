@@ -57,6 +57,10 @@ protected:
    *  Some hosts (e.g. Carla) ignore defaultNormalizedValue and cache 0 (= plain min). */
   void notifyHostParamValues();
 
+  /** After setState: ask the host to refresh without begin/perform/end (avoids
+   *  huge undo storms on Equalizer etc.). Parameter objects are already updated. */
+  void notifyHostStateRestored();
+
   /** Entry HTML inside the bundle (Resources/). */
   virtual const char* editorHtml() const { return "index.html"; }
 

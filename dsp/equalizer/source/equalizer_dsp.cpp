@@ -221,6 +221,8 @@ tresult PLUGIN_API EqualizerPlugin::setState(IBStream* state)
   }
   readParamPlains(params_, kParamCount);
   applyBandTargetsFromParams();
+  // Host may have cached defaults from setComponentHandler; refresh after restore.
+  notifyHostStateRestored();
   return kResultOk;
 }
 
@@ -232,6 +234,8 @@ tresult PLUGIN_API EqualizerPlugin::getState(IBStream* state)
   streamer.writeInt32u(kStateMagic);
   streamer.writeInt32u(kStateVersion);
   streamer.writeInt32(kParamCount);
+  // Parameter objects are authoritative (params_ only updates in process()).
+  readParamPlains(params_, kParamCount);
   for (int i = 0; i < kParamCount; ++i)
     streamer.writeFloat(params_[i]);
   return kResultOk;

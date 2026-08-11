@@ -418,6 +418,7 @@ tresult PLUGIN_API StereoPlugin::setState(IBStream* state)
   }
   readParamPlains(params_, kParamCount);
   updateDecorrelate();
+  notifyHostStateRestored();
   return kResultOk;
 }
 
@@ -429,6 +430,8 @@ tresult PLUGIN_API StereoPlugin::getState(IBStream* state)
   streamer.writeInt32u(kStateMagic);
   streamer.writeInt32u(kStateVersion);
   streamer.writeInt32(kParamCount);
+  // Parameter objects are authoritative (params_ only updates in process()).
+  readParamPlains(params_, kParamCount);
   for (int i = 0; i < kParamCount; ++i)
     streamer.writeFloat(params_[i]);
   return kResultOk;

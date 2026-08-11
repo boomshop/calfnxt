@@ -145,6 +145,13 @@ void EffectBase::notifyHostParamValues()
   componentHandler->restartComponent(kParamValuesChanged);
 }
 
+void EffectBase::notifyHostStateRestored()
+{
+  if (!componentHandler)
+    return;
+  componentHandler->restartComponent(kParamValuesChanged);
+}
+
 tresult PLUGIN_API EffectBase::setActive(TBool state)
 {
   const tresult r = SingleComponentEffect::setActive(state);
