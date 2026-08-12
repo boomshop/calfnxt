@@ -171,12 +171,19 @@ case "$VERSION_ARG" in
 esac
 
 if [[ "$NEW" == "$CURRENT" ]]; then
-  echo "error: new version equals current ($CURRENT)" >&2
-  exit 1
+  TAG="v${NEW}"
+  if git rev-parse "$TAG" >/dev/null 2>&1; then
+    echo "error: version is already $CURRENT and tag $TAG exists" >&2
+    exit 1
+  fi
+  echo "==> version already at $NEW (no bump commit); will tag + publish assets"
+  SKIP_BUMP_COMMIT=1
+else
+  SKIP_BUMP_COMMIT=0
 fi
 
 TAG="v${NEW}"
-if git rev-parse "$TAG" >/dev/null 2>&1; then
+if [[ "$SKIP_BUMP_COMMIT" -eq 0 ]] && git rev-parse "$TAG" >/dev/null 2>&1; then
   echo "error: tag $TAG already exists" >&2
   exit 1
 fi
@@ -192,42 +199,58 @@ fi
 
 # --- bump version files ------------------------------------------------------
 
-echo "==> bump version files to $NEW"
-
-bump_files() {
-  # CMake project VERSION
-  sed -i -E "s/^([[:space:]]*VERSION[[:space:]]+)[0-9]+\.[0-9]+\.[0-9]+/\\1${NEW}/" \
-    "$ROOT/CMakeLists.txt"
-
-  local json
-  for json in "$ROOT"/dsp/*/*.plugin.json; do
-    [[ -f "$json" ]] || continue
-    sed -i -E "s/(\"version\"[[:space:]]*:[[:space:]]*\")[0-9]+\.[0-9]+\.[0-9]+(\")/\\1${NEW}\\2/" \
-      "$json"
-  done
-
-  # package.json + package-lock.json root version (no git tag from npm)
-  (cd "$ROOT/ui" && npm version "$NEW" --no-git-tag-version --allow-same-version >/dev/null)
-}
-
-if [[ "$DRY_RUN" -eq 1 ]]; then
-  echo "dry-run: would bump CMakeLists.txt, dsp/*/*.plugin.json, ui/package.json(+lock)"
+if [[ "$SKIP_BUMP_COMMIT" -eq 1 ]]; then
+  echo "==> skip version file bump (already $NEW)"
 else
-  bump_files
+  echo "==> bump version files to $NEW"
+
+  bump_files() {
+    # CMake project VERSION
+    sed -i -E "s/^([[:space:]]*VERSION[[:space:]]+)[0-9]+\.[0-9]+\.[0-9]+/\\1${NEW}/" \
+      "$ROOT/CMakeLists.txt"
+
+    local json
+    for json in "$ROOT"/dsp/*/*.plugin.json; do
+      [[ -f "$json" ]] || continue
+      sed -i -E "s/(\"version\"[[:space:]]*:[[:space:]]*\")[0-9]+\.[0-9]+\.[0-9]+(\")/\\1${NEW}\\2/" \
+        "$json"
+    done
+
+    # package.json + package-lock.json root version (no git tag from npm)
+    (cd "$ROOT/ui" && npm version "$NEW" --no-git-tag-version --allow-same-version >/dev/null)
+    if [[ -f "$ROOT/studio/package.json" ]]; then
+      (cd "$ROOT/studio" && npm version "$NEW" --no-git-tag-version --allow-same-version >/dev/null)
+    fi
+  }
+
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "dry-run: would bump CMakeLists.txt, dsp/*/*.plugin.json, ui(+studio) package.json(+lock)"
+  else
+    bump_files
+  fi
 fi
 
 # --- commit + tag ------------------------------------------------------------
 
 echo "==> commit + annotated tag $TAG"
 if [[ "$DRY_RUN" -eq 1 ]]; then
-  echo "dry-run: git add + commit 'release: $NEW' + git tag -a $TAG"
+  if [[ "$SKIP_BUMP_COMMIT" -eq 1 ]]; then
+    echo "dry-run: git tag -a $TAG (no version commit)"
+  else
+    echo "dry-run: git add + commit 'release: $NEW' + git tag -a $TAG"
+  fi
 else
-  git add \
-    CMakeLists.txt \
-    ui/package.json \
-    ui/package-lock.json \
-    dsp/*/*.plugin.json
-  git commit -m "release: ${NEW}"
+  if [[ "$SKIP_BUMP_COMMIT" -eq 0 ]]; then
+    git add \
+      CMakeLists.txt \
+      ui/package.json \
+      ui/package-lock.json \
+      dsp/*/*.plugin.json
+    if [[ -f "$ROOT/studio/package.json" ]]; then
+      git add studio/package.json studio/package-lock.json
+    fi
+    git commit -m "release: ${NEW}"
+  fi
   git tag -a "$TAG" -m "calfNXT ${NEW}"
 fi
 
