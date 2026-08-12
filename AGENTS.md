@@ -93,7 +93,7 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 3. C++: `plain=q/d` → `toNormalized` → `setParamNormalized` + `performEdit` (echo suppressed).
 
 ### Host default quirks (Carla etc.)
-`EffectBase::notifyHostParamValues()` on `setActive` / `setComponentHandler` (begin/perform/end + `kParamValuesChanged`) so bipolar defaults are not stuck at norm 0 (= plain min).
+Do **not** call `restartComponent` / begin/perform/end from `setComponentHandler` or `setActive` — Qtractor SIGSEGVs on that re-entrancy. Defaults live on Parameter objects (`getParamNormalized`); after `setState`, `notifyHostStateRestored()` only snapshots plains + suppress-stomps (no host restart).
 
 ### Real fixes — do not “clean up” as debug junk
 - Polling + param dependents

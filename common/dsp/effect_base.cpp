@@ -139,30 +139,6 @@ void EffectBase::syncParamPlains(ProcessData& data, float* plains, int count)
   readParamPlains(plains, count);
 }
 
-void EffectBase::notifyHostParamValues()
-{
-  if (!componentHandler)
-    return;
-
-  // Push each current normalized value so hosts that started at 0 (plain min
-  // for bipolar ranges like Balance −1…1) pick up RangeParameter defaults.
-  const int32 n = getParameterCount();
-  for (int32 i = 0; i < n; ++i)
-  {
-    ParameterInfo info {};
-    if (getParameterInfo(i, info) != kResultOk)
-      continue;
-    if (auto* p = getParameterObject(info.id))
-    {
-      const ParamValue norm = p->getNormalized();
-      beginEdit(info.id);
-      performEdit(info.id, norm);
-      endEdit(info.id);
-    }
-  }
-  componentHandler->restartComponent(kParamValuesChanged);
-}
-
 void EffectBase::notifyHostStateRestored()
 {
   const int32 n = getParameterCount();
@@ -173,9 +149,9 @@ void EffectBase::notifyHostStateRestored()
     // Enough blocks for engine spin-up + Ardour draining pre-setState queues.
     suppressHostParamSync_.store(32, std::memory_order_relaxed);
   }
-  if (!componentHandler)
-    return;
-  componentHandler->restartComponent(kParamValuesChanged);
+  // Skip restartComponent: Qtractor SIGSEGVs on that re-entrancy during
+  // instance setup. Ardour/Carla re-query getParamNormalized / process;
+  // suppressHostParamSync_ protects against stomping the restored plains.
 }
 
 tresult PLUGIN_API EffectBase::setComponentState(IBStream* state)
@@ -188,18 +164,16 @@ tresult PLUGIN_API EffectBase::setComponentState(IBStream* state)
 
 tresult PLUGIN_API EffectBase::setActive(TBool state)
 {
-  const tresult r = SingleComponentEffect::setActive(state);
-  if (state)
-    notifyHostParamValues();
-  return r;
+  // Do not call restartComponent / edit gestures here: Qtractor SIGSEGVs on
+  // re-entrant host callbacks while activating the instance.
+  return SingleComponentEffect::setActive(state);
 }
 
 tresult PLUGIN_API EffectBase::setComponentHandler(IComponentHandler* handler)
 {
-  const tresult r = EditController::setComponentHandler(handler);
-  if (handler)
-    notifyHostParamValues();
-  return r;
+  // Do not call restartComponent / edit gestures here: hosts such as Qtractor
+  // are still wiring the handler and crash on re-entrant callbacks.
+  return EditController::setComponentHandler(handler);
 }
 
 } // namespace Plugin

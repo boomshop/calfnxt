@@ -56,13 +56,9 @@ protected:
    *  Prefer this over per-param applyLastParamPlain/syncParamPlain. */
   void syncParamPlains(Steinberg::Vst::ProcessData& data, float* plains, int count);
 
-  /** Tell the host to re-read parameter values (defaults / after state load).
-   *  Some hosts (e.g. Carla) ignore defaultNormalizedValue and cache 0 (= plain min). */
-  void notifyHostParamValues();
-
-  /** After setState: snapshot plains, ignore host param stomps for a few process
-   *  blocks, and ask the host to refresh (Ardour session load queues defaults /
-   *  Port values that would otherwise overwrite the chunk). */
+  /** After setState: snapshot plains and ignore host param stomps for a few
+   *  process blocks (Ardour session load). Does not call restartComponent —
+   *  that re-entrancy SIGSEGVs Qtractor during instance setup. */
   void notifyHostStateRestored();
 
   /** Single-component: processor state == controller parameter state.
