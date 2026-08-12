@@ -4,7 +4,8 @@
  * Spawned by the VST3 module (no GTK in the host process). Speaks newline-
  * delimited messages on an inherited Unix socket FD:
  *   plugin → host: JS one-liners to evaluate, or {"t":"_size","w","h"}
- *   host → plugin: UI JSON from calfnxtNative.post, or {"t":"_ready"}
+ *   host → plugin: UI JSON from calfnxtNative.post, {"t":"_ready"}, or
+ *                  {"t":"_socket","w","h"} (XEmbed parent size)
  */
 
 #include <gdk/gdkx.h>
@@ -33,6 +34,7 @@ struct HostState
   char entryHtml[256] {};
   int width = 360;
   int height = 420;
+  unsigned long parentXid = 0;
   GtkWidget* plug = nullptr;
   WebKitWebView* webview = nullptr;
   WebKitWebContext* ctx = nullptr;
@@ -112,6 +114,43 @@ void plugGdkSize(int& outW, int& outH)
     return;
   if (GdkWindow* win = gtk_widget_get_window(g.plug))
     gdk_window_get_geometry(win, nullptr, nullptr, &outW, &outH);
+}
+
+/** Report XEmbed socket size to the plugin (for HiDPI enlarge vs fill decision). */
+void reportSocketSize(const char* why)
+{
+  if (!g.parentXid || g.sock < 0)
+    return;
+  Display* dpy = nullptr;
+  if (g.plug)
+  {
+    if (GdkWindow* win = gtk_widget_get_window(g.plug))
+      dpy = GDK_WINDOW_XDISPLAY(win);
+  }
+  if (!dpy)
+  {
+    if (GdkDisplay* gd = gdk_display_get_default())
+      dpy = GDK_DISPLAY_XDISPLAY(gd);
+  }
+  if (!dpy)
+    return;
+  Window root = 0;
+  int x = 0;
+  int y = 0;
+  unsigned w = 0;
+  unsigned h = 0;
+  unsigned border = 0;
+  unsigned depth = 0;
+  if (!XGetGeometry(dpy, static_cast<Window>(g.parentXid), &root, &x, &y, &w, &h, &border,
+                    &depth))
+    return;
+  if (w < 2 || h < 2)
+    return;
+  hostLog("[calfnxt-web-host] socket %s %ux%u (want %dx%d)\n", why ? why : "?", w, h, g.width,
+          g.height);
+  char line[96];
+  std::snprintf(line, sizeof line, "{\"t\":\"_socket\",\"w\":%u,\"h\":%u}\n", w, h);
+  sendLine(line);
 }
 
 void logAlloc(const char* why)
@@ -289,6 +328,7 @@ gboolean onMapPoll(gpointer)
             g.mapPollTries * kMapPollMs);
     g.mapOk = true;
     g.mapPollSource = 0;
+    reportSocketSize("map-ok");
     return G_SOURCE_REMOVE;
   }
 
@@ -303,6 +343,7 @@ gboolean onMapPoll(gpointer)
             g.mapPollTries * kMapPollMs);
     g.mapOk = true;
     g.mapPollSource = 0;
+    reportSocketSize("map-ok");
     return G_SOURCE_REMOVE;
   }
 
@@ -661,6 +702,7 @@ void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
     if (gtkAllocTiny())
       forceGtkAllocation("load-finished");
     startMapPoll();
+    reportSocketSize("load-finished");
     sendLine("{\"t\":\"_ready\"}");
     if (envFlag("CALFNXT_WEB_DEBUG"))
     {
@@ -781,6 +823,7 @@ int main(int argc, char** argv)
     return 2;
   }
   g.sock = fd;
+  g.parentXid = static_cast<unsigned long>(parentXid);
   {
     const int flags = fcntl(g.sock, F_GETFL, 0);
     if (flags >= 0)

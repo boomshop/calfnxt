@@ -102,7 +102,7 @@ Do **not** call `restartComponent` / begin/perform/end from `setComponentHandler
 - Host→UI `to_chars` `v`
 - Fader `sync: true` where needed
 - Embed UI via `calfnxt_copy_plugin_ui` / `*-resources` targets (UI rebuild alone does not update VST3 Resources)
-- Editor HiDPI: UI `{t:"viewport",w,h}` → host/css scale → `IPlugFrame::resizeView` (override `CALFNXT_UI_SCALE`)
+- Editor HiDPI: enlarge via host/css when XEmbed socket ≈ design; if socket already > design (Qtractor), skip enlarge and fill helper to socket (`CALFNXT_UI_SCALE` override)
 - DSP hygiene: keep silence-flag passthrough correct, add denormal sanitizing for stateful filters/meters,
   and prefer idle/block fast-paths over per-sample recomputation when parameters are unchanged
 
@@ -126,9 +126,12 @@ Do **not** call `restartComponent` / begin/perform/end from `setComponentHandler
 ## Editor size / HiDPI
 
 1. Open at design size from `*.plugin.json`.
-2. SPA reports CSS viewport once (`App.tsx` → `{t:"viewport",w,h}`).
-3. Native: `scale = hostPx / cssPx` → `resizeView(design × scale)`. No WebKit zoom.
-4. Optional override: `CALFNXT_UI_SCALE` (e.g. `1.35` or `1`) wins over measurement.
+2. Helper reports XEmbed socket size (`_socket`); SPA reports CSS viewport.
+3. If socket is still ≈ design (Carla/Ardour): `scale = host/css` →
+   `resizeView(design × scale)`.
+4. If socket is already larger than design (Qtractor/Qt DPR): **do not** enlarge
+   again — only size the web-host plug to the socket so the UI fills the window.
+5. Optional override: `CALFNXT_UI_SCALE` (e.g. `1.35` or `1`) wins.
 
 `WebEditor` (proxy): IRunLoop ~16 ms pumps the socket + param/viz flush.
 `calfnxt-web-host`: HW accel **on** by default (`ALWAYS`); force software with

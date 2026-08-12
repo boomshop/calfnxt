@@ -81,6 +81,7 @@ private:
   void requestHostSize();
   bool applyDesignScale(double scale, const char* reason);
   bool applyCssViewport(int cssW, int cssH);
+  void sendHelperSize(int w, int h);
 
   bool sendLine(const char* line);
   void pumpSocket();
@@ -108,6 +109,9 @@ private:
 
   Steinberg::int32 designWidth_ = 360;
   Steinberg::int32 designHeight_ = 420;
+  /** Last XEmbed socket size from helper `_socket` (0 = unknown). */
+  int socketWidth_ = 0;
+  int socketHeight_ = 0;
 
   // Headroom for large plugins (EQ ~195 today; multiband / future analyzers).
   static constexpr std::uint32_t kMaxQueuedParams = 1024;

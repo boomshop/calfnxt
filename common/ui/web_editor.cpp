@@ -259,9 +259,15 @@ bool WebEditor::sendLine(const char* line)
 
 void WebEditor::sendSizeToHelper()
 {
+  sendHelperSize(rect.getWidth(), rect.getHeight());
+}
+
+void WebEditor::sendHelperSize(int w, int h)
+{
+  if (w < 1 || h < 1)
+    return;
   char line[96];
-  std::snprintf(line, sizeof line, "{\"t\":\"_size\",\"w\":%d,\"h\":%d}",
-                rect.getWidth(), rect.getHeight());
+  std::snprintf(line, sizeof line, "{\"t\":\"_size\",\"w\":%d,\"h\":%d}", w, h);
   sendLine(line);
 }
 
@@ -269,6 +275,20 @@ void WebEditor::handleHelperLine(const std::string& line)
 {
   if (line.empty())
     return;
+  if (jsonHasType(line.c_str(), "_socket"))
+  {
+    double w = 0.0;
+    double h = 0.0;
+    if (jsonNumberAfterKey(line.c_str(), "\"w\"", w)
+        && jsonNumberAfterKey(line.c_str(), "\"h\"", h) && w >= 2.0 && h >= 2.0)
+    {
+      socketWidth_ = static_cast<int>(std::lround(w));
+      socketHeight_ = static_cast<int>(std::lround(h));
+      logMsg("[calfnxt] socket size %dx%d (design %dx%d)\n", socketWidth_, socketHeight_,
+             designWidth_, designHeight_);
+    }
+    return;
+  }
   if (jsonHasType(line.c_str(), "_ready"))
   {
     for (std::uint32_t i = 0; i < kMaxQueuedParams; ++i)
@@ -562,8 +582,24 @@ bool WebEditor::applyCssViewport(int cssW, int cssH)
   if (!(scale > 0.05 && scale < 8.0))
     scale = 1.0;
 
-  logMsg("[calfnxt] viewport: host %dx%d / css %dx%d → scale=%.3f (design %dx%d)\n",
-         hostW, hostH, cssW, cssH, scale, designWidth_, designHeight_);
+  logMsg("[calfnxt] viewport: host %dx%d / css %dx%d → scale=%.3f (design %dx%d, socket %dx%d)\n",
+         hostW, hostH, cssW, cssH, scale, designWidth_, designHeight_, socketWidth_,
+         socketHeight_);
+
+  // Qtractor/Qt: XEmbed socket is already ≈ design×DPR while VST rect is still
+  // design. Enlarging again double-scales. Keep design-sized VST size; fill the
+  // helper to the socket so the UI occupies the window. Carla/Ardour keep a
+  // design-sized socket → fall through to applyDesignScale.
+  const int slack = 24;
+  if (socketWidth_ >= designWidth_ + slack || socketHeight_ >= designHeight_ + slack)
+  {
+    viewportApplied_ = true;
+    logMsg("[calfnxt] skip enlarge (socket %dx%d > design) — fill helper to socket\n",
+           socketWidth_, socketHeight_);
+    sendHelperSize(socketWidth_, socketHeight_);
+    return true;
+  }
+
   return applyDesignScale(scale, "viewport");
 }
 
@@ -585,6 +621,8 @@ tresult PLUGIN_API WebEditor::attached(void* parent, FIDString type)
   }
 
   viewportApplied_ = false;
+  socketWidth_ = 0;
+  socketHeight_ = 0;
   rect = ViewRect(0, 0, designWidth_, designHeight_);
 
   if (!openHelper(parent))
