@@ -4,6 +4,7 @@ import {
   DeesserUI,
   DelayUI,
   EqualizerUI,
+  MbcompUI,
   ReverbUI,
   StereoUI,
   TransientsUI,
@@ -11,6 +12,7 @@ import {
   createBoundDeesserHost,
   createBoundDelayHost,
   createBoundEqualizerHost,
+  createBoundMbcompHost,
   createBoundReverbHost,
   createBoundStereoHost,
   createBoundTransientsHost,
@@ -40,6 +42,10 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
   equalizer: async () => ({
     params: (await import('../fixtures/equalizer/params.json')).default,
     viz: (await import('../fixtures/equalizer/viz.json')).default,
+  }),
+  mbcomp: async () => ({
+    params: (await import('../fixtures/mbcomp/params.json')).default,
+    viz: (await import('../fixtures/mbcomp/viz.json')).default,
   }),
   reverb: async () => ({
     params: (await import('../fixtures/reverb/params.json')).default,
@@ -71,6 +77,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundDelayHost();
       case 'equalizer':
         return createBoundEqualizerHost();
+      case 'mbcomp':
+        return createBoundMbcompHost();
       case 'reverb':
         return createBoundReverbHost();
       case 'stereo':
@@ -85,6 +93,7 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
   useEffect(() => {
     readyOnce.current = false;
     let cancelled = false;
+    let stopDemo: (() => void) | undefined;
 
     (async () => {
       const { params, viz } = await fixtureLoaders[pluginId]();
@@ -94,7 +103,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
       await new Promise((r) => requestAnimationFrame(() => r(null)));
       await new Promise((r) => requestAnimationFrame(() => r(null)));
 
-      demoAppliers[pluginId](host, params, viz);
+      const cleanup = demoAppliers[pluginId](host, params, viz);
+      if (typeof cleanup === 'function') stopDemo = cleanup;
       // Force again in case Header / localStorage re-enabled tips.
       showWidgetInfo$.set(false);
 
@@ -109,6 +119,7 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
 
     return () => {
       cancelled = true;
+      stopDemo?.();
     };
   }, [pluginId, host, onReady]);
 
@@ -121,6 +132,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
       return <DelayUI host={host as ReturnType<typeof createBoundDelayHost>} />;
     case 'equalizer':
       return <EqualizerUI host={host as ReturnType<typeof createBoundEqualizerHost>} />;
+    case 'mbcomp':
+      return <MbcompUI host={host as ReturnType<typeof createBoundMbcompHost>} />;
     case 'reverb':
       return <ReverbUI host={host as ReturnType<typeof createBoundReverbHost>} />;
     case 'stereo':

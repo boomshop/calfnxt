@@ -1,0 +1,108 @@
+.MultibandChart {
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
+  background: var(--background);
+
+  > svg {
+    // Clamped curves still benefit from a hard clip if AUX overshoots.
+    overflow: hidden;
+
+    > .aux-graphs {
+      // Only the per-band curves paint; the summed baseline stays hidden.
+      > .aux-baseline {
+        display: none;
+      }
+
+      > .aux-graph {
+        fill: none;
+        stroke: var(--chart-level-stroke, var(--color));
+        stroke-width: 2px;
+        stroke-opacity: 1;
+
+        &.aux-inactive {
+          display: none;
+        }
+
+        &.mb-bypassed {
+          stroke-opacity: 0.33;
+        }
+
+        &.mb-selected {
+          stroke: var(--color);
+          // Soft fill under the lobe via Graph mode=bottom (value-space dots).
+          fill: var(--color);
+          fill-opacity: 0.18;
+        }
+      }
+    }
+
+    > .aux-handles {
+      > .aux-charthandle {
+        &.aux-inactive {
+          display: none;
+        }
+
+        > .aux-handle {
+          fill-opacity: 0.25;
+        }
+
+        &.aux-active > .aux-handle,
+        &.mb-selected > .aux-handle {
+          fill-opacity: 0.6;
+        }
+
+        &.mb-xover {
+          > .aux-handle {
+            fill: var(--color-least);
+            fill-opacity: 0.2;
+          }
+
+          &.aux-active > .aux-handle {
+            fill-opacity: 0.45;
+          }
+
+          > .aux-line1 {
+            stroke: var(--color-least);
+            stroke-opacity: 0.9;
+          }
+
+          > .aux-label {
+            fill-opacity: 0.7;
+          }
+        }
+
+        &.mb-thresh {
+          > .aux-line {
+            stroke: var(--color);
+            stroke-width: 1px;
+            stroke-opacity: 0.66;
+          }
+
+          > .aux-handle {
+            fill: var(--color-accent);
+          }
+
+          > .aux-label {
+            fill-opacity: 0.9;
+          }
+
+          &.mb-selected > .aux-line {
+            stroke-opacity: 1;
+          }
+
+          &.mb-listen {
+            > .aux-line {
+              stroke: var(--color-warn);
+              stroke-opacity: 1;
+            }
+
+            > .aux-handle {
+              fill: var(--color-warn);
+            }
+          }
+        }
+      }
+    }
+  }
+}

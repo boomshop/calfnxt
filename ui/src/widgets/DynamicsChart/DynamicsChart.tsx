@@ -36,6 +36,7 @@ const DynamicsWidget = componentFromWidget(
 
 type AuxHandle = {
   set: (k: string, v: unknown) => void;
+  toBack?: () => void;
 };
 
 type AuxGraph = {
@@ -115,6 +116,7 @@ export function DynamicsChart(props: DynamicsChartProps) {
 
       // Live operating point on the curve. Keep `active: true` — AUX hides
       // inactive ChartHandles (`display: none`). Dragging is blocked in CSS.
+      // toBack: sit under threshold/ratio handles (addHandle appends on top).
       if (typeof w.addHandle === 'function') {
         pointHandleRef.current = w.addHandle({
           class: 'aux-operating',
@@ -129,6 +131,7 @@ export function DynamicsChart(props: DynamicsChartProps) {
           show_handle: true,
           active: true,
         });
+        pointHandleRef.current.toBack?.();
       }
 
       if (point$ && pointHandleRef.current) {
@@ -146,6 +149,11 @@ export function DynamicsChart(props: DynamicsChartProps) {
   );
 
   useEffect(() => () => detachPoint(), [detachPoint]);
+
+  // Ensure paint order after the handle is in the SVG handles group.
+  useEffect(() => {
+    pointHandleRef.current?.toBack?.();
+  }, [chart]);
 
   const cls = ['DynamicsChart', className ?? ''].filter(Boolean).join(' ');
 

@@ -24,6 +24,10 @@ python3 scripts/extract_history.py
 # or: python3 scripts/extract_history.py compressor
 ```
 
+Mbcomp strip history is seeded from the **compressor** fixture envelope
+(`gen_synthetic_viz.mjs` packs it into per-band `[full, band, grLin]` channels)
+until a dedicated capture exists.
+
 Regenerate synthetic viz (meters / envelopes) without extraction:
 
 ```bash

@@ -130,6 +130,23 @@ export function bandPassRbj(O: EqFilterOpts) {
   };
 }
 
+/**
+ * Frequency-independent gain stage (b0 = lin gain, all else neutral).
+ * Cascaded with pass filters so a band curve can carry an offset in dB —
+ * RBJ LP/HP are unity gain and ignore `gain` on their own.
+ */
+export function flatGainRbj(O: EqFilterOpts) {
+  return {
+    b0: dbToLin(O.gain ?? 0),
+    b1: 0,
+    b2: 0,
+    a0: 1,
+    a1: 0,
+    a2: 0,
+    sample_rate: O.sample_rate,
+  };
+}
+
 export const auxPeaking = biquadFilter(withDrawSr(peakingRbj));
 export const auxLowShelf = biquadFilter(withDrawSr(lowShelfRbj));
 export const auxHighShelf = biquadFilter(withDrawSr(highShelfRbj));
@@ -163,4 +180,68 @@ export const auxLowpass48 = biquadFilter(
   withDrawSr(lowPassRbj),
   withDrawSr(lowPassRbj),
   withDrawSr(lowPassRbj),
+);
+
+/** Crossover shapes with a dB offset — multiband band curves (gain = GR).
+ *  Stage Qs match `BandSplitter` (Linkwitz-Riley = Butterworth²). Cascading the
+ *  same Q=0.707 N times is NOT LR for N>2 and looks too soft near fc. */
+const LR2_Q = [0.5] as const;
+const LR4_Q = [0.7071067811865476, 0.7071067811865476] as const;
+const LR8_Q = [
+  0.541196100146197, 1.306562964876376, 0.541196100146197, 1.306562964876376,
+] as const;
+const LR16_Q = [
+  0.509795579, 0.601344886, 0.899976223, 2.562915447,
+  0.509795579, 0.601344886, 0.899976223, 2.562915447,
+] as const;
+
+function lpStage(q: number) {
+  return withDrawSr((O: EqFilterOpts) => lowPassRbj({ ...O, q }));
+}
+function hpStage(q: number) {
+  return withDrawSr((O: EqFilterOpts) => highPassRbj({ ...O, q }));
+}
+
+/**
+ * Clamp freq→dB just below the typical chart floor (−60).
+ * Slightly under y_min keeps Graph mode=bottom closing strokes off-canvas.
+ */
+function clampMbGain(
+  factory: (O: EqFilterOpts) => (f: number) => number,
+  minDb = -66,
+  maxDb = 12,
+) {
+  return (O: EqFilterOpts) => {
+    const fn = factory(O);
+    return (f: number) => {
+      const g = fn(f);
+      if (!Number.isFinite(g)) return minDb;
+      return Math.max(minDb, Math.min(maxDb, g));
+    };
+  };
+}
+
+export const auxLowpassGain12 = clampMbGain(
+  biquadFilter(withDrawSr(flatGainRbj), ...LR2_Q.map(lpStage)),
+);
+export const auxLowpassGain24 = clampMbGain(
+  biquadFilter(withDrawSr(flatGainRbj), ...LR4_Q.map(lpStage)),
+);
+export const auxLowpassGain48 = clampMbGain(
+  biquadFilter(withDrawSr(flatGainRbj), ...LR8_Q.map(lpStage)),
+);
+export const auxLowpassGain96 = clampMbGain(
+  biquadFilter(withDrawSr(flatGainRbj), ...LR16_Q.map(lpStage)),
+);
+export const auxHighpassGain12 = clampMbGain(
+  biquadFilter(withDrawSr(flatGainRbj), ...LR2_Q.map(hpStage)),
+);
+export const auxHighpassGain24 = clampMbGain(
+  biquadFilter(withDrawSr(flatGainRbj), ...LR4_Q.map(hpStage)),
+);
+export const auxHighpassGain48 = clampMbGain(
+  biquadFilter(withDrawSr(flatGainRbj), ...LR8_Q.map(hpStage)),
+);
+export const auxHighpassGain96 = clampMbGain(
+  biquadFilter(withDrawSr(flatGainRbj), ...LR16_Q.map(hpStage)),
 );

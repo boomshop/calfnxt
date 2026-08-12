@@ -13,6 +13,8 @@ const vizCorrApplies = new Map<string, HostApply>();
 const vizGonioApplies = new Map<string, VizLevelsApply>();
 const vizEnvelopeApplies = new Map<string, (v: Float32Array) => void>();
 const vizGrApplies = new Map<string, HostApply>();
+const vizGrArrayApplies = new Map<string, VizLevelsApply>();
+const vizBandIoApplies = new Map<string, VizLevelsApply>();
 const vizPointApplies = new Map<string, VizLevelsApply>();
 const vizTempoApplies = new Map<string, VizLevelsApply>();
 const channelCountApplies = new Set<ChannelCountApply>();
@@ -49,8 +51,12 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizGonioApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "envelope" && Array.isArray(msg.v))
     vizEnvelopeApplies.get(msg.id)?.(new Float32Array(msg.v));
-  if (msg.t === "viz" && msg.kind === "gr" && Array.isArray(msg.v) && typeof msg.v[0] === "number")
+  if (msg.t === "viz" && msg.kind === "gr" && Array.isArray(msg.v) && typeof msg.v[0] === "number") {
     vizGrApplies.get(msg.id)?.(msg.v[0]);
+    vizGrArrayApplies.get(msg.id)?.(msg.v);
+  }
+  if (msg.t === "viz" && msg.kind === "bandio" && Array.isArray(msg.v))
+    vizBandIoApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "point" && Array.isArray(msg.v))
     vizPointApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "tempo" && Array.isArray(msg.v))
@@ -186,6 +192,43 @@ export function bindVizGr(dv: DynamicValue<number>, id: string): () => void {
   });
   return () => {
     vizGrApplies.delete(id);
+  };
+}
+
+/** Wire per-band gain reduction (multiband). DSP sends ≤0 dB per band;
+ *  `apply` receives positive meter amounts 0…60 in band order. */
+export function bindVizGrArray(
+  apply: (v: number[]) => void,
+  id: string,
+): () => void {
+  ensureHostWire();
+  vizGrArrayApplies.set(id, (v) => {
+    apply(
+      v.map((x) => {
+        if (typeof x !== "number" || !Number.isFinite(x))
+          return 0;
+        return Math.min(60, Math.max(0, -x));
+      }),
+    );
+  });
+  return () => {
+    vizGrArrayApplies.delete(id);
+  };
+}
+
+/** Wire per-band in/out levels [in0, out0, in1, out1, …] in dB (id e.g. "mbcomp"). */
+export function bindVizBandIo(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizBandIoApplies.set(id, (v) => {
+    const clean = v.map((x) => {
+      if (typeof x !== "number" || !Number.isFinite(x))
+        return -96;
+      return Math.min(12, Math.max(-96, x));
+    });
+    dv.set(clean);
+  });
+  return () => {
+    vizBandIoApplies.delete(id);
   };
 }
 

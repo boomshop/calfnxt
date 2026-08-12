@@ -1,0 +1,14 @@
+.BandBridgeChart {
+  width: 100%;
+  height: 36px;
+  min-height: 36px;
+  background: var(--background) !important;
+  border: none !important;
+
+  // Same paint as the panels it connects: fill of a block, border as outline.
+  > svg > .aux-graphs > .aux-graph {
+    fill: var(--background-less) !important;
+    stroke: var(--background) !important;
+    stroke-width: 2px;
+  }
+}

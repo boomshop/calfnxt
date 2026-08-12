@@ -46,6 +46,59 @@ function envelope5(slots) {
   return out;
 }
 
+/**
+ * Mbcomp: per band [full, band, grLin] × slots + shared phase.
+ * Prefer seeding from fixtures/compressor/viz.json when present.
+ */
+function mbcompHistory(slots, numBands = 4) {
+  const bandScales = [0.92, 0.7, 0.45, 0.28, 0.18, 0.12];
+  const grIntensity = [1.0, 0.82, 0.55, 0.35, 0.25, 0.18];
+  const compPath = path.join(fixtures, 'compressor/viz.json');
+  if (fs.existsSync(compPath)) {
+    const comp = JSON.parse(fs.readFileSync(compPath, 'utf8'));
+    const env = Array.isArray(comp.envelope) ? comp.envelope : null;
+    if (env && env.length >= 3) {
+      const slotsAll = Math.floor((env.length - 1) / 2);
+      const use = Math.min(slots, slotsAll);
+      const start = slotsAll - use;
+      const out = [];
+      for (let b = 0; b < numBands; ++b) {
+        const bs = bandScales[b] ?? 0.2;
+        const gi = grIntensity[b] ?? 0.2;
+        for (let i = 0; i < use; ++i) {
+          const si = start + i;
+          const audio = Number(env[si * 2]) || 0;
+          const gr = Math.min(1, Math.max(0, Number(env[si * 2 + 1]) || 0));
+          out.push(audio, audio * bs, Math.min(1, Math.max(1e-6, 1 - (1 - gr) * gi)));
+        }
+      }
+      out.push(Number(env[env.length - 1]) || 0);
+      return out;
+    }
+  }
+  // Fallback: compressor-shaped synthetic, packed per band.
+  const base = history2ch(
+    slots,
+    (t) => -6 - 14 * Math.abs(Math.sin(t * Math.PI * 7)) - 8 * t,
+    (t) => {
+      const peak = Math.max(0, Math.sin(t * Math.PI * 7));
+      return -peak * 12 - 2;
+    },
+  );
+  const out = [];
+  for (let b = 0; b < numBands; ++b) {
+    const bs = bandScales[b] ?? 0.2;
+    const gi = grIntensity[b] ?? 0.2;
+    for (let i = 0; i < slots; ++i) {
+      const audio = base[i * 2];
+      const gr = Math.min(1, Math.max(0, base[i * 2 + 1]));
+      out.push(audio, audio * bs, Math.min(1, Math.max(1e-6, 1 - (1 - gr) * gi)));
+    }
+  }
+  out.push(0);
+  return out;
+}
+
 function gonio(n = 256) {
   const v = [];
   for (let i = 0; i < n; ++i) {
@@ -106,6 +159,16 @@ const packs = {
   reverb: {
     levelsIn: [-12, -12.5],
     levelsOut: [-18, -18.5],
+  },
+  mbcomp: {
+    bandio: [-9.5, -7.2, -12.8, -11.0, -17.4, -15.8, -23.0, -21.5],
+    // Per-band GR ≤0 dB (host converts to positive meter amounts).
+    gains: [-5.5, -4.0, -2.8, -1.8, 0, 0],
+    levelsIn: [-8.2, -8.8],
+    levelsOut: [-9.5, -10.1],
+    point: [-14.5, -17.2],
+    // History seeded from compressor fixture when available (3 ch × bands).
+    envelope: mbcompHistory(160, 4),
   },
 };
 

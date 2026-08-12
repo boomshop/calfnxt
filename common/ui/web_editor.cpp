@@ -789,7 +789,7 @@ void WebEditor::flushViz()
       || now - lastEnvVizFlush_ >= std::chrono::milliseconds(1000 / kEnvVizHz))
   {
     lastEnvVizFlush_ = now;
-    constexpr int kMaxEnvFloats = 512 * 5 + 1;
+    constexpr int kMaxEnvFloats = 6 * (512 * 3) + 1;
     float envBuf[kMaxEnvFloats];
     const int nEnv = vizSource_->takeEnvelopeDisplay(envBuf, kMaxEnvFloats);
     if (nEnv > 0)
@@ -900,25 +900,46 @@ void WebEditor::flushViz()
     flushVizArray(vizSource_->vizStereoFieldId(), "gonio", gonio, nGonio);
   }
 
-  float grDb = 0.f;
-  if (vizSource_->takeGainReductionDb(&grDb, 1) > 0)
+  float grDb[32] {};
+  const int nGr = vizSource_->takeGainReductionDb(grDb, 32);
+  if (nGr > 0)
   {
-    if (!std::isfinite(grDb))
-      grDb = 0.f;
-    grDb = std::clamp(grDb, -60.f, 0.f);
-    flushVizArray(vizSource_->vizDynamicsId(), "gr", &grDb, 1);
+    for (int i = 0; i < nGr; ++i)
+    {
+      if (!std::isfinite(grDb[i]))
+        grDb[i] = 0.f;
+      grDb[i] = std::clamp(grDb[i], -60.f, 0.f);
+    }
+    flushVizArray(vizSource_->vizDynamicsId(), "gr", grDb, nGr);
   }
 
-  float point[2] {};
-  if (vizSource_->takeDynamicsPoint(point, 2) >= 2)
+  if (const char* bandIoId = vizSource_->vizBandIoLevelsId())
   {
-    for (float& v : point)
+    float bandIo[64] {};
+    const int nIo = vizSource_->takeBandIoLevelsDb(bandIo, 64);
+    if (nIo > 0)
     {
-      if (!std::isfinite(v))
-        v = -96.f;
-      v = std::clamp(v, -96.f, 24.f);
+      for (int i = 0; i < nIo; ++i)
+      {
+        if (!std::isfinite(bandIo[i]))
+          bandIo[i] = -96.f;
+        bandIo[i] = std::clamp(bandIo[i], -96.f, 12.f);
+      }
+      flushVizArray(bandIoId, "bandio", bandIo, nIo);
     }
-    flushVizArray(vizSource_->vizDynamicsId(), "point", point, 2);
+  }
+
+  float point[32] {};
+  const int nPt = vizSource_->takeDynamicsPoint(point, 32);
+  if (nPt >= 2)
+  {
+    for (int i = 0; i < nPt; ++i)
+    {
+      if (!std::isfinite(point[i]))
+        point[i] = -96.f;
+      point[i] = std::clamp(point[i], -96.f, 24.f);
+    }
+    flushVizArray(vizSource_->vizDynamicsId(), "point", point, nPt);
   }
 }
 

@@ -1,0 +1,273 @@
+{
+  "id": "mbcomp",
+  "name": "calfNXT Multiband Compressor",
+  "vendor": "calfNXT",
+  "vendor_url": "https://calfnxt.org",
+  "vendor_email": "mailto:schmidt@boomshop.net",
+  "version": "0.3.1",
+  "category": "Fx|Dynamics",
+  "vst3_uid": [
+    "0xC4A1F00B",
+    "0x0E11C01D",
+    "0xCA1F000B",
+    "0xB0000001"
+  ],
+  "editor": {
+    "width": 1024,
+    "height": 780
+  },
+  "buses": {
+    "audio_inputs": [
+      { "name": "Stereo In", "channels": 2 }
+    ],
+    "audio_outputs": [
+      { "name": "Stereo Out", "channels": 2 }
+    ]
+  },
+  "parameters": [
+    {
+      "id": "bypass",
+      "name": "Bypass",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "num_bands",
+      "name": "Bands",
+      "type": "float",
+      "unit": "",
+      "min": 2.0,
+      "max": 6.0,
+      "default": 4.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "slope",
+      "name": "Slope",
+      "type": "float",
+      "unit": "dB/oct",
+      "min": 24.0,
+      "max": 96.0,
+      "default": 48.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "xover1",
+      "name": "Xover 1",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 200.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "xover2",
+      "name": "Xover 2",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 800.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "xover3",
+      "name": "Xover 3",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 3200.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "xover4",
+      "name": "Xover 4",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 8000.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "xover5",
+      "name": "Xover 5",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 12000.0,
+      "scale": "log",
+      "precision": 1
+    }
+  ],
+  "bands": {
+    "count": 6,
+    "params": [
+      {
+        "id": "active",
+        "name": "Active",
+        "type": "float",
+        "unit": "",
+        "min": 0.0,
+        "max": 1.0,
+        "default": 1.0,
+        "scale": "linear",
+        "precision": 0
+      },
+      {
+        "id": "bypass",
+        "name": "Bypass",
+        "type": "float",
+        "unit": "",
+        "min": 0.0,
+        "max": 1.0,
+        "default": 0.0,
+        "scale": "linear",
+        "precision": 0
+      },
+      {
+        "id": "listen",
+        "name": "Listen",
+        "type": "float",
+        "unit": "",
+        "min": 0.0,
+        "max": 1.0,
+        "default": 0.0,
+        "scale": "linear",
+        "precision": 0
+      },
+      {
+        "id": "threshold",
+        "name": "Threshold",
+        "type": "float",
+        "unit": "dB",
+        "min": -60.0,
+        "max": 0.0,
+        "default": -20.0,
+        "scale": "dB",
+        "precision": 1
+      },
+      {
+        "id": "ratio",
+        "name": "Ratio",
+        "type": "float",
+        "unit": ":1",
+        "min": 1.0,
+        "max": 20.0,
+        "default": 4.0,
+        "scale": "log",
+        "precision": 1
+      },
+      {
+        "id": "knee",
+        "name": "Knee",
+        "type": "float",
+        "unit": "dB",
+        "min": 0.0,
+        "max": 24.0,
+        "default": 6.0,
+        "scale": "linear",
+        "precision": 1
+      },
+      {
+        "id": "attack",
+        "name": "Attack",
+        "type": "float",
+        "unit": "ms",
+        "min": 0.1,
+        "max": 500.0,
+        "default": 20.0,
+        "scale": "log",
+        "precision": 1
+      },
+      {
+        "id": "release",
+        "name": "Release",
+        "type": "float",
+        "unit": "ms",
+        "min": 1.0,
+        "max": 2000.0,
+        "default": 200.0,
+        "scale": "log",
+        "precision": 0
+      },
+      {
+        "id": "makeup",
+        "name": "Makeup",
+        "type": "float",
+        "unit": "dB",
+        "min": 0.0,
+        "max": 24.0,
+        "default": 0.0,
+        "scale": "dB",
+        "precision": 1
+      },
+      {
+        "id": "mix",
+        "name": "Mix",
+        "type": "float",
+        "unit": "",
+        "min": 0.0,
+        "max": 1.0,
+        "default": 1.0,
+        "scale": "linear",
+        "precision": 2
+      },
+      {
+        "id": "mode",
+        "name": "Mode",
+        "type": "float",
+        "unit": "",
+        "min": 0.0,
+        "max": 2.0,
+        "default": 1.0,
+        "scale": "linear",
+        "precision": 0
+      },
+      {
+        "id": "link",
+        "name": "Link",
+        "type": "float",
+        "unit": "",
+        "min": 0.0,
+        "max": 2.0,
+        "default": 0.0,
+        "scale": "linear",
+        "precision": 0
+      },
+      {
+        "id": "pdr",
+        "name": "PDR",
+        "type": "float",
+        "unit": "",
+        "min": 0.0,
+        "max": 1.0,
+        "default": 0.0,
+        "scale": "linear",
+        "precision": 2
+      }
+    ],
+    "defaults": [
+      { "threshold": -18.0 },
+      { "threshold": -20.0 },
+      { "threshold": -22.0 },
+      { "threshold": -24.0 },
+      { "threshold": -20.0 },
+      { "threshold": -18.0 }
+    ]
+  }
+}

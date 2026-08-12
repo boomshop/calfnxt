@@ -8,7 +8,7 @@ set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
 set(SMTG_CREATE_PLUGIN_LINK OFF CACHE BOOL "" FORCE)
 
 project(calfnxt
-  VERSION 0.3.0
+  VERSION 0.3.1
   DESCRIPTION "calfNXT — VST3 + Web UI"
   LANGUAGES C CXX
 )
@@ -56,6 +56,7 @@ add_subdirectory(dsp/compressor)
 add_subdirectory(dsp/deesser)
 add_subdirectory(dsp/delay)
 add_subdirectory(dsp/reverb)
+add_subdirectory(dsp/mbcomp)
 
 # After every plugin registered via calfnxt_copy_web_host: refresh helpers whenever
 # calfnxt-web-host is rebuilt (plugin .so may be unchanged).
@@ -76,7 +77,7 @@ add_custom_target(calfnxt-web-host-bundles
 )
 
 # UI build needs generated models from every plugin descriptor
-add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen deesser_codegen delay_codegen reverb_codegen)
+add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen)
 
 # Meta-target: all plugins + embedded UI packs (add new plugins here).
 add_custom_target(calfnxt-plugins
@@ -95,6 +96,8 @@ add_custom_target(calfnxt-plugins
     calfnxt-delay-resources
     calfnxt-reverb
     calfnxt-reverb-resources
+    calfnxt-mbcomp
+    calfnxt-mbcomp-resources
     calfnxt-web-host
     calfnxt-web-host-bundles
   COMMENT "Build all calfNXT VST3 plugins (+ embedded UI + web-host)"

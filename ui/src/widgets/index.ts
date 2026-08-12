@@ -5,6 +5,8 @@ export * from "./MultiMeter";
 export * from "./CorrelationMeter";
 export * from "./GonioMeter";
 export * from "./EQChart";
+export * from "./MultibandChart";
+export * from "./BandBridgeChart";
 export * from "./EnvelopeChart";
 export * from "./DynamicsChart";
 export * from "./FrequencyRange";

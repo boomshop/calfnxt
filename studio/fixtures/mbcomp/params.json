@@ -1,0 +1,73 @@
+{
+  "bypass": false,
+  "num_bands": 4,
+  "slope": 48,
+  "selected_band": 1,
+  "xovers": [200, 800, 3200, 8000, 12000],
+  "bands": [
+    {
+      "index": 0,
+      "active": true,
+      "bypass": false,
+      "listen": false,
+      "threshold": -18,
+      "ratio": 4,
+      "knee": 6,
+      "attack": 20,
+      "release": 200,
+      "makeup": 2,
+      "mix": 1,
+      "mode": 1,
+      "link": 0,
+      "pdr": 0
+    },
+    {
+      "index": 1,
+      "active": true,
+      "bypass": false,
+      "listen": false,
+      "threshold": -20,
+      "ratio": 3,
+      "knee": 6,
+      "attack": 15,
+      "release": 180,
+      "makeup": 1.5,
+      "mix": 1,
+      "mode": 1,
+      "link": 0,
+      "pdr": 0
+    },
+    {
+      "index": 2,
+      "active": true,
+      "bypass": false,
+      "listen": false,
+      "threshold": -22,
+      "ratio": 2.5,
+      "knee": 6,
+      "attack": 8,
+      "release": 120,
+      "makeup": 1,
+      "mix": 1,
+      "mode": 1,
+      "link": 0,
+      "pdr": 0
+    },
+    {
+      "index": 3,
+      "active": true,
+      "bypass": false,
+      "listen": false,
+      "threshold": -24,
+      "ratio": 2,
+      "knee": 6,
+      "attack": 4,
+      "release": 90,
+      "makeup": 0.5,
+      "mix": 1,
+      "mode": 1,
+      "link": 0,
+      "pdr": 0
+    }
+  ]
+}

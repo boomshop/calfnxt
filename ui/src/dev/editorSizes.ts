@@ -6,6 +6,7 @@ import { pluginMeta as compressorMeta } from "../generated/compressorModel";
 import { pluginMeta as deesserMeta } from "../generated/deesserModel";
 import { pluginMeta as delayMeta } from "../generated/delayModel";
 import { pluginMeta as reverbMeta } from "../generated/reverbModel";
+import { pluginMeta as mbcompMeta } from "../generated/mbcompModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
 export const editorSizes: Record<PluginId, { width: number; height: number }> = {
@@ -16,4 +17,5 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   deesser: deesserMeta.editor,
   delay: delayMeta.editor,
   reverb: reverbMeta.editor,
+  mbcomp: mbcompMeta.editor,
 };

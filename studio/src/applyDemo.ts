@@ -4,6 +4,7 @@ import type {
   IDeesserHost,
   IDelayHost,
   IEqualizerHost,
+  IMbcompHost,
   IReverbHost,
   IStereoHost,
   ITransientsHost,
@@ -23,6 +24,8 @@ export type VizFixture = {
   gonio?: number[];
   tempo?: number[];
   gains?: number[];
+  /** Interleaved per-band levels [in0, out0, in1, out1, …] in dB (mbcomp). */
+  bandio?: number[];
 };
 
 function setNum(dv: DynamicValue<number> | undefined, v: unknown) {
@@ -272,17 +275,100 @@ export function applyEqualizerDemo(
     pushViz('eq', 'gains', viz.gains);
 }
 
+function applyMbcompMeters(host: IMbcompHost, viz: VizFixture) {
+  applySharedViz(viz);
+  if (viz.gains) {
+    const gr = viz.gains.map((db) => Math.max(0, -db));
+    host.grAll$.set(gr);
+    for (const band of host.bands) {
+      const v = gr[band.index];
+      band.gr$.set(typeof v === 'number' ? v : 0);
+    }
+  }
+  if (viz.bandio) {
+    host.bandIo$.set(viz.bandio);
+    // Nudge ±0.05 dB so AUX LevelMeter.set() always runs (identical peaks are
+    // ignored while falling is active — and bindings may skip unchanged values).
+    const eps = performance.now() % 2 < 1 ? 0.05 : 0;
+    for (const band of host.bands) {
+      const inDb = viz.bandio[band.index * 2];
+      const outDb = viz.bandio[band.index * 2 + 1];
+      band.inLevel$.set(
+        typeof inDb === 'number' && Number.isFinite(inDb) ? inDb + eps : -96,
+      );
+      band.outLevel$.set(
+        typeof outDb === 'number' && Number.isFinite(outDb) ? outDb + eps : -96,
+      );
+    }
+    pushViz('mbcomp', 'bandio', viz.bandio);
+  }
+  if (viz.point) host.point$.set(viz.point);
+}
+
+export function applyMbcompDemo(
+  host: IMbcompHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+): () => void {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.numBands$, params.num_bands);
+  setNum(host.slope$, params.slope);
+  const xovers = params.xovers;
+  if (Array.isArray(xovers))
+    xovers.forEach((hz, i) => setNum(host.xover$[i], hz));
+
+  const bands = params.bands;
+  if (Array.isArray(bands)) {
+    for (const b of bands) {
+      if (!b || typeof b !== 'object') continue;
+      const rec = b as Record<string, unknown>;
+      const idx = typeof rec.index === 'number' ? rec.index : -1;
+      const band = host.bands[idx];
+      if (!band) continue;
+      setBool(band.active$, rec.active);
+      setBool(band.bypass$, rec.bypass);
+      setBool(band.listen$, rec.listen);
+      setNum(band.threshold$, rec.threshold);
+      setNum(band.ratio$, rec.ratio);
+      setNum(band.knee$, rec.knee);
+      setNum(band.attack$, rec.attack);
+      setNum(band.release$, rec.release);
+      setNum(band.makeup$, rec.makeup);
+      setNum(band.mix$, rec.mix);
+      setNum(band.mode$, rec.mode);
+      setNum(band.link$, rec.link);
+      setNum(band.pdr$, rec.pdr);
+    }
+  }
+
+  const selected =
+    typeof params.selected_band === 'number' ? params.selected_band : 1;
+  host.selectedBandIndex$.set(
+    Math.max(0, Math.min(host.bands.length - 1, Math.round(selected))),
+  );
+
+  if (viz.envelope)
+    host.historyAll$.set(new Float32Array(viz.envelope));
+
+  applyMbcompMeters(host, viz);
+  // Strip/header LevelMeters use AUX falling; static fixtures must be refreshed
+  // or the bars empty before Playwright captures.
+  const hold = window.setInterval(() => applyMbcompMeters(host, viz), 50);
+  return () => window.clearInterval(hold);
+}
+
 export type DemoApplier = (
   host: unknown,
   params: Record<string, unknown>,
   viz: VizFixture,
-) => void;
+) => void | (() => void);
 
 export const demoAppliers: Record<PluginId, DemoApplier> = {
   compressor: applyCompressorDemo as DemoApplier,
   deesser: applyDeesserDemo as DemoApplier,
   delay: applyDelayDemo as DemoApplier,
   equalizer: applyEqualizerDemo as DemoApplier,
+  mbcomp: applyMbcompDemo as DemoApplier,
   reverb: applyReverbDemo as DemoApplier,
   stereo: applyStereoDemo as DemoApplier,
   transients: applyTransientsDemo as DemoApplier,

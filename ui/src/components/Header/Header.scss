@@ -42,10 +42,19 @@
   }
 
   > .children {
-    flex: 0 1 auto;
-    min-width: 0;
+    // Keep header controls at intrinsic width — do not let In/Out meters
+    // crush them. `.info-block { width: 100% }` is for detail columns only;
+    // under WebKitGTK that percentage collapses children on top of each other.
+    flex: 0 0 auto;
+    min-width: auto;
     display: flex;
     gap: var(--gap);
+    align-items: center;
+
+    > .WithInfo.info-block {
+      width: auto;
+      flex: 0 0 auto;
+    }
 
     > .bypass,
     > .active,

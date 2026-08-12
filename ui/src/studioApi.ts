@@ -12,7 +12,8 @@ export type PluginId =
   | 'compressor'
   | 'deesser'
   | 'delay'
-  | 'reverb';
+  | 'reverb'
+  | 'mbcomp';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -22,6 +23,7 @@ const PLUGIN_IDS: PluginId[] = [
   'deesser',
   'delay',
   'reverb',
+  'mbcomp',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -60,6 +62,13 @@ export {
   type IEqualizerHost,
   type IEqualizerBand,
 } from './host/equalizerHost';
+
+export { MbcompUI } from './plugins/MbcompUI/MbcompUI';
+export {
+  createBoundMbcompHost,
+  type IMbcompHost,
+  type IMbcompBand,
+} from './host/mbcompHost';
 
 export { ReverbUI } from './plugins/ReverbUI/ReverbUI';
 export { createBoundReverbHost, type IReverbHost } from './host/reverbHost';

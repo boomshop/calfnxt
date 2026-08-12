@@ -20,7 +20,7 @@ internalized toolkit collides with system GTK3 — `GdkDisplay` GType abort).
 (GtkPlug + WebKit, XEmbed into the host XID) and forwards the JSON bridge over a
 Unix socketpair. Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`).
 More Calf-heritage processors planned.
 
 ---
@@ -36,14 +36,14 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Vendor URL / email | `https://calfnxt.org`, `mailto:schmidt@boomshop.net` |
 | C++ namespace | `calfNXT` |
 | CMake project / libs | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui` |
-| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb` |
-| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb` (must match; Carla/JUCE) |
-| Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3`, `calfNXTTransients.vst3`, `calfNXTCompressor.vst3`, `calfNXTDeesser.vst3`, `calfNXTDelay.vst3`, `calfNXTReverb.vst3` |
+| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp` |
+| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp` (must match; Carla/JUCE) |
+| Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3`, `calfNXTTransients.vst3`, `calfNXTCompressor.vst3`, `calfNXTDeesser.vst3`, `calfNXTDelay.vst3`, `calfNXTReverb.vst3`, `calfNXTMbcomp.vst3` |
 | URI scheme | `calfnxt://bundle/...` |
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
 | Script message handler | `webkit.messageHandlers.calfnxt` |
 | Env flags | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU` (full list in `README.md`) |
-| Install (packaging) | `cmake --install` → `${prefix}/${CALFNXT_VST3_INSTALL_DIR}` (default `lib/vst3`); user copy via `CALFNXT_VST3_DIR` / `./tools/install-user-vst3.sh [dest]` |
+| Install (packaging) | `cmake --install` → `${prefix}/${CALFNXT_VST3_INSTALL_DIR}` (default `lib/vst3`); user copy via `./tools/install-user-vst3.sh` `[plugin…]` / `[--dest dir]` |
 | Msg type (TS) | `calfNXTMsg` |
 
 Classic upstream “Calf Studio Gear” may still be mentioned as the DSP heritage; that is not this product name.
@@ -62,8 +62,9 @@ dsp/compressor/ compressor.plugin.json + DSP + codegen
 dsp/deesser/   deesser.plugin.json + DSP + codegen
 dsp/delay/     delay.plugin.json + DSP + codegen
 dsp/reverb/    reverb.plugin.json + DSP + codegen
+dsp/mbcomp/    mbcomp.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
-ui/            React SPA (Vite), hash router #equalizer / #stereo / … / #delay / #reverb
+ui/            React SPA (Vite), hash router #equalizer / #stereo / … / #reverb / #mbcomp
 external/vst3sdk/
 ```
 
@@ -159,16 +160,21 @@ Verify Ardour-safe link: `ldd …/*.so` must not list `libgtk-3` / `libwebkit`.
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target calfnxt-plugins -j
-# user install — always force-rebuilds SPA, embeds Resources, copies ~/.vst3
-# (or: ./tools/install-user-vst3.sh /usr/lib/vst3):
+# user install — force-rebuilds SPA, embeds Resources, copies ~/.vst3
 ./tools/install-user-vst3.sh
+# fast iterate on one plugin (UI + DSP + install that bundle only):
+./tools/install-user-vst3.sh mbcomp
+# several: ./tools/install-user-vst3.sh mbcomp compressor
+# custom dest: ./tools/install-user-vst3.sh --dest /usr/lib/vst3 mbcomp
 # packaging: cmake --install build --prefix /usr   # → $prefix/lib/vst3
 # (close the plugin host first if ~/.vst3 remove fails with Permission denied)
 # suite release (version bump, tag, ui-dist GitHub asset): see VERSIONING.md
 # ./tools/release.sh
 ```
 
-Install paths (user default): `~/.vst3/calfNXTEqualizer.vst3`, …  
+UI pack alone (no install): `cd ui && npm run build -- mbcomp` (or omit the id for all plugins).
+
+Install paths (user default): `~/.vst3/calfNXTEqualizer.vst3`, … `calfNXTMbcomp.vst3`  
 System / packaging: `${CMAKE_INSTALL_PREFIX}/${CALFNXT_VST3_INSTALL_DIR}/` (default `lib/vst3`).
 
 Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
@@ -200,6 +206,26 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
 ---
 
+## Multiband Compressor bands
+
+- Fixed **6** VST band slots (`b01_…`…`b06_…`: active/bypass/listen/threshold/ratio/knee/
+  attack/release/makeup/mix/mode/link/pdr); `num_bands` (2…6) decides how many run,
+  `slope` picks the LR crossover (12/24/48), `xover1…xover5` the split frequencies.
+- Raising `num_bands` in the UI seeds the new crossover at the geometric mean of the
+  previous top crossover and 20 kHz; `listen` is exclusive like the EQ's `dyn_listen`.
+- Viz id `"mbcomp"`: `gr` (array, ≤0 dB per band → `bindVizGrArray`), `gains` (chart curves),
+  `bandio` (`[in0,out0,in1,out1,…]` dB → `bindVizBandIo`), `point` (`[in,out]` for the transfer
+  chart) and `envelope` packed as bands × (slots × 3) + phase with
+  channels `[fullPeak, bandPeak, grLin]` (split into per-band `historyData$`).
+- UI: `MultibandChart` (AUX Equalizer; one stroked HP/LP curve per band whose dB offset is
+  the band's GR, vertical crossover handles, one threshold handle at each band's geometric
+  center) → `BandBridgeChart` → band strips → `BandBridgeChart` → detail panel for the
+  selected band (Compressor controls without FrequencyRange).
+- Band curves use the gain-carrying pass factories in `ui/src/dsp/eqFilters.ts`
+  (`auxLowpassGain12/24/48`, `auxHighpassGain12/24/48`).
+
+---
+
 ## Open / deferred
 
 1. Analyzer arrays (`viz` + `vizcfg` bins).
@@ -209,8 +235,6 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
    - **Flanger**
    - **Pulsator**
    - **Ring Modulator**
-   - **Reverb**
-   - **Multiband Compressor**
    - Gate / Sidechain Gate → **Expander**
    - **Limiter**
    - **Multiband Limiter**
@@ -241,6 +265,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 | DeEsser DSP | `dsp/deesser/source/*_dsp.*`, `common/dsp/deesser_detector.h`, `common/dsp/band_splitter.h` |
 | Delay DSP | `dsp/delay/source/*_dsp.*`, `common/dsp/sidechain_filter.h`, `common/dsp/smooth_gain.h` |
 | Reverb DSP | `dsp/reverb/source/*_dsp.*`, `common/dsp/reverb_*.h`, `common/dsp/delay_line.h` |
+| Multiband Compressor | `dsp/mbcomp/source/*_dsp.*`, `common/dsp/band_splitter.h`, `common/dsp/compressor.h`; UI `ui/src/plugins/MbcompUI/*`, `host/mbcompHost.ts`, `widgets/MultibandChart/*`, `widgets/BandBridgeChart/*` |
 | Param bind | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts` |
 | Header I/O | `ui/src/components/Header/*`, `host/headerMeters.ts` |
 | Meters | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*` |

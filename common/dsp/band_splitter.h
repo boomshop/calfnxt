@@ -20,18 +20,20 @@ class BandSplitter
 public:
   static constexpr int kMaxBands = 8;
   static constexpr int kMaxSplits = kMaxBands - 1;
-  static constexpr int kMaxStages = 4; // LR8 = 4 biquads per LP/HP
+  static constexpr int kMaxStages = 8; // LR16 = 8 biquads per LP/HP
 
   /**
    * Approximate slope in dB/oct (Linkwitz-Riley).
    * Only even orders: LR = Butterworth². No LR6 (36 dB) — odd order cannot
    * sum LP+HP to a flat allpass (phase-coherent complementary split).
+   * LR2 (12 dB) is kept for Deesser / API; multiband UI offers 24 / 48 / 96.
    */
   enum class Slope : int
   {
     Db12 = 0, // LR2 — 1 biquad, Q=0.5
     Db24 = 1, // LR4 — 2 biquads, Q=√2/2
     Db48 = 2, // LR8 — 4 biquads, Butterworth-4 Qs doubled
+    Db96 = 3, // LR16 — 8 biquads, Butterworth-8 Qs doubled (~2× LR8 CPU)
   };
 
   void reset()
@@ -81,14 +83,18 @@ public:
     updateFilters();
   }
 
-  /** Snap continuous UI values (e.g. 12 / 24 / 48) to Slope. */
+  /** Snap continuous UI values (e.g. 12 / 24 / 48 / 96) to Slope. */
   void setSlopeDb(float db)
   {
     Slope s = Slope::Db24;
     if (db < 18.f)
       s = Slope::Db12;
-    else if (db >= 36.f)
+    else if (db < 36.f)
+      s = Slope::Db24;
+    else if (db < 72.f)
       s = Slope::Db48;
+    else
+      s = Slope::Db96;
     setSlope(s);
   }
 
@@ -207,6 +213,8 @@ private:
         return 2;
       case Slope::Db48:
         return 4;
+      case Slope::Db96:
+        return 8;
     }
     return 2;
   }
@@ -250,8 +258,16 @@ private:
         q[0] = q[1] = 0.7071067811865476;
         break;
       case Slope::Db48:
+        // LR8 = two cascaded Butterworth-4 (Qs repeated).
         q[0] = q[2] = 0.541196100146197;
         q[1] = q[3] = 1.306562964876376;
+        break;
+      case Slope::Db96:
+        // LR16 = two cascaded Butterworth-8 (Qs repeated).
+        q[0] = q[4] = 0.509795579;
+        q[1] = q[5] = 0.601344886;
+        q[2] = q[6] = 0.899976223;
+        q[3] = q[7] = 2.562915447;
         break;
     }
 

@@ -1,0 +1,208 @@
+.MbcompUI {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 2px;
+
+  > .Header {
+    > .children {
+      > .bandcount {
+        > .bandcount {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+
+          > .Button {
+            flex: 0 0 auto;
+
+            > .aux-label {
+              font-family: sans-serif;
+              font-size: 24px;
+            }
+          }
+        }
+      }
+
+      > .slope {
+        flex-shrink: 0;
+      }
+    }
+  }
+
+  > .MultibandChart {
+    flex: 1 1 auto;
+    min-height: 180px;
+  }
+
+  > .bridge {
+    flex: 0 0 auto;
+  }
+
+  > .strips {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    gap: var(--gap);
+    flex: 0 0 auto;
+
+    > .strip {
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+      flex: 1 1 0;
+      max-width: 256px;
+      padding: var(--gap);
+      background: var(--background-less);
+      border: 1px solid var(--background-lesser);
+      border-radius: 2px;
+
+      &.selected {
+        border-color: var(--color-accent);
+      }
+
+      &.bypassed {
+        > .history,
+        > .meters {
+          opacity: 0.5;
+        }
+      }
+
+      > .history {
+        flex: 0 0 72px;
+        min-width: 0;
+
+        &.disabled,
+        > .HistoryChart.disabled {
+          opacity: 0.45;
+        }
+      }
+
+      // Horizontal meters stacked under the history; only the bottom shows scale.
+      > .meters {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: 0 0 auto;
+
+        .LevelMeter {
+          // Horizontal layout: bar thickness via --aux-meter-size; don't collapse.
+          min-height: 0;
+          height: auto;
+          flex: 0 0 auto;
+        }
+      }
+
+      > .knobs {
+        display: flex;
+        justify-content: space-evenly;
+        align-items: center;
+        gap: var(--gap);
+        flex: 0 0 auto;
+      }
+
+      > .bottom {
+        display: flex;
+        align-items: stretch;
+        gap: var(--gap);
+        flex: 0 0 auto;
+
+        > .band-select {
+          flex: 1 1 auto;
+          min-width: 0;
+
+          .Button {
+            width: 100%;
+          }
+        }
+      }
+    }
+  }
+
+  > .detail {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: var(--gap);
+    flex: 0 0 auto;
+
+    // The lower bridge fans the selected strip out to the full width, so the
+    // detail blocks share it.
+    > .block {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    > .chart {
+      flex: 0 0 auto;
+    }
+
+    > .detector {
+      flex-direction: column;
+
+      > .selects {
+        display: flex;
+        flex-direction: column;
+        gap: var(--gap);
+        align-items: stretch;
+        justify-content: center;
+        flex: 1;
+
+        > .Buttons,
+        > .WithInfo:has(> .Buttons) {
+          .Button {
+            flex: 1;
+          }
+        }
+      }
+    }
+
+    > .compressor {
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      grid-template-columns: repeat(5, auto);
+      grid-auto-flow: row;
+      gap: var(--gap) 0;
+
+      > .threshold {
+        grid-row: 1 / 3;
+      }
+
+      > .ratio {
+        grid-row: 1 / 3;
+      }
+    }
+
+    > .chart {
+      // Compact square transfer curve — the editor height is fully budgeted.
+      > .DynamicsChart {
+        flex: 0 0 140px;
+        width: 140px;
+        min-width: 140px;
+        height: 140px;
+        min-height: 140px;
+        background: var(--background);
+      }
+
+      .LevelMeter {
+        min-height: 0;
+      }
+    }
+  }
+
+  .HistoryChart {
+    .hist-full {
+      fill: var(--color);
+      fill-opacity: 0.1;
+      stroke: none;
+    }
+
+    .hist-band {
+      fill: var(--color);
+      fill-opacity: 0.22;
+      stroke: var(--color);
+      stroke-width: 1px;
+      stroke-opacity: 0.45;
+    }
+  }
+}

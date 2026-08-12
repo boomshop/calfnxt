@@ -66,7 +66,7 @@ public:
     return -1;
   }
 
-  /** Gain reduction in dB (≤0). Returns 1 if available, else 0. */
+  /** Gain reduction in dB (≤0). Returns count written (1…N for multiband). */
   virtual int takeGainReductionDb(float* out, int maxOut)
   {
     (void)out;
@@ -74,7 +74,22 @@ public:
     return 0;
   }
 
-  /** Dynamics transfer operating point: [inDb, outDb]. Returns 2 if available. */
+  /**
+   * Per-band peak meters: interleaved [inDb, outDb] × bands (mono peak).
+   * Returns float count (2×bands), or 0 if unused.
+   */
+  virtual int takeBandIoLevelsDb(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for band I/O levels (nullptr = do not flush). */
+  virtual const char* vizBandIoLevelsId() const { return nullptr; }
+
+  /** Dynamics transfer operating point(s): [inDb, outDb] or per-band
+   *  [in0, out0, in1, out1, …]. Returns float count written (2 or 2×N). */
   virtual int takeDynamicsPoint(float* out, int maxOut)
   {
     (void)out;

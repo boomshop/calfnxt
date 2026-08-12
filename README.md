@@ -46,6 +46,7 @@ will follow.
 | **Stereo** | `calfNXTStereo.vst3` | Width, M/S, decorrelation, imaging |
 | **Transients** | `calfNXTTransients.vst3` | Attack / release shaping |
 | **Compressor** | `calfNXTCompressor.vst3` | Feed-forward dynamics (threshold / ratio / knee) |
+| **Multiband Compressor** | `calfNXTMbcomp.vst3` | 2–6 band LR dynamics with per-band history |
 | **DeEsser** | `calfNXTDeesser.vst3` | Sibilance control (Wide / Split) |
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo / Ping-Pong / L-R) |
 | **Reverb** | `calfNXTReverb.vst3` | Algorithmic room (ER + late, no IR) |
@@ -80,6 +81,15 @@ will follow.
 - Threshold, ratio, soft **knee**, attack / release, makeup, wet/dry **mix**, bypass
 - **GR meter** + AUX transfer curve with live DSP operating point
 - Scrolling **history** chart (audio peak + GR over time, selectable window)
+
+### Multiband Compressor
+
+- **2–6** Linkwitz-Riley bands; adjustable **crossovers** and slope (**24 / 48 / 96** dB/oct)
+- Per-band compressor (threshold, ratio, knee, attack / release, makeup, mix, detector mode / link / PDR)
+- Band **bypass** / **listen**; selection opens the detail strip (transfer curve + full dynamics)
+- Frequency **response chart** with threshold handles; **bridge** guides to per-band strips
+- Per-band **history** (full-range / band peak / GR), In/Out/GR meters
+- Shared In/Out gain + peak meters
 
 ### DeEsser
 
@@ -194,10 +204,13 @@ DESTDIR=/tmp/pkgroot cmake --install build --prefix /usr
 # optional override: -DCALFNXT_VST3_INSTALL_DIR=lib64/vst3
 ```
 
-Developer / local install still defaults to `~/.vst3`. Override the destination:
+Developer / local install still defaults to `~/.vst3`. Override the destination
+or limit to one plugin while iterating:
 
 ```bash
-./tools/install-user-vst3.sh /usr/lib/vst3
+./tools/install-user-vst3.sh                    # all plugins → ~/.vst3
+./tools/install-user-vst3.sh mbcomp             # one plugin (faster)
+./tools/install-user-vst3.sh --dest /usr/lib/vst3 mbcomp
 # or: CALFNXT_VST3_DIR=/usr/lib/vst3 cmake --build build --target install-user-vst3-copy
 ```
 
@@ -285,10 +298,12 @@ cmake --build build --target calfnxt-plugins -j
 cmake --build build --target install-user-vst3
 # equivalent shortcut (also clears UI stamps so Resources always refresh):
 #   ./tools/install-user-vst3.sh
+# while working on one plugin only (UI + embed + copy that bundle):
+#   ./tools/install-user-vst3.sh mbcomp
 ```
 
-`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, Compressor, DeEsser, Delay, Reverb, …) and embeds each
-UI pack. `install-user-vst3` then copies the bundles into `~/.vst3/`:
+`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, Compressor, DeEsser, Delay, Reverb, Multiband Compressor, …) and embeds each
+UI pack. `install-user-vst3` / `./tools/install-user-vst3.sh` then copies the bundles into `~/.vst3/`:
 
 | Plugin    | Path                         |
 |-----------|------------------------------|
@@ -299,6 +314,7 @@ UI pack. `install-user-vst3` then copies the bundles into `~/.vst3/`:
 | DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
 | Delay     | `~/.vst3/calfNXTDelay.vst3`     |
 | Reverb    | `~/.vst3/calfNXTReverb.vst3`    |
+| Multiband Compressor | `~/.vst3/calfNXTMbcomp.vst3` |
 
 Rescan / reload the plugins in the host after install.
 
@@ -308,14 +324,19 @@ A Vite build **alone** does **not** update what the VST editor shows.
 You must copy the SPA into each bundle’s `Resources/`:
 
 ```bash
+# all plugins
 ./tools/install-user-vst3.sh
-# or manually:
-cmake --build build --target calfnxt-equalizer-resources calfnxt-stereo-resources calfnxt-transients-resources calfnxt-compressor-resources calfnxt-deesser-resources calfnxt-delay-resources -j
-cmake --build build --target install-user-vst3
+# one plugin while iterating (recommended — skips the other Vite packs)
+./tools/install-user-vst3.sh mbcomp
+# UI pack only (no CMake / no ~/.vst3 copy):
+cd ui && npm run build -- mbcomp
+# or manually via cmake after a full/partial SPA build:
+cmake --build build --target calfnxt-mbcomp-resources -j
+cmake --build build --target install-user-vst3-copy -j
 ```
 
-The `*-resources` targets run `npm run build` in `ui/` (one Vite build per plugin →
-`ui/dist/plugins/<id>/`) and embed only that plugin’s assets.
+`npm run build` / `node scripts/build-plugins.mjs` runs one Vite build per selected
+plugin id → `ui/dist/plugins/<id>/`. Omit ids to rebuild every pack.
 
 ### DSP / C++ only
 
@@ -324,7 +345,7 @@ cmake --build build --target calfnxt-plugins -j
 cmake --build build --target install-user-vst3
 ```
 
-Re-run `*-resources` (or `./tools/install-user-vst3.sh`) as well if the UI also changed.
+Re-run `*-resources` (or `./tools/install-user-vst3.sh [plugin…]`) as well if the UI also changed.
 
 ---
 
@@ -335,7 +356,7 @@ cd ui && npm install   # once
 cd ui && npm run dev
 ```
 
-Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` · `#reverb`
+Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` · `#reverb` · `#mbcomp`
 
 This is useful for layout and widget work. It does **not** replace installing into `~/.vst3` for Carla / other hosts.
 
@@ -347,7 +368,7 @@ you need it — see [`studio/README.md`](studio/README.md).
 ```bash
 cd studio && npm install    # once (downloads Chromium)
 npm run studio              # from repo root — all plugins
-npm run studio -- reverb    # one plugin
+npm run studio -- mbcomp    # one plugin
 ```
 
 ---
@@ -358,16 +379,12 @@ npm run studio -- reverb    # one plugin
 |-----------------------------|---------|
 | Configure                   | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` |
 | Build **all** plugins (+ UI)| `cmake --build build --target calfnxt-plugins -j` |
-| Embed SPA + install         | `./tools/install-user-vst3.sh` `[dest]` or `cmake --build build --target install-user-vst3` |
+| Embed SPA + install (all)   | `./tools/install-user-vst3.sh` or `cmake --build build --target install-user-vst3` |
+| Embed + install **one** plugin | `./tools/install-user-vst3.sh mbcomp` (ids: `equalizer` `stereo` `transients` `compressor` `deesser` `delay` `reverb` `mbcomp`) |
+| UI pack only (one / all)    | `cd ui && npm run build -- mbcomp` or `npm run build` |
 | System install (packaging)  | `cmake --install build --prefix /usr` (→ `$prefix/lib/vst3`) |
 | Cut a GitHub release        | `./tools/release.sh` (see `VERSIONING.md`) |
-| Single plugin (Equalizer)   | `cmake --build build --target calfnxt-equalizer calfnxt-equalizer-resources -j` |
-| Single plugin (Stereo)      | `cmake --build build --target calfnxt-stereo calfnxt-stereo-resources -j` |
-| Single plugin (Transients)  | `cmake --build build --target calfnxt-transients calfnxt-transients-resources -j` |
-| Single plugin (Compressor)  | `cmake --build build --target calfnxt-compressor calfnxt-compressor-resources -j` |
-| Single plugin (DeEsser)     | `cmake --build build --target calfnxt-deesser calfnxt-deesser-resources -j` |
-| Single plugin (Delay)       | `cmake --build build --target calfnxt-delay calfnxt-delay-resources -j` |
-| Single plugin (Reverb)      | `cmake --build build --target calfnxt-reverb calfnxt-reverb-resources -j` |
+| Single plugin (cmake only)  | `cmake --build build --target calfnxt-<id> calfnxt-<id>-resources -j` then `install-user-vst3-copy` |
 | UI HMR in the browser       | `cd ui && npm run dev` |
 | Website UI screenshots      | `cd studio && npm i` then `npm run studio` (see `studio/README.md`) |
 
@@ -403,7 +420,7 @@ Related (not calfNXT-owned, but often useful with WebKitGTK / X11 embed):
 
 | Variable | Values | Effect |
 |----------|--------|--------|
-| `CALFNXT_VST3_DIR` | absolute path | Destination for `install-user-vst3-copy` / `./tools/install-user-vst3.sh` (default `~/.vst3`). Example: `CALFNXT_VST3_DIR=/usr/lib/vst3 ./tools/install-user-vst3.sh`. |
+| `CALFNXT_VST3_DIR` | absolute path | Destination for `install-user-vst3-copy` / `./tools/install-user-vst3.sh` (default `~/.vst3`). Example: `./tools/install-user-vst3.sh --dest /usr/lib/vst3 mbcomp`. |
 | `BUILD_DIR` | path | Override build tree for `./tools/install-user-vst3.sh` (default `<repo>/build`). |
 | `JOBS` | integer | Parallelism for that script’s `cmake --build` (default `nproc`). |
 

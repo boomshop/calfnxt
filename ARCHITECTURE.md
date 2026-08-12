@@ -66,7 +66,9 @@ Step-by-step **build / embed UI / install to `~/.vst3`**: see **[`README.md`](RE
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
-# or UI only: cd ui && npm install && npm run build
+# UI packs: cd ui && npm run build            # all
+#           cd ui && npm run build -- mbcomp  # one
+# Install (embed + ~/.vst3): ./tools/install-user-vst3.sh [mbcomp…]
 ```
 
 Dev UI: `cd ui && npm run dev` → http://localhost:5173/#equalizer (HMR, sized DevShell).
