@@ -41,6 +41,13 @@ public:
     pub_.store(meterDb_, std::memory_order_relaxed);
   }
 
+  /** Instant clear (bypass) — skip fall ballistics. Audio thread only. */
+  void forceZero()
+  {
+    meterDb_ = 0.f;
+    pub_.store(0.f, std::memory_order_relaxed);
+  }
+
   /** ≤0 dB for viz (no reset on poll). */
   float takeDb() const
   {

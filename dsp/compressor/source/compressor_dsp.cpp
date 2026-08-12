@@ -126,15 +126,16 @@ CompressorPlugin::BlockState CompressorPlugin::makeBlockState() const
   return state;
 }
 
-void CompressorPlugin::histFeedSample(float audioPeakLin, float grLin)
+void CompressorPlugin::histFeedSample(float audioPeakLin, float detPeakLin, float grLin)
 {
   const int pos = histPos_;
   histBuf_[pos + 0] = std::max(audioPeakLin, histBuf_[pos + 0]);
+  histBuf_[pos + 1] = std::max(detPeakLin, histBuf_[pos + 1]);
   // Most reduction within the slot (smallest linear GR).
-  if (histBuf_[pos + 1] <= 0.f)
-    histBuf_[pos + 1] = grLin;
+  if (histBuf_[pos + 2] <= 0.f)
+    histBuf_[pos + 2] = grLin;
   else
-    histBuf_[pos + 1] = std::min(grLin, histBuf_[pos + 1]);
+    histBuf_[pos + 2] = std::min(grLin, histBuf_[pos + 2]);
 
   histSampleCount_ += 1;
   if (histSampleCount_ >= histSamplesPerSlot_)
@@ -142,7 +143,8 @@ void CompressorPlugin::histFeedSample(float audioPeakLin, float grLin)
     histPos_ = (pos + kHistChannels) % kHistBufSize;
     histSampleCount_ = 0;
     histBuf_[histPos_ + 0] = audioPeakLin;
-    histBuf_[histPos_ + 1] = grLin;
+    histBuf_[histPos_ + 1] = detPeakLin;
+    histBuf_[histPos_ + 2] = grLin;
   }
 }
 
@@ -180,15 +182,33 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
     L = detL;
     R = detR;
     const float gr = gr_.processDetector(detL, detR);
+    const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
     grMeter_.process(gr);
-    histFeedSample(std::max(std::fabs(detL), std::fabs(detR)), gr);
+    histFeedSample(audioPeak, detPeak, gr);
+    return;
+  }
+
+  const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
+
+  // Bypass: keep audio + detector history, but GR meter/history show idle.
+  if (state.bypass)
+  {
+    gr_.processDetector(detL, detR); // keep detector state continuous
+    grMeter_.forceZero();
+    histFeedSample(audioPeak, detPeak, 1.f);
+    {
+      std::lock_guard<std::mutex> lock(vizMutex_);
+      const float inDb = linToDbSafe(gr_.lastDetectorLin());
+      pointInDb_ = inDb;
+      pointOutDb_ = inDb;
+    }
     return;
   }
 
   const float gr = gr_.processDetector(detL, detR);
   const float det = gr_.lastDetectorLin();
   grMeter_.process(gr);
-  histFeedSample(audioPeak, gr);
+  histFeedSample(audioPeak, detPeak, gr);
 
   const float inDb = linToDbSafe(det);
   const float grDb = linToDbSafe(gr);
@@ -198,9 +218,6 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
     pointInDb_ = inDb;
     pointOutDb_ = outDb;
   }
-
-  if (state.bypass)
-    return;
 
   const float wetL = dryL * gr * state.makeupLin;
   const float wetR = dryR * gr * state.makeupLin;
@@ -245,10 +262,11 @@ int CompressorPlugin::takeEnvelopeDisplay(float* out, int maxOut)
     {
       const int srcIdx = (startPos + i * kHistChannels) % kHistBufSize;
       out[i * kHistChannels + 0] = std::fabs(histSnapshot_[srcIdx + 0]);
-      float gr = histSnapshot_[srcIdx + 1];
+      out[i * kHistChannels + 1] = std::fabs(histSnapshot_[srcIdx + 1]);
+      float gr = histSnapshot_[srcIdx + 2];
       if (!(gr > 0.f))
         gr = 1.f;
-      out[i * kHistChannels + 1] = std::clamp(gr, 1.0e-6f, 1.f);
+      out[i * kHistChannels + 2] = std::clamp(gr, 1.0e-6f, 1.f);
     }
   }
   out[outCount] = std::clamp(phase, 0.f, 1.f);

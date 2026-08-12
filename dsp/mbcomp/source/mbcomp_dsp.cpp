@@ -323,7 +323,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
   {
     gr_[b].reset();
     lastGrDb_[b] = 0.f;
-    grMeter_[b].process(1.f);
+    grMeter_[b].forceZero();
   }
 
   const int nSamples = data.numSamples;
@@ -350,19 +350,43 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
-  // Global bypass: dry I/O path already in outs — skip crossovers + compressors.
+  // Global bypass: dry I/O already in outs. Still run crossovers so history
+  // keeps full + band peaks (same idea as Comp/DeEsser keeping the detector).
   if (globalBypass)
   {
+    float xoversBypass[kMaxBands - 1] {};
+    xoversBypass[0] = params_[kParamXover1];
+    xoversBypass[1] = params_[kParamXover2];
+    xoversBypass[2] = params_[kParamXover3];
+    xoversBypass[3] = params_[kParamXover4];
+    xoversBypass[4] = params_[kParamXover5];
+    splitL_.setBands(bands);
+    splitR_.setBands(bands);
+    splitL_.setSlopeDb(slopeDb);
+    splitR_.setSlopeDb(slopeDb);
+    splitL_.setFreqs(xoversBypass, bands - 1);
+    splitR_.setFreqs(xoversBypass, bands - 1);
+    splitL_.prepareBlock();
+    splitR_.prepareBlock();
+
+    float bandsL[kMaxBands];
+    float bandsR[kMaxBands];
     for (int i = 0; i < nSamples; ++i)
     {
       const float fullPeak = std::max(std::fabs(outL[i]), std::fabs(outR[i]));
+      splitL_.process(outL[i], bandsL);
+      splitR_.process(outR[i], bandsR);
       for (int b = 0; b < bands; ++b)
-        histFeedSample(b, fullPeak, 0.f, 1.f);
+      {
+        const float bandPeak =
+          std::max(std::fabs(bandsL[b]), std::fabs(bandsR[b]));
+        histFeedSample(b, fullPeak, bandPeak, 1.f);
+      }
     }
     for (int b = 0; b < bands; ++b)
     {
       lastGrDb_[b] = 0.f;
-      grMeter_[b].process(1.f);
+      grMeter_[b].forceZero();
     }
     {
       std::lock_guard<std::mutex> lock(vizMutex_);
@@ -460,7 +484,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
       else
       {
         // Bypassed band: passthrough only — compressor already reset above.
-        grMeter_[b].process(1.f);
+        grMeter_[b].forceZero();
         lastGrDb_[b] = 0.f;
         const float inDb = linToDbSafe(bandPeak);
         pointInDb_[b] = inDb;
@@ -468,6 +492,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
       }
 
       bandOutHold_[b].accumulate(0, std::max(std::fabs(bL), std::fabs(bR)));
+      // Always feed full + band peaks; GR history is unity while bypassed.
       histFeedSample(b, fullPeak, bandPeak, grLin);
 
       if (anyListen && b == listenBand)

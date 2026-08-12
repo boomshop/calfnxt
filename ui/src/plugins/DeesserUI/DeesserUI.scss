@@ -10,14 +10,6 @@
   > .HistoryChart {
     grid-area: hist;
     background: var(--background-less);
-    > svg {
-      > .aux-graphs {
-        > .hist-audio {
-          stroke: var(--color-accent);
-          fill: var(--color-accent);
-        }
-      }
-    }
   }
 
   > .filters {

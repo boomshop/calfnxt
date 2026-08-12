@@ -51,8 +51,8 @@ protected:
   const char* editorHtml() const override { return kEditorHtml; }
 
 private:
-  // History slots: audio peak (lin), GR (lin) — keep in sync with CompressorHistoryChart.
-  static constexpr int kHistChannels = 2;
+  // History: audio peak, sidechain/detector peak, GR (lin) — same layout as DeEsser.
+  static constexpr int kHistChannels = 3;
   static constexpr int kHistSlots = 512;
   static constexpr int kHistMinSlots = 48;
   static constexpr int kHistBufSize = kHistSlots * kHistChannels;
@@ -71,7 +71,7 @@ private:
   BlockState makeBlockState() const;
   void processSample(const BlockState& state, float& L, float& R);
   void resetProcessing();
-  void histFeedSample(float audioPeakLin, float grLin);
+  void histFeedSample(float audioPeakLin, float detPeakLin, float grLin);
   void publishHistSnapshot();
 
   float params_[kParamCount] {};

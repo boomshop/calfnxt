@@ -96,6 +96,29 @@ def extract_2ch(path: Path, rect: tuple[float, float, float, float]) -> list[flo
     return out
 
 
+def extract_3ch(path: Path, rect: tuple[float, float, float, float]) -> list[float]:
+    """Audio + approximate filtered detector + GR (DeEsser / Compressor layout)."""
+    img = Image.open(path).convert("RGBA")
+    w, h = img.size
+    x0, y0 = int(rect[0] * w), int(rect[1] * h)
+    x1, y1 = int(rect[2] * w), int(rect[3] * h)
+    out: list[float] = []
+    for i in range(SLOTS):
+        x = x0 + int(i * (x1 - x0 - 1) / max(1, SLOTS - 1))
+        adb = sample_blue_peak_db(img, x, y0, y1)
+        if adb is None:
+            adb = DB_MIN + 6
+        gdb = sample_gr_db(img, x, y0, y1)
+        audio = db_to_lin(adb)
+        # Filtered often sits below the fullband peak in the same chart.
+        filt = db_to_lin(adb - 4.0) * (0.55 + 0.2 * abs(math.sin(i * 0.13)))
+        out.append(audio)
+        out.append(filt)
+        out.append(db_to_lin(gdb))
+    out.append(0.0)
+    return out
+
+
 def extract_transients(path: Path, rect: tuple[float, float, float, float]) -> list[float]:
     """Map a single sampled curve into 5 envelope channels (approx)."""
     img = Image.open(path).convert("RGBA")
@@ -138,10 +161,16 @@ def main() -> None:
             continue
         if plugin == "transients":
             env = extract_transients(png, rect)
+        elif plugin in ("compressor", "deesser"):
+            env = extract_3ch(png, rect)
+            for c in (0, 1, 2):
+                for i in range(1, SLOTS - 1):
+                    a = env[(i - 1) * 3 + c]
+                    b = env[i * 3 + c]
+                    d = env[(i + 1) * 3 + c]
+                    env[i * 3 + c] = 0.25 * a + 0.5 * b + 0.25 * d
         else:
             env = extract_2ch(png, rect)
-        # Light smoothing
-        if plugin != "transients":
             for c in (0, 1):
                 for i in range(1, SLOTS - 1):
                     a = env[(i - 1) * 2 + c]

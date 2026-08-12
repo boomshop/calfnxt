@@ -143,10 +143,6 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
   Dsp::sanitizeDenormal(detR);
   const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
 
-  const float gr = gr_.processDetector(detL, detR);
-  grMeter_.process(gr);
-  histFeedSample(audioPeak, detPeak, gr);
-
   // Always feed LR splitters so Wide↔Split stays continuous and states sanitize.
   float loL = 0.f;
   float hiL = 0.f;
@@ -157,13 +153,26 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
 
   if (state.listen && !state.bypass)
   {
+    const float gr = gr_.processDetector(detL, detR);
+    grMeter_.process(gr);
+    histFeedSample(audioPeak, detPeak, gr);
     L = detL;
     R = detR;
     return;
   }
 
+  // Bypass: keep audio + detector history, GR meter/history idle.
   if (state.bypass)
+  {
+    gr_.processDetector(detL, detR);
+    grMeter_.forceZero();
+    histFeedSample(audioPeak, detPeak, 1.f);
     return;
+  }
+
+  const float gr = gr_.processDetector(detL, detR);
+  grMeter_.process(gr);
+  histFeedSample(audioPeak, detPeak, gr);
 
   if (state.split)
   {

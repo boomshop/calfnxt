@@ -120,6 +120,7 @@ export function CompressorUI(props: CompressorUIProps) {
           vizId="comp"
           graphs={[
             { className: 'hist-audio', mode: 'bottom' },
+            { className: 'hist-audio-filtered', mode: 'bottom' },
             { className: 'hist-gr', mode: 'line', toFront: true, gradient: true },
           ]}
         />

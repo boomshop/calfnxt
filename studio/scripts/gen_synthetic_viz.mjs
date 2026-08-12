@@ -27,6 +27,19 @@ function history2ch(slots, audioDbFn, grDbFn) {
   return out;
 }
 
+/** Compressor / DeEsser: [audio, filtered/detector, grLin] × slots + phase. */
+function history3ch(slots, audioDbFn, filtDbFn, grDbFn) {
+  const out = new Array(slots * 3 + 1);
+  for (let i = 0; i < slots; ++i) {
+    const t = i / (slots - 1);
+    out[i * 3] = dbToLin(audioDbFn(t));
+    out[i * 3 + 1] = dbToLin(filtDbFn(t));
+    out[i * 3 + 2] = dbToLin(grDbFn(t));
+  }
+  out[slots * 3] = 0;
+  return out;
+}
+
 /** Transients: 5 channels (in, out, env, att, rel) + phase. */
 function envelope5(slots) {
   const out = new Array(slots * 5 + 1);
@@ -57,8 +70,9 @@ function mbcompHistory(slots, numBands = 4) {
   if (fs.existsSync(compPath)) {
     const comp = JSON.parse(fs.readFileSync(compPath, 'utf8'));
     const env = Array.isArray(comp.envelope) ? comp.envelope : null;
-    if (env && env.length >= 3) {
-      const slotsAll = Math.floor((env.length - 1) / 2);
+    if (env && env.length >= 4) {
+      const rem = (env.length - 1) % 3 === 0 ? 3 : 2;
+      const slotsAll = Math.floor((env.length - 1) / rem);
       const use = Math.min(slots, slotsAll);
       const start = slotsAll - use;
       const out = [];
@@ -67,9 +81,20 @@ function mbcompHistory(slots, numBands = 4) {
         const gi = grIntensity[b] ?? 0.2;
         for (let i = 0; i < use; ++i) {
           const si = start + i;
-          const audio = Number(env[si * 2]) || 0;
-          const gr = Math.min(1, Math.max(0, Number(env[si * 2 + 1]) || 0));
-          out.push(audio, audio * bs, Math.min(1, Math.max(1e-6, 1 - (1 - gr) * gi)));
+          const audio = Number(env[si * rem]) || 0;
+          const filt =
+            rem === 3
+              ? Number(env[si * rem + 1]) || 0
+              : audio * bs;
+          const gr = Math.min(
+            1,
+            Math.max(0, Number(env[si * rem + (rem - 1)]) || 0),
+          );
+          out.push(
+            audio,
+            rem === 3 ? filt * (0.85 + 0.15 * bs) : audio * bs,
+            Math.min(1, Math.max(1e-6, 1 - (1 - gr) * gi)),
+          );
         }
       }
       out.push(Number(env[env.length - 1]) || 0);
@@ -77,9 +102,10 @@ function mbcompHistory(slots, numBands = 4) {
     }
   }
   // Fallback: compressor-shaped synthetic, packed per band.
-  const base = history2ch(
+  const base = history3ch(
     slots,
     (t) => -6 - 14 * Math.abs(Math.sin(t * Math.PI * 7)) - 8 * t,
+    (t) => -10 - 12 * Math.abs(Math.sin(t * Math.PI * 7)) - 6 * t,
     (t) => {
       const peak = Math.max(0, Math.sin(t * Math.PI * 7));
       return -peak * 12 - 2;
@@ -90,9 +116,14 @@ function mbcompHistory(slots, numBands = 4) {
     const bs = bandScales[b] ?? 0.2;
     const gi = grIntensity[b] ?? 0.2;
     for (let i = 0; i < slots; ++i) {
-      const audio = base[i * 2];
-      const gr = Math.min(1, Math.max(0, base[i * 2 + 1]));
-      out.push(audio, audio * bs, Math.min(1, Math.max(1e-6, 1 - (1 - gr) * gi)));
+      const audio = base[i * 3];
+      const filt = base[i * 3 + 1];
+      const gr = Math.min(1, Math.max(0, base[i * 3 + 2]));
+      out.push(
+        audio,
+        filt * bs,
+        Math.min(1, Math.max(1e-6, 1 - (1 - gr) * gi)),
+      );
     }
   }
   out.push(0);
@@ -117,9 +148,10 @@ const packs = {
     levelsOut: [-10.1, -10.8],
     gr: 6.5,
     point: [-18, -22],
-    envelope: history2ch(
+    envelope: history3ch(
       slots,
       (t) => -6 - 14 * Math.abs(Math.sin(t * Math.PI * 7)) - 8 * t,
+      (t) => -10 - 12 * Math.abs(Math.sin(t * Math.PI * 7 + 0.4)) - 6 * t,
       (t) => {
         const peak = Math.max(0, Math.sin(t * Math.PI * 7));
         return -peak * 12 - 2;
@@ -130,9 +162,10 @@ const packs = {
     levelsIn: [-12, -12.5],
     levelsOut: [-13, -13.4],
     gr: 4.2,
-    envelope: history2ch(
+    envelope: history3ch(
       slots,
       (t) => -10 - 10 * Math.abs(Math.sin(t * Math.PI * 11)),
+      (t) => -14 - 12 * Math.abs(Math.sin(t * Math.PI * 11)) - 4 * Math.max(0, Math.sin(t * Math.PI * 22)),
       (t) => -Math.max(0, Math.sin(t * Math.PI * 11) - 0.3) * 10,
     ),
   },

@@ -190,8 +190,8 @@ function BandStrip(props: {
           vizId="mbcomp"
           className={bypass ? 'disabled' : undefined}
           graphs={[
-            { className: 'hist-full', mode: 'bottom' },
-            { className: 'hist-band', mode: 'bottom' },
+            { className: 'hist-audio', mode: 'bottom' },
+            { className: 'hist-audio-filtered', mode: 'bottom' },
             {
               className: 'hist-gr',
               mode: 'line',

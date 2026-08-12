@@ -188,20 +188,4 @@
       }
     }
   }
-
-  .HistoryChart {
-    .hist-full {
-      fill: var(--color);
-      fill-opacity: 0.1;
-      stroke: none;
-    }
-
-    .hist-band {
-      fill: var(--color);
-      fill-opacity: 0.22;
-      stroke: var(--color);
-      stroke-width: 1px;
-      stroke-opacity: 0.45;
-    }
-  }
 }
