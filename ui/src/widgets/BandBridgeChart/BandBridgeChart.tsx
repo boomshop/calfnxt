@@ -23,6 +23,8 @@ const ChartWidget = componentFromWidget(
 type AuxGraph = {
   set: (k: string, v: unknown) => void;
   element?: SVGElement;
+  destroy?: () => void;
+  destroyAndRemove?: () => void;
 };
 
 type AuxChartInstance = {
@@ -31,6 +33,43 @@ type AuxChartInstance = {
   addGraph: (opts: unknown) => AuxGraph;
   removeGraph: (g: AuxGraph) => void;
 };
+
+/**
+ * Chart.removeGraph only unlinks the widget tree — the SVG path stays in
+ * `_graphs`. destroyAndRemove unlinks and drops the path; fall back to a
+ * captured element if that throws (same pitfall as ReverbChart).
+ */
+function disposeGraph(chart: AuxChartInstance, g: AuxGraph) {
+  try {
+    g.destroyAndRemove?.();
+    return;
+  } catch {
+    // fall through
+  }
+  const el = g.element ?? null;
+  try {
+    chart.removeGraph(g);
+  } catch {
+    // already detached
+  }
+  try {
+    g.destroy?.();
+  } catch {
+    // ignore
+  }
+  el?.remove?.();
+}
+
+function addBridgeGraph(chart: AuxChartInstance, index: number): AuxGraph {
+  const g = chart.addGraph({
+    dots: null,
+    type: 'L',
+    mode: 'fill',
+    class: `bridge-band bridge-band-${index}`,
+  });
+  g.element?.classList.add('bridge-band', `bridge-band-${index}`);
+  return g;
+}
 
 /** One trapezoid: upper edge `in1…in2`, lower edge `out1…out2` (all 0…1). */
 export type BandBridgeSegment = {
@@ -71,21 +110,14 @@ export function BandBridgeChart(props: BandBridgeChartProps) {
     if (!chart || chart.isDestructed?.()) return;
 
     const specs = segmentsRef.current;
-    let graphs = graphsRef.current;
+    const graphs = graphsRef.current;
 
-    if (graphs.length !== specs.length) {
-      for (const g of graphs) chart.removeGraph(g);
-      graphs = specs.map((_, i) => {
-        const g = chart.addGraph({
-          dots: null,
-          type: 'L',
-          mode: 'fill',
-          class: `bridge-band bridge-band-${i}`,
-        });
-        g.element?.classList.add('bridge-band', `bridge-band-${i}`);
-        return g;
-      });
-      graphsRef.current = graphs;
+    while (graphs.length > specs.length) {
+      const g = graphs.pop();
+      if (g) disposeGraph(chart, g);
+    }
+    while (graphs.length < specs.length) {
+      graphs.push(addBridgeGraph(chart, graphs.length));
     }
 
     specs.forEach((segment, i) => graphs[i]?.set('dots', segmentDots(segment)));
@@ -97,7 +129,7 @@ export function BandBridgeChart(props: BandBridgeChartProps) {
     graphsRef.current = [];
     chartRef.current = null;
     if (!chart || chart.isDestructed?.()) return;
-    for (const g of graphs) chart.removeGraph(g);
+    for (const g of graphs) disposeGraph(chart, g);
   }, []);
 
   const widgetRef = useCallback(
