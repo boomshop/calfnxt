@@ -4,6 +4,7 @@ import type {
   IDeesserHost,
   IDelayHost,
   IEqualizerHost,
+  ILimiterHost,
   IMbcompHost,
   IReverbHost,
   IStereoHost,
@@ -305,6 +306,38 @@ function applyMbcompMeters(host: IMbcompHost, viz: VizFixture) {
   if (viz.point) host.point$.set(viz.point);
 }
 
+export function applyLimiterDemo(
+  host: ILimiterHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.limit$, params.limit);
+  setNum(host.attack$, params.attack);
+  setNum(host.release$, params.release);
+  setBool(host.asc$, params.asc);
+  setNum(host.ascCoeff$, params.asc_coeff);
+  setNum(host.oversampling$, params.oversampling);
+  setBool(host.autoLevel$, params.auto_level);
+  setNum(host.curve$, params.curve);
+  setNum(host.knee$, params.knee);
+  setBool(host.colorEnable$, params.color_enable);
+  setNum(host.color$, params.color);
+  setBool(host.truePeak$, params.true_peak);
+  setNum(host.margin$, params.margin);
+  setBool(host.diffListen$, params.diff_listen);
+  setBool(host.holdEnable$, params.hold_enable);
+  setNum(host.releaseHold$, params.release_hold);
+  setBool(host.emphasisEnable$, params.emphasis_enable);
+  setNum(host.emphasis$, params.emphasis);
+
+  applySharedViz(viz);
+  if (viz.envelope)
+    host.historyData$.set(new Float32Array(viz.envelope));
+  if (typeof viz.gr === 'number')
+    host.gr$.set(viz.gr);
+}
+
 export function applyMbcompDemo(
   host: IMbcompHost,
   params: Record<string, unknown>,
@@ -368,6 +401,7 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   deesser: applyDeesserDemo as DemoApplier,
   delay: applyDelayDemo as DemoApplier,
   equalizer: applyEqualizerDemo as DemoApplier,
+  limiter: applyLimiterDemo as DemoApplier,
   mbcomp: applyMbcompDemo as DemoApplier,
   reverb: applyReverbDemo as DemoApplier,
   stereo: applyStereoDemo as DemoApplier,

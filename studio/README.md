@@ -26,7 +26,8 @@ python3 scripts/extract_history.py
 
 Mbcomp strip history is seeded from the **compressor** fixture envelope
 (`gen_synthetic_viz.mjs` packs it into per-band `[full, band, grLin]` channels)
-until a dedicated capture exists.
+until a dedicated capture exists. Limiter history uses the same compressor
+envelope remapped to `[audio, grLin]` (see `fixtures/limiter/`).
 
 Regenerate synthetic viz (meters / envelopes) without extraction:
 

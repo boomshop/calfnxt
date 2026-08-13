@@ -26,6 +26,7 @@ const knownPlugins = [
   "delay",
   "reverb",
   "mbcomp",
+  "limiter",
 ] as const;
 
 export default defineConfig(({ command }) => {

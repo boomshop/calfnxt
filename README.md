@@ -47,6 +47,7 @@ will follow.
 | **Transients** | `calfNXTTransients.vst3` | Attack / release shaping |
 | **Compressor** | `calfNXTCompressor.vst3` | Feed-forward dynamics (threshold / ratio / knee) |
 | **Multiband Compressor** | `calfNXTMbcomp.vst3` | 2–6 band LR dynamics with per-band history |
+| **Limiter** | `calfNXTLimiter.vst3` | Lookahead brickwall with ASC + oversampling |
 | **DeEsser** | `calfNXTDeesser.vst3` | Sibilance control (Wide / Split) |
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo / Ping-Pong / L-R) |
 | **Reverb** | `calfNXTReverb.vst3` | Algorithmic room (ER + late, no IR) |
@@ -89,6 +90,15 @@ will follow.
 - Band **bypass** / **listen**; selection opens the detail strip (transfer curve + full dynamics)
 - Frequency **response chart** with threshold handles; **bridge** guides to per-band strips
 - Per-band **history** (full-range / band peak / GR), In/Out/GR meters
+- Shared In/Out gain + peak meters
+
+### Limiter
+
+- Calf-heritage **lookahead brickwall** with gliding look changes (click-free) and host latency
+- **ASC** adaptive release, selectable gain **curves** (Lin / Log / Cos), soft **knee**
+- **Oversampling** (1–4×), optional **True Peak** (+ margin), **Auto Level** makeup
+- Character: pre-limit **Color**, release **Hold**, program **Emphasis**; **Diff Listen**
+- **GR meter** + scrolling history (audio peak + GR)
 - Shared In/Out gain + peak meters
 
 ### DeEsser
@@ -280,6 +290,8 @@ Then rescan plugins in your host. Bundles appear as:
 | Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
 | Transients | `~/.vst3/calfNXTTransients.vst3` |
 | Compressor | `~/.vst3/calfNXTCompressor.vst3` |
+| Multiband Compressor | `~/.vst3/calfNXTMbcomp.vst3` |
+| Limiter   | `~/.vst3/calfNXTLimiter.vst3`   |
 | DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
 | Delay     | `~/.vst3/calfNXTDelay.vst3`     |
 | Reverb    | `~/.vst3/calfNXTReverb.vst3`    |
@@ -302,7 +314,8 @@ cmake --build build --target install-user-vst3
 #   ./tools/install-user-vst3.sh mbcomp
 ```
 
-`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, Compressor, DeEsser, Delay, Reverb, Multiband Compressor, …) and embeds each
+`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, Compressor,
+Multiband Compressor, Limiter, DeEsser, Delay, Reverb, …) and embeds each
 UI pack. `install-user-vst3` / `./tools/install-user-vst3.sh` then copies the bundles into `~/.vst3/`:
 
 | Plugin    | Path                         |
@@ -315,6 +328,7 @@ UI pack. `install-user-vst3` / `./tools/install-user-vst3.sh` then copies the bu
 | Delay     | `~/.vst3/calfNXTDelay.vst3`     |
 | Reverb    | `~/.vst3/calfNXTReverb.vst3`    |
 | Multiband Compressor | `~/.vst3/calfNXTMbcomp.vst3` |
+| Limiter   | `~/.vst3/calfNXTLimiter.vst3` |
 
 Rescan / reload the plugins in the host after install.
 
@@ -356,7 +370,7 @@ cd ui && npm install   # once
 cd ui && npm run dev
 ```
 
-Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` · `#reverb` · `#mbcomp`
+Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` · `#reverb` · `#mbcomp` · `#limiter`
 
 This is useful for layout and widget work. It does **not** replace installing into `~/.vst3` for Carla / other hosts.
 
@@ -380,7 +394,7 @@ npm run studio -- mbcomp    # one plugin
 | Configure                   | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` |
 | Build **all** plugins (+ UI)| `cmake --build build --target calfnxt-plugins -j` |
 | Embed SPA + install (all)   | `./tools/install-user-vst3.sh` or `cmake --build build --target install-user-vst3` |
-| Embed + install **one** plugin | `./tools/install-user-vst3.sh mbcomp` (ids: `equalizer` `stereo` `transients` `compressor` `deesser` `delay` `reverb` `mbcomp`) |
+| Embed + install **one** plugin | `./tools/install-user-vst3.sh mbcomp` (ids: `equalizer` `stereo` `transients` `compressor` `deesser` `delay` `reverb` `mbcomp` `limiter`) |
 | UI pack only (one / all)    | `cd ui && npm run build -- mbcomp` or `npm run build` |
 | System install (packaging)  | `cmake --install build --prefix /usr` (→ `$prefix/lib/vst3`) |
 | Cut a GitHub release        | `./tools/release.sh` (see `VERSIONING.md`) |

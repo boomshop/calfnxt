@@ -25,6 +25,7 @@ const ALL = [
   'deesser',
   'delay',
   'equalizer',
+  'limiter',
   'mbcomp',
   'reverb',
   'stereo',

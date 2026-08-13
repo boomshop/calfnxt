@@ -4,6 +4,7 @@ import {
   DeesserUI,
   DelayUI,
   EqualizerUI,
+  LimiterUI,
   MbcompUI,
   ReverbUI,
   StereoUI,
@@ -12,6 +13,7 @@ import {
   createBoundDeesserHost,
   createBoundDelayHost,
   createBoundEqualizerHost,
+  createBoundLimiterHost,
   createBoundMbcompHost,
   createBoundReverbHost,
   createBoundStereoHost,
@@ -42,6 +44,10 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
   equalizer: async () => ({
     params: (await import('../fixtures/equalizer/params.json')).default,
     viz: (await import('../fixtures/equalizer/viz.json')).default,
+  }),
+  limiter: async () => ({
+    params: (await import('../fixtures/limiter/params.json')).default,
+    viz: (await import('../fixtures/limiter/viz.json')).default,
   }),
   mbcomp: async () => ({
     params: (await import('../fixtures/mbcomp/params.json')).default,
@@ -77,6 +83,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundDelayHost();
       case 'equalizer':
         return createBoundEqualizerHost();
+      case 'limiter':
+        return createBoundLimiterHost();
       case 'mbcomp':
         return createBoundMbcompHost();
       case 'reverb':
@@ -132,6 +140,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
       return <DelayUI host={host as ReturnType<typeof createBoundDelayHost>} />;
     case 'equalizer':
       return <EqualizerUI host={host as ReturnType<typeof createBoundEqualizerHost>} />;
+    case 'limiter':
+      return <LimiterUI host={host as ReturnType<typeof createBoundLimiterHost>} />;
     case 'mbcomp':
       return <MbcompUI host={host as ReturnType<typeof createBoundMbcompHost>} />;
     case 'reverb':
