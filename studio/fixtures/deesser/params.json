@@ -12,5 +12,6 @@
   "peak_freq": 7500,
   "peak_gain": 6,
   "peak_q": 2,
-  "listen": false
+  "listen": false,
+  "target": 0
 }

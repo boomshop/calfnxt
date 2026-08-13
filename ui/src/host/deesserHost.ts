@@ -9,6 +9,7 @@ import {
   postEnd,
 } from '../bind_param';
 import {
+  type EqFilterType,
   type EqPassSlope,
   type IEqualizerBand,
   toAuxEqType,
@@ -17,6 +18,12 @@ import {
 export const DEESSER_MODE_ENTRIES = [
   { label: 'Wide', value: 0 },
   { label: 'Split', value: 1 },
+];
+
+/** Ess = classic de-ess (HP / high band); Rumble = de-rumble (LP / low band). */
+export const DEESSER_TARGET_ENTRIES = [
+  { label: 'Ess', value: 0 },
+  { label: 'Rumble', value: 1 },
 ];
 
 export const DEESSER_DETECTION_ENTRIES = [
@@ -36,6 +43,7 @@ export type IDeesserHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
   mode$: DynamicValue<number>;
+  target$: DynamicValue<number>;
   detection$: DynamicValue<number>;
   slope$: DynamicValue<number>;
   threshold$: DynamicValue<number>;
@@ -50,7 +58,7 @@ export type IDeesserHost = {
   listen$: DynamicValue<boolean>;
   gr$: DynamicValue<number>;
   historyData$: DynamicValue<Float32Array | null>;
-  /** Fake EQ bands for detection chart (HP + peaking). */
+  /** Fake EQ bands for detection chart (HP/LP + peaking). */
   filterBands: IEqualizerBand[];
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
@@ -93,21 +101,21 @@ function makeFilterBands(
   peakGain$: DynamicValue<number>,
   peakQ$: DynamicValue<number>,
   slopePlain$: DynamicValue<number>,
+  target$: DynamicValue<number>,
 ): IEqualizerBand[] {
   const make = (
     index: number,
     id: string,
-    type: 'highpass' | 'parametric',
+    type$: DynamicValue<EqFilterType>,
     frequency$: DynamicValue<number>,
     gain$: DynamicValue<number>,
     q$: DynamicValue<number>,
     slope$: DynamicValue<EqPassSlope>,
   ): IEqualizerBand => {
-    const type$ = DynamicValue.fromConstant(type);
     const auxType$ = DynamicValue.fromConstant(
-      toAuxEqType(type, slope$.value),
+      toAuxEqType(type$.value, slope$.value),
     );
-    const syncAux = () => auxType$.set(toAuxEqType(type, slope$.value));
+    const syncAux = () => auxType$.set(toAuxEqType(type$.value, slope$.value));
     type$.subscribe(syncAux, false);
     slope$.subscribe(syncAux, false);
     const effectiveGain$ = DynamicValue.fromConstant(gain$.value);
@@ -149,10 +157,19 @@ function makeFilterBands(
     if (slope$.value !== s) slope$.set(s);
   }, false);
 
+  const cutoffType$ = DynamicValue.fromConstant<EqFilterType>(
+    target$.value >= 0.5 ? 'lowpass' : 'highpass',
+  );
+  target$.subscribe((v) => {
+    const next: EqFilterType = v >= 0.5 ? 'lowpass' : 'highpass';
+    if (cutoffType$.value !== next) cutoffType$.set(next);
+  }, false);
+
+  const peakType$ = DynamicValue.fromConstant<EqFilterType>('parametric');
   const hpGain$ = DynamicValue.fromConstant(0);
   return [
-    make(0, 'deess-hp', 'highpass', splitFreq$, hpGain$, hpQ$, slope$),
-    make(1, 'deess-peak', 'parametric', peakFreq$, peakGain$, peakQ$, slope$),
+    make(0, 'deess-hp', cutoffType$, splitFreq$, hpGain$, hpQ$, slope$),
+    make(1, 'deess-peak', peakType$, peakFreq$, peakGain$, peakQ$, slope$),
   ];
 }
 
@@ -168,11 +185,13 @@ export function createBoundDeesserHost(): IDeesserHost {
   const peakGain$ = bindNum('peak_gain', 12);
   const peakQ$ = bindNum('peak_q', 1);
   const slope$ = bindNum('slope', 24);
+  const target$ = bindNum('target', 0);
 
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
     mode$: bindNum('mode', 0),
+    target$,
     detection$: bindNum('detection', 1),
     slope$,
     threshold$: bindNum('threshold', -18),
@@ -194,6 +213,7 @@ export function createBoundDeesserHost(): IDeesserHost {
       peakGain$,
       peakQ$,
       slope$,
+      target$,
     ),
     beginEdit: postBegin,
     endEdit: postEnd,

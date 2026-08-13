@@ -100,6 +100,7 @@ export function applyDeesserDemo(
 ) {
   setBool(host.bypass$, params.bypass);
   setNum(host.mode$, params.mode);
+  setNum(host.target$, params.target);
   setNum(host.detection$, params.detection);
   setNum(host.slope$, params.slope);
   setNum(host.threshold$, params.threshold);

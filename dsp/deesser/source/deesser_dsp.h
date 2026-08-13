@@ -65,6 +65,8 @@ private:
     bool bypass = false;
     bool listen = false;
     bool split = false;
+    /** Rumble target: detector LP + Split reduces the low band. */
+    bool rumble = false;
   };
 
   BlockState makeBlockState() const;

@@ -14,6 +14,7 @@ import {
   DEESSER_DETECTION_ENTRIES,
   DEESSER_MODE_ENTRIES,
   DEESSER_SLOPE_ENTRIES,
+  DEESSER_TARGET_ENTRIES,
   deesserParamDefault,
   type IDeesserHost,
 } from '../../host/deesserHost';
@@ -94,14 +95,27 @@ export function DeesserUI(props: DeesserUIProps) {
     endEdit: () => host.endEdit(id),
   });
   const mode = useDynamicValueReadonly(host.mode$, 0);
+  const target = useDynamicValueReadonly(host.target$, 0);
   const detection = useDynamicValueReadonly(host.detection$, 1);
   const slope = useDynamicValueReadonly(host.slope$, 24);
+  const rumble = target >= 0.5;
 
   return (
     <div className="DeesserUI PluginUI">
       <Header title="DeEsser">
         <WithInfo title={deesserInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
+        <WithInfo title={deesserInfo.target} className="info-block">
+          <Buttons
+            entries={DEESSER_TARGET_ENTRIES}
+            value={target}
+            onChange={(v) => {
+              host.beginEdit(paramIds.target);
+              host.target$.set(v);
+              host.endEdit(paramIds.target);
+            }}
+          />
         </WithInfo>
       </Header>
 
@@ -260,7 +274,7 @@ export function DeesserUI(props: DeesserUIProps) {
         <div className="knobs">
           <WithInfo title={deesserInfo.hpQ}>
             <Knob
-              label="HP Q"
+              label={rumble ? 'LP Q' : 'HP Q'}
               value$={host.hpQ$}
               min={0.1}
               max={20}

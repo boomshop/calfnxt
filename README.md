@@ -50,7 +50,7 @@ will follow.
 | **Limiter** | `calfNXTLimiter.vst3` | Lookahead brickwall with ASC + oversampling |
 | **Multiband Limiter** | `calfNXTMblimiter.vst3` | Weighted multiband brickwall + final limiter |
 | **Harmonics** | `calfNXTHarmonics.vst3` | Saturator / Exciter / Bass Enhancer (TAP waveshape) |
-| **DeEsser** | `calfNXTDeesser.vst3` | Sibilance control (Wide / Split) |
+| **DeEsser** | `calfNXTDeesser.vst3` | Sibilance / rumble control (Ess / Rumble, Wide / Split) |
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo / Ping-Pong / L-R) |
 | **Reverb** | `calfNXTReverb.vst3` | Algorithmic room (ER + late, no IR) |
 
@@ -121,8 +121,9 @@ will follow.
 
 ### DeEsser
 
-- Calf-heritage sibilance control: **Wide** (full-band GR) or **Split** (Linkwitz-Riley high band only)
-- Detection chain: multi-slope **HP** (12/24/48 dB, resonant Q) + **peaking** EQ; Peak / RMS / Opto
+- Calf-heritage dynamics: **Wide** (full-band GR) or **Split** (Linkwitz-Riley band only)
+- **Ess / Rumble** target: Ess = detection HP + Split reduces the high band; Rumble flips to LP + low band (no preset swap — retune Split/Peak yourself)
+- Detection chain: multi-slope HP/LP (12/24/48 dB, resonant Q) + **peaking** EQ; Peak / RMS / Opto
 - Threshold, ratio, **laxity** (attack/release), makeup, listen (detector solo)
 - **GR meter** + history (input / filtered detector / GR)
 - Shared In/Out gain + peak meters

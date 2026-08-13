@@ -1,8 +1,9 @@
 #pragma once
 
-// De-esser detection chain: multi-slope HP (12/24/48 via cascaded RBJ) + peaking.
-// HP Q is applied equally on every stage (EQ-style resonance at fc).
+// De-esser detection chain: multi-slope HP or LP (12/24/48 via cascaded RBJ) + peaking.
+// Cutoff Q is applied equally on every stage (EQ-style resonance at fc).
 // Audio split uses BandSplitter LR Qs separately — detection is not complementary.
+// Target Ess = high-pass focus; Target Rumble = low-pass focus (same fc / Q / peak).
 
 #include "band_splitter.h"
 #include "biquad.h"
@@ -40,21 +41,23 @@ public:
   }
 
   void setParams(
-    float hpHz,
-    float hpQ,
+    float cutoffHz,
+    float cutoffQ,
     float peakHz,
     float peakGainDb,
     float peakQ,
-    BandSplitter::Slope slope)
+    BandSplitter::Slope slope,
+    bool lowpass)
   {
-    hpHz_ = hpHz;
-    hpQ_ = hpQ;
+    cutoffHz_ = cutoffHz;
+    cutoffQ_ = cutoffQ;
     peakHz_ = peakHz;
     peakGainDb_ = peakGainDb;
     peakQ_ = peakQ;
-    if (slope != slope_)
+    if (slope != slope_ || lowpass != lowpass_)
     {
       slope_ = slope;
+      lowpass_ = lowpass;
       dirty_ = true;
     }
     dirty_ = true;
@@ -66,20 +69,20 @@ public:
       updateCoeffs();
   }
 
-  /** HP (resonant) → peaking. Returns detector sample for one channel. */
+  /** Cutoff (resonant HP or LP) → peaking. Returns detector sample for one channel. */
   float processChannel(int ch, float x)
   {
     if (dirty_)
       updateCoeffs();
 
-    BiquadD1* hp = ch == 0 ? hpL_ : hpR_;
+    BiquadD1* stages = ch == 0 ? hpL_ : hpR_;
     BiquadD1& peak = ch == 0 ? peakL_ : peakR_;
 
     double y = x;
     for (int s = 0; s < stages_; ++s)
     {
-      y = hp[s].process(y);
-      hp[s].sanitize();
+      y = stages[s].process(y);
+      stages[s].sanitize();
     }
     y = peak.process(y);
     peak.sanitize();
@@ -114,15 +117,18 @@ private:
 
     stages_ = stageCount();
     const float ny = sr_ * 0.45f;
-    const float hpFc = std::clamp(hpHz_, 20.f, ny);
+    const float fc = std::clamp(cutoffHz_, 20.f, ny);
     const float pkFc = std::clamp(peakHz_, 20.f, ny);
-    const float qHp = std::clamp(hpQ_, 0.1f, 100.f);
+    const float qCut = std::clamp(cutoffQ_, 0.1f, 100.f);
     const float qPk = std::clamp(peakQ_, 0.1f, 100.f);
     const float peakLin = dbToLin(std::clamp(peakGainDb_, -24.f, 24.f));
 
     for (int s = 0; s < stages_; ++s)
     {
-      hpL_[s].setHpRbj(hpFc, qHp, sr_);
+      if (lowpass_)
+        hpL_[s].setLpRbj(fc, qCut, sr_);
+      else
+        hpL_[s].setHpRbj(fc, qCut, sr_);
       hpR_[s].copyCoeffs(hpL_[s]);
     }
     for (int s = stages_; s < kMaxStages; ++s)
@@ -143,13 +149,14 @@ private:
   BiquadD1 peakL_;
   BiquadD1 peakR_;
   float sr_ = 44100.f;
-  float hpHz_ = 4000.f;
-  float hpQ_ = 0.707f;
+  float cutoffHz_ = 4000.f;
+  float cutoffQ_ = 0.707f;
   float peakHz_ = 4500.f;
   float peakGainDb_ = 12.f;
   float peakQ_ = 1.f;
   BandSplitter::Slope slope_ = BandSplitter::Slope::Db24;
   int stages_ = 2;
+  bool lowpass_ = false;
   bool dirty_ = true;
 };
 

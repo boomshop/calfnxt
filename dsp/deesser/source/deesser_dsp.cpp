@@ -16,7 +16,8 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5844u; // 'CNXD'
-constexpr uint32 kStateVersion = 1;
+// v1: pre-target; v2: +target (Ess/Rumble). Older counts accepted; missing plains = defaults.
+constexpr uint32 kStateVersion = 2;
 
 Dsp::DetectorMode detectorModeFromPlain(float v)
 {
@@ -97,6 +98,7 @@ DeesserPlugin::BlockState DeesserPlugin::makeBlockState() const
   state.bypass = params_[kParamBypass] >= 0.5f;
   state.listen = params_[kParamListen] >= 0.5f;
   state.split = params_[kParamMode] >= 0.5f;
+  state.rumble = params_[kParamTarget] >= 0.5f;
   return state;
 }
 
@@ -176,8 +178,17 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
 
   if (state.split)
   {
-    L = (loL + hiL * gr) * state.makeupLin;
-    R = (loR + hiR * gr) * state.makeupLin;
+    // Ess: reduce high band; Rumble: reduce low band (same LR split).
+    if (state.rumble)
+    {
+      L = (loL * gr + hiL) * state.makeupLin;
+      R = (loR * gr + hiR) * state.makeupLin;
+    }
+    else
+    {
+      L = (loL + hiL * gr) * state.makeupLin;
+      R = (loR + hiR * gr) * state.makeupLin;
+    }
   }
   else
   {
@@ -261,6 +272,8 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
   splitL_.prepareBlock();
   splitR_.prepareBlock();
 
+  const BlockState state = makeBlockState();
+
   detector_.setSampleRate(static_cast<float>(sampleRate_));
   detector_.setParams(
     splitHz,
@@ -268,10 +281,9 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
     params_[kParamPeakFreq],
     params_[kParamPeakGain],
     params_[kParamPeakQ],
-    splitL_.slope());
+    splitL_.slope(),
+    state.rumble);
   detector_.prepareBlock();
-
-  const BlockState state = makeBlockState();
 
   const int slots = std::max(kHistMinSlots, std::min(kHistSlots, histVisibleSlots_));
   histSamplesPerSlot_ = std::max(
@@ -340,13 +352,22 @@ tresult PLUGIN_API DeesserPlugin::setState(IBStream* state)
   int32 count = 0;
   if (!streamer.readInt32u(magic) || magic != kStateMagic)
     return kResultFalse;
-  if (!streamer.readInt32u(version) || version != kStateVersion)
+  if (!streamer.readInt32u(version) || version < 1 || version > kStateVersion)
     return kResultFalse;
-  if (!streamer.readInt32(count) || count != kParamCount)
+  // Accept older saves (pre-target); missing plains stay at Parameter defaults via zero-init
+  // only for append-only additions — apply defaults from registered Parameters below.
+  if (!streamer.readInt32(count) || count <= 0 || count > kParamCount)
     return kResultFalse;
 
   float plains[kParamCount];
   for (int i = 0; i < kParamCount; ++i)
+  {
+    if (auto* p = getParameterObject(static_cast<ParamID>(i)))
+      plains[i] = static_cast<float>(p->toPlain(p->getNormalized()));
+    else
+      plains[i] = 0.f;
+  }
+  for (int i = 0; i < count; ++i)
   {
     if (!streamer.readFloat(plains[i]))
       return kResultFalse;

@@ -2,44 +2,47 @@
 
 export const deesserInfo = {
   bypass:
-    'Turns de-essing off so sibilance is left untouched (In/Out gains still apply). A/B with a bright “sss” or “ch” to hear whether harshness is controlled or the vocal just got duller.',
+    'Turns processing off so sibilance or rumble is left untouched (In/Out gains still apply). A/B to hear whether the problem is controlled or the source just got duller / thinner.',
+
+  target:
+    'Ess = classic de-esser: detection high-pass, Split reduces the high band. Rumble = same engine flipped: detection low-pass, Split reduces the low band (bass thumps / rumble). Does not change frequencies or dynamics — retune Split/Peak yourself for the problem band.',
 
   threshold:
-    'How loud the detected ess band must be before reduction starts. Lower = more sensitive — catches soft lisps but can chew into brightness. Higher = only loud esses are touched — more natural, less risk of lisping. Tune with Listen so the detector is really hearing the problem band.',
+    'How loud the detected problem band must be before reduction starts. Lower = more sensitive. Higher = only loud spikes are touched. Tune with Listen so the detector is really hearing the problem.',
 
   ratio:
-    'How strongly essy peaks are reduced once above threshold. Gentle ratios = subtle polish; high ratios = aggressive lisp control that can sound lispy or dull if overdone. Prefer enough ratio with a well-aimed detector over slamming everything.',
+    'How strongly peaks are reduced once above threshold. Gentle ratios = subtle polish; high ratios = aggressive control that can sound unnatural if overdone. Prefer enough ratio with a well-aimed detector over slamming everything.',
 
   laxity:
-    'Overall timing feel (attack and release together). Higher = slower, gentler — less chatter, more natural on sung esses. Lower = snappier reaction — tighter on sharp spikes, but can sound like a lisp or zipper if too fast. Think “how grabby” rather than separate attack/release knobs.',
+    'Overall timing feel (attack and release together). Higher = slower, gentler — less chatter. Lower = snappier reaction — tighter on sharp spikes, but can sound grabby if too fast.',
 
   split:
-    'Crossover for Split mode — processing focuses above this frequency. Set it under the harsh band so lows/mids stay open while highs get controlled. Ignored for the audio split in Wide mode (Wide reduces the whole signal when the detector fires).',
+    'Crossover for Split mode. Ess: processing focuses above this frequency. Rumble: processing focuses below it. Ignored for the audio split in Wide mode (Wide reduces the whole signal when the detector fires). Full range — set it for your problem, not a fixed “ess” or “rumble” zone.',
 
   makeup:
-    'Gain after reduction if the de-esser pulls too much level down. Use sparingly — if you need a lot of makeup, the detector or ratio is probably too aggressive.',
+    'Gain after reduction if processing pulls too much level down. Use sparingly — if you need a lot of makeup, the detector or ratio is probably too aggressive.',
 
   detection:
-    'Detector ballistics. Peak = jumps on sharp spikes (bright consonants). RMS = smoother average — less twitchy. Opto = softer, program-like response. Peak is often best for classic de-essing; RMS/Opto when Peak chatters on the vocal.',
+    'Detector ballistics. Peak = jumps on sharp spikes. RMS = smoother average — less twitchy. Opto = softer, program-like response. Peak often works for sharp esses; RMS/Opto when Peak chatters (also useful on slower rumble).',
 
   mode:
-    'Wide = when an ess is detected, the whole signal is turned down (simple, can dull the whole vocal). Split = only the high band above Split is reduced — usually more natural, keeps body and warmth while taming air/harshness.',
+    'Wide = when the detector fires, the whole signal is turned down. Split = only one side of the crossover is reduced (Ess: high band; Rumble: low band) — usually more natural.',
 
   slope:
-    'Steepness of the detection high-pass that feeds the detector. Steeper = tighter focus on high sibilance, less false triggering from midrange. Too steep with a wrong cutoff can miss the real ess band — check with Listen.',
+    'Steepness of the detection high-pass (Ess) or low-pass (Rumble) that feeds the detector. Steeper = tighter focus on that side of the spectrum, less false triggering from the rest. Check with Listen.',
 
   hpQ:
-    'Resonance of the detection high-pass. Higher Q = sharper emphasis near the cutoff for the detector — can help lock onto a narrow harsh spot. Too much Q can make triggering jumpy.',
+    'Resonance of the detection high-pass (Ess) or low-pass (Rumble). Higher Q = sharper emphasis near the cutoff for the detector — can help lock onto a narrow problem spot. Too much Q can make triggering jumpy.',
 
   peakFreq:
-    'Center of the detection peaking filter — aim at the ess / harsh band (often 5–10 kHz, sometimes higher for “air” harshness). Use Listen and sweep until the soloed detector is mostly the problem, not the whole vocal.',
+    'Center of the detection peaking filter — aim at the problem band (esses often 5–10 kHz; rumble often low/mid bass). Full range either way. Use Listen and sweep until the soloed detector is mostly the problem.',
 
   peakGain:
-    'How much that peaking filter boosts (or cuts) in the detector path. More boost = more sensitive at Peak freq — catches quieter esses. Too much and normal brightness also triggers. Cut if the detector is over-focusing.',
+    'How much that peaking filter boosts (or cuts) in the detector path. More boost = more sensitive at Peak freq. Too much and normal content also triggers. Cut if the detector is over-focusing.',
 
   peakQ:
-    'Bandwidth of the detection peak. Higher Q = narrower ess targeting (surgical). Lower Q = wider band of highs can trigger — more forgiving, less precise. Match Q to how wide the harshness is in the spectrum.',
+    'Bandwidth of the detection peak. Higher Q = narrower targeting (surgical). Lower Q = wider band can trigger — more forgiving, less precise.',
 
   listen:
-    'Solos the detection signal so you can tune HP/Peak/Slope to the sibilance by ear. You’re hearing what the detector hears, not the final de-essed mix — when Listen sounds like “just the problem,” the main path usually behaves better.',
+    'Solos the detection signal so you can tune cutoff/Peak/Slope to the problem by ear. You’re hearing what the detector hears, not the final mix — when Listen sounds like “just the problem,” the main path usually behaves better.',
 } as const;

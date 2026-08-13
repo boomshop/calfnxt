@@ -1,4 +1,4 @@
-# DeEsser — Calf heritage sibilance control (Wide / Split)
+# DeEsser — sibilance / rumble control (Wide / Split, Ess / Rumble)
 set(target calfnxt-deesser)
 
 set(DEESSER_DESC "${CMAKE_CURRENT_SOURCE_DIR}/deesser.plugin.json")
