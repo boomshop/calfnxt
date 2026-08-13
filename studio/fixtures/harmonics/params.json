@@ -1,0 +1,17 @@
+{
+  "bypass": false,
+  "drive": 7.5,
+  "blend": 5,
+  "dry": 0,
+  "wet": -3,
+  "pre_hipass": 3000,
+  "pre_lopass": 20000,
+  "pre_hp_mode": 2,
+  "pre_lp_mode": 0,
+  "post_hipass": 5500,
+  "post_lopass": 20000,
+  "post_hp_mode": 1,
+  "post_lp_mode": 0,
+  "pre_listen": false,
+  "listen": false
+}

@@ -15,7 +15,8 @@ export type PluginId =
   | 'reverb'
   | 'mbcomp'
   | 'limiter'
-  | 'mblimiter';
+  | 'mblimiter'
+  | 'harmonics';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -28,6 +29,7 @@ const PLUGIN_IDS: PluginId[] = [
   'mbcomp',
   'limiter',
   'mblimiter',
+  'harmonics',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -86,6 +88,13 @@ export {
   type IMblimiterHost,
   type IMblimiterBand,
 } from './host/mblimiterHost';
+
+export { HarmonicsUI } from './plugins/HarmonicsUI/HarmonicsUI';
+export {
+  createBoundHarmonicsHost,
+  type IHarmonicsHost,
+} from './host/harmonicsHost';
+export { HARMONICS_PRESETS } from './plugins/HarmonicsUI/harmonicsPresets';
 
 export { ReverbUI } from './plugins/ReverbUI/ReverbUI';
 export { createBoundReverbHost, type IReverbHost } from './host/reverbHost';

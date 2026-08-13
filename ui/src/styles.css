@@ -105,6 +105,10 @@ body,
   &:has(.title) {
     padding-top: 28px !important;
   }
+
+  .aux-chart {
+    background: var(--background) !important;
+  }
 }
 
 .panel {

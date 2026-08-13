@@ -10,6 +10,8 @@ export * from "./BandBridgeChart";
 export * from "./EnvelopeChart";
 export * from "./DynamicsChart";
 export * from "./FrequencyRange";
+export * from "./WaveshapeChart";
+export * from "./HarmonicBars";
 export * from "./HistoryChart";
 export * from "./DelayEchoChart";
 export * from "./ReverbChart";

@@ -20,7 +20,7 @@ internalized toolkit collides with system GTK3 — `GdkDisplay` GType abort).
 (GtkPlug + WebKit, XEmbed into the host XID) and forwards the JSON bridge over a
 Unix socketpair. Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`).
 More Calf-heritage processors planned.
 
 ---
@@ -36,9 +36,9 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Vendor URL / email | `https://calfnxt.org`, `mailto:schmidt@boomshop.net` |
 | C++ namespace | `calfNXT` |
 | CMake project / libs | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui` |
-| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter` |
-| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter` (must match; Carla/JUCE) |
-| Install names | `~/.vst3/calfNXTEqualizer.vst3`, `calfNXTStereo.vst3`, `calfNXTTransients.vst3`, `calfNXTCompressor.vst3`, `calfNXTDeesser.vst3`, `calfNXTDelay.vst3`, `calfNXTReverb.vst3`, `calfNXTMbcomp.vst3`, `calfNXTLimiter.vst3`, `calfNXTMblimiter.vst3` |
+| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics` |
+| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics` (must match; Carla/JUCE) |
+| Install names | `~/.vst3/calfNXTEqualizer.vst3`, …, `calfNXTMblimiter.vst3`, `calfNXTHarmonics.vst3` |
 | URI scheme | `calfnxt://bundle/...` |
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
 | Script message handler | `webkit.messageHandlers.calfnxt` |
@@ -65,7 +65,8 @@ dsp/reverb/    reverb.plugin.json + DSP + codegen
 dsp/mbcomp/    mbcomp.plugin.json + DSP + codegen
 dsp/limiter/   limiter.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
-ui/            React SPA (Vite), hash router #equalizer / #stereo / … / #mbcomp / #limiter / #mblimiter
+dsp/harmonics/ harmonics.plugin.json + DSP + codegen
+ui/            React SPA (Vite), hash router #equalizer / … / #mblimiter / #harmonics
 external/vst3sdk/
 ```
 
@@ -256,7 +257,6 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
    - **Ring Modulator**
    - Gate / Sidechain Gate → **Expander**
    - Filter / Envelope Filter → **Filter**
-   - Saturator / Exciter / Bass Enhancer → **Saturator** (name may still change)
    - **Vinyl**
    - **Crusher**
    - **Analyzer**
@@ -285,6 +285,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 | Multiband Compressor | `dsp/mbcomp/source/*_dsp.*`, `common/dsp/band_splitter.h`, `common/dsp/compressor.h`; UI `ui/src/plugins/MbcompUI/*`, `host/mbcompHost.ts`, `widgets/MultibandChart/*`, `widgets/BandBridgeChart/*` |
 | Limiter | `dsp/limiter/source/*_dsp.*`, `common/dsp/lookahead_limiter.h`, `common/dsp/resample_n.h`; UI `ui/src/plugins/LimiterUI/*`, `host/limiterHost.ts` |
 | Multiband Limiter | `dsp/mblimiter/source/*_dsp.*`, `band_splitter.h`, `lookahead_limiter.h`; UI `ui/src/plugins/MblimiterUI/*`, `host/mblimiterHost.ts` |
+| Harmonics | `dsp/harmonics/source/*_dsp.*`, `common/dsp/tap_distortion.h`; UI `ui/src/plugins/HarmonicsUI/*`, `host/harmonicsHost.ts` |
 | Param bind | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts` |
 | Header I/O | `ui/src/components/Header/*`, `host/headerMeters.ts` |
 | Meters | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*` |

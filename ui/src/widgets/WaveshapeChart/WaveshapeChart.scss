@@ -1,0 +1,50 @@
+.WaveshapeChart {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: block;
+  background: var(--background);
+
+  .axis {
+    stroke: var(--background-least);
+    stroke-width: 1;
+  }
+
+  .unity {
+    fill: none;
+    stroke: color-mix(in srgb, currentColor 22%, transparent);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+  }
+
+  .heat-layer {
+    pointer-events: none;
+  }
+
+  .heat {
+    fill: none;
+    stroke: var(--chart-level-stroke, var(--color-accent));
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  .curve {
+    fill: none;
+    stroke: var(--chart-level-stroke, var(--color-accent));
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    opacity: 0.55;
+  }
+
+  .zone {
+    fill: none;
+    stroke: var(--chart-level-stroke, var(--color-accent));
+    stroke-width: 4.5;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    opacity: 0.95;
+    pointer-events: none;
+  }
+}

@@ -11,7 +11,7 @@ export type calfNXTMsg =
   /** Host→UI: active audio channel count (from bus arrangement). */
   | { t: "io"; ch: number }
   /** DSP→UI telemetry (meters now; spectrum arrays later). */
-  | { t: "viz"; id: string; kind: "levels" | "spectrum" | "gains" | "corr" | "gonio" | "envelope" | "gr" | "bandio" | "point" | "tempo"; v: number[] }
+  | { t: "viz"; id: string; kind: "levels" | "spectrum" | "gains" | "corr" | "gonio" | "envelope" | "gr" | "bandio" | "point" | "tempo" | "shape"; v: number[] }
   /** UI→host viz config (e.g. FFT bin count from pixel width). */
   | { t: "vizcfg"; id: string; bins?: number };
 

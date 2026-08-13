@@ -20,6 +20,17 @@ export const FREQUENCY_RANGE_MODE_ENTRIES = [
   { label: '48 dB', value: 4 },
 ];
 
+/**
+ * Linkwitz-Riley slopes only (no 36 dB / LR6 — odd order cannot sum LP+HP flat).
+ * Values stay on the 0…4 FrequencyRange scale (48 dB = 4).
+ */
+export const FREQUENCY_RANGE_LR_MODE_ENTRIES = [
+  { label: 'Off', value: 0 },
+  { label: '12 dB', value: 1 },
+  { label: '24 dB', value: 2 },
+  { label: '48 dB', value: 4 },
+];
+
 const HP_LP_DOTS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
 const HP_LP_LABELS = [
   { pos: 20, label: '20' },
@@ -51,6 +62,10 @@ export interface FrequencyRangeProps {
   lpMode$: DynamicValue<number>;
   /** When set, shows headphones toggle for sidechain listen. */
   listen$?: DynamicValue<boolean>;
+  /** Override hover text for the listen toggle (default: shared FrequencyRange copy). */
+  listenInfo?: string;
+  /** Slope select entries (default: Off/12/24/36/48). */
+  modeEntries?: { label: string; value: number }[];
   hipassDefault?: number;
   lopassDefault?: number;
   hipassEdit?: FrequencyRangeEdit;
@@ -70,6 +85,8 @@ export function FrequencyRange(props: FrequencyRangeProps) {
     hpMode$,
     lpMode$,
     listen$,
+    listenInfo,
+    modeEntries = FREQUENCY_RANGE_MODE_ENTRIES,
     hipassDefault = 100,
     lopassDefault = 5000,
     hipassEdit,
@@ -160,7 +177,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
   return (
     <div className={cls}>
       {listen$ ? (
-        <WithInfo title={frequencyRangeInfo.listen}>
+        <WithInfo title={listenInfo ?? frequencyRangeInfo.listen}>
           <Toggle state$={listen$} icon="headphones" className="listen warn" />
         </WithInfo>
       ) : null}
@@ -173,7 +190,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
       />
       <div className="filter">
         <WithInfo title={frequencyRangeInfo.hpMode}>
-          <Select value$={hpMode$} entries={FREQUENCY_RANGE_MODE_ENTRIES} />
+          <Select value$={hpMode$} entries={modeEntries} />
         </WithInfo>
         <WithInfo title={frequencyRangeInfo.hipass}>
           <Knob
@@ -204,7 +221,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
           />
         </WithInfo>
         <WithInfo title={frequencyRangeInfo.lpMode}>
-          <Select value$={lpMode$} entries={FREQUENCY_RANGE_MODE_ENTRIES} />
+          <Select value$={lpMode$} entries={modeEntries} />
         </WithInfo>
       </div>
     </div>

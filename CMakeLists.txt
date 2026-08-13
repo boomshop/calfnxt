@@ -59,6 +59,7 @@ add_subdirectory(dsp/reverb)
 add_subdirectory(dsp/mbcomp)
 add_subdirectory(dsp/limiter)
 add_subdirectory(dsp/mblimiter)
+add_subdirectory(dsp/harmonics)
 
 # After every plugin registered via calfnxt_copy_web_host: refresh helpers whenever
 # calfnxt-web-host is rebuilt (plugin .so may be unchanged).
@@ -79,7 +80,7 @@ add_custom_target(calfnxt-web-host-bundles
 )
 
 # UI build needs generated models from every plugin descriptor
-add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen limiter_codegen mblimiter_codegen)
+add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen limiter_codegen mblimiter_codegen harmonics_codegen)
 
 # Meta-target: all plugins + embedded UI packs (add new plugins here).
 add_custom_target(calfnxt-plugins
@@ -104,6 +105,8 @@ add_custom_target(calfnxt-plugins
     calfnxt-limiter-resources
     calfnxt-mblimiter
     calfnxt-mblimiter-resources
+    calfnxt-harmonics
+    calfnxt-harmonics-resources
     calfnxt-web-host
     calfnxt-web-host-bundles
   COMMENT "Build all calfNXT VST3 plugins (+ embedded UI + web-host)"

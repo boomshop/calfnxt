@@ -4,6 +4,7 @@ import type {
   IDeesserHost,
   IDelayHost,
   IEqualizerHost,
+  IHarmonicsHost,
   ILimiterHost,
   IMblimiterHost,
   IMbcompHost,
@@ -28,6 +29,8 @@ export type VizFixture = {
   gains?: number[];
   /** Interleaved per-band levels [in0, out0, in1, out1, …] in dB (mbcomp). */
   bandio?: number[];
+  /** Waveshaper viz [zone, …densityBins] in 0…1 (harmonics). */
+  shape?: number[];
 };
 
 function setNum(dv: DynamicValue<number> | undefined, v: unknown) {
@@ -339,6 +342,41 @@ export function applyLimiterDemo(
     host.gr$.set(viz.gr);
 }
 
+export function applyHarmonicsDemo(
+  host: IHarmonicsHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.drive$, params.drive);
+  setNum(host.blend$, params.blend);
+  setNum(host.dry$, params.dry);
+  setNum(host.wet$, params.wet);
+  setNum(host.preHipass$, params.pre_hipass);
+  setNum(host.preLopass$, params.pre_lopass);
+  setNum(host.preHpMode$, params.pre_hp_mode);
+  setNum(host.preLpMode$, params.pre_lp_mode);
+  setNum(host.postHipass$, params.post_hipass);
+  setNum(host.postLopass$, params.post_lopass);
+  setNum(host.postHpMode$, params.post_hp_mode);
+  setNum(host.postLpMode$, params.post_lp_mode);
+  setBool(host.preListen$, params.pre_listen);
+  setBool(host.listen$, params.listen);
+
+  applySharedViz(viz);
+  const applyShape = () => {
+    if (!viz.shape) return;
+    host.shapePoint$.set(viz.shape);
+    pushViz('harmonics', 'shape', viz.shape);
+  };
+  applyShape();
+  const hold = window.setInterval(() => {
+    applySharedViz(viz);
+    applyShape();
+  }, 50);
+  return () => window.clearInterval(hold);
+}
+
 function applyMblimiterMeters(host: IMblimiterHost, viz: VizFixture) {
   applySharedViz(viz);
   if (viz.gains) {
@@ -491,6 +529,7 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   deesser: applyDeesserDemo as DemoApplier,
   delay: applyDelayDemo as DemoApplier,
   equalizer: applyEqualizerDemo as DemoApplier,
+  harmonics: applyHarmonicsDemo as DemoApplier,
   limiter: applyLimiterDemo as DemoApplier,
   mbcomp: applyMbcompDemo as DemoApplier,
   mblimiter: applyMblimiterDemo as DemoApplier,

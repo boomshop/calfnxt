@@ -175,7 +175,7 @@ function BandStrip(props: {
   return (
     <div
       className={[
-        'strip',
+        'strip block',
         selected && 'selected',
         bypass && 'bypassed',
         showMakeup && 'with-makeup',

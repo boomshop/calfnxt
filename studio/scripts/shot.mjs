@@ -25,6 +25,7 @@ const ALL = [
   'deesser',
   'delay',
   'equalizer',
+  'harmonics',
   'limiter',
   'mbcomp',
   'mblimiter',

@@ -16,6 +16,7 @@ const vizGrApplies = new Map<string, HostApply>();
 const vizGrArrayApplies = new Map<string, VizLevelsApply>();
 const vizBandIoApplies = new Map<string, VizLevelsApply>();
 const vizPointApplies = new Map<string, VizLevelsApply>();
+const vizShapeApplies = new Map<string, VizLevelsApply>();
 const vizTempoApplies = new Map<string, VizLevelsApply>();
 const channelCountApplies = new Set<ChannelCountApply>();
 let hostWired = false;
@@ -59,6 +60,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizBandIoApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "point" && Array.isArray(msg.v))
     vizPointApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "shape" && Array.isArray(msg.v))
+    vizShapeApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "tempo" && Array.isArray(msg.v))
     vizTempoApplies.get(msg.id)?.(msg.v);
 }
@@ -258,6 +261,22 @@ export function bindVizPoint(dv: DynamicValue<number[]>, id: string): () => void
   });
   return () => {
     vizPointApplies.delete(id);
+  };
+}
+
+/** Wire waveshaper viz [zone, …densityBins] in 0…1 (id e.g. "harmonics"). */
+export function bindVizShape(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizShapeApplies.set(id, (v) => {
+    const clean = v.map((x) => {
+      if (typeof x !== "number" || !Number.isFinite(x))
+        return 0;
+      return Math.min(1, Math.max(0, x));
+    });
+    dv.set(clean);
+  });
+  return () => {
+    vizShapeApplies.delete(id);
   };
 }
 

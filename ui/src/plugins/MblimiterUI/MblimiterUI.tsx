@@ -184,7 +184,7 @@ function BandStrip(props: { band: IMblimiterBand; compactKnobs: boolean }) {
   const knobSize = compactKnobs ? 'tiny' : 'small';
 
   return (
-    <div className="strip" data-band={band.id}>
+    <div className="strip block" data-band={band.id}>
       <div className="history">
         <HistoryChart
           data$={band.historyData$}

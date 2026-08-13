@@ -990,6 +990,23 @@ void WebEditor::flushViz()
     }
     flushVizArray(vizSource_->vizDynamicsId(), "point", point, nPt);
   }
+
+  if (const char* shapeId = vizSource_->vizShapeId())
+  {
+    // [zone, bin…] — see IVizSource::takeShapePoint
+    float shape[65] {};
+    const int nShape = vizSource_->takeShapePoint(shape, 65);
+    if (nShape >= 2)
+    {
+      for (int i = 0; i < nShape; ++i)
+      {
+        if (!std::isfinite(shape[i]))
+          shape[i] = 0.f;
+        shape[i] = std::clamp(shape[i], 0.f, 1.f);
+      }
+      flushVizArray(shapeId, "shape", shape, nShape);
+    }
+  }
 }
 
 void WebEditor::pushAllParams()

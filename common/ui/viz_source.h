@@ -139,6 +139,21 @@ public:
 
   /** Stream id for host tempo (nullptr = do not flush). */
   virtual const char* vizTempoId() const { return nullptr; }
+
+  /**
+   * Waveshaper viz: out[0] = active-zone amplitude 0…1 (|send| envelope),
+   * out[1…] = density bins along input x ∈ [−1, 1] (soft histogram, 0…1).
+   * Returns 1 + binCount, or 0 if unused.
+   */
+  virtual int takeShapePoint(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for shape viz (nullptr = do not flush). */
+  virtual const char* vizShapeId() const { return nullptr; }
 };
 
 } // namespace Ui

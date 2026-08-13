@@ -189,6 +189,12 @@ const packs = {
     levelsIn: [-10, -10.5],
     levelsOut: [-10.2, -10.6],
   },
+  harmonics: {
+    levelsIn: [-9.5, -10.0],
+    levelsOut: [-8.2, -8.6],
+    // [zone, …48 density bins] — filled by fixtures/harmonics/viz.json for shots.
+    shape: [0.72],
+  },
   reverb: {
     levelsIn: [-12, -12.5],
     levelsOut: [-18, -18.5],
