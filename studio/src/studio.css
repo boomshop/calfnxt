@@ -14,6 +14,7 @@ body,
 }
 
 /* Belt-and-suspenders: never show WithInfo tip chips in Studio captures. */
-.WithInfo > .info-tip {
+.WithInfo > .info-tip,
+.WithInfo-flyout {
   display: none !important;
 }

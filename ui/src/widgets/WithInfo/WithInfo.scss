@@ -61,6 +61,28 @@
 }
 
 /* Toggled from Header via localStorage-backed showWidgetInfo$. */
-:root.calfnxt-widget-info-off .WithInfo > .info-tip {
+:root.calfnxt-widget-info-off .WithInfo > .info-tip,
+:root.calfnxt-widget-info-off .WithInfo-flyout {
   display: none;
+}
+
+/*
+ * Portaled to document.body. pointer-events:none so a clamped flyout that
+ * overlaps the cursor cannot fire leave on the icon (flicker loop).
+ */
+.WithInfo-flyout {
+  position: fixed;
+  z-index: 1000;
+  max-width: min(480px, calc(100vw - 16px));
+  padding: 8px 12px;
+  pointer-events: none;
+  visibility: hidden;
+  box-sizing: border-box;
+  border-radius: var(--border-radius);
+  background: var(--background-least);
+  color: var(--color);
+  border: 1px solid var(--background-lesser);
+  font-family: PragatiNarrow, sans-serif;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
