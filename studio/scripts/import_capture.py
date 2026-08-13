@@ -36,6 +36,15 @@ def to_viz(d: dict) -> dict:
     for k in ("levelsIn", "levelsOut", "envelope", "gr", "point", "corr", "gonio", "tempo", "gains"):
         if k in d and k not in viz:
             viz[k] = d[k]
+
+    # Near-silence meter snapshots look empty in studio shots — keep readable demo levels.
+    for key, fallback in (("levelsIn", [-12.0, -12.5]), ("levelsOut", [-13.0, -13.4])):
+        levels = viz.get(key)
+        if isinstance(levels, list) and levels and all(
+            isinstance(x, (int, float)) and float(x) < -48.0 for x in levels
+        ):
+            viz[key] = list(fallback)
+
     return viz
 
 

@@ -5,7 +5,7 @@
   "slope": 24,
   "threshold": -24,
   "ratio": 4,
-  "laxity": 0.35,
+  "laxity": 15,
   "makeup": 0,
   "split_freq": 6000,
   "hp_q": 0.7,

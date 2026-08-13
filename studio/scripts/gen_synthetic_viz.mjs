@@ -224,6 +224,12 @@ for (const [id, viz] of Object.entries(packs)) {
   const dir = path.join(fixtures, id);
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, 'viz.json');
+  // Keep live captures (import_capture.py) — do not clobber with synthetic curves.
+  const capture = path.join(dir, 'capture.json');
+  if (fs.existsSync(capture)) {
+    console.log('skip', file, '(capture.json present)');
+    continue;
+  }
   fs.writeFileSync(file, `${JSON.stringify(viz, null, 2)}\n`);
   console.log('wrote', file);
 }
