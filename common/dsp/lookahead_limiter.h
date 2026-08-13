@@ -165,6 +165,19 @@ public:
   float cleanLeft() const { return cleanL_; }
   float cleanRight() const { return cleanR_; }
 
+  /** Write index into the look-ahead ring (for shared multiband multiBuffer). */
+  int writeIndex() const { return pos_; }
+
+  /** Store multi-band coefficient at the current write index before process(). */
+  void pokeMulti(float* multiBuffer, float coeff) const
+  {
+    if (!multiBuffer || overallBufferSize_ < channels_)
+      return;
+    multiBuffer[static_cast<size_t>(pos_)] = coeff;
+    if (channels_ > 1)
+      multiBuffer[static_cast<size_t>(pos_ + 1)] = coeff;
+  }
+
   /** Lookahead delay in (over)sampled frames — stable target (max while fading). */
   int latencyFrames() const
   {

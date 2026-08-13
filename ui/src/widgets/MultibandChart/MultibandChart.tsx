@@ -80,18 +80,24 @@ export interface MultibandChartProps {
   /** Active band count 2…6 (crossovers = bandCount − 1). */
   bandCount: number;
   slope$: DynamicValue<number>;
-  threshold$: DynamicValue<number>[];
+  /**
+   * Per-band threshold models for circular ChartHandles.
+   * Optional when `showThresholds` is false (GR curves + xovers only).
+   */
+  threshold$?: DynamicValue<number>[];
   /** Gain reduction per band (positive amount or ≤0 dB). */
   gr$: DynamicValue<number>[];
   xover$: DynamicValue<number>[];
   /** Per-band bypass — dims the curve stroke when true. */
   bypass$?: DynamicValue<boolean>[];
-  /** Per-band listen/solo — warn color on threshold handles. */
+  /** Per-band listen/solo — warn color on threshold handles and band curves. */
   listen$?: DynamicValue<boolean>[];
   selectedBand?: number;
   onSelectBand?: (index: number) => void;
   thresholdEdit?: (index: number) => EditGesture;
   xoverEdit?: (index: number) => EditGesture;
+  /** When false, omit threshold ChartHandles (still show GR curves + xovers). */
+  showThresholds?: boolean;
   className?: string;
 }
 
@@ -209,6 +215,7 @@ export function MultibandChart(props: MultibandChartProps) {
     onSelectBand,
     thresholdEdit,
     xoverEdit,
+    showThresholds = true,
     className,
   } = props;
 
@@ -454,51 +461,68 @@ export function MultibandChart(props: MultibandChartProps) {
 
   const threshOptions = useMemo(
     () =>
-      Array.from({ length: MB_MAX_BANDS }, (_, b) => ({
-        mode: 'block-bottom',
-        class: `mb-thresh mb-band-${b}`,
-        label: 'Band ' + String(b + 1),
-        format_label: (label: string, _x: number, y: number) =>
-          `${label}\n${y.toFixed(1)} dB`,
-        preferences: ['top'],
-        z: MB_XOVER_Q,
-        y_min: MB_GAIN_MIN,
-        y_max: MB_GAIN_MAX,
-        show_axis: false,
-      })),
-    [],
+      showThresholds
+        ? Array.from({ length: MB_MAX_BANDS }, (_, b) => ({
+            mode: 'block-bottom',
+            class: `mb-thresh mb-band-${b}`,
+            label: 'Band ' + String(b + 1),
+            format_label: (label: string, _x: number, y: number) =>
+              `${label}\n${y.toFixed(1)} dB`,
+            preferences: ['top'],
+            z: MB_XOVER_Q,
+            y_min: MB_GAIN_MIN,
+            y_max: MB_GAIN_MAX,
+            show_axis: false,
+          }))
+        : [],
+    [showThresholds],
   );
 
   const threshBindings = useMemo(
     () =>
-      Array.from({ length: MB_MAX_BANDS }, (_, b) => [
-        { name: 'y', backendValue: threshold$[b] ?? derived.zeroGain$ },
-        { name: 'x', backendValue: derived.center$[b]!, readonly: true },
-        { name: 'x_min', backendValue: derived.loEdge$[b]!, readonly: true },
-        { name: 'x_max', backendValue: derived.hiEdge$[b]!, readonly: true },
-        {
-          name: 'active',
-          backendValue: derived.bandActive$[b]!,
-          readonly: true,
-        },
-      ]),
-    [derived, threshold$],
+      showThresholds
+        ? Array.from({ length: MB_MAX_BANDS }, (_, b) => [
+            {
+              name: 'y',
+              backendValue: threshold$?.[b] ?? derived.zeroGain$,
+            },
+            { name: 'x', backendValue: derived.center$[b]!, readonly: true },
+            {
+              name: 'x_min',
+              backendValue: derived.loEdge$[b]!,
+              readonly: true,
+            },
+            {
+              name: 'x_max',
+              backendValue: derived.hiEdge$[b]!,
+              readonly: true,
+            },
+            {
+              name: 'active',
+              backendValue: derived.bandActive$[b]!,
+              readonly: true,
+            },
+          ])
+        : [],
+    [derived, showThresholds, threshold$],
   );
 
   const threshEvents = useMemo(
     () =>
-      Array.from({ length: MB_MAX_BANDS }, (_, b) => {
-        const gesture = thresholdEdit?.(b);
-        if (!gesture && !onSelectBand) return null;
-        return {
-          set_interacting: (on: unknown) => {
-            if (on) gesture?.beginEdit?.();
-            else gesture?.endEdit?.();
-          },
-          ...(onSelectBand ? { handlegrabbed: () => onSelectBand(b) } : {}),
-        };
-      }),
-    [onSelectBand, thresholdEdit],
+      showThresholds
+        ? Array.from({ length: MB_MAX_BANDS }, (_, b) => {
+            const gesture = thresholdEdit?.(b);
+            if (!gesture && !onSelectBand) return null;
+            return {
+              set_interacting: (on: unknown) => {
+                if (on) gesture?.beginEdit?.();
+                else gesture?.endEdit?.();
+              },
+              ...(onSelectBand ? { handlegrabbed: () => onSelectBand(b) } : {}),
+            };
+          })
+        : [],
+    [onSelectBand, showThresholds, thresholdEdit],
   );
 
   const threshHandles = useWidgetsWithBindingsAndEvents(
@@ -557,12 +581,16 @@ export function MultibandChart(props: MultibandChartProps) {
       const graph = graphs[b] as AuxWidget | undefined;
       mark(graphs, b);
       mark(threshHandles, b);
+      const listening = !!listen$?.[b]?.value;
       // mode change re-renders from cached dots[] via Graph (no path rewrite).
-      graph?.set?.('mode', b === selectedBand ? 'bottom' : 'line');
+      graph?.set?.(
+        'mode',
+        b === selectedBand || listening ? 'bottom' : 'line',
+      );
       const bypassed = derived.bypassed$[b]?.value ?? false;
       graph?.element?.classList.toggle('mb-bypassed', bypassed);
     }
-  }, [derived, graphs, selectedBand, threshHandles]);
+  }, [derived, graphs, listen$, selectedBand, threshHandles]);
 
   useEffect(() => {
     if (!bypass$) return;
@@ -584,14 +612,21 @@ export function MultibandChart(props: MultibandChartProps) {
     if (!listen$) return;
     const sync = () => {
       for (let b = 0; b < MB_MAX_BANDS; ++b) {
-        const el = (threshHandles[b] as AuxWidget | undefined)?.element;
-        el?.classList.toggle('mb-listen', !!listen$[b]?.value);
+        const listening = !!listen$[b]?.value;
+        const graph = graphs[b] as AuxWidget | undefined;
+        graph?.element?.classList.toggle('mb-listen', listening);
+        const thresh = (threshHandles[b] as AuxWidget | undefined)?.element;
+        thresh?.classList.toggle('mb-listen', listening);
+        graph?.set?.(
+          'mode',
+          b === selectedBand || listening ? 'bottom' : 'line',
+        );
       }
     };
     sync();
     const unsubs = listen$.map((dv) => dv.subscribe(sync, false));
     return () => unsubs.forEach((u) => u());
-  }, [listen$, threshHandles]);
+  }, [listen$, graphs, selectedBand, threshHandles]);
 
   const getEqHeight = useCallback(
     (svg: SVGSVGElement) =>

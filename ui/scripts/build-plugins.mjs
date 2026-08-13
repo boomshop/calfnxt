@@ -29,6 +29,7 @@ const ALL_PLUGINS = [
   'reverb',
   'mbcomp',
   'limiter',
+  'mblimiter',
 ];
 
 const rawArgs = process.argv.slice(2);

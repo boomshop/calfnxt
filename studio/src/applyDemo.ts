@@ -5,6 +5,7 @@ import type {
   IDelayHost,
   IEqualizerHost,
   ILimiterHost,
+  IMblimiterHost,
   IMbcompHost,
   IReverbHost,
   IStereoHost,
@@ -338,6 +339,95 @@ export function applyLimiterDemo(
     host.gr$.set(viz.gr);
 }
 
+function applyMblimiterMeters(host: IMblimiterHost, viz: VizFixture) {
+  applySharedViz(viz);
+  if (viz.gains) {
+    // gains are ≤0 dB; host expects positive amounts for strip + overall meters.
+    const amounts = viz.gains.map((db) => Math.max(0, -db));
+    const overall =
+      typeof viz.gr === 'number' && Number.isFinite(viz.gr)
+        ? viz.gr
+        : Math.max(0, ...amounts);
+    host.grAll$.set([...amounts, overall]);
+    for (const band of host.bands) {
+      const v = amounts[band.index];
+      band.gr$.set(typeof v === 'number' ? v : 0);
+    }
+    host.gr$.set(overall);
+  } else if (typeof viz.gr === 'number') {
+    host.gr$.set(viz.gr);
+  }
+  if (viz.bandio) {
+    host.bandIo$.set(viz.bandio);
+    const eps = performance.now() % 2 < 1 ? 0.05 : 0;
+    for (const band of host.bands) {
+      const inDb = viz.bandio[band.index * 2];
+      const outDb = viz.bandio[band.index * 2 + 1];
+      band.inLevel$.set(
+        typeof inDb === 'number' && Number.isFinite(inDb) ? inDb + eps : -96,
+      );
+      band.outLevel$.set(
+        typeof outDb === 'number' && Number.isFinite(outDb) ? outDb + eps : -96,
+      );
+    }
+    pushViz('mblimiter', 'bandio', viz.bandio);
+  }
+}
+
+export function applyMblimiterDemo(
+  host: IMblimiterHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+): () => void {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.numBands$, params.num_bands);
+  setNum(host.slope$, params.slope);
+  const xovers = params.xovers;
+  if (Array.isArray(xovers))
+    xovers.forEach((hz, i) => setNum(host.xover$[i], hz));
+
+  setNum(host.limit$, params.limit);
+  setNum(host.attack$, params.attack);
+  setNum(host.release$, params.release);
+  setBool(host.minRelease$, params.min_release);
+  setBool(host.asc$, params.asc);
+  setNum(host.ascCoeff$, params.asc_coeff);
+  setNum(host.oversampling$, params.oversampling);
+  setBool(host.autoLevel$, params.auto_level);
+  setNum(host.curve$, params.curve);
+  setNum(host.knee$, params.knee);
+  setBool(host.colorEnable$, params.color_enable);
+  setNum(host.color$, params.color);
+  setBool(host.truePeak$, params.true_peak);
+  setNum(host.margin$, params.margin);
+  setBool(host.diffListen$, params.diff_listen);
+  setBool(host.holdEnable$, params.hold_enable);
+  setNum(host.releaseHold$, params.release_hold);
+  setBool(host.emphasisEnable$, params.emphasis_enable);
+  setNum(host.emphasis$, params.emphasis);
+
+  const bands = params.bands;
+  if (Array.isArray(bands)) {
+    for (const b of bands) {
+      if (!b || typeof b !== 'object') continue;
+      const rec = b as Record<string, unknown>;
+      const idx = typeof rec.index === 'number' ? rec.index : -1;
+      const band = host.bands[idx];
+      if (!band) continue;
+      setBool(band.listen$, rec.listen);
+      setNum(band.weight$, rec.weight);
+      setNum(band.release$, rec.release);
+    }
+  }
+
+  if (viz.envelope)
+    host.historyAll$.set(new Float32Array(viz.envelope));
+
+  applyMblimiterMeters(host, viz);
+  const hold = window.setInterval(() => applyMblimiterMeters(host, viz), 50);
+  return () => window.clearInterval(hold);
+}
+
 export function applyMbcompDemo(
   host: IMbcompHost,
   params: Record<string, unknown>,
@@ -403,6 +493,7 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   equalizer: applyEqualizerDemo as DemoApplier,
   limiter: applyLimiterDemo as DemoApplier,
   mbcomp: applyMbcompDemo as DemoApplier,
+  mblimiter: applyMblimiterDemo as DemoApplier,
   reverb: applyReverbDemo as DemoApplier,
   stereo: applyStereoDemo as DemoApplier,
   transients: applyTransientsDemo as DemoApplier,

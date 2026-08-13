@@ -9,7 +9,8 @@ export type PluginId =
   | "delay"
   | "reverb"
   | "mbcomp"
-  | "limiter";
+  | "limiter"
+  | "mblimiter";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
 
@@ -24,6 +25,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   reverb: () => import("./ReverbUI/BoundReverbUI"),
   mbcomp: () => import("./MbcompUI/BoundMbcompUI"),
   limiter: () => import("./LimiterUI/BoundLimiterUI"),
+  mblimiter: () => import("./MblimiterUI/BoundMblimiterUI"),
 };
 
 export function isPluginId(id: string): id is PluginId {

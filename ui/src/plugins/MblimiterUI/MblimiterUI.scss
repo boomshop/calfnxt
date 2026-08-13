@@ -1,0 +1,146 @@
+.MblimiterUI {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 2px;
+
+  > .Header {
+    > .children {
+      > .bandcount {
+        > .bandcount {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+
+          > .Button {
+            flex: 0 0 auto;
+
+            > .aux-label {
+              font-family: sans-serif;
+              font-size: 24px;
+            }
+          }
+        }
+      }
+
+      > .slope {
+        flex-shrink: 0;
+      }
+    }
+  }
+
+  > .MultibandChart {
+    flex: 1 1 auto;
+  }
+
+  > .bridge {
+    flex: 0 0 auto;
+  }
+
+  > .strips {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    gap: var(--gap);
+    flex: 0 0 auto;
+    margin-bottom: 6px;
+
+    > .strip {
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+      flex: 1 1 0;
+      max-width: 256px;
+      padding: var(--gap);
+      background: var(--background-less);
+      border: 1px solid var(--background-lesser);
+      border-radius: 2px;
+
+      > .history {
+        flex: 0 0 72px;
+        min-width: 0;
+      }
+
+      // Horizontal meters stacked under the history; only the bottom shows scale.
+      > .meters {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: 0 0 auto;
+
+        .LevelMeter {
+          min-height: 0;
+          height: auto;
+          flex: 0 0 auto;
+        }
+      }
+
+      > .knobs {
+        display: flex;
+        justify-content: space-evenly;
+        align-items: center;
+        gap: var(--gap);
+        flex: 0 0 auto;
+      }
+    }
+  }
+
+  > .main {
+    flex: 0 0 auto;
+    display: flex;
+    gap: var(--gap);
+
+    > .limit {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+      align-items: stretch;
+
+      > .top {
+        display: flex;
+        align-items: center;
+        gap: var(--gap);
+        justify-content: space-evenly;
+      }
+
+      > .bottom {
+        display: flex;
+        align-items: center;
+        gap: var(--gap);
+        justify-content: space-evenly;
+
+        > .WithInfo {
+          width: auto;
+
+          .aux-button {
+            padding: 0 16px;
+          }
+        }
+      }
+    }
+
+    > .meter {
+      flex: 0 0 auto;
+    }
+
+    > .character {
+      flex: 1 1 auto;
+      display: grid;
+      grid-template-columns: auto auto;
+      grid-template-rows: auto auto;
+      align-items: center;
+      align-content: center;
+      gap: var(--gap);
+    }
+  }
+
+  .feat-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--gap);
+    justify-content: center;
+  }
+}

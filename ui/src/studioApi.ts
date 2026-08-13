@@ -14,7 +14,8 @@ export type PluginId =
   | 'delay'
   | 'reverb'
   | 'mbcomp'
-  | 'limiter';
+  | 'limiter'
+  | 'mblimiter';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -26,6 +27,7 @@ const PLUGIN_IDS: PluginId[] = [
   'reverb',
   'mbcomp',
   'limiter',
+  'mblimiter',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -77,6 +79,13 @@ export {
   createBoundLimiterHost,
   type ILimiterHost,
 } from './host/limiterHost';
+
+export { MblimiterUI } from './plugins/MblimiterUI/MblimiterUI';
+export {
+  createBoundMblimiterHost,
+  type IMblimiterHost,
+  type IMblimiterBand,
+} from './host/mblimiterHost';
 
 export { ReverbUI } from './plugins/ReverbUI/ReverbUI';
 export { createBoundReverbHost, type IReverbHost } from './host/reverbHost';

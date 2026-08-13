@@ -27,6 +27,7 @@ const ALL = [
   'equalizer',
   'limiter',
   'mbcomp',
+  'mblimiter',
   'reverb',
   'stereo',
   'transients',

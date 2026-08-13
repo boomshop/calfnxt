@@ -27,6 +27,7 @@ const knownPlugins = [
   "reverb",
   "mbcomp",
   "limiter",
+  "mblimiter",
 ] as const;
 
 export default defineConfig(({ command }) => {

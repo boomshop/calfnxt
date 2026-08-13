@@ -21,6 +21,7 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <vector>
 
 extern char** environ;
 
@@ -785,10 +786,20 @@ void WebEditor::flushVizArray(const char* streamId, const char* kind, float* val
   if (sock_ < 0 || !streamId || !kind || n < 0)
     return;
 
-  constexpr size_t kJsCap = 24576;
-  char js[kJsCap];
+  // Multiband envelope: up to 6×(512×3)+1 floats. A fixed 24 KiB stack buffer
+  // overflowed once values stopped being short zeros — flush aborted silently
+  // and history froze until bypass reset cleared the ring.
+  constexpr size_t kHeaderReserve = 128;
+  constexpr size_t kBytesPerFloat = 18; // worst-case to_chars + comma
+  const size_t jsCap =
+    std::max<size_t>(24576, kHeaderReserve + static_cast<size_t>(n) * kBytesPerFloat + 32);
+
+  thread_local std::vector<char> jsBuf;
+  if (jsBuf.size() < jsCap)
+    jsBuf.resize(jsCap);
+  char* js = jsBuf.data();
   char* p = js;
-  char* end = js + sizeof js;
+  char* end = js + jsCap;
   int written = std::snprintf(p, static_cast<size_t>(end - p),
                               "try{window.__calfnxtOnHost&&window.__calfnxtOnHost({t:\"viz\",id:\"%s\",kind:\"%s\",v:[",
                               streamId, kind);

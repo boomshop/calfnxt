@@ -34,6 +34,14 @@
           fill: var(--color);
           fill-opacity: 0.18;
         }
+
+        // Listen solo — same warn treatment as mb-thresh.mb-listen (no thresh UI).
+        &.mb-listen {
+          stroke: var(--color-warn);
+          stroke-opacity: 1;
+          fill: var(--color-warn);
+          fill-opacity: 0.18;
+        }
       }
     }
 

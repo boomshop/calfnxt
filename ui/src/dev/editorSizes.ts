@@ -8,6 +8,7 @@ import { pluginMeta as delayMeta } from "../generated/delayModel";
 import { pluginMeta as reverbMeta } from "../generated/reverbModel";
 import { pluginMeta as mbcompMeta } from "../generated/mbcompModel";
 import { pluginMeta as limiterMeta } from "../generated/limiterModel";
+import { pluginMeta as mblimiterMeta } from "../generated/mblimiterModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
 export const editorSizes: Record<PluginId, { width: number; height: number }> = {
@@ -20,4 +21,5 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   reverb: reverbMeta.editor,
   mbcomp: mbcompMeta.editor,
   limiter: limiterMeta.editor,
+  mblimiter: mblimiterMeta.editor,
 };

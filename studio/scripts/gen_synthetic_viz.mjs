@@ -203,6 +203,15 @@ const packs = {
     // History seeded from compressor fixture when available (3 ch × bands).
     envelope: mbcompHistory(160, 4),
   },
+  // Same packed history layout as mbcomp; gr = overall deepest (UI amount).
+  mblimiter: {
+    bandio: [-8.5, -10.2, -11.5, -13.0, -16.0, -17.5, -21.0, -22.2],
+    gains: [-4.5, -3.2, -2.0, -1.2, 0, 0],
+    levelsIn: [-7.5, -8.0],
+    levelsOut: [-1.5, -1.8],
+    gr: 5.8,
+    envelope: mbcompHistory(160, 4),
+  },
 };
 
 for (const [id, viz] of Object.entries(packs)) {
