@@ -108,5 +108,109 @@ private:
   int w_ = 0;
 };
 
+/**
+ * Stereo delay with equal-power crossfade when the delay length changes.
+ * delaySamples == 0 is realtime passthrough (ring still advances).
+ */
+template <int N>
+class StereoDelayXfade
+{
+  static_assert((N & (N - 1)) == 0, "StereoDelayXfade size must be power of two");
+
+public:
+  void reset()
+  {
+    for (int i = 0; i < N; ++i)
+    {
+      l_[i] = 0.f;
+      r_[i] = 0.f;
+    }
+    w_ = 0;
+    delay_ = 0;
+    xfFrom_ = 0;
+    xfTo_ = 0;
+    xfPos_ = 0;
+    xfLen_ = 0;
+  }
+
+  void setXfadeLen(int samples) { xfadeLenSetting_ = std::max(1, samples); }
+
+  void process(float inL, float inR, int delaySamples, float& outL, float& outR)
+  {
+    delaySamples = std::clamp(delaySamples, 0, N - 1);
+    l_[w_] = inL;
+    r_[w_] = inR;
+
+    if (delaySamples != delay_)
+    {
+      xfFrom_ = (xfLen_ > 0) ? blendedDelay() : delay_;
+      xfTo_ = delaySamples;
+      delay_ = delaySamples;
+      xfLen_ = xfadeLenSetting_;
+      xfPos_ = 0;
+    }
+
+    if (xfLen_ > 0)
+    {
+      const float t =
+        static_cast<float>(xfPos_) / static_cast<float>(std::max(1, xfLen_));
+      const float a = std::sin(t * 1.5707963267948966f);
+      const float b = std::cos(t * 1.5707963267948966f);
+      float l0 = 0.f, r0 = 0.f, l1 = 0.f, r1 = 0.f;
+      readAt(xfFrom_, l0, r0);
+      readAt(xfTo_, l1, r1);
+      outL = l0 * b + l1 * a;
+      outR = r0 * b + r1 * a;
+      if (++xfPos_ >= xfLen_)
+      {
+        xfLen_ = 0;
+        xfPos_ = 0;
+        xfFrom_ = xfTo_;
+      }
+    }
+    else
+    {
+      readAt(delay_, outL, outR);
+    }
+
+    w_ = (w_ + 1) & (N - 1);
+  }
+
+private:
+  void readAt(int delay, float& outL, float& outR) const
+  {
+    if (delay <= 0)
+    {
+      outL = l_[w_];
+      outR = r_[w_];
+      return;
+    }
+    const int ri = (w_ - delay) & (N - 1);
+    outL = l_[ri];
+    outR = r_[ri];
+  }
+
+  int blendedDelay() const
+  {
+    if (xfLen_ <= 0)
+      return delay_;
+    const float t =
+      static_cast<float>(xfPos_) / static_cast<float>(std::max(1, xfLen_));
+    return std::max(0, static_cast<int>(std::lround(
+                         static_cast<float>(xfFrom_) +
+                         static_cast<float>(xfTo_ - xfFrom_) * t)));
+  }
+
+  float l_[N] {};
+  float r_[N] {};
+  int w_ = 0;
+  int delay_ = 0;
+  int xfFrom_ = 0;
+  int xfTo_ = 0;
+  int xfPos_ = 0;
+  int xfLen_ = 0;
+  int xfadeLenSetting_ = 64;
+};
+
 } // namespace Dsp
 } // namespace calfNXT

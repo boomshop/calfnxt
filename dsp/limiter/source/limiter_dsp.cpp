@@ -80,14 +80,34 @@ float LimiterPlugin::applyColor(float x, float amount)
   return x + (wet - x) * amount;
 }
 
-void LimiterPlugin::updateLatency(bool bypass)
+uint32_t LimiterPlugin::latencyForLook(int lookLat, int os) const
+{
+  os = std::max(1, os);
+  const uint32 lookHost =
+    static_cast<uint32>(std::max(1, (lookLat + os - 1) / os));
+  const uint32 osDelay = (os > 1) ? 4u : 0u;
+  return lookHost + osDelay;
+}
+
+uint32_t LimiterPlugin::actualLatencySamples() const
 {
   const int os = std::max(1, oversamplingOld_ > 0 ? oversamplingOld_ : effectiveOversampling());
-  const uint32 lookHost =
-    bypass ? 0u
-           : static_cast<uint32>(std::max(1, (limiter_.latencyFrames() + os - 1) / os));
-  const uint32 osDelay = (!bypass && os > 1) ? 4u : 0u;
-  const uint32 want = lookHost + osDelay;
+  return latencyForLook(limiter_.latencyFrames(), os);
+}
+
+uint32_t LimiterPlugin::reportedLatencySamples() const
+{
+  const int os = std::max(1, oversamplingOld_ > 0 ? oversamplingOld_ : effectiveOversampling());
+  const uint32_t hostSr = static_cast<uint32_t>(std::max(1.0, sampleRate_));
+  const int maxLookOs = std::max(
+    1, static_cast<int>(static_cast<float>(hostSr * static_cast<uint32_t>(os)) *
+                        (kMaxLookaheadMs * 0.001f)));
+  return latencyForLook(maxLookOs, os);
+}
+
+void LimiterPlugin::updateLatency(bool forceZero)
+{
+  const uint32 want = forceZero ? 0u : reportedLatencySamples();
   if (want == latencySamples_)
     return;
   latencySamples_ = want;
@@ -116,10 +136,13 @@ void LimiterPlugin::resetProcessing()
   oversamplingOld_ = -1;
   curveOld_ = -1;
   ascOld_ = true;
-  xfadeSamples_ = 0;
-  xfadeTotal_ = 0;
-  xfadeL_ = 0.f;
-  xfadeR_ = 0.f;
+  lookPad_.reset();
+  bypassDelay_.reset();
+  lookPad_.setXfadeLen(static_cast<int>(std::max(1.0, sampleRate_ * 0.02)));
+  bypassDelay_.setXfadeLen(static_cast<int>(std::max(1.0, sampleRate_ * 0.02)));
+  bypassOld_ = params_[kParamBypass] >= 0.5f;
+  bypassXfadePos_ = 0;
+  bypassXfadeLen_ = 0;
   ascLed_.store(0.f, std::memory_order_relaxed);
 
   std::memset(histBuf_, 0, sizeof(histBuf_));
@@ -136,7 +159,7 @@ void LimiterPlugin::resetProcessing()
   }
 
   applyParams(true);
-  updateLatency(params_[kParamBypass] >= 0.5f);
+  updateLatency(false);
 }
 
 void LimiterPlugin::applyParams(bool force)
@@ -170,12 +193,7 @@ void LimiterPlugin::applyParams(bool force)
   {
     attackOld_ = attackMs;
     if (!force)
-    {
       limiter_.setLookaheadMs(attackMs, false);
-      // Mask any residual discontinuity while the look taps crossfade.
-      xfadeTotal_ = static_cast<uint32_t>(std::max(1.0, sampleRate_ * 0.02));
-      xfadeSamples_ = xfadeTotal_;
-    }
   }
 
   if (force || limitDb != limitOld_ || asc != ascOld_)
@@ -200,11 +218,9 @@ void LimiterPlugin::applyParams(bool force)
     limiter_.setDynamicsExtras(params_[kParamKnee], holdMs, emphasis);
     limiter_.setLookaheadMs(attackMs, true);
     attackOld_ = attackMs;
-    xfadeTotal_ = static_cast<uint32_t>(std::max(1.0, sampleRate_ * 0.005));
-    xfadeSamples_ = xfadeTotal_;
   }
 
-  updateLatency(params_[kParamBypass] >= 0.5f);
+  updateLatency(false);
 }
 
 void LimiterPlugin::histFeedSample(float audioPeakLin, float grLin)
@@ -245,7 +261,7 @@ tresult PLUGIN_API LimiterPlugin::setActive(TBool state)
   else
   {
     limiter_.deactivate();
-    updateLatency(true);
+    updateLatency(/*forceZero=*/true);
   }
   return kResultOk;
 }
@@ -323,28 +339,14 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
-  if (bypass)
-  {
-    grMeter_.forceZero();
-    ascLed_.store(0.f, std::memory_order_relaxed);
-    if (data.symbolicSampleSize == kSample32)
-    {
-      auto** out = data.outputs[0].channelBuffers32;
-      const int32 nCh = data.outputs[0].numChannels;
-      for (int32 i = 0; i < data.numSamples; ++i)
-      {
-        const float L = nCh > 0 ? out[0][i] : 0.f;
-        const float R = nCh > 1 ? out[1][i] : L;
-        histFeedSample(std::max(std::fabs(L), std::fabs(R)), 1.f);
-      }
-    }
-    publishHistSnapshot();
-    updateLatency(true);
-    io_.end(data);
-    return kResultOk;
-  }
-
   updateLatency(false);
+
+  if (bypass != bypassOld_)
+  {
+    bypassOld_ = bypass;
+    bypassXfadeLen_ = static_cast<uint32_t>(std::max(1.0, sampleRate_ * 0.01));
+    bypassXfadePos_ = 0;
+  }
 
   const float displayLimit = Dsp::dbToLin(params_[kParamLimit]);
   const bool autoLevel = params_[kParamAutoLevel] >= 0.5f;
@@ -365,6 +367,9 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
 
   const int32 nFrames = data.numSamples;
   auto processFrame = [&](float& outL, float& outR) {
+    const float inL = outL;
+    const float inR = outR;
+
     if (color > 0.f)
     {
       outL = applyColor(outL, color);
@@ -425,19 +430,49 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
       outR = cleanR - outR;
     }
 
-    if (xfadeSamples_ > 0 && xfadeTotal_ > 0)
+    const int pad = std::max(
+      0, static_cast<int>(latencySamples_) - static_cast<int>(actualLatencySamples()));
+    lookPad_.process(outL, outR, pad, outL, outR);
+
+    float dryL = inL;
+    float dryR = inR;
+    bypassDelay_.process(
+      inL, inR, static_cast<int>(latencySamples_), dryL, dryR);
+
+    if (bypassXfadePos_ < bypassXfadeLen_)
     {
-      const float a =
-        1.f - static_cast<float>(xfadeSamples_) / static_cast<float>(xfadeTotal_);
-      outL = xfadeL_ + (outL - xfadeL_) * a;
-      outR = xfadeR_ + (outR - xfadeR_) * a;
-      --xfadeSamples_;
+      const float t = static_cast<float>(bypassXfadePos_) /
+                      static_cast<float>(std::max(1u, bypassXfadeLen_));
+      const float a = std::sin(t * 1.5707963267948966f);
+      const float b = std::cos(t * 1.5707963267948966f);
+      if (bypass)
+      {
+        outL = outL * b + dryL * a;
+        outR = outR * b + dryR * a;
+      }
+      else
+      {
+        outL = dryL * b + outL * a;
+        outR = dryR * b + outR * a;
+      }
+      ++bypassXfadePos_;
     }
-    xfadeL_ = outL;
-    xfadeR_ = outR;
+    else if (bypass)
+    {
+      outL = dryL;
+      outR = dryR;
+    }
 
     Dsp::sanitizeDenormal(outL);
     Dsp::sanitizeDenormal(outR);
+
+    if (bypass)
+    {
+      histFeedSample(inPeak, 1.f);
+      grMeter_.forceZero();
+      ascHold = 0;
+      return;
+    }
 
     // Per host sample — GrMeter ballistics are sample-rate based.
     const float grLin = limiter_.attenuation();

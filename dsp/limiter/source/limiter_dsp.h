@@ -1,5 +1,6 @@
 #pragma once
 
+#include "delay_line.h"
 #include "effect_base.h"
 #include "gr_meter.h"
 #include "io_stage.h"
@@ -58,9 +59,16 @@ private:
   static constexpr int kHistMinSlots = 48;
   static constexpr int kHistBufSize = kHistSlots * kHistChannels;
 
+  /** Matches attack parameter max in limiter.plugin.json. */
+  static constexpr float kMaxLookaheadMs = 10.f;
+  static constexpr int kLatencyDelaySize = 8192;
+
   void resetProcessing();
   void applyParams(bool force);
-  void updateLatency(bool bypass);
+  void updateLatency(bool forceZero = false);
+  uint32_t latencyForLook(int lookLat, int os) const;
+  uint32_t actualLatencySamples() const;
+  uint32_t reportedLatencySamples() const;
   int oversamplingFactor() const;
   int effectiveOversampling() const;
   Dsp::LimitCurve curveFromPlain(float v) const;
@@ -88,10 +96,11 @@ private:
 
   Steinberg::uint32 latencySamples_ = 0;
 
-  uint32_t xfadeSamples_ = 0;
-  uint32_t xfadeTotal_ = 0;
-  float xfadeL_ = 0.f;
-  float xfadeR_ = 0.f;
+  Dsp::StereoDelayXfade<kLatencyDelaySize> lookPad_;
+  Dsp::StereoDelayXfade<kLatencyDelaySize> bypassDelay_;
+  bool bypassOld_ = false;
+  uint32_t bypassXfadePos_ = 0;
+  uint32_t bypassXfadeLen_ = 0;
 
   std::atomic<float> ascLed_ {0.f};
 

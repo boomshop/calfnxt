@@ -181,16 +181,36 @@ void MblimiterPlugin::idleSanitize(int nFrames)
   Dsp::sanitizeDenormal(zR);
 }
 
-void MblimiterPlugin::updateLatency(bool bypass)
+uint32_t MblimiterPlugin::latencyForLooks(int stripLat, int bbLat, int os) const
+{
+  os = std::max(1, os);
+  const uint32 lookHost =
+    static_cast<uint32>(std::max(1, (stripLat + bbLat + os - 1) / os));
+  const uint32 osDelay = (os > 1) ? 4u : 0u;
+  return lookHost + osDelay;
+}
+
+uint32_t MblimiterPlugin::actualLatencySamples() const
 {
   const int os = std::max(1, oversamplingOld_ > 0 ? oversamplingOld_ : effectiveOversampling());
-  const int stripLat = strip_[0].latencyFrames();
-  const int bbLat = broadband_.latencyFrames();
-  const uint32 lookHost =
-    bypass ? 0u
-           : static_cast<uint32>(std::max(1, (stripLat + bbLat + os - 1) / os));
-  const uint32 osDelay = (!bypass && os > 1) ? 4u : 0u;
-  const uint32 want = lookHost + osDelay;
+  return latencyForLooks(strip_[0].latencyFrames(), broadband_.latencyFrames(), os);
+}
+
+uint32_t MblimiterPlugin::reportedLatencySamples() const
+{
+  // Constant PDC latency at max look — avoids host graph restarts when the
+  // lookahead knob moves (wet path is padded up to this value).
+  const int os = std::max(1, oversamplingOld_ > 0 ? oversamplingOld_ : effectiveOversampling());
+  const uint32_t hostSr = static_cast<uint32_t>(std::max(1.0, sampleRate_));
+  const int maxLookOs = std::max(
+    1, static_cast<int>(static_cast<float>(hostSr * static_cast<uint32_t>(os)) *
+                        (kMaxLookaheadMs * 0.001f)));
+  return latencyForLooks(maxLookOs, maxLookOs, os);
+}
+
+void MblimiterPlugin::updateLatency(bool forceZero)
+{
+  const uint32 want = forceZero ? 0u : reportedLatencySamples();
   if (want == latencySamples_)
     return;
   latencySamples_ = want;
@@ -284,10 +304,13 @@ void MblimiterPlugin::resetProcessing()
   }
   for (int i = 0; i < kMaxBands - 1; ++i)
     xoverOld_[i] = -1.f;
-  xfadeSamples_ = 0;
-  xfadeTotal_ = 0;
-  xfadeL_ = 0.f;
-  xfadeR_ = 0.f;
+  lookPad_.reset();
+  bypassDelay_.reset();
+  lookPad_.setXfadeLen(static_cast<int>(std::max(1.0, sampleRate_ * 0.02)));
+  bypassDelay_.setXfadeLen(static_cast<int>(std::max(1.0, sampleRate_ * 0.02)));
+  bypassOld_ = params_[kParamBypass] >= 0.5f;
+  bypassXfadePos_ = 0;
+  bypassXfadeLen_ = 0;
   ascLed_.store(0.f, std::memory_order_relaxed);
   histSamplesPerSlot_ = 1;
   histVisibleSlots_ = 160;
@@ -306,7 +329,7 @@ void MblimiterPlugin::resetProcessing()
   ensureMultiBuffer();
   applyParams(true);
   applySplitParams();
-  updateLatency(params_[kParamBypass] >= 0.5f);
+  updateLatency(false);
 }
 
 void MblimiterPlugin::applyParams(bool force)
@@ -428,11 +451,10 @@ void MblimiterPlugin::applyParams(bool force)
     attackOld_ = attackMs;
     if (!force)
     {
+      // Soft tap crossfade inside LookaheadLimiter; host latency stays at max.
       for (int b = 0; b < kMaxBands; ++b)
         strip_[b].setLookaheadMs(attackMs, false);
       broadband_.setLookaheadMs(attackMs, false);
-      xfadeTotal_ = static_cast<uint32_t>(std::max(1.0, sampleRate_ * 0.02));
-      xfadeSamples_ = xfadeTotal_;
     }
   }
 
@@ -477,12 +499,10 @@ void MblimiterPlugin::applyParams(bool force)
     broadband_.setMulti(false);
     attackOld_ = attackMs;
     ensureMultiBuffer();
-    xfadeTotal_ = static_cast<uint32_t>(std::max(1.0, sampleRate_ * 0.005));
-    xfadeSamples_ = xfadeTotal_;
   }
 
   ensureMultiBuffer();
-  updateLatency(params_[kParamBypass] >= 0.5f);
+  updateLatency(false);
 }
 
 void MblimiterPlugin::histFeedSample(int band, float fullPeak, float bandPeak, float grLin)
@@ -621,7 +641,7 @@ tresult PLUGIN_API MblimiterPlugin::setActive(TBool state)
     for (int b = 0; b < kMaxBands; ++b)
       strip_[b].deactivate();
     broadband_.deactivate();
-    updateLatency(true);
+    updateLatency(/*forceZero=*/true);
   }
   return kResultOk;
 }
@@ -668,46 +688,16 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
-  if (bypass)
-  {
-    applySplitParams();
-    for (int b = 0; b < kMaxBands; ++b)
-    {
-      stripMeter_[b].forceZero();
-      lastGrDb_[b] = 0.f;
-    }
-    bbMeter_.forceZero();
-    overallMeter_.forceZero();
-    ascLed_.store(0.f, std::memory_order_relaxed);
-
-    if (data.symbolicSampleSize == kSample32 && data.outputs && data.outputs[0].numChannels >= 2)
-    {
-      float* outL = data.outputs[0].channelBuffers32[0];
-      float* outR = data.outputs[0].channelBuffers32[1];
-      float bandsL[kMaxBands];
-      float bandsR[kMaxBands];
-      for (int32 i = 0; i < data.numSamples; ++i)
-      {
-        const float fullPeak = std::max(std::fabs(outL[i]), std::fabs(outR[i]));
-        splitL_.process(outL[i], bandsL);
-        splitR_.process(outR[i], bandsR);
-        for (int b = 0; b < bands; ++b)
-        {
-          const float bandPeak =
-            std::max(std::fabs(bandsL[b]), std::fabs(bandsR[b]));
-          histFeedSample(b, fullPeak, bandPeak, 1.f);
-        }
-      }
-    }
-    publishHistSnapshot();
-    updateLatency(true);
-    io_.end(data);
-    return kResultOk;
-  }
-
   updateLatency(false);
   applySplitParams();
   ensureMultiBuffer();
+
+  if (bypass != bypassOld_)
+  {
+    bypassOld_ = bypass;
+    bypassXfadeLen_ = static_cast<uint32_t>(std::max(1.0, sampleRate_ * 0.01));
+    bypassXfadePos_ = 0;
+  }
 
   const float displayLimit = Dsp::dbToLin(params_[kParamLimit]);
   const bool truePeak = params_[kParamTruePeak] >= 0.5f;
@@ -737,6 +727,9 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
   const int32 nFrames = data.numSamples;
 
   auto processFrame = [&](float& outL, float& outR) {
+    const float inL = outL;
+    const float inR = outR;
+
     if (color > 0.f)
     {
       outL = applyColor(outL, color);
@@ -887,19 +880,63 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
       outR = cleanR - outR;
     }
 
-    if (xfadeSamples_ > 0 && xfadeTotal_ > 0)
+    // Pad variable look up to constant reported latency (no PDC restart on knob).
+    const int pad = std::max(
+      0, static_cast<int>(latencySamples_) - static_cast<int>(actualLatencySamples()));
+    lookPad_.process(outL, outR, pad, outL, outR);
+
+    float dryL = inL;
+    float dryR = inR;
+    bypassDelay_.process(
+      inL, inR, static_cast<int>(latencySamples_), dryL, dryR);
+
+    if (bypassXfadePos_ < bypassXfadeLen_)
     {
-      const float a =
-        1.f - static_cast<float>(xfadeSamples_) / static_cast<float>(xfadeTotal_);
-      outL = xfadeL_ + (outL - xfadeL_) * a;
-      outR = xfadeR_ + (outR - xfadeR_) * a;
-      --xfadeSamples_;
+      const float t = static_cast<float>(bypassXfadePos_) /
+                      static_cast<float>(std::max(1u, bypassXfadeLen_));
+      const float a = std::sin(t * 1.5707963267948966f);
+      const float b = std::cos(t * 1.5707963267948966f);
+      // a→new target (bypass ? dry : wet), b→previous target.
+      if (bypass)
+      {
+        outL = outL * b + dryL * a;
+        outR = outR * b + dryR * a;
+      }
+      else
+      {
+        outL = dryL * b + outL * a;
+        outR = dryR * b + outR * a;
+      }
+      ++bypassXfadePos_;
     }
-    xfadeL_ = outL;
-    xfadeR_ = outR;
+    else if (bypass)
+    {
+      outL = dryL;
+      outR = dryR;
+    }
 
     Dsp::sanitizeDenormal(outL);
     Dsp::sanitizeDenormal(outR);
+
+    if (bypass)
+    {
+      for (int b = 0; b < kMaxBands; ++b)
+      {
+        stripMeter_[b].forceZero();
+        lastGrDb_[b] = 0.f;
+        bandOutHold_[b].accumulate(0, bandPeak[b]);
+        histFeedSample(b, fullPeak, bandPeak[b], 1.f);
+      }
+      bbMeter_.forceZero();
+      overallMeter_.forceZero();
+      ascHold = 0;
+      for (int b = bands; b < kMaxBands; ++b)
+      {
+        stripMeter_[b].forceZero();
+        lastGrDb_[b] = 0.f;
+      }
+      return;
+    }
 
     const float bbAtt = broadband_.attenuation();
     bbMeter_.process(bbAtt);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "band_splitter.h"
+#include "delay_line.h"
 #include "effect_base.h"
 #include "gr_meter.h"
 #include "io_stage.h"
@@ -66,9 +67,18 @@ private:
   static constexpr int kHistMinSlots = 48;
   static constexpr int kHistBufSize = kHistSlots * kHistChannels;
 
+  /** Matches attack parameter max in mblimiter.plugin.json. */
+  static constexpr float kMaxLookaheadMs = 10.f;
+  /** Host-rate delay capacity for bypass / look pad (covers 2×10 ms @ 192 kHz + OS). */
+  static constexpr int kLatencyDelaySize = 8192;
+
   void resetProcessing();
   void applyParams(bool force);
-  void updateLatency(bool bypass);
+  /** Report host latency. forceZero only when deactivated. */
+  void updateLatency(bool forceZero = false);
+  uint32_t latencyForLooks(int stripLat, int bbLat, int os) const;
+  uint32_t actualLatencySamples() const;
+  uint32_t reportedLatencySamples() const;
   void applySplitParams();
   int numBands() const;
   int oversamplingFactor() const;
@@ -131,10 +141,13 @@ private:
 
   Steinberg::uint32 latencySamples_ = 0;
 
-  uint32_t xfadeSamples_ = 0;
-  uint32_t xfadeTotal_ = 0;
-  float xfadeL_ = 0.f;
-  float xfadeR_ = 0.f;
+  /** Pads wet path so total delay stays at reported (max) look latency. */
+  Dsp::StereoDelayXfade<kLatencyDelaySize> lookPad_;
+  /** Dry path delayed by reported latency for click-free bypass. */
+  Dsp::StereoDelayXfade<kLatencyDelaySize> bypassDelay_;
+  bool bypassOld_ = false;
+  uint32_t bypassXfadePos_ = 0;
+  uint32_t bypassXfadeLen_ = 0;
 
   std::atomic<float> ascLed_ {0.f};
 
