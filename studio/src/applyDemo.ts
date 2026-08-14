@@ -353,6 +353,9 @@ export function applyHarmonicsDemo(
   setNum(host.blend$, params.blend);
   setNum(host.dry$, params.dry);
   setNum(host.wet$, params.wet);
+  setNum(host.oversample$, params.oversample);
+  setNum(host.asymmetry$, params.asymmetry);
+  setNum(host.tone$, params.tone);
   setNum(host.preHipass$, params.pre_hipass);
   setNum(host.preLopass$, params.pre_lopass);
   setNum(host.preHpMode$, params.pre_hp_mode);

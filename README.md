@@ -49,7 +49,7 @@ will follow.
 | **Multiband Compressor** | `calfNXTMbcomp.vst3` | 2–6 band LR dynamics with per-band history |
 | **Limiter** | `calfNXTLimiter.vst3` | Lookahead brickwall with ASC + oversampling |
 | **Multiband Limiter** | `calfNXTMblimiter.vst3` | Weighted multiband brickwall + final limiter |
-| **Harmonics** | `calfNXTHarmonics.vst3` | Saturator / Exciter / Bass Enhancer (TAP waveshape) |
+| **Harmonics** | `calfNXTHarmonics.vst3` | Saturator / Exciter / Bass Enhancer — Drive, Blend, Asym, Tone, OS |
 | **DeEsser** | `calfNXTDeesser.vst3` | Sibilance / rumble control (Ess / Rumble, Wide / Split) |
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo / Ping-Pong / L-R) |
 | **Reverb** | `calfNXTReverb.vst3` | Algorithmic room (ER + late, no IR) |
@@ -114,9 +114,9 @@ will follow.
 ### Harmonics
 
 - Merged Calf **Saturator / Exciter / Bass Enhancer**: Feed filters → TAP waveshaper → Post filters
-- Parallel mix: **Dry** = raw input; **Wet** = shaped path minus clean filtered reference (no cancellation notches)
-- **Drive** / **Blend** (even↔odd / tube–transistor); presets Wide / Exciter / Bass
-- Live **transfer curve** (active zone + fading density heatmap) and relative **harmonic bars**
+- Parallel mix: **Dry** = raw input; **Wet** = toned(shaped − clean) (no cancellation notches)
+- **Drive** / **Blend** (even↔odd); **Asymmetry** bias; **Tone** (shelf tracks Feed∩Post band centre); **Oversampling** 1×…4×
+- Presets Wide / Exciter / Bass; live **transfer curve** + relative **harmonic bars**
 - Shared In/Out gain + peak meters
 
 ### DeEsser

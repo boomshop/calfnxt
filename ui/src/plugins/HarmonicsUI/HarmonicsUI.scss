@@ -7,8 +7,8 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   grid-template-rows: 1fr 1fr;
   grid-template-areas:
-    'pre drive wave'
-    'post drive harmonics';
+    'harmonics drive wave'
+    'pre drive post';
   align-items: stretch;
   gap: var(--gap);
 
@@ -54,7 +54,8 @@
     justify-content: space-around;
 
     > .controls1,
-    > .controls2 {
+    > .controls2,
+    > .controls3 {
       display: flex;
       gap: var(--gap);
       align-items: center;

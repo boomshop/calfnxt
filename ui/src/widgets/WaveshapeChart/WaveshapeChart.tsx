@@ -12,6 +12,8 @@ export interface WaveshapeChartProps {
   className?: string;
   drive$: DynamicValue<number>;
   blend$: DynamicValue<number>;
+  /** Optional DC bias into the shaper (−1…+1); default 0. */
+  asymmetry$?: DynamicValue<number>;
   /**
    * DSP viz: `[zoneAmp, …densityBins]` in 0…1.
    * zone = soft |send| envelope; bins = heatmap along input x ∈ [−1, 1].
@@ -54,7 +56,7 @@ function sliceCurve(curve: Pt[], x0: number, x1: number, coeffs: ReturnType<type
  * soft heatmap density along the curve, active zone (−A…+A) on top.
  */
 export function WaveshapeChart(props: WaveshapeChartProps) {
-  const { className, drive$, blend$, viz$ } = props;
+  const { className, drive$, blend$, asymmetry$, viz$ } = props;
   const svgRef = useRef<SVGSVGElement>(null);
   const blurId = `waveshape-heat-blur-${useId().replace(/:/g, '')}`;
   const [svg, setSvg] = useState<SVGSVGElement | null>(null);
@@ -63,20 +65,23 @@ export function WaveshapeChart(props: WaveshapeChartProps) {
   const [size, setSize] = useState({ w: 1, h: 1 });
   const [drive, setDrive] = useState(() => drive$.value);
   const [blend, setBlend] = useState(() => blend$.value);
+  const [asymmetry, setAsymmetry] = useState(() => asymmetry$?.value ?? 0);
   const [viz, setViz] = useState<number[]>(() => viz$?.value ?? [0]);
 
   useEffect(() => {
     const u1 = drive$.subscribe((v) => setDrive(v));
     const u2 = blend$.subscribe((v) => setBlend(v));
+    const uA = asymmetry$?.subscribe((v) => setAsymmetry(v));
     const u3 = viz$?.subscribe((v) => {
       if (Array.isArray(v) && v.length >= 1) setViz(v);
     });
     return () => {
       u1();
       u2();
+      uA?.();
       u3?.();
     };
-  }, [drive$, blend$, viz$]);
+  }, [drive$, blend$, asymmetry$, viz$]);
 
   useEffect(() => {
     const el = svgRef.current;
@@ -107,10 +112,13 @@ export function WaveshapeChart(props: WaveshapeChartProps) {
     paint: 'stroke',
   });
 
-  const coeffs = useMemo(() => makeTapCoeffs(blend, drive), [blend, drive]);
+  const coeffs = useMemo(
+    () => makeTapCoeffs(blend, drive, asymmetry),
+    [blend, drive, asymmetry],
+  );
   const curve = useMemo(
-    () => sampleTransferCurve(blend, drive, 161),
-    [blend, drive],
+    () => sampleTransferCurve(blend, drive, 161, asymmetry),
+    [blend, drive, asymmetry],
   );
 
   const zone = Math.max(0, Math.min(1, viz[0] ?? 0));

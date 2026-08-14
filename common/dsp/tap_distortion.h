@@ -1,7 +1,8 @@
 #pragma once
 
 // Tom Szilagyi's distortion (Calf heritage, used with permission in Calf).
-// Drive / blend waveshaper with optional 2× oversampling via ResampleN.
+// Drive / blend waveshaper with selectable oversampling via ResampleN.
+// Optional input asymmetry (DC bias into the shaper) for more even harmonics.
 
 #include "dsp_math.h"
 #include "resample_n.h"
@@ -29,14 +30,25 @@ public:
   void setSampleRate(uint32_t sr)
   {
     srate_ = std::max(1u, sr);
-    over_ = (srate_ * 2u > 96000u) ? 1 : 2;
-    resampler_.setParams(srate_, over_, 2);
+    applyResampler();
     driveOld_ = 1.0e9f;
     blendOld_ = 1.0e9f;
   }
 
-  void setParams(float blend, float drive)
+  /** Host-rate oversample factor: 1…4. */
+  void setOversample(int factor)
   {
+    const int f = std::clamp(factor, 1, 4);
+    if (f == over_)
+      return;
+    over_ = f;
+    applyResampler();
+  }
+
+  void setParams(float blend, float drive, float asymmetry = 0.f)
+  {
+    asymmetry_ = std::clamp(asymmetry, -1.f, 1.f);
+
     if (driveOld_ == drive && blendOld_ == blend)
       return;
 
@@ -75,7 +87,9 @@ public:
 
   float process(float in)
   {
-    double* samples = resampler_.upsample(static_cast<double>(in));
+    // Bias into the shaper (tube-ish even harmonics); applied pre-OS.
+    const float biased = in + asymmetry_ * kAsymScale;
+    double* samples = resampler_.upsample(static_cast<double>(biased));
     meter_ = 0.f;
     for (int o = 0; o < over_; ++o)
     {
@@ -106,6 +120,7 @@ public:
   /** Evaluate the static waveshape (no OS / slew) for UI transfer curves. */
   float shapeStatic(float x) const
   {
+    x = x + asymmetry_ * kAsymScale;
     float med = 0.f;
     if (x >= 0.0f)
       med = (D(ap_ + x * (kpa_ - x)) + kpb_) * pwrq_;
@@ -115,15 +130,22 @@ public:
   }
 
 private:
+  static constexpr float kAsymScale = 0.35f;
+
+  void applyResampler()
+  {
+    resampler_.setParams(srate_, over_, 2);
+  }
+
   static float M(float x)
   {
-    return (std::fabs(x) > 1.0e-8f) ? x : 0.0f;
+    return (std::fabs(x) > 1.0e-8f) ? x : 0.f;
   }
 
   static float D(float x)
   {
     x = std::fabs(x);
-    return (x > 1.0e-8f) ? std::sqrt(x) : 0.0f;
+    return (x > 1.0e-8f) ? std::sqrt(x) : 0.f;
   }
 
   ResampleN resampler_;
@@ -133,6 +155,7 @@ private:
 
   float driveOld_ = 1.0e9f;
   float blendOld_ = 1.0e9f;
+  float asymmetry_ = 0.f;
   float meter_ = 0.f;
   float prevMed_ = 0.f;
   float prevOut_ = 0.f;

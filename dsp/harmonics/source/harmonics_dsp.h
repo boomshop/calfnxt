@@ -1,5 +1,6 @@
 #pragma once
 
+#include "biquad.h"
 #include "complementary_band_filter.h"
 #include "effect_base.h"
 #include "io_stage.h"
@@ -50,6 +51,7 @@ protected:
 private:
   void resetProcessing();
   void applyFilterParams();
+  void applyToneParams();
   void processSample(float& L, float& R, bool bypass, bool preListen,
                      bool postListen, float dry, float wet);
   void observeSend(float sendL, float sendR);
@@ -66,6 +68,12 @@ private:
   Dsp::ComplementaryBandFilter postHot_;
   /** Same Post coeffs/state twin on the unshaped send — for dry-safe delta mix. */
   Dsp::ComplementaryBandFilter postClean_;
+  /** High-shelf on wet delta only (after hot−clean) — keeps Dry notch-free.
+   *  Shelf fc tracks the geometric mean of the Feed∩Post passband. */
+  Dsp::BiquadD1 toneL_;
+  Dsp::BiquadD1 toneR_;
+  float toneDb_ = 0.f;
+  float toneFc_ = 0.f;
 
   /** Soft |send| envelope for active-zone highlight (0…1). */
   float shapeZone_ = 0.f;

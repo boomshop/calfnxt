@@ -38,6 +38,27 @@ const BLEND_LABELS = [
   { pos: 10, label: 'Tube/Tape' },
 ];
 
+const ASYM_DOTS = [-1, -0.5, 0, 0.5, 1];
+const ASYM_LABELS = [
+  { pos: -1, label: '−1' },
+  { pos: -0.5, label: '−0.5' },
+  { pos: 0, label: '0' },
+  { pos: 0.5, label: '+0.5' },
+  { pos: 1, label: '+1' },
+];
+
+const TONE_DOTS = [-12, -6, 0, 6, 12];
+const TONE_LABELS = [
+  { pos: -12, label: '−12' },
+  { pos: -6, label: '−6' },
+  { pos: 0, label: '0' },
+  { pos: 6, label: '+6' },
+  { pos: 12, label: '+12' },
+];
+
+const OS_DOTS = [1, 2, 3, 4];
+const OS_LABELS = OS_DOTS.map((n) => ({ pos: n, label: `${n}×` }));
+
 const DB_DOTS = [-60, -36, -24, -12, -6, 0, 6, 12];
 const DB_LABELS = [
   { pos: -60, label: '−60' },
@@ -90,6 +111,7 @@ export function HarmonicsUI(props: HarmonicsUIProps) {
           <WaveshapeChart
             drive$={host.drive$}
             blend$={host.blend$}
+            asymmetry$={host.asymmetry$}
             viz$={host.shapePoint$}
           />
         </WithInfo>
@@ -98,12 +120,65 @@ export function HarmonicsUI(props: HarmonicsUIProps) {
       <div className="block harmonics">
         <div className="title">Harmonics</div>
         <WithInfo title={harmonicsInfo.bars} className="harmonics">
-          <HarmonicBars drive$={host.drive$} blend$={host.blend$} count={5} />
+          <HarmonicBars
+            drive$={host.drive$}
+            blend$={host.blend$}
+            asymmetry$={host.asymmetry$}
+            count={5}
+          />
         </WithInfo>
       </div>
 
       <div className="block drive">
         <div className="title">Drive</div>
+
+        <div className="controls2">
+          <WithInfo title={harmonicsInfo.oversample}>
+            <Knob
+              label="Oversampling"
+              value$={host.oversample$}
+              min={1}
+              max={4}
+              snap={1}
+              reset={harmonicsParamDefault('oversample')}
+              dots={OS_DOTS}
+              labels={OS_LABELS}
+              {...{ 'value.format': (v: number) => `${Math.round(v)}×` }}
+              {...edit(paramIds.oversample)}
+              start={225}
+              angle={90}
+            />
+          </WithInfo>
+          <WithInfo title={harmonicsInfo.asymmetry}>
+            <Knob
+              value$={host.asymmetry$}
+              base={0}
+              label="Asym"
+              min={-1}
+              max={1}
+              dots={ASYM_DOTS}
+              labels={ASYM_LABELS}
+              reset={harmonicsParamDefault('asymmetry')}
+              {...edit(paramIds.asymmetry)}
+              size="medium"
+            />
+          </WithInfo>
+          <WithInfo title={harmonicsInfo.tone}>
+            <Knob
+              value$={host.tone$}
+              base={0}
+              label="Tone"
+              min={-12}
+              max={12}
+              unit="dB"
+              dots={TONE_DOTS}
+              labels={TONE_LABELS}
+              reset={harmonicsParamDefault('tone')}
+              {...edit(paramIds.tone)}
+              size="medium"
+            />
+          </WithInfo>
+        </div>
 
         <div className="controls1">
           <WithInfo title={harmonicsInfo.drive}>
@@ -134,7 +209,8 @@ export function HarmonicsUI(props: HarmonicsUIProps) {
             />
           </WithInfo>
         </div>
-        <div className="controls2">
+
+        <div className="controls3">
           <WithInfo title={harmonicsInfo.dry}>
             <Knob
               value$={host.dry$}

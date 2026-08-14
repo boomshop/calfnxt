@@ -15,8 +15,14 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5848u; // 'CNXH'
-constexpr uint32 kStateVersion = 7;
+// v7: pre-listen; v8: +oversample / asymmetry / tone
+constexpr uint32 kStateVersion = 8;
+
+int snapOversample(float plain)
+{
+  return std::clamp(static_cast<int>(std::lround(plain)), 1, 4);
 }
+} // namespace
 
 HarmonicsPlugin::HarmonicsPlugin()
 : Plugin::EffectBase(ViewRect(0, 0, kEditorWidth, kEditorHeight))
@@ -48,6 +54,10 @@ void HarmonicsPlugin::resetProcessing()
   pre_.reset();
   postHot_.reset();
   postClean_.reset();
+  toneL_.reset();
+  toneR_.reset();
+  toneDb_ = 1.0e9f; // force tone coeff update
+  toneFc_ = 0.f;
   shapeZone_ = 0.f;
   // ~120 ms release for the active-zone amplitude.
   shapeZoneFall_ = std::exp(-1.f / static_cast<float>(sampleRate_ * 0.12));
@@ -57,6 +67,7 @@ void HarmonicsPlugin::resetProcessing()
     histDisp_[i] = 0.f;
   }
   applyFilterParams();
+  applyToneParams();
 }
 
 void HarmonicsPlugin::applyFilterParams()
@@ -70,6 +81,48 @@ void HarmonicsPlugin::applyFilterParams()
     params_[kParamPostHipass], params_[kParamPostLopass], postHp, postLp);
   postClean_.setParams(
     params_[kParamPostHipass], params_[kParamPostLopass], postHp, postLp);
+}
+
+void HarmonicsPlugin::applyToneParams()
+{
+  const float db = std::clamp(params_[kParamTone], -12.f, 12.f);
+  const float sr = static_cast<float>(sampleRate_);
+  const float ny = sr * 0.45f;
+
+  // Effective wet band ≈ Feed ∩ Post (what the delta can carry after filters).
+  float fLo = 20.f;
+  float fHi = std::min(20000.f, ny);
+  if (Dsp::complementaryModeToStages(params_[kParamPreHpMode]) > 0)
+    fLo = std::max(fLo, params_[kParamPreHipass]);
+  if (Dsp::complementaryModeToStages(params_[kParamPostHpMode]) > 0)
+    fLo = std::max(fLo, params_[kParamPostHipass]);
+  if (Dsp::complementaryModeToStages(params_[kParamPreLpMode]) > 0)
+    fHi = std::min(fHi, params_[kParamPreLopass]);
+  if (Dsp::complementaryModeToStages(params_[kParamPostLpMode]) > 0)
+    fHi = std::min(fHi, params_[kParamPostLopass]);
+  fLo = std::clamp(fLo, 20.f, ny);
+  fHi = std::clamp(fHi, 20.f, ny);
+  if (fHi < fLo * 1.05f)
+    fHi = std::min(ny, fLo * 1.5f);
+
+  // Shelf sits at the band's geometric centre — Exciter→air, Bass→lows, Wide→mids.
+  const float fc = std::sqrt(fLo * fHi);
+
+  if (db == toneDb_ && fc == toneFc_)
+    return;
+  toneDb_ = db;
+  toneFc_ = fc;
+
+  if (std::fabs(db) < 0.05f)
+  {
+    toneL_.setNull();
+    toneR_.setNull();
+    return;
+  }
+
+  const float peak = Dsp::dbToLin(db);
+  toneL_.setHighshelfRbj(fc, 0.707f, peak, sr);
+  toneR_.copyCoeffs(toneL_);
 }
 
 void HarmonicsPlugin::observeSend(float sendL, float sendR)
@@ -123,6 +176,10 @@ void HarmonicsPlugin::processSample(float& L, float& R, bool bypass,
   const float cleanR = postClean_.processWet(1, sendR);
   float deltaL = hotL - cleanL;
   float deltaR = hotR - cleanR;
+  deltaL = static_cast<float>(toneL_.process(deltaL));
+  deltaR = static_cast<float>(toneR_.process(deltaR));
+  toneL_.sanitize();
+  toneR_.sanitize();
 
   Dsp::sanitizeDenormal(deltaL);
   Dsp::sanitizeDenormal(deltaR);
@@ -207,10 +264,15 @@ tresult PLUGIN_API HarmonicsPlugin::process(ProcessData& data)
   const float wet = Dsp::dbToLin(std::clamp(params_[kParamWet], -60.f, 12.f));
   const float drive = std::clamp(params_[kParamDrive], 0.1f, 10.f);
   const float blend = std::clamp(params_[kParamBlend], -10.f, 10.f);
+  const float asymmetry = std::clamp(params_[kParamAsymmetry], -1.f, 1.f);
+  const int over = snapOversample(params_[kParamOversample]);
 
-  distL_.setParams(blend, drive);
-  distR_.setParams(blend, drive);
+  distL_.setOversample(over);
+  distR_.setOversample(over);
+  distL_.setParams(blend, drive, asymmetry);
+  distR_.setParams(blend, drive, asymmetry);
   applyFilterParams();
+  applyToneParams();
 
   io_.setBypassGains(bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
@@ -296,6 +358,7 @@ tresult PLUGIN_API HarmonicsPlugin::setState(IBStream* state)
   }
   readParamPlains(params_, kParamCount);
   applyFilterParams();
+  applyToneParams();
   notifyHostStateRestored();
   return kResultOk;
 }

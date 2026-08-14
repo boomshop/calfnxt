@@ -25,6 +25,9 @@ export type IHarmonicsHost = {
   blend$: DynamicValue<number>;
   dry$: DynamicValue<number>;
   wet$: DynamicValue<number>;
+  oversample$: DynamicValue<number>;
+  asymmetry$: DynamicValue<number>;
+  tone$: DynamicValue<number>;
   preHipass$: DynamicValue<number>;
   preLopass$: DynamicValue<number>;
   preHpMode$: DynamicValue<number>;
@@ -92,6 +95,9 @@ export function createBoundHarmonicsHost(): IHarmonicsHost {
   const blend$ = bindNum('blend', 10);
   const dry$ = bindNum('dry', -60);
   const wet$ = bindNum('wet', 0);
+  const oversample$ = bindNum('oversample', 2);
+  const asymmetry$ = bindNum('asymmetry', 0);
+  const tone$ = bindNum('tone', 0);
   const preHipass$ = bindNum('pre_hipass', 20);
   const preLopass$ = bindNum('pre_lopass', 20000);
   const preHpMode$ = bindNum('pre_hp_mode', 0);
@@ -129,6 +135,9 @@ export function createBoundHarmonicsHost(): IHarmonicsHost {
     setPlain('blend', blend$, v.blend);
     setPlain('dry', dry$, v.dry);
     setPlain('wet', wet$, v.wet);
+    setPlain('oversample', oversample$, v.oversample);
+    setPlain('asymmetry', asymmetry$, v.asymmetry);
+    setPlain('tone', tone$, v.tone);
     setPlain('pre_hipass', preHipass$, v.pre_hipass);
     setPlain('pre_lopass', preLopass$, v.pre_lopass);
     setPlain('pre_hp_mode', preHpMode$, v.pre_hp_mode);
@@ -148,6 +157,9 @@ export function createBoundHarmonicsHost(): IHarmonicsHost {
     blend$,
     dry$,
     wet$,
+    oversample$,
+    asymmetry$,
+    tone$,
     preHipass$,
     preLopass$,
     preHpMode$,

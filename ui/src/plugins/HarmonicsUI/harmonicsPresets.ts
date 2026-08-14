@@ -3,7 +3,7 @@
  * UI-only bundles (not host presets) — same pattern as Reverb Room/Hall/Plate.
  *
  * Slope modes: 0=off, 1/2/4 = LR 12/24/48 dB.
- * Mix: out = dry * input + wet * (post(sat(feed(x))) − post(feed(x))).
+ * Mix: out = dry * input + wet * tone(post(sat(feed(x))) − post(feed(x))).
  */
 
 export type HarmonicsPresetId = 'wide' | 'exciter' | 'bass';
@@ -13,6 +13,9 @@ export type HarmonicsPresetValues = {
   blend: number;
   dry: number;
   wet: number;
+  oversample: number;
+  asymmetry: number;
+  tone: number;
   pre_hipass: number;
   pre_lopass: number;
   pre_hp_mode: number;
@@ -37,6 +40,9 @@ const wide: HarmonicsPresetValues = {
   blend: 0,
   dry: -60,
   wet: 3,
+  oversample: 2,
+  asymmetry: 0,
+  tone: 0,
   pre_hipass: 20,
   pre_lopass: 20000,
   pre_hp_mode: 0,
@@ -55,6 +61,9 @@ const exciter: HarmonicsPresetValues = {
   blend: 5,
   dry: 0,
   wet: -3,
+  oversample: 2,
+  asymmetry: 0,
+  tone: 0,
   pre_hipass: 3000,
   pre_lopass: 20000,
   pre_hp_mode: 2,
@@ -73,6 +82,9 @@ const bass: HarmonicsPresetValues = {
   blend: -5,
   dry: 0,
   wet: 3,
+  oversample: 2,
+  asymmetry: 0,
+  tone: 0,
   pre_hipass: 20,
   pre_lopass: 150,
   pre_hp_mode: 0,
