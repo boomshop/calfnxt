@@ -18,6 +18,7 @@ const vizBandIoApplies = new Map<string, VizLevelsApply>();
 const vizPointApplies = new Map<string, VizLevelsApply>();
 const vizShapeApplies = new Map<string, VizLevelsApply>();
 const vizTempoApplies = new Map<string, VizLevelsApply>();
+const vizSpectrumApplies = new Map<string, VizLevelsApply>();
 const channelCountApplies = new Set<ChannelCountApply>();
 let hostWired = false;
 
@@ -64,6 +65,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizShapeApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "tempo" && Array.isArray(msg.v))
     vizTempoApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "spectrum" && Array.isArray(msg.v))
+    vizSpectrumApplies.get(msg.id)?.(msg.v);
 }
 
 function ensureHostWire(): void {
@@ -277,6 +280,33 @@ export function bindVizShape(dv: DynamicValue<number[]>, id: string): () => void
   });
   return () => {
     vizShapeApplies.delete(id);
+  };
+}
+
+/**
+ * Wire spectrum payload (id e.g. "fft"):
+ * [bins, hold, avg×N, max×N, L×N, R×N] in dBFS (−120…12).
+ */
+export function bindVizSpectrum(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizSpectrumApplies.set(id, (v) => {
+    if (!v.length) {
+      dv.set([]);
+      return;
+    }
+    const clean = v.map((x, i) => {
+      if (typeof x !== "number" || !Number.isFinite(x))
+        return i < 2 ? 0 : -90;
+      if (i === 0)
+        return Math.min(256, Math.max(1, Math.round(x)));
+      if (i === 1)
+        return x >= 0.5 ? 1 : 0;
+      return Math.min(12, Math.max(-120, x));
+    });
+    dv.set(clean);
+  });
+  return () => {
+    vizSpectrumApplies.delete(id);
   };
 }
 

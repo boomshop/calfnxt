@@ -6,6 +6,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 /** CSS custom property set on the chart SVG; value is `url(#…)`. */
 export const CHART_LEVEL_STROKE_VAR = '--chart-level-stroke';
 
+export type ChartGradientPaint = 'stroke' | 'fill' | 'both';
+
 export type UseChartGradientOptions = {
   svg: SVGSVGElement | null | undefined;
   /** Skip install (e.g. mini charts). Default true when svg is set. */
@@ -14,13 +16,36 @@ export type UseChartGradientOptions = {
   cssVar?: string;
   /** Elements that receive the gradient paint. */
   targets?: ReadonlyArray<SVGElement | null | undefined>;
-  /** Apply gradient as stroke (EQ baseline) or fill (filled graphs). */
-  paint?: 'stroke' | 'fill';
+  /** Apply gradient as stroke, fill, or both. */
+  paint?: ChartGradientPaint;
+  /**
+   * Optional stop opacities: `cut` = floor / bottom stop, `boost` = ceiling /
+   * top stop. Defaults to fully opaque (1, 1).
+   */
+  opacities?: { cut: number; boost: number };
   /** Height for userSpaceOnUse y1/y2. Defaults to svg clientHeight. */
   getHeight?: (svg: SVGSVGElement) => number;
   /** Swap blue/red vertically (top = blue, bottom = red). */
   reverse?: boolean;
 };
+
+function applyPaint(
+  el: SVGElement,
+  paint: ChartGradientPaint,
+  value: string,
+): void {
+  if (paint === 'stroke' || paint === 'both')
+    el.style.stroke = value;
+  if (paint === 'fill' || paint === 'both')
+    el.style.fill = value;
+}
+
+function clearPaint(el: SVGElement, paint: ChartGradientPaint): void {
+  if (paint === 'stroke' || paint === 'both')
+    el.style.removeProperty('stroke');
+  if (paint === 'fill' || paint === 'both')
+    el.style.removeProperty('fill');
+}
 
 /**
  * Install a vertical accent→warn level gradient on an AUX chart SVG and paint
@@ -36,11 +61,14 @@ export function useChartGradient(
     cssVar = CHART_LEVEL_STROKE_VAR,
     targets,
     paint = 'stroke',
+    opacities,
     getHeight,
     reverse = false,
   } = options;
   const gradId = `chart-level-grad-${useId().replace(/:/g, '')}`;
   const applyRef = useRef<() => void>(() => {});
+  const cutOpacity = opacities?.cut ?? 1;
+  const boostOpacity = opacities?.boost ?? 1;
 
   useEffect(() => {
     if (!svg || !enabled) return;
@@ -84,13 +112,15 @@ export function useChartGradient(
     const syncStops = () => {
       const c = themeColors$.value;
       stopCut.setAttribute('stop-color', c.accent);
+      stopCut.setAttribute('stop-opacity', String(cutOpacity));
       stopBoost.setAttribute('stop-color', c.warn);
+      stopBoost.setAttribute('stop-opacity', String(boostOpacity));
     };
 
     const apply = () => {
       for (const el of targets ?? []) {
         if (!el) continue;
-        el.style[paint] = `var(${cssVar})`;
+        applyPaint(el, paint, `var(${cssVar})`);
       }
     };
     applyRef.current = apply;
@@ -125,13 +155,24 @@ export function useChartGradient(
       ro.disconnect();
       applyRef.current = () => {};
       for (const el of targets ?? []) {
-        if (el) el.style.removeProperty(paint);
+        if (el) clearPaint(el, paint);
       }
       svg.style.removeProperty(cssVar);
       grad?.remove();
       if (defs && !defs.childElementCount) defs.remove();
     };
-  }, [svg, enabled, cssVar, gradId, getHeight, targets, paint, reverse]);
+  }, [
+    svg,
+    enabled,
+    cssVar,
+    gradId,
+    getHeight,
+    targets,
+    paint,
+    reverse,
+    cutOpacity,
+    boostOpacity,
+  ]);
 
   return useCallback(() => applyRef.current(), []);
 }

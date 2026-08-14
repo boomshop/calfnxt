@@ -1,0 +1,56 @@
+.AnalyzerUI {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  grid-template-columns: 1fr auto auto;
+  grid-template-areas: 'chart mode fft' 'chart mode tilt' 'chart gonio gonio';
+  align-items: stretch;
+  gap: var(--gap);
+
+  > .SpectrumChart {
+    grid-area: chart;
+  }
+
+  > .mode {
+    grid-area: mode;
+  }
+
+  > .fft {
+    grid-area: fft;
+  }
+
+  > .tilt {
+    grid-area: tilt;
+  }
+
+  > .block {
+    > .WithInfo {
+      > .Buttons {
+        > .Button {
+          min-height: 0;
+          height: auto;
+          flex: 1;
+        }
+      }
+    }
+  }
+
+  > .gonio {
+    grid-area: gonio;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding-bottom: 0;
+    min-width: 0;
+    min-height: 0;
+
+    > .GonioMeter {
+      flex: 1 1 0;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    > .CorrelationMeter {
+      flex: 0 0 auto;
+    }
+  }
+}

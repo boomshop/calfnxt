@@ -1,0 +1,90 @@
+{
+  "id": "analyzer",
+  "name": "calfNXT Analyzer",
+  "vendor": "calfNXT",
+  "vendor_url": "https://calfnxt.org",
+  "vendor_email": "mailto:schmidt@boomshop.net",
+  "version": "0.8.0",
+  "category": "Fx|Analyzer",
+  "vst3_uid": [
+    "0xC4A1F008",
+    "0x0E11A001",
+    "0xCA1F0008",
+    "0xB0000003"
+  ],
+  "editor": {
+    "width": 1024,
+    "height": 480
+  },
+  "buses": {
+    "audio_inputs": [
+      {
+        "name": "Stereo In",
+        "channels": 2
+      }
+    ],
+    "audio_outputs": [
+      {
+        "name": "Stereo Out",
+        "channels": 2
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "id": "bypass",
+      "name": "Bypass",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "mode",
+      "name": "Mode",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "hold",
+      "name": "Hold",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "fft_size",
+      "name": "FFT Size",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "scale",
+      "name": "Scale",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    }
+  ]
+}

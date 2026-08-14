@@ -32,6 +32,7 @@ const ALL_PLUGINS = [
   'limiter',
   'mblimiter',
   'harmonics',
+  'analyzer',
 ];
 
 const rawArgs = process.argv.slice(2);

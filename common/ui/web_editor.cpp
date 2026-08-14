@@ -1007,6 +1007,27 @@ void WebEditor::flushViz()
       flushVizArray(shapeId, "shape", shape, nShape);
     }
   }
+
+  if (const char* spectrumId = vizSource_->vizSpectrumId())
+  {
+    // Layout: bins, hold, avg[N], max[N], L[N], R[N] — max 2+4*256
+    constexpr int kMaxSpectrum = 2 + 4 * 256;
+    float spectrum[kMaxSpectrum];
+    const int nSpec = vizSource_->takeSpectrum(spectrum, kMaxSpectrum);
+    if (nSpec >= 2)
+    {
+      spectrum[0] = std::clamp(spectrum[0], 1.f, 256.f);
+      spectrum[1] = spectrum[1] >= 0.5f ? 1.f : 0.f;
+      for (int i = 2; i < nSpec; ++i)
+      {
+        float v = spectrum[i];
+        if (!std::isfinite(v))
+          v = -90.f;
+        spectrum[i] = std::clamp(v, -120.f, 12.f);
+      }
+      flushVizArray(spectrumId, "spectrum", spectrum, nSpec);
+    }
+  }
 }
 
 void WebEditor::pushAllParams()

@@ -11,7 +11,10 @@ const ChartOptions = {
   auto_size: true,
   show_grid: false,
   label: false,
-  square: true,
+  // Fill the host box (square or rectangular). Ranges map −1…1 across the
+  // full width/height so (0,0) stays centered; unit circle becomes an ellipse
+  // in non-square layouts — preferred over letterboxed square + misaligned chrome.
+  square: false,
   range_x: { min: -1, max: 1, reverse: false },
   range_y: { min: -1, max: 1, reverse: false },
 };
@@ -82,11 +85,15 @@ function installMsGradient(svg: SVGSVGElement): () => void {
   };
   syncStops(themeColors$.value);
 
-  // Fragment urls from external CSS often miss the SVG; keep the rule in-tree.
+  // Keep the paint rule in-tree (fragment urls from external CSS often miss
+  // this SVG). Scope with an id so inline-<style> does not match other Charts
+  // in the same HTML document (e.g. SpectrumChart .aux-filled).
+  const scopeId = `calfnxt-gonio-scope-${gonioGradSeq}`;
+  svg.setAttribute('id', scopeId);
   const style = document.createElementNS(ns, 'style');
   style.textContent =
-    `.aux-graph.aux-filled{fill:url(#${gradId});stroke:none}` +
-    `.aux-graph.aux-outline{fill:none}`;
+    `#${scopeId} .aux-graph.aux-filled{fill:url(#${gradId});stroke:none}` +
+    `#${scopeId} .aux-graph.aux-outline{fill:none}`;
   svg.insertBefore(style, svg.firstChild);
 
   const sync = () => {
@@ -106,6 +113,8 @@ function installMsGradient(svg: SVGSVGElement): () => void {
     ro.disconnect();
     grad.remove();
     style.remove();
+    if (svg.getAttribute('id') === scopeId)
+      svg.removeAttribute('id');
     if (defs && !defs.childNodes.length)
       defs.remove();
   };
@@ -157,7 +166,7 @@ function makeLineDots(samples: number[]): { x: number; y: number }[] {
   return interleavedToXy(samples);
 }
 
-/** Axis chrome in viewBox coords (y down). Matches 45° map: M↑, R↖, L↗. */
+/** Axis chrome — stretches with the plot so M/S stay centered in any aspect. */
 function GonioMeterChrome() {
   return (
     <svg

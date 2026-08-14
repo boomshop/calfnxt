@@ -1,0 +1,114 @@
+.SpectrumChart {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+  background: var(--background);
+  overflow: hidden;
+
+  > .SpectrumChart-aux,
+  > .aux-chart {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+  }
+
+  // Above the curve chart so the band stays visible (a behind-chart layer is
+  // covered by the filled path). Only shown when Scale ≠ Linear.
+  > .spec-corridor-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    pointer-events: none;
+    box-sizing: border-box;
+    background: transparent;
+    opacity: 0.33;
+    border-top: 1px solid var(--color);
+    border-bottom: 1px solid var(--color);
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--color);
+      opacity: 0.25;
+    }
+  }
+
+  > .SpectrumChart-waterfall {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    background: var(--background);
+  }
+
+  > .SpectrumChart-gridOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background: transparent !important;
+
+    &.aux-chart,
+    .aux-chart {
+      background: transparent !important;
+    }
+
+    > svg {
+      background: transparent !important;
+    }
+
+    // Keep grid strokes; hide any accidental graph fills.
+    .aux-graphs {
+      display: none;
+    }
+  }
+
+  // --- Curve layout hooks (style per view) ---
+  // .view-single      → Average / Max (one primary curve)
+  // .view-stereo      → L + R
+  // .view-difference  → bipolar diff line
+  // .view-spectralizer → canvas waterfall
+  // Plus exact mode: .mode-average | .mode-max | .mode-stereo | .mode-difference | .mode-spectralizer
+
+  .spec-primary,
+  .spec-secondary {
+    stroke: var(--chart-level-stroke);
+    stroke-width: 2px !important;
+    fill: var(--color);
+    fill-opacity: 0.08;
+  }
+
+  &.mode-stereo {
+    .spec-primary {
+      stroke: var(--color-accent);
+      fill: transparent;
+    }
+
+    .spec-secondary {
+      stroke: var(--color-warn);
+      fill: transparent;
+    }
+  }
+
+  .spec-hold {
+    fill: none;
+    stroke: var(--color);
+    stroke-width: 1.2px;
+    stroke-opacity: 0.5;
+  }
+
+  .spec-hold.spec-diff {
+    stroke: var(--chart-level-stroke, var(--color-accent));
+    stroke-dasharray: none;
+    stroke-width: 1.75px;
+    stroke-opacity: 0.95;
+  }
+}

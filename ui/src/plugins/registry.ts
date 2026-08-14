@@ -12,7 +12,8 @@ export type PluginId =
   | "mbcomp"
   | "limiter"
   | "mblimiter"
-  | "harmonics";
+  | "harmonics"
+  | "analyzer";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
 
@@ -30,6 +31,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   limiter: () => import("./LimiterUI/BoundLimiterUI"),
   mblimiter: () => import("./MblimiterUI/BoundMblimiterUI"),
   harmonics: () => import("./HarmonicsUI/BoundHarmonicsUI"),
+  analyzer: () => import("./AnalyzerUI/BoundAnalyzerUI"),
 };
 
 export function isPluginId(id: string): id is PluginId {

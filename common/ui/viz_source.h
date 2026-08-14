@@ -15,8 +15,7 @@ namespace Ui {
  *   {t:"viz", id:"comp", kind:"gr", v:[grDb]}       // gain reduction ≤0 dB
  *   {t:"viz", id:"comp", kind:"point", v:[inDb,outDb]} // transfer operating point
  *   {t:"viz", id:"comp", kind:"envelope", v:[…]}   // history: audio, GR (2×slots + phase)
- * Future:
- *   {t:"viz", id:"fft", kind:"spectrum", v:[...]}
+ *   {t:"viz", id:"fft", kind:"spectrum", v:[bins,hold,avg…,max…,L…,R…]}
  *   UI→host {t:"vizcfg", id:"fft", bins:N} after measuring pixel width.
  */
 class IVizSource
@@ -121,6 +120,20 @@ public:
 
   /** Stream id for envelope display. */
   virtual const char* vizEnvelopeId() const { return "env"; }
+
+  /**
+   * Spectrum snapshot: v[0]=N, v[1]=hold, then avg[N], max[N], L[N], R[N] (dBFS).
+   * Returns float count (2+4*N), or 0 if unused / unavailable.
+   */
+  virtual int takeSpectrum(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for spectrum (nullptr = do not flush). */
+  virtual const char* vizSpectrumId() const { return nullptr; }
 
   /** Optional UI→DSP viz sizing/config, e.g. visible chart bins/points. */
   virtual void configureVizBins(const char* id, int bins)

@@ -12,6 +12,7 @@ import type {
   IReverbHost,
   IStereoHost,
   ITransientsHost,
+  IAnalyzerHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -32,6 +33,8 @@ export type VizFixture = {
   bandio?: number[];
   /** Waveshaper viz [zone, …densityBins] in 0…1 (harmonics). */
   shape?: number[];
+  /** Spectrum: [bins, hold, avg×N, max×N, L×N, R×N] dBFS. */
+  spectrum?: number[];
 };
 
 function setNum(dv: DynamicValue<number> | undefined, v: unknown) {
@@ -212,6 +215,28 @@ export function applyStereoDemo(
     host.corr$.set(viz.corr);
   if (viz.gonio)
     host.gonio$.set(viz.gonio);
+}
+
+export function applyAnalyzerDemo(
+  host: IAnalyzerHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.mode$, params.mode);
+  setBool(host.hold$, params.hold);
+  setNum(host.fftSize$, params.fft_size);
+  setNum(host.scale$, params.scale);
+
+  applySharedViz(viz);
+  if (typeof viz.corr === 'number')
+    host.corr$.set(viz.corr);
+  if (viz.gonio)
+    host.gonio$.set(viz.gonio);
+  if (viz.spectrum) {
+    host.spectrum$.set(viz.spectrum);
+    pushViz('fft', 'spectrum', viz.spectrum);
+  }
 }
 
 export function applyDelayDemo(
@@ -573,4 +598,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   reverb: applyReverbDemo as DemoApplier,
   stereo: applyStereoDemo as DemoApplier,
   transients: applyTransientsDemo as DemoApplier,
+  analyzer: applyAnalyzerDemo as DemoApplier,
 };

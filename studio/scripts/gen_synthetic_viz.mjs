@@ -140,6 +140,67 @@ function gonio(n = 256) {
   return v;
 }
 
+/**
+ * Spectrum viz payload: [bins, hold, avg×N, max×N, L×N, R×N].
+ * Shape ≈ pink (−3 dB/oct) + kick/bass/vocal/air so Stereo + −3 tilt looks balanced.
+ */
+function spectrumPayload(bins = 128) {
+  const fMin = 20;
+  const fMax = 20000;
+  const avg = [];
+  const max = [];
+  const L = [];
+  const R = [];
+  for (let i = 0; i < bins; ++i) {
+    const t = (i + 0.5) / bins;
+    const f = fMin * (fMax / fMin) ** t;
+    const pink = -18 - 3 * Math.log2(Math.max(1e-6, f / 1000));
+    const kick = 7 * Math.exp(-(Math.log(f / 55) ** 2) / 0.28);
+    const bass = 3.2 * Math.exp(-(Math.log(f / 110) ** 2) / 0.45);
+    const lowMid = 1.4 * Math.exp(-(Math.log(f / 350) ** 2) / 0.7);
+    const vocal = 2.4 * Math.exp(-(Math.log(f / 2800) ** 2) / 0.75);
+    const air = 1.6 * Math.exp(-(Math.log(f / 11000) ** 2) / 0.55);
+    const grain = 0.9 * Math.sin(i * 1.73) * Math.cos(i * 0.37);
+    const base = Math.max(-88, Math.min(-2, pink + kick + bass + lowMid + vocal + air + grain));
+    // Mild L/R imbalance: L warmer lows, R a bit more top/side.
+    const lBias =
+      1.6 * Math.exp(-(Math.log(f / 180) ** 2) / 1.1)
+      - 0.7 * Math.exp(-(Math.log(f / 9000) ** 2) / 0.8);
+    const rBias =
+      -1.1 * Math.exp(-(Math.log(f / 140) ** 2) / 1.0)
+      + 1.4 * Math.exp(-(Math.log(f / 6500) ** 2) / 0.85);
+    const l = Math.max(-90, Math.min(0, base + lBias + 0.35 * Math.sin(i * 2.05)));
+    const r = Math.max(-90, Math.min(0, base + rBias + 0.35 * Math.cos(i * 1.91)));
+    const mid = 0.5 * (l + r);
+    avg.push(mid);
+    max.push(Math.min(0, Math.max(l, r) + 2.2 + 0.4 * Math.abs(Math.sin(i * 0.61))));
+    L.push(l);
+    R.push(r);
+  }
+  return [bins, 0, ...avg, ...max, ...L, ...R];
+}
+
+/** Slightly denser gonio cloud (more mid, some side) for Analyzer shots. */
+function gonioCloud(n = 320) {
+  // Deterministic “random” so screenshots stay stable across regenerations.
+  let seed = 0xc4a1f008;
+  const rnd = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  const v = [];
+  for (let i = 0; i < n; ++i) {
+    const u = i / n;
+    const mid = (rnd() * 2 - 1) * (0.15 + 0.55 * (1 - u * 0.35));
+    const side = (rnd() * 2 - 1) * (0.08 + 0.35 * u);
+    const L = mid + side;
+    const R = mid - side;
+    const scale = 0.55;
+    v.push(L * scale, R * scale);
+  }
+  return v;
+}
+
 const slots = 240;
 
 const packs = {
@@ -194,6 +255,13 @@ const packs = {
     levelsOut: [-9.2, -9.1],
     corr: 0.42,
     gonio: gonio(320),
+  },
+  analyzer: {
+    levelsIn: [-8.5, -9.2],
+    levelsOut: [-8.6, -9.3],
+    corr: 0.48,
+    gonio: gonioCloud(320),
+    spectrum: spectrumPayload(128),
   },
   delay: {
     levelsIn: [-11, -11.5],

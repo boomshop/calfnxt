@@ -96,9 +96,9 @@ external/vst3sdk/
 
 ## Intentionally deferred
 
-- Spectrum / analyzer arrays (`kind:"spectrum"` + UI→host `vizcfg` bin count)
-- Additional Calf-heritage plugins beyond Equalizer / Stereo / Transients / Compressor / DeEsser / Delay
-- Full AUX catalog beyond current widgets (Fader/Knob/MultiMeter/EQChart/…)
+- Optional binary spectrum payloads (JSON headroom); EQ overlay via shared `SpectrumTap`
+- Additional Calf-heritage plugins beyond the current suite
+- Full AUX catalog beyond current widgets (Fader/Knob/MultiMeter/EQChart/SpectrumChart/…)
 - macOS / Windows WebView hosts
 - Shared Resources across `.vst3` bundles (each still embeds a SPA copy)
 - Shared `calfnxt-web-host` binary across bundles (each bundle copies the helper today)

@@ -51,6 +51,7 @@ will follow.
 | **Limiter** | `calfNXTLimiter.vst3` | Lookahead brickwall with ASC + oversampling |
 | **Multiband Limiter** | `calfNXTMblimiter.vst3` | Weighted multiband brickwall + final limiter |
 | **Harmonics** | `calfNXTHarmonics.vst3` | Saturator / Exciter / Bass Enhancer — Drive, Blend, Asym, Tone, OS |
+| **Analyzer** | `calfNXTAnalyzer.vst3` | Spectrum + gonio/correlation monitor (passthrough) |
 | **DeEsser** | `calfNXTDeesser.vst3` | Sibilance / rumble control (Ess / Rumble, Wide / Split) |
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo / Ping-Pong / L-R) |
 | **Reverb** | `calfNXTReverb.vst3` | Algorithmic room (ER + late, no IR) |
@@ -128,6 +129,14 @@ will follow.
 - **Drive** / **Blend** (even↔odd); **Asymmetry** bias; **Tone** (shelf tracks Feed∩Post band centre); **Oversampling** 1×…4×
 - Presets Wide / Exciter / Bass; live **transfer curve** + relative **harmonic bars**
 - Shared In/Out gain + peak meters
+
+### Analyzer
+
+- Monitor-only passthrough with shared **`SpectrumTap`** (Hann FFT 1k/2k/4k/8k, log bins, EMA ~100 ms for Average/L/R + max-hold)
+- Modes: **Average**, **Max**, **Stereo** (L/R), **Difference** (calm L−R dB), **Spectralizer** (scrolling canvas waterfall)
+- **Scale**: Linear / −3 dB/oct (pink) / −4.5 dB/oct (modern) with midband ±6 dB balance corridor when tilted
+- **Hold** freezes peak-hold; always-on **goniometer** + **correlation**
+- Shared In/Out gain + peak meters; spectrum layout ready for a future EQ overlay
 
 ### DeEsser
 
@@ -405,7 +414,7 @@ cd ui && npm install   # once
 cd ui && npm run dev
 ```
 
-Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` · `#reverb` · `#mbcomp` · `#limiter` · `#mblimiter` · `#harmonics`
+Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` · `#reverb` · `#mbcomp` · `#limiter` · `#mblimiter` · `#harmonics` · `#analyzer`
 
 This is useful for layout and widget work. It does **not** replace installing into `~/.vst3` for Carla / other hosts.
 
@@ -429,7 +438,7 @@ npm run studio -- mbcomp    # one plugin
 | Configure                   | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` |
 | Build **all** plugins (+ UI)| `cmake --build build --target calfnxt-plugins -j` |
 | Embed SPA + install (all)   | `./tools/install-user-vst3.sh` or `cmake --build build --target install-user-vst3` |
-| Embed + install **one** plugin | `./tools/install-user-vst3.sh mbcomp` (ids: `equalizer` `stereo` `transients` `compressor` `deesser` `delay` `reverb` `mbcomp` `limiter` `mblimiter` `harmonics`) |
+| Embed + install **one** plugin | `./tools/install-user-vst3.sh mbcomp` (ids: `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay` `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer`) |
 | UI pack only (one / all)    | `cd ui && npm run build -- mbcomp` or `npm run build` |
 | System install (packaging)  | `cmake --install build --prefix /usr` (→ `$prefix/lib/vst3`) |
 | Cut a GitHub release        | `./tools/release.sh` (see `VERSIONING.md`) |

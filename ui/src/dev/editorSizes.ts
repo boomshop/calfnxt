@@ -11,6 +11,7 @@ import { pluginMeta as mbcompMeta } from "../generated/mbcompModel";
 import { pluginMeta as limiterMeta } from "../generated/limiterModel";
 import { pluginMeta as mblimiterMeta } from "../generated/mblimiterModel";
 import { pluginMeta as harmonicsMeta } from "../generated/harmonicsModel";
+import { pluginMeta as analyzerMeta } from "../generated/analyzerModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
 export const editorSizes: Record<PluginId, { width: number; height: number }> = {
@@ -26,4 +27,5 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   limiter: limiterMeta.editor,
   mblimiter: mblimiterMeta.editor,
   harmonics: harmonicsMeta.editor,
+  analyzer: analyzerMeta.editor,
 };

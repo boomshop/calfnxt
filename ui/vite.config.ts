@@ -30,6 +30,7 @@ const knownPlugins = [
   "limiter",
   "mblimiter",
   "harmonics",
+  "analyzer",
 ] as const;
 
 export default defineConfig(({ command }) => {

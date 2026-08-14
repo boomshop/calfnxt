@@ -12,6 +12,7 @@ import {
   ReverbUI,
   StereoUI,
   TransientsUI,
+  AnalyzerUI,
   createBoundCompressorHost,
   createBoundExpanderHost,
   createBoundDeesserHost,
@@ -24,6 +25,7 @@ import {
   createBoundReverbHost,
   createBoundStereoHost,
   createBoundTransientsHost,
+  createBoundAnalyzerHost,
   showWidgetInfo$,
   type PluginId,
 } from '@calfnxt/ui';
@@ -58,6 +60,10 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
   harmonics: async () => ({
     params: (await import('../fixtures/harmonics/params.json')).default,
     viz: (await import('../fixtures/harmonics/viz.json')).default,
+  }),
+  analyzer: async () => ({
+    params: (await import('../fixtures/analyzer/params.json')).default,
+    viz: (await import('../fixtures/analyzer/viz.json')).default,
   }),
   limiter: async () => ({
     params: (await import('../fixtures/limiter/params.json')).default,
@@ -105,6 +111,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundEqualizerHost();
       case 'harmonics':
         return createBoundHarmonicsHost();
+      case 'analyzer':
+        return createBoundAnalyzerHost();
       case 'limiter':
         return createBoundLimiterHost();
       case 'mbcomp':
@@ -169,6 +177,10 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
     case 'harmonics':
       return (
         <HarmonicsUI host={host as ReturnType<typeof createBoundHarmonicsHost>} />
+      );
+    case 'analyzer':
+      return (
+        <AnalyzerUI host={host as ReturnType<typeof createBoundAnalyzerHost>} />
       );
     case 'limiter':
       return <LimiterUI host={host as ReturnType<typeof createBoundLimiterHost>} />;

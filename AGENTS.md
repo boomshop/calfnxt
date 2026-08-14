@@ -20,7 +20,7 @@ internalized toolkit collides with system GTK3 — `GdkDisplay` GType abort).
 (GtkPlug + WebKit, XEmbed into the host XID) and forwards the JSON bridge over a
 Unix socketpair. Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`).
 More Calf-heritage processors planned.
 
 ---
@@ -36,9 +36,9 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Vendor URL / email | `https://calfnxt.org`, `mailto:schmidt@boomshop.net` |
 | C++ namespace | `calfNXT` |
 | CMake project / libs | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui` |
-| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-expander`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics` |
-| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTExpander`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics` (must match; Carla/JUCE) |
-| Install names | `~/.vst3/calfNXTEqualizer.vst3`, …, `calfNXTMblimiter.vst3`, `calfNXTHarmonics.vst3` |
+| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-expander`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics`, `calfnxt-analyzer` |
+| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTExpander`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics`, `calfNXTAnalyzer` (must match; Carla/JUCE) |
+| Install names | `~/.vst3/calfNXTEqualizer.vst3`, …, `calfNXTHarmonics.vst3`, `calfNXTAnalyzer.vst3` |
 | URI scheme | `calfnxt://bundle/...` |
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
 | Script message handler | `webkit.messageHandlers.calfnxt` |
@@ -66,7 +66,8 @@ dsp/mbcomp/    mbcomp.plugin.json + DSP + codegen
 dsp/limiter/   limiter.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
 dsp/harmonics/ harmonics.plugin.json + DSP + codegen
-ui/            React SPA (Vite), hash router #equalizer / … / #mblimiter / #harmonics
+dsp/analyzer/  analyzer.plugin.json + DSP + codegen
+ui/            React SPA (Vite), hash router #equalizer / … / #harmonics / #analyzer
 external/vst3sdk/
 ```
 
@@ -121,7 +122,7 @@ Do **not** call `restartComponent` / begin/perform/end from `setComponentHandler
 - Optional host tempo (Delay): `IVizSource::takeHostTempo` / `vizTempoId()` → `{t:"viz",id:"delay",kind:"tempo",v:[valid,bpm]}` → `bindVizTempo`.
 - Host also pushes `{t:"io",ch:N}` (bus channel count).
 - Header (`createHeaderIo`) binds In/Out MultiMeters + In/Out gain knobs for all plugins.
-- Future analyzers: `kind:"spectrum"`; UI→host `{t:"vizcfg",id,bins:N}`. Prefer binary/base64 later for large arrays.
+- Spectrum (Analyzer; shared `SpectrumTap` for later EQ overlay): `{t:"viz",id:"fft",kind:"spectrum",v:[bins,hold,avg…,max…,L…,R…]}`; UI→host `{t:"vizcfg",id:"fft",bins:N}`. Display tilt (Linear / −3 / −4.5 dB/oct) + midband corridor are UI-only. Prefer binary/base64 later for large arrays.
 
 ---
 
@@ -248,7 +249,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
 ## Open / deferred
 
-1. Analyzer arrays (`viz` + `vizcfg` bins).
+1. Optional binary/base64 spectrum payloads (JSON headroom at high bin counts).
 2. **Plugin backlog** (Calf heritage → calfNXT name; order not fixed):
    - Multi Chorus → **Chorus**
    - **Phaser**
@@ -259,12 +260,12 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
    - Filter / Envelope Filter → **Filter**
    - **Vinyl**
    - **Crusher**
-   - **Analyzer**
    - **Mono Input**
    - Optional: **Vocoder** (FIR-based if done)
    - Optional: **Crossovers** (dynamic band count if done)
 3. macOS / Windows WebView hosts.
 4. Optional: compare `examples/auxvst` WebView hosting; optional SVF upgrade if steep bass still artifacts.
+5. EQ spectrum overlay (reuse `SpectrumTap`, fixed bins) — API ready, UI not yet.
 
 ---
 
@@ -287,6 +288,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 | Limiter | `dsp/limiter/source/*_dsp.*`, `common/dsp/lookahead_limiter.h`, `common/dsp/resample_n.h`; UI `ui/src/plugins/LimiterUI/*`, `host/limiterHost.ts` |
 | Multiband Limiter | `dsp/mblimiter/source/*_dsp.*`, `band_splitter.h`, `lookahead_limiter.h`; UI `ui/src/plugins/MblimiterUI/*`, `host/mblimiterHost.ts` |
 | Harmonics | `dsp/harmonics/source/*_dsp.*`, `common/dsp/tap_distortion.h`; UI `ui/src/plugins/HarmonicsUI/*`, `host/harmonicsHost.ts` |
+| Analyzer | `dsp/analyzer/source/*_dsp.*`, `common/dsp/fft_r2.h`, `common/dsp/spectrum_tap.h`; UI `ui/src/plugins/AnalyzerUI/*`, `host/analyzerHost.ts`, `widgets/SpectrumChart/*` |
 | Param bind | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts` |
 | Header I/O | `ui/src/components/Header/*`, `host/headerMeters.ts` |
 | Meters | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*` |

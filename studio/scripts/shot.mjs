@@ -33,6 +33,7 @@ const ALL = [
   'reverb',
   'stereo',
   'transients',
+  'analyzer',
 ];
 
 function parsePlugins(argv) {

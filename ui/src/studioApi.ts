@@ -17,7 +17,8 @@ export type PluginId =
   | 'mbcomp'
   | 'limiter'
   | 'mblimiter'
-  | 'harmonics';
+  | 'harmonics'
+  | 'analyzer';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -32,6 +33,7 @@ const PLUGIN_IDS: PluginId[] = [
   'limiter',
   'mblimiter',
   'harmonics',
+  'analyzer',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -116,6 +118,12 @@ export {
   createBoundTransientsHost,
   type ITransientsHost,
 } from './host/transientsHost';
+
+export { AnalyzerUI } from './plugins/AnalyzerUI/AnalyzerUI';
+export {
+  createBoundAnalyzerHost,
+  type IAnalyzerHost,
+} from './host/analyzerHost';
 
 export { createHeaderIo, type IHeaderIo } from './host/headerMeters';
 

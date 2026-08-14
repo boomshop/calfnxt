@@ -15,6 +15,7 @@ export * from "./HarmonicBars";
 export * from "./HistoryChart";
 export * from "./DelayEchoChart";
 export * from "./ReverbChart";
+export * from "./SpectrumChart";
 export * from "./Toggle";
 export * from "./Select";
 export * from "./Button";
