@@ -92,17 +92,6 @@ const PERCENT_LABELS = [
   { pos: 1, label: '100 %' },
 ];
 
-const GR_GRADIENT = [
-  { value: 0, color: '#0066ff' },
-  { value: 60, color: '#ff0066' },
-];
-
-/** In/Out strip meters (−60…0 dB). */
-const LEVEL_GRADIENT = [
-  { value: -60, color: '#0066ff' },
-  { value: 0, color: '#ff0066' },
-];
-
 /** Band strips are capped so wide editors keep them readable, centered in the row. */
 const STRIP_MAX_PX = 256;
 /** `--gap` of the plugin theme: editor padding and strip spacing. */
@@ -214,7 +203,6 @@ function BandStrip(props: {
             show_scale={false}
             scale="decibel"
             log_factor={3}
-            gradient={LEVEL_GRADIENT}
             {...studioMeterProps}
           />
         </WithInfo>
@@ -234,7 +222,6 @@ function BandStrip(props: {
             auto_hold={800}
             scale="log2"
             log_factor={3}
-            gradient={GR_GRADIENT}
           />
         </WithInfo>
         <WithInfo title={mbcompInfo.bandOut}>
@@ -248,7 +235,6 @@ function BandStrip(props: {
             show_scale
             scale="decibel"
             log_factor={3}
-            gradient={LEVEL_GRADIENT}
             {...studioMeterProps}
           />
         </WithInfo>
@@ -518,7 +504,6 @@ function BandDetail(props: {
             scale="log2"
             log_factor={5}
             levels={[1, 3, 6, 12]}
-            gradient={GR_GRADIENT}
           />
         </WithInfo>
         <DynamicsChart

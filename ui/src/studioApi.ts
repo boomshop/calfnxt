@@ -113,3 +113,6 @@ export { createHeaderIo, type IHeaderIo } from './host/headerMeters';
 
 /** Studio forces this off before capture (WithInfo tip bubbles). */
 export { showWidgetInfo$ } from './prefs/showWidgetInfo';
+
+/** Studio forces night + calfnxt accents for consistent website shots. */
+export { themeAccent$, themeMode$ } from './prefs/theme';

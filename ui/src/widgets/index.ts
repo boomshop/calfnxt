@@ -19,6 +19,7 @@ export * from "./Toggle";
 export * from "./Select";
 export * from "./Button";
 export * from "./Buttons";
+export * from "./MenuButton";
 export * from "./ConfirmButton";
 export * from "./Loading";
 export * from "./Icon";

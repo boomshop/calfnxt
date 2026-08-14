@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
+import { themeColors$, type ThemeColors } from '../../theme/themeColors';
 import './GonioMeter.scss';
 
 const ChartBindings = {};
@@ -24,10 +25,6 @@ const ChartWidget = componentFromWidget(
 
 /** Dot radius in SVG px. */
 const DOT_R = 1.25;
-
-/** Match CorrelationMeter ends: Side / anti ≈ warm, Mid / +corr ≈ blue. */
-const COLOR_SIDE = '#ff0066';
-const COLOR_MID = '#0066FF';
 
 type AuxRange = { valueToPixel: (v: number) => number };
 
@@ -53,7 +50,7 @@ const GONIO_TRAIL_OPACITIES = [1, 0.66, 0.33] as const;
 let gonioGradSeq = 0;
 
 /**
- * One horizontal paint server on the chart SVG: S → M → S.
+ * One horizontal paint server on the chart SVG: S → M → S (warn → accent → warn).
  * Dots stay a single path; the renderer samples the gradient (no per-dot color).
  */
 function installMsGradient(svg: SVGSVGElement): () => void {
@@ -69,17 +66,21 @@ function installMsGradient(svg: SVGSVGElement): () => void {
   const grad = document.createElementNS(ns, 'linearGradient');
   grad.id = gradId;
   grad.setAttribute('gradientUnits', 'userSpaceOnUse');
-  for (const [offset, color] of [
-    ['0%', COLOR_SIDE],
-    ['50%', COLOR_MID],
-    ['100%', COLOR_SIDE],
-  ] as const) {
+  const stops: SVGStopElement[] = [];
+  for (const offset of ['0%', '50%', '100%'] as const) {
     const stop = document.createElementNS(ns, 'stop');
     stop.setAttribute('offset', offset);
-    stop.setAttribute('stop-color', color);
     grad.appendChild(stop);
+    stops.push(stop);
   }
   defs.appendChild(grad);
+
+  const syncStops = (c: ThemeColors) => {
+    stops[0]!.setAttribute('stop-color', c.warn);
+    stops[1]!.setAttribute('stop-color', c.accent);
+    stops[2]!.setAttribute('stop-color', c.warn);
+  };
+  syncStops(themeColors$.value);
 
   // Fragment urls from external CSS often miss the SVG; keep the rule in-tree.
   const style = document.createElementNS(ns, 'style');
@@ -98,8 +99,10 @@ function installMsGradient(svg: SVGSVGElement): () => void {
   sync();
   const ro = new ResizeObserver(sync);
   ro.observe(svg);
+  const unsubTheme = themeColors$.subscribe(syncStops);
 
   return () => {
+    unsubTheme();
     ro.disconnect();
     grad.remove();
     style.remove();

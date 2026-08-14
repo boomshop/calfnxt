@@ -1,6 +1,10 @@
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { LevelMeter as AuxLevelMeter } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
+import {
+  meterGradientForRange,
+  useThemeColors,
+} from '../../theme/themeColors';
 import './LevelMeter.scss';
 
 const LevelMeterBindings = {
@@ -10,7 +14,7 @@ const LevelMeterBindings = {
 /**
  * paint_mode=inverse (AUX default):
  * - gradient = visible meter fill
- * - foreground = mask (= page background)
+ * - foreground = mask for empty regions (`--background`, page surface)
  *
  * WebEditor defaults WebKit HW accel to ALWAYS; set CALFNXT_WEB_NO_GPU=1 for software.
  */
@@ -35,12 +39,6 @@ const LevelMeterOptions = {
   show_scale: true,
   show_value: false,
   scale: 'linear',
-  foreground: '#000000',
-  gradient: [
-    { value: -96, color: '#0066ff' },
-    { value: 0, color: '#ff0066' },
-    { value: 12, color: '#ff6600' },
-  ],
 };
 
 const LevelMeterWidget = componentFromWidget(
@@ -57,12 +55,24 @@ export interface LevelMeterProps {
 }
 
 export function LevelMeter(props: LevelMeterProps) {
-  const { size = 'normal', ...rest } = props;
+  const { size = 'normal', foreground, gradient, min, max, ...rest } = props;
+  const colors = useThemeColors();
+
+  const lo = typeof min === 'number' ? min : -96;
+  const hi = typeof max === 'number' ? max : 12;
+
+  const themed = {
+    min: lo,
+    max: hi,
+    foreground: (foreground as string | undefined) ?? colors.background,
+    gradient:
+      (gradient as unknown) ?? meterGradientForRange(colors, lo, hi),
+  };
 
   const options =
     size === 'small'
-      ? { show_scale: false, label: false, hold_size: 2, ...rest }
-      : { show_scale: rest.show_scale !== false, ...rest };
+      ? { show_scale: false, label: false, hold_size: 2, ...themed, ...rest }
+      : { show_scale: rest.show_scale !== false, ...themed, ...rest };
 
   return <LevelMeterWidget className={size} {...options} />;
 }

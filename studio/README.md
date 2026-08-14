@@ -56,6 +56,7 @@ npm run shot -- equalizer
 Output width targets ~1560 CSS×deviceScaleFactor (matches current website assets).
 Frames are design-size (`*.plugin.json` editor WxH) without DevShell chrome.
 **WithInfo tip bubbles are forced off** for every capture (`showWidgetInfo$` + CSS).
+Theme is always reset to **night / calfnxt** (ignore localStorage prefs).
 
 ## Preview in the browser
 

@@ -27,7 +27,7 @@
   }
 
   > .aux-scale > .aux-label {
-    color: color-mix(in srgb, var(--fg, #e8eaed) 55%, transparent) !important;
+    color: var(--color-least) !important;
   }
 
   &.small {

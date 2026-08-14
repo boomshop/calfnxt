@@ -1,0 +1,23 @@
+.MenuButton {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+
+  > .trigger {
+    display: inline-flex;
+  }
+
+  > .menu {
+    position: fixed;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    min-width: 36px;
+    background: var(--background-lesser);
+    border: 1px solid var(--background-least);
+    border-radius: var(--border-radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+}

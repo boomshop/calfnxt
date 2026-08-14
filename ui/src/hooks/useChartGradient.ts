@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useId, useRef } from 'react';
+import { themeColors$ } from '../theme/themeColors';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-
-/** Vertical level paint: bottom/low = blue, top/high = red (EQ response match). */
-export const CHART_LEVEL_CUT = '#0066ff';
-export const CHART_LEVEL_BOOST = '#ff0066';
 
 /** CSS custom property set on the chart SVG; value is `url(#…)`. */
 export const CHART_LEVEL_STROKE_VAR = '--chart-level-stroke';
@@ -26,8 +23,9 @@ export type UseChartGradientOptions = {
 };
 
 /**
- * Install a vertical blue→red level gradient on an AUX chart SVG and paint
- * optional targets. Returns `reassert` for after AUX rewrites paths.
+ * Install a vertical accent→warn level gradient on an AUX chart SVG and paint
+ * optional targets. Stops track `themeColors$` (day/night + accent pair).
+ * Returns `reassert` for after AUX rewrites paths.
  */
 export function useChartGradient(
   options: UseChartGradientOptions,
@@ -57,6 +55,8 @@ export function useChartGradient(
     let grad = defs.querySelector(
       `#${CSS.escape(gradId)}`,
     ) as SVGLinearGradientElement | null;
+    let stopCut: SVGStopElement;
+    let stopBoost: SVGStopElement;
     if (!grad) {
       grad = document.createElementNS(
         SVG_NS,
@@ -66,20 +66,26 @@ export function useChartGradient(
       grad.setAttribute('gradientUnits', 'userSpaceOnUse');
       grad.setAttribute('x1', '0');
       grad.setAttribute('x2', '0');
-      // Same stop layout as EQChart (stretched mid transition).
-      const stopCut = document.createElementNS(SVG_NS, 'stop');
+      stopCut = document.createElementNS(SVG_NS, 'stop') as SVGStopElement;
       stopCut.setAttribute('offset', '20%');
-      stopCut.setAttribute('stop-color', CHART_LEVEL_CUT);
-      const stopBoost = document.createElementNS(SVG_NS, 'stop');
+      stopBoost = document.createElementNS(SVG_NS, 'stop') as SVGStopElement;
       stopBoost.setAttribute('offset', '800%');
-      stopBoost.setAttribute('stop-color', CHART_LEVEL_BOOST);
       grad.appendChild(stopCut);
       grad.appendChild(stopBoost);
       defs.appendChild(grad);
+    } else {
+      stopCut = grad.querySelectorAll('stop')[0] as SVGStopElement;
+      stopBoost = grad.querySelectorAll('stop')[1] as SVGStopElement;
     }
 
     const paintValue = `url(#${gradId})`;
     svg.style.setProperty(cssVar, paintValue);
+
+    const syncStops = () => {
+      const c = themeColors$.value;
+      stopCut.setAttribute('stop-color', c.accent);
+      stopBoost.setAttribute('stop-color', c.warn);
+    };
 
     const apply = () => {
       for (const el of targets ?? []) {
@@ -94,7 +100,6 @@ export function useChartGradient(
         1,
         getHeight?.(svg) || svg.clientHeight || 1,
       );
-      // Default: bottom = cut/low (blue), top = boost/high (red).
       if (reverse) {
         grad!.setAttribute('y1', '0');
         grad!.setAttribute('y2', String(h));
@@ -103,12 +108,20 @@ export function useChartGradient(
         grad!.setAttribute('y2', '0');
       }
     };
+
+    syncStops();
     syncGeom();
     apply();
+
+    const unsubTheme = themeColors$.subscribe(() => {
+      syncStops();
+      apply();
+    });
 
     const ro = new ResizeObserver(syncGeom);
     ro.observe(svg);
     return () => {
+      unsubTheme();
       ro.disconnect();
       applyRef.current = () => {};
       for (const el of targets ?? []) {

@@ -23,13 +23,13 @@
     }
 
     .echo-l {
-      fill: #0066ff;
+      fill: var(--color-accent);
       fill-opacity: 0.85;
       stroke: none;
     }
 
     .echo-r {
-      fill: #ff0066;
+      fill: var(--color-warn);
       fill-opacity: 0.85;
       stroke: none;
     }

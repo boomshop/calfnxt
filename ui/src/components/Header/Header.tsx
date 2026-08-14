@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './Header.scss';
-import Logo from '../../images/calfNXT.svg';
-import { Knob, MultiMeter, Toggle } from '../../widgets';
+import { CalfNxtLogo } from '../CalfNxtLogo';
+import { Button, Knob, MenuButton, MultiMeter, Toggle } from '../../widgets';
 import {
   createHeaderIo,
   ioGainMeta,
@@ -9,6 +9,15 @@ import {
   type IHeaderIo,
 } from '../../host/headerMeters';
 import { showWidgetInfo$ } from '../../prefs/showWidgetInfo';
+import {
+  themeAccent$,
+  themeMode$,
+  toggleThemeAccent,
+  toggleThemeMode,
+  nextThemeAccent,
+  type ThemeAccent,
+  type ThemeMode,
+} from '../../prefs/theme';
 import type { DynamicValue } from '@deutschesoft/awml';
 
 export interface HeaderProps {
@@ -18,6 +27,12 @@ export interface HeaderProps {
 }
 
 function useDynamicNumber(dv: DynamicValue<number>): number {
+  const [v, setV] = useState(() => dv.value);
+  useEffect(() => dv.subscribe(setV), [dv]);
+  return v;
+}
+
+function useDynamicValue<T>(dv: DynamicValue<T>): T {
   const [v, setV] = useState(() => dv.value);
   useEffect(() => dv.subscribe(setV), [dv]);
   return v;
@@ -36,10 +51,12 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
   const io = external ?? ownedIo!;
   const channelCount = useDynamicNumber(io.channelCount$);
   const labels = labelsForChannelCount(channelCount);
+  const themeMode = useDynamicValue<ThemeMode>(themeMode$);
+  const themeAccent = useDynamicValue<ThemeAccent>(themeAccent$);
 
   return (
     <div className="Header">
-      <img src={Logo} className="logo" alt="" />
+      <CalfNxtLogo className="logo" />
       {title ? <div className="title">{title}</div> : null}
 
       <div className="in io" data-io="in">
@@ -98,6 +115,22 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
         icon="info"
         title="Show parameter info icons"
       />
+
+      <MenuButton icon="show" className="topmenu" anchor="top-right">
+        <Button
+          icon={themeMode === 'day' ? 'day' : 'night'}
+          label={false}
+          title={themeMode === 'day' ? 'Switch to night' : 'Switch to day'}
+          onClick={toggleThemeMode}
+        />
+        <Button
+          icon="gear"
+          label={false}
+          className="theme-swatch"
+          title={`Switch to ${nextThemeAccent(themeAccent)} accents`}
+          onClick={toggleThemeAccent}
+        />
+      </MenuButton>
     </div>
   );
 }

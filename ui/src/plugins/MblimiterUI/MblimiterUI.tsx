@@ -82,16 +82,6 @@ const COEFF_LABELS = [
   { pos: 1, label: '1' },
 ];
 
-const GR_GRADIENT = [
-  { value: 0, color: '#0066ff' },
-  { value: 60, color: '#ff0066' },
-];
-
-const LEVEL_GRADIENT = [
-  { value: -60, color: '#0066ff' },
-  { value: 0, color: '#ff0066' },
-];
-
 const LIMIT_DOTS = [-24, -18, -12, -6, -3, 0];
 const LIMIT_LABELS = [
   { pos: -24, label: '−24' },
@@ -214,7 +204,6 @@ function BandStrip(props: { band: IMblimiterBand; compactKnobs: boolean }) {
             show_scale={false}
             scale="decibel"
             log_factor={3}
-            gradient={LEVEL_GRADIENT}
             {...studioMeterProps}
           />
         </WithInfo>
@@ -233,7 +222,6 @@ function BandStrip(props: { band: IMblimiterBand; compactKnobs: boolean }) {
             auto_hold={800}
             scale="log2"
             log_factor={3}
-            gradient={GR_GRADIENT}
           />
         </WithInfo>
         <WithInfo title={mblimiterInfo.bandOut}>
@@ -247,7 +235,6 @@ function BandStrip(props: { band: IMblimiterBand; compactKnobs: boolean }) {
             show_scale
             scale="decibel"
             log_factor={3}
-            gradient={LEVEL_GRADIENT}
             {...studioMeterProps}
           />
         </WithInfo>
@@ -574,10 +561,6 @@ export function MblimiterUI(props: MblimiterUIProps) {
               scale="log2"
               log_factor={5}
               levels={[1, 3, 6, 12]}
-              gradient={[
-                { value: 0, color: '#0066ff' },
-                { value: 24, color: '#ff0066' },
-              ]}
             />
           </WithInfo>
         </div>

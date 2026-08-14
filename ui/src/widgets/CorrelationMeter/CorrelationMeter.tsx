@@ -1,6 +1,7 @@
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { PhaseMeter as AuxPhaseMeter } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
+import { useThemeColors } from '../../theme/themeColors';
 import './CorrelationMeter.scss';
 
 const CorrelationMeterBindings = {
@@ -21,13 +22,6 @@ const CorrelationMeterOptions = {
   show_value: false,
   layout: 'top',
   falling: 0,
-  foreground: '#000000',
-  gradient: [
-    { value: -1, color: '#ff6600' },
-    { value: 0, color: '#ff0066' },
-    { value: 0, color: '#0066ff' },
-    { value: 1, color: '#003CFF' },
-  ],
 };
 
 const CorrelationMeterWidget = componentFromWidget(
@@ -45,6 +39,19 @@ export interface CorrelationMeterProps {
 
 export function CorrelationMeter(props: CorrelationMeterProps) {
   const { className, ...rest } = props;
+  const colors = useThemeColors();
   const cls = ['CorrelationMeter', className ?? ''].filter(Boolean).join(' ');
-  return <CorrelationMeterWidget className={cls} {...rest} />;
+  return (
+    <CorrelationMeterWidget
+      className={cls}
+      foreground={colors.background}
+      gradient={[
+        { value: -1, color: colors.hot },
+        { value: 0, color: colors.warn },
+        { value: 0, color: colors.accent },
+        { value: 1, color: colors.accent },
+      ]}
+      {...rest}
+    />
+  );
 }

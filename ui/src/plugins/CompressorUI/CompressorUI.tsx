@@ -314,10 +314,6 @@ export function CompressorUI(props: CompressorUIProps) {
             scale="log2"
             log_factor={5}
             levels={[1, 3, 6, 12]}
-            gradient={[
-              { value: 0, color: '#0066ff' },
-              { value: 60, color: '#ff0066' },
-            ]}
           />
         </WithInfo>
         <DynamicsChart

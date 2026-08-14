@@ -19,6 +19,7 @@
 
   --color-warn: #ff0066;
   --contrast-warn: #ffffff;
+  --color-hot: #ff6600;
 
   --accent: hsl(
     var(--color-accent-h) var(--color-accent-s) var(--color-accent-l)
@@ -40,6 +41,79 @@
   --aux-scale-markersize: 3px;
   --aux-scale-minheight: 15px;
   --aux-scale-minwidth: 20px;
+}
+
+:root.day {
+  --background: #eeeeee;
+  --background-less: #e4e4e4;
+  --background-lesser: #d3d3d3;
+  --background-least: #bbbbbb;
+
+  --color: #111111;
+  --color-less: #333333;
+  --color-lesser: #555555;
+  --color-least: #777777;
+}
+
+:root.night {
+  --background: #000000;
+  --background-less: #0a0a0a;
+  --background-lesser: #1b1b1b;
+  --background-least: #333333;
+
+  --color: #ffffff;
+  --color-less: #dddddd;
+  --color-lesser: #bbbbbb;
+  --color-least: #999999;
+}
+
+/* Accent pairs (independent of day/night). */
+:root.calfnxt {
+  --color-accent: hsl(216, 100%, 50%);
+  --contrast-accent: #ffffff;
+  --color-accent-h: 216;
+  --color-accent-s: 100%;
+  --color-accent-l: 50%;
+
+  --color-warn: #ff0066;
+  --contrast-warn: #ffffff;
+  --color-hot: #ff6600;
+}
+
+:root.lime {
+  --color-accent: #00cc00;
+  --contrast-accent: #000000;
+  --color-accent-h: 120;
+  --color-accent-s: 100%;
+  --color-accent-l: 37%;
+
+  --color-warn: #dddd00;
+  --contrast-warn: #000000;
+  --color-hot: #ff9900;
+}
+
+:root.fire {
+  --color-accent: #990000;
+  --contrast-accent: #ffffff;
+  --color-accent-h: 0;
+  --color-accent-s: 100%;
+  --color-accent-l: 30%;
+
+  --color-warn: #ffcc00;
+  --contrast-warn: #000000;
+  --color-hot: #ff6600;
+}
+
+:root.sea {
+  --color-accent: #0033cc;
+  --contrast-accent: #ffffff;
+  --color-accent-h: 240;
+  --color-accent-s: 100%;
+  --color-accent-l: 40%;
+
+  --color-warn: #00ccff;
+  --contrast-warn: #000000;
+  --color-hot: #0088ff;
 }
 
 /* Kill UA focus, apply ours only for keyboard / :focus-visible. */

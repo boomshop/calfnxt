@@ -102,6 +102,18 @@ function runNpm(args) {
   });
 }
 
+async function forceStudioTheme(page) {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('calfnxt.themeMode', 'night');
+      localStorage.setItem('calfnxt.themeAccent', 'calfnxt');
+      localStorage.setItem('calfnxt.showWidgetInfo', '0');
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
 async function shotPlugin(browser, id) {
   const url = `${BASE}/#${id}`;
   // Probe CSS size at dpr=1
@@ -109,6 +121,7 @@ async function shotPlugin(browser, id) {
     viewport: { width: 1400, height: 1000 },
     deviceScaleFactor: 1,
   });
+  await forceStudioTheme(probe);
   await probe.goto(url, { waitUntil: 'networkidle' });
   await probe.waitForSelector('[data-studio-frame][data-ready="1"]', {
     timeout: 45000,
@@ -125,20 +138,27 @@ async function shotPlugin(browser, id) {
     },
     deviceScaleFactor: dpr,
   });
+  await forceStudioTheme(page);
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForSelector('[data-studio-frame][data-ready="1"]', {
     timeout: 45000,
   });
-  // Ensure WithInfo tips stay off even if localStorage had them enabled.
+  // Re-assert prefs after boot (in case localStorage raced or was flipped).
   await page.evaluate(() => {
     try {
       localStorage.setItem('calfnxt.showWidgetInfo', '0');
+      localStorage.setItem('calfnxt.themeMode', 'night');
+      localStorage.setItem('calfnxt.themeAccent', 'calfnxt');
     } catch {
       /* ignore */
     }
-    document.documentElement.classList.add('calfnxt-widget-info-off');
+    const root = document.documentElement;
+    root.classList.add('calfnxt-widget-info-off');
+    for (const c of ['day', 'night']) root.classList.toggle(c, c === 'night');
+    for (const c of ['calfnxt', 'lime', 'fire', 'sea'])
+      root.classList.toggle(c, c === 'calfnxt');
   });
-  // Extra settle for AUX SVG layouts
+  // Extra settle for AUX SVG layouts + theme paint refresh
   await wait(200);
 
   const out = path.join(OUT_DIR, `${id}.png`);

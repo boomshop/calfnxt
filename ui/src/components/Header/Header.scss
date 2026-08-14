@@ -1,13 +1,15 @@
 .Header {
   height: 56px;
   display: flex;
-  gap: 16px;
+  gap: var(--gap);
   padding: 0 10px 0 16px;
   align-items: center;
 
   > .logo {
     height: 32px;
+    width: auto;
     flex-shrink: 0;
+    color: var(--color);
   }
 
   > .title {
@@ -21,7 +23,7 @@
     flex: 1;
     display: flex;
     align-items: center;
-    gap: var(--gap);
+    gap: 0;
     margin-left: auto;
 
     &.in {
@@ -67,5 +69,23 @@
   > .widget-info {
     flex-shrink: 0;
     margin-left: 4px;
+  }
+
+  > .topmenu {
+    flex-shrink: 0;
+    margin-left: 4px;
+
+    .theme-swatch {
+      > .aux-icon {
+        color: transparent !important;
+        background: linear-gradient(
+          to top right,
+          var(--color-accent),
+          var(--color-warn)
+        );
+        -webkit-background-clip: text;
+        background-clip: text;
+      }
+    }
   }
 }

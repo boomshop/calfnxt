@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef } from 'react';
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { MultiMeter as AuxMultiMeter } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
+import {
+  levelMeterGradientMap,
+  useThemeColors,
+} from '../../theme/themeColors';
 import './MultiMeter.scss';
 
 const MultiMeterBindings = {
@@ -41,12 +45,6 @@ const MultiMeterOptions = {
   log_factor: 3,
   'scale.labels': (v: number) => v.toFixed(0),
   'scale.base': 0,
-  foreground: '#000000',
-  gradient: {
-    '-96': '#0066ff',
-    '0': '#ff0066',
-    '12': '#ff6600',
-  },
 };
 
 const MultiMeterWidget = componentFromWidget(
@@ -77,6 +75,7 @@ export interface MultiMeterProps {
 }
 
 export function MultiMeter(props: MultiMeterProps) {
+  const colors = useThemeColors();
   const mmRef = useRef<AuxMultiMeterInstance | null>(null);
   const rafRef = useRef(0);
   const unsubRef = useRef<(() => void) | null>(null);
@@ -91,8 +90,6 @@ export function MultiMeter(props: MultiMeterProps) {
       unsubRef.current?.();
       unsubRef.current = null;
       if (mm.isDestructed()) return;
-      // New LevelMeters are created in the count renderer *after* set_count —
-      // pin on the next frame so Scale.base sticks without touching Meter.base.
       unsubRef.current = mm.subscribe('set_count', () => schedulePin(mm));
       schedulePin(mm);
     },
@@ -120,5 +117,20 @@ export function MultiMeter(props: MultiMeterProps) {
 
   useEffect(() => () => detach(), [detach]);
 
-  return <MultiMeterWidget {...props} widgetRef={widgetRef} />;
+  // Push theme paints when accents / day-night change (inherit_options on bars).
+  useEffect(() => {
+    const mm = mmRef.current;
+    if (!mm || mm.isDestructed()) return;
+    mm.set('foreground', colors.background);
+    mm.set('gradient', levelMeterGradientMap(colors));
+  }, [colors]);
+
+  return (
+    <MultiMeterWidget
+      {...props}
+      widgetRef={widgetRef}
+      foreground={colors.background}
+      gradient={levelMeterGradientMap(colors)}
+    />
+  );
 }

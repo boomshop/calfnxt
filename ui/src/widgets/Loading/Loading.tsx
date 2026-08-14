@@ -1,5 +1,5 @@
 import './Loading.scss';
-import Logo from '../../images/calfNXT.svg';
+import { CalfNxtLogo } from '../../components/CalfNxtLogo';
 
 export interface LoadingProps {
   className?: string;
@@ -11,7 +11,7 @@ export function Loading(props: LoadingProps) {
   const cls = ['Loading', className].filter(Boolean).join(' ');
   return (
     <div className={cls} role="status" aria-label="Loading">
-      <img src={Logo} className="logo" alt="" />
+      <CalfNxtLogo className="logo" />
       <div className="bar">
         {Array.from({ length: 16 }, (_, i) => (
           <i key={i} />
