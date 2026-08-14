@@ -11,6 +11,20 @@ export type ThemeAccent = 'calfnxt' | 'lime' | 'fire' | 'sea';
 const MODE_CLASSES: ThemeMode[] = ['day', 'night'];
 export const ACCENT_CLASSES: ThemeAccent[] = ['calfnxt', 'lime', 'fire', 'sea'];
 
+function preferBrowserMode(): ThemeMode {
+  try {
+    if (typeof matchMedia === 'function') {
+      const light = matchMedia('(prefers-color-scheme: light)');
+      if (light.media !== 'not all' && light.matches) return 'day';
+      const dark = matchMedia('(prefers-color-scheme: dark)');
+      if (dark.media !== 'not all' && dark.matches) return 'night';
+    }
+  } catch {
+    // ignore
+  }
+  return 'night';
+}
+
 function readMode(): ThemeMode {
   try {
     const raw = localStorage.getItem(THEME_MODE_KEY);
@@ -18,7 +32,7 @@ function readMode(): ThemeMode {
   } catch {
     // ignore
   }
-  return 'night';
+  return preferBrowserMode();
 }
 
 function isAccent(v: string | null): v is ThemeAccent {
@@ -34,6 +48,7 @@ function readAccent(): ThemeAccent {
   } catch {
     // ignore
   }
+  // Accent has no OS preference — always brand default until the user cycles.
   return 'calfnxt';
 }
 
