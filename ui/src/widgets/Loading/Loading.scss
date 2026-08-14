@@ -11,6 +11,8 @@
   min-height: 4rem;
   position: absolute;
   inset: 0;
+  background: var(--background);
+  color: var(--color);
 
   > .logo,
   > img {
