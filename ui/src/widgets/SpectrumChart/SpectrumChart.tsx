@@ -177,6 +177,9 @@ export function parseSpectrumPayload(v: number[] | null | undefined): SpectrumPa
   };
 }
 
+/** Extra bin-units past [0, bins] so mode=bottom vertical closers are clipped. */
+const SERIES_EDGE_PAD = 1.25;
+
 function seriesDots(
   data: Float32Array,
   bins: number,
@@ -184,17 +187,24 @@ function seriesDots(
   yMax = SPECTRUM_DB_MAX,
   slope = 0,
 ): { x: number; y: number }[] {
-  const pts: { x: number; y: number }[] = [];
+  if (bins < 1) return [];
+  const ys: number[] = [];
   for (let i = 0; i < bins; ++i) {
     const raw = data[i] ?? yMin;
     let y = tiltDb(raw, binToHz(i, bins), slope);
     // Snap near-floor to floor so the fill/stroke ends at the bottom.
     if (y <= yMin + 0.75) y = yMin;
-    pts.push({
-      x: i + 0.5,
-      y: Math.min(yMax, Math.max(yMin, y)),
-    });
+    ys.push(Math.min(yMax, Math.max(yMin, y)));
   }
+  const first = ys[0]!;
+  const last = ys[bins - 1]!;
+  const pts: { x: number; y: number }[] = [
+    // Hang past the plot so AUX bottom-fill vertical edges are off-screen.
+    { x: -SERIES_EDGE_PAD, y: first },
+  ];
+  for (let i = 0; i < bins; ++i)
+    pts.push({ x: i + 0.5, y: ys[i]! });
+  pts.push({ x: bins + SERIES_EDGE_PAD, y: last });
   return pts;
 }
 

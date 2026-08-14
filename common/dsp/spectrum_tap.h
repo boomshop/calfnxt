@@ -237,34 +237,31 @@ private:
     binHi_.assign(static_cast<size_t>(bins_), 0);
     binValid_.assign(static_cast<size_t>(bins_), 0);
     const float nyquist = static_cast<float>(sampleRate_ * 0.5);
-    const float fMin = 20.f;
-    const float fMax = std::max(fMin * 2.f, nyquist);
+    // Keep 20 Hz…20 kHz log map in sync with SpectrumChart (not Nyquist), so
+    // tilt / grid / DSP bins share the same abscissa. Bands above Nyquist stay invalid.
+    constexpr float fMin = 20.f;
+    constexpr float fMaxUi = 20000.f;
     const int fftBins = fftSize_ / 2;
-    // Assign unique FFT coverage per UI bin. Once FFT bins are exhausted near
-    // Nyquist, remaining UI bins stay invalid → display floor (no flat plateau).
-    int nextFft = 1;
     for (int i = 0; i < bins_; ++i)
     {
       const float t0 = static_cast<float>(i) / static_cast<float>(bins_);
       const float t1 = static_cast<float>(i + 1) / static_cast<float>(bins_);
-      const float f0 = fMin * std::pow(fMax / fMin, t0);
-      const float f1 = fMin * std::pow(fMax / fMin, t1);
-      int lo = static_cast<int>(f0 / nyquist * static_cast<float>(fftBins));
-      int hi = static_cast<int>(f1 / nyquist * static_cast<float>(fftBins));
-      lo = std::max(lo, nextFft);
-      hi = std::max(hi, lo + 1);
-      if (lo >= fftBins - 1 || nextFft >= fftBins)
+      const float f0 = fMin * std::pow(fMaxUi / fMin, t0);
+      const float f1 = fMin * std::pow(fMaxUi / fMin, t1);
+      if (!(f0 < nyquist) || fftBins < 2)
       {
         binLo_[static_cast<size_t>(i)] = 0;
         binHi_[static_cast<size_t>(i)] = 0;
         binValid_[static_cast<size_t>(i)] = 0;
         continue;
       }
-      hi = std::min(hi, fftBins);
+      int lo = static_cast<int>(f0 / nyquist * static_cast<float>(fftBins));
+      int hi = static_cast<int>(f1 / nyquist * static_cast<float>(fftBins));
+      lo = std::clamp(lo, 1, fftBins - 1);
+      hi = std::clamp(std::max(hi, lo + 1), lo + 1, fftBins);
       binLo_[static_cast<size_t>(i)] = lo;
       binHi_[static_cast<size_t>(i)] = hi;
       binValid_[static_cast<size_t>(i)] = 1;
-      nextFft = hi;
     }
   }
 
