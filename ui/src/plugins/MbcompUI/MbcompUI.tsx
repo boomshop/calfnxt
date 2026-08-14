@@ -507,6 +507,7 @@ function BandDetail(props: {
           />
         </WithInfo>
         <DynamicsChart
+          key={band.id}
           threshold$={band.threshold$}
           ratio$={band.ratio$}
           makeup$={band.makeup$}

@@ -473,10 +473,11 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
         const float grDb = linToDbSafe(grLin);
         grMeter_[b].process(grLin);
         lastGrDb_[b] = grDb;
-        // Smoothed detector (not sample peak) — keeps the point on the curve.
+        // Curve GR (not lagged audio GR) — keeps the point on the transfer line.
         {
           const float inDb = linToDbSafe(gr_[b].lastDetectorLin());
-          const float outDb = inDb + grDb + st.makeupDb;
+          const float outDb =
+            inDb + linToDbSafe(gr_[b].lastCurveGain()) + st.makeupDb;
           pointInDb_[b] = inDb;
           pointOutDb_[b] = outDb;
         }

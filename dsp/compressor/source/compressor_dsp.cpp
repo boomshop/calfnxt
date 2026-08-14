@@ -210,9 +210,10 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
   grMeter_.process(gr);
   histFeedSample(audioPeak, detPeak, gr);
 
+  // Operating point uses curve GR (not lagged audio GR) so it stays on the line.
   const float inDb = linToDbSafe(det);
-  const float grDb = linToDbSafe(gr);
-  const float outDb = inDb + grDb + state.makeupDb;
+  const float outDb =
+    inDb + linToDbSafe(gr_.lastCurveGain()) + state.makeupDb;
   {
     std::lock_guard<std::mutex> lock(vizMutex_);
     pointInDb_ = inDb;

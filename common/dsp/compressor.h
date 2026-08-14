@@ -71,6 +71,7 @@ public:
     linSlope_ = 0.f;
     rmsSq_ = 0.f;
     lastGr_ = 1.f;
+    lastTargetGr_ = 1.f;
   }
 
   /**
@@ -96,6 +97,11 @@ public:
   /**
    * Advance envelope from stereo detector samples; return linear GR in (0, 1].
    * Does not modify audio. Samples should already be sidechain-filtered.
+   *
+   * Topology: detector estimates level → static curve → attack/release on GR.
+   * User attack must not lag the level detector (that “punches through” then
+   * slams shut — gate/tape flutter under deep GR). Peak/RMS only change how
+   * level is measured; Opto keeps soft level tracking (photocell feel).
    */
   float processDetector(float detL, float detR)
   {
@@ -132,31 +138,57 @@ public:
         break;
     }
 
-    float absample = linked;
     if (mode_ == DetectorMode::Rms)
     {
-      // Power smoother is the RMS envelope (attack/release on squared level).
+      // Fixed short power window for loudness — not the user attack control.
+      const float rmsCoeff = std::min(
+        1.f, 1.f / (kRmsWindowMs * sampleRate_ / 4000.f));
       const float sq = linked * linked;
       sanitize(rmsSq_);
-      rmsSq_ += (sq - rmsSq_) * (sq > rmsSq_ ? attackCoeff : releaseCoeff);
-      absample = std::sqrt(std::max(0.f, rmsSq_));
-      linSlope_ = absample;
+      rmsSq_ += (sq - rmsSq_) * rmsCoeff;
+      linSlope_ = std::sqrt(std::max(0.f, rmsSq_));
+    }
+    else if (mode_ == DetectorMode::Peak)
+    {
+      // Instant up so peaks request GR immediately; release falls with release.
+      sanitize(linSlope_);
+      if (linked >= linSlope_)
+        linSlope_ = linked;
+      else
+        linSlope_ += (linked - linSlope_) * releaseCoeff;
     }
     else
     {
+      // Opto: soft bidirectional level tracking (ballistics live here).
       sanitize(linSlope_);
       linSlope_ +=
-        (absample - linSlope_) * (absample > linSlope_ ? attackCoeff : releaseCoeff);
+        (linked - linSlope_) * (linked > linSlope_ ? attackCoeff : releaseCoeff);
     }
 
-    float gain = 1.f;
-    if (linSlope_ > 0.f)
-      gain = outputGain(linSlope_);
-    lastGr_ = gain;
-    return gain;
+    const float targetGr =
+      (linSlope_ > 0.f) ? outputGain(linSlope_) : 1.f;
+    lastTargetGr_ = targetGr;
+
+    if (mode_ == DetectorMode::Opto)
+    {
+      // Level already carries photocell attack/release.
+      lastGr_ = targetGr;
+    }
+    else
+    {
+      // Peak / RMS: smooth GR in gain domain (falling = attack, rising = release).
+      const float coeff = (targetGr < lastGr_) ? attackCoeff : releaseCoeff;
+      lastGr_ += (targetGr - lastGr_) * coeff;
+      if (!(lastGr_ > 0.f) || !std::isfinite(lastGr_))
+        lastGr_ = 1.f;
+      lastGr_ = std::min(1.f, lastGr_);
+    }
+    return lastGr_;
   }
 
   float lastGainReduction() const { return lastGr_; }
+  /** Static-curve GR for current detector level (ignores attack/release lag). */
+  float lastCurveGain() const { return lastTargetGr_; }
   /** Peak detector level (linear) after last processDetector. */
   float lastDetectorLin() const { return linSlope_; }
 
@@ -201,6 +233,9 @@ private:
     return std::exp(gain - slope);
   }
 
+  /** Fixed RMS loudness window (ms); user attack/release apply to GR only. */
+  static constexpr float kRmsWindowMs = 10.f;
+
   float sampleRate_ = 44100.f;
   float attackMs_ = 20.f;
   float releaseMs_ = 200.f;
@@ -218,6 +253,7 @@ private:
   float kneeStop_ = 0.f;
   float compressedKneeStop_ = 0.f;
   float lastGr_ = 1.f;
+  float lastTargetGr_ = 1.f;
 };
 
 } // namespace Dsp

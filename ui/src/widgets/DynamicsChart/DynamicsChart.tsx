@@ -74,7 +74,9 @@ type AuxDynamicsInstance = {
   response?: AuxGraph;
   range_y?: { options?: { basis?: number } };
   addHandle?: (opts: Record<string, unknown>) => AuxHandle;
+  removeHandle?: (handle: AuxHandle) => void;
   addGraph?: (opts: Record<string, unknown>) => AuxGraph;
+  removeGraph?: (graph: AuxGraph) => void;
   set?: (k: string, v: unknown) => void;
   get?: (k: string) => unknown;
   /** AUX regenerates the hard expander polyline here — we override for soft knee. */
@@ -120,6 +122,7 @@ export function DynamicsChart(props: DynamicsChartProps) {
   } = props;
 
   const composedOnSet = composeInteractingOnSet({ beginEdit, endEdit }, onSet);
+  const chartInstRef = useRef<AuxDynamicsInstance | null>(null);
   const pointHandleRef = useRef<AuxHandle | null>(null);
   const relHandleRef = useRef<AuxHandle | null>(null);
   /** Native AUX handle.set — bypasses our drag wrapper (avoids sync loops). */
@@ -151,6 +154,38 @@ export function DynamicsChart(props: DynamicsChartProps) {
   const detachPoint = useCallback(() => {
     pointUnsubRef.current?.();
     pointUnsubRef.current = null;
+
+    const w = chartInstRef.current;
+    const alive = w && !w.isDestructed();
+    // Must removeHandle — otherwise band switches / widgetRef rebinds leave
+    // orphaned operating-point dots on the transfer curve.
+    if (alive) {
+      if (pointHandleRef.current)
+        try {
+          w.removeHandle?.(pointHandleRef.current);
+        } catch {
+          /* destroyed */
+        }
+      if (relHandleRef.current)
+        try {
+          w.removeHandle?.(relHandleRef.current);
+        } catch {
+          /* destroyed */
+        }
+      if (releaseCurveRef.current)
+        try {
+          w.removeGraph?.(releaseCurveRef.current);
+        } catch {
+          /* destroyed */
+        }
+      if (bandRef.current)
+        try {
+          w.removeGraph?.(bandRef.current);
+        } catch {
+          /* destroyed */
+        }
+    }
+
     pointHandleRef.current = null;
     relHandleRef.current = null;
     relOrigSetRef.current = null;
@@ -210,12 +245,14 @@ export function DynamicsChart(props: DynamicsChartProps) {
   const widgetRef = useCallback(
     (w: AuxDynamicsInstance | null) => {
       detachPoint();
+      chartInstRef.current = null;
 
       if (!w || w.isDestructed()) {
         setChart(null);
         return;
       }
 
+      chartInstRef.current = w;
       setChart(w);
 
       // AUX Expander.drawGraph() ignores knee and overwrites response dots.

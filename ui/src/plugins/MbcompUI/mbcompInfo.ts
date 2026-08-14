@@ -23,7 +23,7 @@ export const mbcompInfo = {
     'Skips compression for this band while keeping it in the sum. Instant A/B for “is this band helping?” without muting that frequency range.',
 
   bandListen:
-    'Solos this band’s output so you hear only what that band is working on. Only one band at a time. Great for setting threshold/attack on kick vs. vocal without the full mix masking it.',
+    'Solos this band’s processed output so you hear only what that band is doing (crossover + compression). Only one band at a time. Great for setting threshold/attack on kick vs. vocal without the full mix masking it.',
 
   threshold:
     'Level where this band starts compressing. Lower = more of that frequency range is ridden — denser lows, tamer harshness, etc. Higher = only loud events in the band are touched. Set with Listen so you’re not guessing from the full mix.',
