@@ -3,6 +3,7 @@ import { pluginMeta as equalizerMeta } from "../generated/equalizerModel";
 import { pluginMeta as stereoMeta } from "../generated/stereoModel";
 import { pluginMeta as transientsMeta } from "../generated/transientsModel";
 import { pluginMeta as compressorMeta } from "../generated/compressorModel";
+import { pluginMeta as expanderMeta } from "../generated/expanderModel";
 import { pluginMeta as deesserMeta } from "../generated/deesserModel";
 import { pluginMeta as delayMeta } from "../generated/delayModel";
 import { pluginMeta as reverbMeta } from "../generated/reverbModel";
@@ -17,6 +18,7 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   stereo: stereoMeta.editor,
   transients: transientsMeta.editor,
   compressor: compressorMeta.editor,
+  expander: expanderMeta.editor,
   deesser: deesserMeta.editor,
   delay: delayMeta.editor,
   reverb: reverbMeta.editor,

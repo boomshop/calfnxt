@@ -24,6 +24,7 @@ const ALL_PLUGINS = [
   'stereo',
   'transients',
   'compressor',
+  'expander',
   'deesser',
   'delay',
   'reverb',

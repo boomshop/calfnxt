@@ -22,6 +22,7 @@ const TARGET_WIDTH = 1560;
 
 const ALL = [
   'compressor',
+  'expander',
   'deesser',
   'delay',
   'equalizer',

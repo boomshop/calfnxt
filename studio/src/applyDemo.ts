@@ -1,6 +1,7 @@
 import type { DynamicValue } from '@deutschesoft/awml';
 import type {
   ICompressorHost,
+  IExpanderHost,
   IDeesserHost,
   IDelayHost,
   IEqualizerHost,
@@ -78,6 +79,37 @@ export function applyCompressorDemo(
   setNum(host.mode$, params.mode);
   setNum(host.link$, params.link);
   setNum(host.pdr$, params.pdr);
+  setNum(host.hipass$, params.hipass);
+  setNum(host.lopass$, params.lopass);
+  setNum(host.hpMode$, params.hp_mode);
+  setNum(host.lpMode$, params.lp_mode);
+  setBool(host.listen$, params.listen);
+
+  applySharedViz(viz);
+  if (viz.envelope)
+    host.historyData$.set(new Float32Array(viz.envelope));
+  if (typeof viz.gr === 'number')
+    host.gr$.set(viz.gr);
+  if (viz.point)
+    host.point$.set(viz.point);
+}
+
+export function applyExpanderDemo(
+  host: IExpanderHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.threshold$, params.threshold);
+  setNum(host.releaseThreshold$, params.release_threshold);
+  setNum(host.ratio$, params.ratio);
+  setNum(host.knee$, params.knee);
+  setNum(host.attack$, params.attack);
+  setNum(host.hold$, params.hold);
+  setNum(host.release$, params.release);
+  setNum(host.range$, params.range);
+  setNum(host.mode$, params.mode);
+  setNum(host.link$, params.link);
   setNum(host.hipass$, params.hipass);
   setNum(host.lopass$, params.lopass);
   setNum(host.hpMode$, params.hp_mode);
@@ -530,6 +562,7 @@ export type DemoApplier = (
 
 export const demoAppliers: Record<PluginId, DemoApplier> = {
   compressor: applyCompressorDemo as DemoApplier,
+  expander: applyExpanderDemo as DemoApplier,
   deesser: applyDeesserDemo as DemoApplier,
   delay: applyDelayDemo as DemoApplier,
   equalizer: applyEqualizerDemo as DemoApplier,

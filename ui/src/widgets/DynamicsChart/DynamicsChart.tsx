@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
-import { Compressor as AuxCompressor } from '@deutschesoft/aux-widgets/src/index.pure.js';
+import {
+  Compressor as AuxCompressor,
+  Expander as AuxExpander,
+} from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
 import { useChartGradient } from '../../hooks/useChartGradient';
+import { expanderResponseDots } from '../../dsp/expanderCurve';
 import { composeInteractingOnSet, type AuxOnSet } from '../editGesture';
 import './DynamicsChart.scss';
 
@@ -11,10 +15,10 @@ const DynamicsBindings = {
   ratio$: { name: 'ratio' },
   makeup$: { name: 'makeup' },
   knee$: { name: 'knee' },
+  range$: { name: 'range' },
 };
 
-/** Match knob ranges: threshold −60…0, ratio 1…20, makeup up to +24. */
-const DynamicsOptions = {
+const CompressorOptions = {
   type: 'compressor',
   min: -60,
   max: 24,
@@ -22,15 +26,34 @@ const DynamicsOptions = {
   show_handle: true,
   show_ratio: true,
   ratio_x: 12,
-  // Chart default range_z is 0…1; Dynamics.snap(ratio) would clamp every
-  // ratio to 1 without an explicit ratio range (z = ratio on the handle).
   range_z: { min: 1, max: 20, basis: 300 },
+  makeup: 0,
 };
 
-const DynamicsWidget = componentFromWidget(
+const ExpanderOptions = {
+  type: 'expander',
+  min: -60,
+  max: 24,
+  db_grid: 12,
+  show_handle: true,
+  show_ratio: true,
+  ratio_x: 12,
+  range_z: { min: 1, max: 20, basis: 300 },
+  makeup: 0,
+  range: -60,
+};
+
+const CompressorWidget = componentFromWidget(
   AuxCompressor,
   DynamicsBindings,
-  DynamicsOptions,
+  CompressorOptions,
+  'DynamicsChart',
+);
+
+const ExpanderWidget = componentFromWidget(
+  AuxExpander,
+  DynamicsBindings,
+  ExpanderOptions,
   'DynamicsChart',
 );
 
@@ -41,6 +64,7 @@ type AuxHandle = {
 
 type AuxGraph = {
   element?: SVGElement;
+  set?: (k: string, v: unknown) => void;
 };
 
 type AuxDynamicsInstance = {
@@ -50,14 +74,22 @@ type AuxDynamicsInstance = {
   response?: AuxGraph;
   range_y?: { options?: { basis?: number } };
   addHandle?: (opts: Record<string, unknown>) => AuxHandle;
+  addGraph?: (opts: Record<string, unknown>) => AuxGraph;
+  set?: (k: string, v: unknown) => void;
+  get?: (k: string) => unknown;
+  /** AUX regenerates the hard expander polyline here — we override for soft knee. */
+  drawGraph?: () => void;
 };
 
 export interface DynamicsChartProps {
   className?: string;
+  type?: 'compressor' | 'expander';
   threshold$?: DynamicValue<number>;
+  releaseThreshold$?: DynamicValue<number>;
   ratio$?: DynamicValue<number>;
   makeup$?: DynamicValue<number>;
   knee$?: DynamicValue<number>;
+  range$?: DynamicValue<number>;
   /** Operating point [inDb, outDb] from DSP viz. */
   point$?: DynamicValue<number[]>;
   beginEdit?: () => void;
@@ -67,14 +99,33 @@ export interface DynamicsChartProps {
 }
 
 /**
- * AUX Compressor transfer curve + optional DSP operating-point handle.
- * Stub layout — style later.
+ * AUX Dynamics transfer curve + optional DSP operating-point handle.
+ * Expander: open + release transfer curves (same shape, shifted), soft knee/floor,
+ * release-threshold handle, hysteresis band.
  */
 export function DynamicsChart(props: DynamicsChartProps) {
-  const { className, beginEdit, endEdit, onSet, point$, ...rest } = props;
+  const {
+    className,
+    type = 'compressor',
+    beginEdit,
+    endEdit,
+    onSet,
+    point$,
+    releaseThreshold$,
+    threshold$,
+    ratio$,
+    knee$,
+    range$,
+    ...rest
+  } = props;
 
   const composedOnSet = composeInteractingOnSet({ beginEdit, endEdit }, onSet);
   const pointHandleRef = useRef<AuxHandle | null>(null);
+  const relHandleRef = useRef<AuxHandle | null>(null);
+  /** Native AUX handle.set — bypasses our drag wrapper (avoids sync loops). */
+  const relOrigSetRef = useRef<((k: string, v: unknown) => void) | null>(null);
+  const bandRef = useRef<AuxGraph | null>(null);
+  const releaseCurveRef = useRef<AuxGraph | null>(null);
   const pointUnsubRef = useRef<(() => void) | null>(null);
   const [chart, setChart] = useState<AuxDynamicsInstance | null>(null);
 
@@ -101,7 +152,60 @@ export function DynamicsChart(props: DynamicsChartProps) {
     pointUnsubRef.current?.();
     pointUnsubRef.current = null;
     pointHandleRef.current = null;
+    relHandleRef.current = null;
+    relOrigSetRef.current = null;
+    bandRef.current = null;
+    releaseCurveRef.current = null;
   }, []);
+
+  const syncExpanderCurve = useCallback(
+    (w: AuxDynamicsInstance) => {
+      if (type !== 'expander' || !w.response?.set) return;
+      const th = threshold$?.value ?? -32;
+      const rel = Math.min(releaseThreshold$?.value ?? th, th);
+      const ratio = ratio$?.value ?? 4;
+      const knee = knee$?.value ?? 6;
+      const range = range$?.value ?? -60;
+      // Open curve (attack / open threshold).
+      w.response.set(
+        'dots',
+        expanderResponseDots(-60, 24, th, ratio, knee, range),
+      );
+      // Release curve: same shape, keyed at release threshold.
+      releaseCurveRef.current?.set?.(
+        'dots',
+        expanderResponseDots(-60, 24, rel, ratio, knee, range),
+      );
+      reassertRef.current();
+    },
+    [type, threshold$, releaseThreshold$, ratio$, knee$, range$],
+  );
+
+  const syncHysteresisBand = useCallback(
+    (open: number, rel: number) => {
+      bandRef.current?.set?.('dots', [
+        { x: rel, y: -60 },
+        { x: open, y: -60 },
+        { x: open, y: 24 },
+        { x: rel, y: 24 },
+        { x: rel, y: -60 },
+      ]);
+    },
+    [],
+  );
+
+  const syncHysteresis = useCallback(
+    (_w: AuxDynamicsInstance) => {
+      if (type !== 'expander') return;
+      const open = threshold$?.value ?? -32;
+      const rel = Math.min(releaseThreshold$?.value ?? open, open);
+      const set = relOrigSetRef.current;
+      set?.('x', rel);
+      set?.('y', rel);
+      syncHysteresisBand(open, rel);
+    },
+    [type, threshold$, releaseThreshold$, syncHysteresisBand],
+  );
 
   const widgetRef = useCallback(
     (w: AuxDynamicsInstance | null) => {
@@ -114,9 +218,14 @@ export function DynamicsChart(props: DynamicsChartProps) {
 
       setChart(w);
 
-      // Live operating point on the curve. Keep `active: true` — AUX hides
-      // inactive ChartHandles (`display: none`). Dragging is blocked in CSS.
-      // toBack: sit under threshold/ratio handles (addHandle appends on top).
+      // AUX Expander.drawGraph() ignores knee and overwrites response dots.
+      // Always redraw with our soft-knee / range-floor path instead.
+      if (type === 'expander') {
+        w.drawGraph = () => {
+          syncExpanderCurve(w);
+        };
+      }
+
       if (typeof w.addHandle === 'function') {
         pointHandleRef.current = w.addHandle({
           class: 'aux-operating',
@@ -132,6 +241,53 @@ export function DynamicsChart(props: DynamicsChartProps) {
           active: true,
         });
         pointHandleRef.current.toBack?.();
+
+        if (type === 'expander' && releaseThreshold$) {
+          relHandleRef.current = w.addHandle({
+            class: 'aux-release-thresh',
+            mode: 'circular',
+            x: releaseThreshold$.value,
+            y: releaseThreshold$.value,
+            z: 1,
+            min_size: 18,
+            max_size: 18,
+            format_label: false,
+            label: '',
+            show_handle: true,
+            active: true,
+            // Lock to unity diagonal via userset below.
+          });
+          // Drag → release threshold (x), clamp ≤ open threshold.
+          const h = relHandleRef.current;
+          const origSet = h.set.bind(h);
+          relOrigSetRef.current = origSet;
+          h.set = (k: string, v: unknown) => {
+            if (k === 'x' || k === 'y') {
+              const open = threshold$?.value ?? 0;
+              const x = Math.min(Number(v), open);
+              if (releaseThreshold$.value !== x) releaseThreshold$.set(x);
+              origSet('x', x);
+              origSet('y', x);
+              syncHysteresisBand(open, x);
+              return;
+            }
+            origSet(k, v);
+          };
+        }
+      }
+
+      if (type === 'expander' && typeof w.addGraph === 'function') {
+        // Release transfer (same shape as open, keyed at release threshold).
+        releaseCurveRef.current = w.addGraph({
+          class: 'aux-response-release',
+          mode: 'line',
+          dots: [],
+        });
+        bandRef.current = w.addGraph({
+          class: 'aux-hysteresis-band',
+          mode: 'fill',
+          dots: [],
+        });
       }
 
       if (point$ && pointHandleRef.current) {
@@ -144,24 +300,68 @@ export function DynamicsChart(props: DynamicsChartProps) {
         };
         apply(point$.value);
         pointUnsubRef.current = point$.subscribe(apply, false);
-      }    },
-    [detachPoint, point$],
+      }
+
+      syncExpanderCurve(w);
+      syncHysteresis(w);
+    },
+    [
+      detachPoint,
+      point$,
+      type,
+      releaseThreshold$,
+      threshold$,
+      syncExpanderCurve,
+      syncHysteresis,
+      syncHysteresisBand,
+    ],
   );
 
   useEffect(() => () => detachPoint(), [detachPoint]);
 
-  // Ensure paint order after the handle is in the SVG handles group.
   useEffect(() => {
     pointHandleRef.current?.toBack?.();
   }, [chart]);
 
-  const cls = ['DynamicsChart', className ?? ''].filter(Boolean).join(' ');
+  useEffect(() => {
+    if (!chart || chart.isDestructed()) return;
+    const unsubs: (() => void)[] = [];
+    const bump = () => {
+      syncExpanderCurve(chart);
+      syncHysteresis(chart);
+    };
+    for (const dv of [threshold$, ratio$, knee$, range$, releaseThreshold$]) {
+      if (dv) unsubs.push(dv.subscribe(bump, false));
+    }
+    bump();
+    return () => unsubs.forEach((u) => u());
+  }, [
+    chart,
+    threshold$,
+    ratio$,
+    knee$,
+    range$,
+    releaseThreshold$,
+    syncExpanderCurve,
+    syncHysteresis,
+  ]);
+
+  const cls = ['DynamicsChart', type, className ?? '']
+    .filter(Boolean)
+    .join(' ');
+
+  const Widget = type === 'expander' ? ExpanderWidget : CompressorWidget;
 
   return (
-    <DynamicsWidget
+    <Widget
       className={cls}
       widgetRef={widgetRef}
       {...rest}
+      threshold$={threshold$}
+      ratio$={ratio$}
+      knee$={knee$}
+      range$={range$}
+      makeup={0}
       {...(composedOnSet ? { onSet: composedOnSet } : {})}
     />
   );

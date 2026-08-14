@@ -1,0 +1,18 @@
+{
+  "bypass": false,
+  "threshold": -32,
+  "release_threshold": -38,
+  "ratio": 4,
+  "knee": 6,
+  "attack": 5,
+  "hold": 20,
+  "release": 120,
+  "range": -60,
+  "mode": 0,
+  "link": 0,
+  "hipass": 20,
+  "lopass": 20000,
+  "hp_mode": 0,
+  "lp_mode": 0,
+  "listen": false
+}

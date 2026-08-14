@@ -20,7 +20,7 @@ internalized toolkit collides with system GTK3 — `GdkDisplay` GType abort).
 (GtkPlug + WebKit, XEmbed into the host XID) and forwards the JSON bridge over a
 Unix socketpair. Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`).
 More Calf-heritage processors planned.
 
 ---
@@ -36,8 +36,8 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Vendor URL / email | `https://calfnxt.org`, `mailto:schmidt@boomshop.net` |
 | C++ namespace | `calfNXT` |
 | CMake project / libs | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui` |
-| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics` |
-| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics` (must match; Carla/JUCE) |
+| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-expander`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics` |
+| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTExpander`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics` (must match; Carla/JUCE) |
 | Install names | `~/.vst3/calfNXTEqualizer.vst3`, …, `calfNXTMblimiter.vst3`, `calfNXTHarmonics.vst3` |
 | URI scheme | `calfnxt://bundle/...` |
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
@@ -255,7 +255,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
    - **Flanger**
    - **Pulsator**
    - **Ring Modulator**
-   - Gate / Sidechain Gate → **Expander**
+   - ~~Gate / Sidechain Gate → **Expander**~~ (done)
    - Filter / Envelope Filter → **Filter**
    - **Vinyl**
    - **Crusher**
@@ -279,6 +279,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 | Stereo DSP | `dsp/stereo/source/*_dsp.*` |
 | Transients DSP | `dsp/transients/source/*_dsp.*`, `common/dsp/transients.h` |
 | Compressor DSP | `dsp/compressor/source/*_dsp.*`, `common/dsp/compressor.h`, `common/dsp/sidechain_filter.h` |
+| Expander DSP | `dsp/expander/source/*_dsp.*`, `common/dsp/expander.h`, `common/dsp/sidechain_filter.h` |
 | DeEsser DSP | `dsp/deesser/source/*_dsp.*`, `common/dsp/deesser_detector.h`, `common/dsp/band_splitter.h` (Ess/Rumble target) |
 | Delay DSP | `dsp/delay/source/*_dsp.*`, `common/dsp/sidechain_filter.h`, `common/dsp/smooth_gain.h` |
 | Reverb DSP | `dsp/reverb/source/*_dsp.*`, `common/dsp/reverb_*.h`, `common/dsp/delay_line.h` |

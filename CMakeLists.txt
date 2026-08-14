@@ -53,6 +53,7 @@ add_subdirectory(dsp/equalizer)
 add_subdirectory(dsp/stereo)
 add_subdirectory(dsp/transients)
 add_subdirectory(dsp/compressor)
+add_subdirectory(dsp/expander)
 add_subdirectory(dsp/deesser)
 add_subdirectory(dsp/delay)
 add_subdirectory(dsp/reverb)
@@ -80,7 +81,7 @@ add_custom_target(calfnxt-web-host-bundles
 )
 
 # UI build needs generated models from every plugin descriptor
-add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen limiter_codegen mblimiter_codegen harmonics_codegen)
+add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen expander_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen limiter_codegen mblimiter_codegen harmonics_codegen)
 
 # Meta-target: all plugins + embedded UI packs (add new plugins here).
 add_custom_target(calfnxt-plugins
@@ -93,6 +94,8 @@ add_custom_target(calfnxt-plugins
     calfnxt-transients-resources
     calfnxt-compressor
     calfnxt-compressor-resources
+    calfnxt-expander
+    calfnxt-expander-resources
     calfnxt-deesser
     calfnxt-deesser-resources
     calfnxt-delay

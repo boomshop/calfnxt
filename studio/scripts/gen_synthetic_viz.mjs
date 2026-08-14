@@ -158,6 +158,21 @@ const packs = {
       },
     ),
   },
+  expander: {
+    levelsIn: [-10, -10.4],
+    levelsOut: [-14, -14.6],
+    gr: 8.0,
+    point: [-40, -52],
+    envelope: history3ch(
+      slots,
+      (t) => -8 - 18 * Math.abs(Math.sin(t * Math.PI * 5)) - 4 * t,
+      (t) => -12 - 16 * Math.abs(Math.sin(t * Math.PI * 5 + 0.3)) - 3 * t,
+      (t) => {
+        const quiet = Math.max(0, 0.55 - Math.abs(Math.sin(t * Math.PI * 5)));
+        return -quiet * 28 - 1;
+      },
+    ),
+  },
   deesser: {
     levelsIn: [-12, -12.5],
     levelsOut: [-13, -13.4],

@@ -17,6 +17,8 @@ declare module '@deutschesoft/aux-widgets/src/index.pure.js' {
   export const Chart: new (...args: unknown[]) => unknown;
   export const ChartHandle: new (...args: unknown[]) => unknown;
   export const Compressor: new (...args: unknown[]) => unknown;
+  export const Expander: new (...args: unknown[]) => unknown;
+  export const Dynamics: new (...args: unknown[]) => unknown;
   export const Reverb: new (...args: unknown[]) => unknown;
 }
 

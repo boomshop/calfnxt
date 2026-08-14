@@ -9,16 +9,27 @@
         stroke-width: 2px;
       }
 
+      > .aux-response-release {
+        stroke: var(--chart-level-stroke, var(--color-warn));
+        stroke-width: 2px;
+        fill: none;
+      }
+
       > .aux-steady {
         stroke: var(--color-least);
         stroke-width: 1px;
         stroke-dasharray: 2 3;
       }
+
+      > .aux-hysteresis-band {
+        fill: var(--color);
+        fill-opacity: 0.08;
+        stroke: none;
+      }
     }
 
     > .aux-handles {
       > .aux-charthandle.aux-operating {
-        /* Visible marker; not draggable (DSP drives x/y). */
         pointer-events: none;
 
         > .aux-handle {
@@ -27,6 +38,17 @@
           stroke: var(--background);
           stroke-width: 1.5px;
           opacity: 1;
+        }
+
+        > .aux-label,
+        > .aux-line {
+          display: none;
+        }
+      }
+
+      > .aux-charthandle.aux-release-thresh {
+        > .aux-handle {
+          fill: var(--color);
         }
 
         > .aux-label,

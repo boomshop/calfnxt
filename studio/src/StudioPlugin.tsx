@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import {
   CompressorUI,
+  ExpanderUI,
   DeesserUI,
   DelayUI,
   EqualizerUI,
@@ -12,6 +13,7 @@ import {
   StereoUI,
   TransientsUI,
   createBoundCompressorHost,
+  createBoundExpanderHost,
   createBoundDeesserHost,
   createBoundDelayHost,
   createBoundEqualizerHost,
@@ -36,6 +38,10 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
   compressor: async () => ({
     params: (await import('../fixtures/compressor/params.json')).default,
     viz: (await import('../fixtures/compressor/viz.json')).default,
+  }),
+  expander: async () => ({
+    params: (await import('../fixtures/expander/params.json')).default,
+    viz: (await import('../fixtures/expander/viz.json')).default,
   }),
   deesser: async () => ({
     params: (await import('../fixtures/deesser/params.json')).default,
@@ -89,6 +95,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
     switch (pluginId) {
       case 'compressor':
         return createBoundCompressorHost();
+      case 'expander':
+        return createBoundExpanderHost();
       case 'deesser':
         return createBoundDeesserHost();
       case 'delay':
@@ -150,6 +158,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
   switch (pluginId) {
     case 'compressor':
       return <CompressorUI host={host as ReturnType<typeof createBoundCompressorHost>} />;
+    case 'expander':
+      return <ExpanderUI host={host as ReturnType<typeof createBoundExpanderHost>} />;
     case 'deesser':
       return <DeesserUI host={host as ReturnType<typeof createBoundDeesserHost>} />;
     case 'delay':

@@ -5,6 +5,7 @@ export type PluginId =
   | "stereo"
   | "transients"
   | "compressor"
+  | "expander"
   | "deesser"
   | "delay"
   | "reverb"
@@ -21,6 +22,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   stereo: () => import("./StereoUI/BoundStereoUI"),
   transients: () => import("./TransientsUI/BoundTransientsUI"),
   compressor: () => import("./CompressorUI/BoundCompressorUI"),
+  expander: () => import("./ExpanderUI/BoundExpanderUI"),
   deesser: () => import("./DeesserUI/BoundDeesserUI"),
   delay: () => import("./DelayUI/BoundDelayUI"),
   reverb: () => import("./ReverbUI/BoundReverbUI"),

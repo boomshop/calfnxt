@@ -46,6 +46,7 @@ will follow.
 | **Stereo** | `calfNXTStereo.vst3` | Width, M/S, decorrelation, imaging |
 | **Transients** | `calfNXTTransients.vst3` | Attack / release shaping |
 | **Compressor** | `calfNXTCompressor.vst3` | Feed-forward dynamics (threshold / ratio / knee) |
+| **Expander** | `calfNXTExpander.vst3` | Downward expander / gate with hysteresis + hold |
 | **Multiband Compressor** | `calfNXTMbcomp.vst3` | 2–6 band LR dynamics with per-band history |
 | **Limiter** | `calfNXTLimiter.vst3` | Lookahead brickwall with ASC + oversampling |
 | **Multiband Limiter** | `calfNXTMblimiter.vst3` | Weighted multiband brickwall + final limiter |
@@ -84,6 +85,15 @@ will follow.
 - Threshold, ratio, soft **knee**, attack / release, makeup, wet/dry **mix**, bypass
 - **GR meter** + AUX transfer curve with live DSP operating point
 - Scrolling **history** chart (audio peak + GR over time, selectable window)
+
+### Expander
+
+- Calf Gate–heritage **downward expander** / gate (`GainExpansion`)
+- **Open** + **release** thresholds (hysteresis), optional **hold**, ratio, soft **knee**, **range** floor
+- **Peak / RMS / Opto** detector; **Max / Avg / Mid** stereo link
+- Sidechain **HP/LP** with listen; bypass
+- Dual transfer curves (open + release) + live operating point; **GR meter**
+- Scrolling **history** (audio / filtered detector / GR)
 
 ### Multiband Compressor
 
@@ -309,6 +319,7 @@ Then rescan plugins in your host. Bundles appear as:
 | Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
 | Transients | `~/.vst3/calfNXTTransients.vst3` |
 | Compressor | `~/.vst3/calfNXTCompressor.vst3` |
+| Expander  | `~/.vst3/calfNXTExpander.vst3`  |
 | Multiband Compressor | `~/.vst3/calfNXTMbcomp.vst3` |
 | Limiter   | `~/.vst3/calfNXTLimiter.vst3`   |
 | Multiband Limiter | `~/.vst3/calfNXTMblimiter.vst3` |
@@ -336,7 +347,7 @@ cmake --build build --target install-user-vst3
 ```
 
 `calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, Compressor,
-Multiband Compressor, Limiter, DeEsser, Delay, Reverb, …) and embeds each
+Expander, Multiband Compressor, Limiter, DeEsser, Delay, Reverb, …) and embeds each
 UI pack. `install-user-vst3` / `./tools/install-user-vst3.sh` then copies the bundles into `~/.vst3/`:
 
 | Plugin    | Path                         |
@@ -345,6 +356,7 @@ UI pack. `install-user-vst3` / `./tools/install-user-vst3.sh` then copies the bu
 | Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
 | Transients | `~/.vst3/calfNXTTransients.vst3` |
 | Compressor | `~/.vst3/calfNXTCompressor.vst3` |
+| Expander  | `~/.vst3/calfNXTExpander.vst3`  |
 | DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
 | Delay     | `~/.vst3/calfNXTDelay.vst3`     |
 | Reverb    | `~/.vst3/calfNXTReverb.vst3`    |

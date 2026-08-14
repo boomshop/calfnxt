@@ -10,6 +10,7 @@ export type PluginId =
   | 'stereo'
   | 'transients'
   | 'compressor'
+  | 'expander'
   | 'deesser'
   | 'delay'
   | 'reverb'
@@ -23,6 +24,7 @@ const PLUGIN_IDS: PluginId[] = [
   'stereo',
   'transients',
   'compressor',
+  'expander',
   'deesser',
   'delay',
   'reverb',
@@ -52,6 +54,12 @@ export {
   createBoundCompressorHost,
   type ICompressorHost,
 } from './host/compressorHost';
+
+export { ExpanderUI } from './plugins/ExpanderUI/ExpanderUI';
+export {
+  createBoundExpanderHost,
+  type IExpanderHost,
+} from './host/expanderHost';
 
 export { DeesserUI } from './plugins/DeesserUI/DeesserUI';
 export {

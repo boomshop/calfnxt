@@ -22,6 +22,7 @@ const knownPlugins = [
   "stereo",
   "transients",
   "compressor",
+  "expander",
   "deesser",
   "delay",
   "reverb",
