@@ -74,18 +74,19 @@
   > .topmenu {
     flex-shrink: 0;
     margin-left: 4px;
+  }
+}
 
-    .theme-swatch {
-      > .aux-icon {
-        color: transparent !important;
-        background: linear-gradient(
-          to top right,
-          var(--color-accent),
-          var(--color-warn)
-        );
-        -webkit-background-clip: text;
-        background-clip: text;
-      }
-    }
+/* MenuButton portals the panel to document.body — style swatch there. */
+.MenuButton-menu .theme-swatch {
+  > .aux-icon {
+    color: transparent !important;
+    background: linear-gradient(
+      to top right,
+      var(--color-accent),
+      var(--color-warn)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
   }
 }
