@@ -93,7 +93,7 @@ export function createBoundExpanderHost(): IExpanderHost {
     hold$: bindNum('hold', 0),
     release$: bindNum('release', 120),
     range$: bindNum('range', -60),
-    mode$: bindNum('mode', 0),
+    mode$: bindNum('mode', 1),
     link$: bindNum('link', 0),
     hipass$: bindNum('hipass', 20),
     lopass$: bindNum('lopass', 20000),
