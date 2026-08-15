@@ -122,17 +122,21 @@
     padding-bottom: 0;
     padding-top: 20px !important;
 
-    > .GonioMeter {
+    > .WithInfo:has(> .GonioMeter) {
       width: 180px;
-      height: 180px;
 
-      > * {
+      > .GonioMeter {
         width: 180px;
         height: 180px;
+
+        > * {
+          width: 180px;
+          height: 180px;
+        }
       }
     }
 
-    > .CorrelationMeter {
+    > .WithInfo:has(> .CorrelationMeter) {
       width: 180px;
     }
   }

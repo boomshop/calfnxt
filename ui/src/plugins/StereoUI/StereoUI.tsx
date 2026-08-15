@@ -450,8 +450,12 @@ export function StereoUI(props: StereoUIProps) {
             {...edit(paramIds.balance_out)}
           />
         </WithInfo>
-        <GonioMeter samples$={host.gonio$} />
-        <CorrelationMeter value$={host.corr$} />
+        <WithInfo title={stereoInfo.gonio}>
+          <GonioMeter samples$={host.gonio$} />
+        </WithInfo>
+        <WithInfo title={stereoInfo.corr}>
+          <CorrelationMeter value$={host.corr$} />
+        </WithInfo>
       </div>
     </div>
   );

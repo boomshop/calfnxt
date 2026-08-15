@@ -66,4 +66,10 @@ export const stereoInfo = {
 
   balanceOut:
     'Final left/right output balance after all spatial processing. Trim a skewed master or stem without redoing mid/side work.',
+
+  gonio:
+    'Goniometer (vectorscope): each sample is plotted as L vs R. A vertical line is mono (center); a cloud that fans left/right is wider stereo. Circles/ellipses suggest phase rotation; a thin diagonal or inverted blob often means polarity / out-of-phase issues. Use it to judge image width and mono risk at a glance.',
+
+  corr:
+    'Stereo correlation (−1…+1). Near +1 = highly mono-compatible (L and R move together). Around 0 = wide / diffuse. Negative values mean out-of-phase content that can cancel in mono — watch the low end especially. A healthy master usually sits positive; brief dips are fine, sustained negatives are a red flag.',
 } as const;
