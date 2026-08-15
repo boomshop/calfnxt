@@ -30,7 +30,15 @@ fixture envelope (`gen_synthetic_viz.mjs` packs it into per-band
 history uses the same compressor envelope remapped to `[audio, grLin]`
 (see `fixtures/limiter/`).
 
-Regenerate synthetic viz (meters / envelopes) without extraction:
+Live WebKit captures (`fixtures/<id>/capture.json`) win over synthetic packs.
+Import / refresh:
+
+```bash
+python3 scripts/import_capture.py compressor fixtures/compressor/capture.json
+```
+
+Regenerate **missing** synthetic viz only (never clobbers existing `viz.json`
+or anything with a `capture.json`):
 
 ```bash
 node scripts/gen_synthetic_viz.mjs

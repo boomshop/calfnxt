@@ -307,10 +307,14 @@ for (const [id, viz] of Object.entries(packs)) {
   const dir = path.join(fixtures, id);
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, 'viz.json');
-  // Keep live captures (import_capture.py) — do not clobber with synthetic curves.
+  // Never clobber live captures or hand-tuned viz — use import_capture.py.
   const capture = path.join(dir, 'capture.json');
   if (fs.existsSync(capture)) {
-    console.log('skip', file, '(capture.json present)');
+    console.log('skip', file, '(capture.json present — import_capture.py)');
+    continue;
+  }
+  if (fs.existsSync(file)) {
+    console.log('skip', file, '(exists)');
     continue;
   }
   fs.writeFileSync(file, `${JSON.stringify(viz, null, 2)}\n`);
