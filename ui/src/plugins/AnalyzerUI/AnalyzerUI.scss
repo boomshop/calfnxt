@@ -43,14 +43,23 @@
     min-width: 0;
     min-height: 0;
 
-    > .GonioMeter {
+    > .WithInfo:has(> .GonioMeter) {
       flex: 1 1 0;
       min-width: 0;
       min-height: 0;
+      display: flex;
+      width: 100%;
+
+      > .GonioMeter {
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 0;
+      }
     }
 
-    > .CorrelationMeter {
+    > .WithInfo:has(> .CorrelationMeter) {
       flex: 0 0 auto;
+      width: 100%;
     }
   }
 }

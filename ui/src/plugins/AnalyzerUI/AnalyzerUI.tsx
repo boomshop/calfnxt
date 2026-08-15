@@ -99,8 +99,12 @@ export function AnalyzerUI(props: AnalyzerUIProps) {
       </div>
 
       <div className="block gonio">
-        <GonioMeter samples$={host.gonio$} />
-        <CorrelationMeter value$={host.corr$} />
+        <WithInfo title={analyzerInfo.gonio}>
+          <GonioMeter samples$={host.gonio$} />
+        </WithInfo>
+        <WithInfo title={analyzerInfo.corr}>
+          <CorrelationMeter value$={host.corr$} />
+        </WithInfo>
       </div>
     </div>
   );
