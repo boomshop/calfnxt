@@ -197,5 +197,18 @@
       { "type": 4, "freq": 30.0, "q": 0.707, "slope": 36.0 },
       { "type": 3, "freq": 10000.0, "q": 0.707, "slope": 36.0 }
     ]
-  }
+  },
+  "trailing_parameters": [
+    {
+      "id": "spectrum",
+      "name": "Spectrum",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    }
+  ]
 }

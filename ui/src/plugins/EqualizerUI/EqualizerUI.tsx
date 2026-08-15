@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { EQChart, Icon, Knob, Select, Toggle, WithInfo } from '../../widgets';
+import {
+  EQChart,
+  Buttons,
+  Icon,
+  Knob,
+  Select,
+  Toggle,
+  WithInfo,
+} from '../../widgets';
 import {
   EQ_DEFAULT_SELECTED_INDEX,
   EQ_DYN_ATTACK_MAX,
@@ -18,12 +26,14 @@ import {
   EQ_PASS_SLOPE_ENTRIES,
   EQ_Q_MAX,
   EQ_Q_MIN,
+  EQ_SPECTRUM_ENTRIES,
   bandSupportsDyn,
   isPassFilter,
   type EqFilterType,
   type IEqualizerBand,
   type IEqualizerHost,
 } from '../../host/equalizerHost';
+import { paramIds } from '../../generated/equalizerModel';
 import '../PluginUI.scss';
 import './EqualizerUI.scss';
 import { Header } from '../../components';
@@ -102,7 +112,6 @@ export interface EqualizerUIProps {
   host: IEqualizerHost;
 }
 
-
 function BandRow(props: {
   band: IEqualizerBand;
   index: number;
@@ -111,7 +120,10 @@ function BandRow(props: {
 }) {
   const { band, index, selected, onSelect } = props;
   const active = useDynamicValueReadonly(band.active$, false);
-  const filterType = useDynamicValueReadonly<EqFilterType>(band.type$, 'parametric');
+  const filterType = useDynamicValueReadonly<EqFilterType>(
+    band.type$,
+    'parametric',
+  );
   const dyn = useDynamicValueReadonly(band.dyn$, false);
   const listen = useDynamicValueReadonly(band.listen$, false);
   const dynActive = bandSupportsDyn(filterType) && dyn;
@@ -158,7 +170,10 @@ function BandRow(props: {
 
 function BandControls(props: { band: IEqualizerBand }) {
   const { band } = props;
-  const filterType = useDynamicValueReadonly<EqFilterType>(band.type$, 'parametric');
+  const filterType = useDynamicValueReadonly<EqFilterType>(
+    band.type$,
+    'parametric',
+  );
   const pass = isPassFilter(filterType);
   const canDyn = bandSupportsDyn(filterType);
   return (
@@ -333,6 +348,7 @@ function BandControls(props: { band: IEqualizerBand }) {
 export function EqualizerUI(props: EqualizerUIProps) {
   const { host } = props;
   const bands = host.bands;
+  const spectrumMode = useDynamicValueReadonly(host.spectrum$, 0);
   const [selectedBandId, setSelectedBandId] = useState(
     () => bands[EQ_DEFAULT_SELECTED_INDEX]?.id ?? bands[0]?.id ?? '',
   );
@@ -364,7 +380,25 @@ export function EqualizerUI(props: EqualizerUIProps) {
         size="normal"
         selectedBandId={selectedBandId}
         onSelectBand={selectBand}
+        spectrum$={host.spectrumData$}
+        spectrumMode={Math.round(spectrumMode)}
       />
+
+      <div className="block spectrum">
+        <div className="title">Analyzer</div>
+        <WithInfo title={equalizerInfo.spectrum} className="info-block">
+          <Buttons
+            layout="horizontal"
+            entries={[...EQ_SPECTRUM_ENTRIES]}
+            value={Math.round(spectrumMode)}
+            onChange={(v) => {
+              host.beginEdit(paramIds.spectrum);
+              host.spectrum$.set(v as number);
+              host.endEdit(paramIds.spectrum);
+            }}
+          />
+        </WithInfo>
+      </div>
 
       {selectedBand ? <BandControls band={selectedBand} /> : null}
 

@@ -25,6 +25,7 @@ import {
   bindBoolParamToHost,
   bindParamToHost,
   bindVizGains,
+  bindVizSpectrum,
   postBegin,
   postEnd,
 } from '../bind_param';
@@ -493,23 +494,48 @@ export function createBoundEqualizerBands(): {
 
 export interface IEqualizerHost {
   bypass$: DynamicValue<boolean>;
+  /** 0 Off / 1 Linear / 2 −3 dB/oct / 3 −4.5 dB/oct */
+  spectrum$: DynamicValue<number>;
+  spectrumData$: DynamicValue<number[]>;
   bands: IEqualizerBand[];
   beginBypassEdit: () => void;
   endBypassEdit: () => void;
+  beginEdit: (id: number) => void;
+  endEdit: (id: number) => void;
   dispose: () => void;
 }
+
+export const EQ_SPECTRUM_ENTRIES = [
+  { label: 'Off', value: 0 },
+  { label: 'Linear', value: 1 },
+  { label: '−3 dB', value: 2 },
+  { label: '−4.5 dB', value: 3 },
+] as const;
 
 export function createBoundEqualizerHost(): IEqualizerHost {
   const bypass$ = DynamicValue.fromConstant(false);
   const unbindBypass = bindBoolParamToHost(bypass$, paramIds.bypass);
+
+  const spectrum$ = DynamicValue.fromConstant(0);
+  const unbindSpectrum = bindParamToHost(spectrum$, paramIds.spectrum);
+
+  const spectrumData$ = DynamicValue.fromConstant<number[]>([]);
+  const unbindSpectrumData = bindVizSpectrum(spectrumData$, 'fft');
+
   const { bands, dispose: disposeBands } = createBoundEqualizerBands();
   return {
     bypass$,
+    spectrum$,
+    spectrumData$,
     bands,
     beginBypassEdit: () => postBegin(paramIds.bypass),
     endBypassEdit: () => postEnd(paramIds.bypass),
+    beginEdit: (id) => postBegin(id),
+    endEdit: (id) => postEnd(id),
     dispose: () => {
       unbindBypass();
+      unbindSpectrum();
+      unbindSpectrumData();
       disposeBands();
     },
   };

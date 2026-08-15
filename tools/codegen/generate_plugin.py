@@ -58,11 +58,16 @@ def with_standard_io_gains(params: list[dict[str, Any]]) -> list[dict[str, Any]]
 
 
 def expand_bands(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Expand optional bands{count,params,defaults} into flat parameter list."""
+    """Expand optional bands{count,params,defaults} into flat parameter list.
+
+    Optional trailing_parameters are appended after all bands so new global
+    params do not shift band ParamIDs (presets / automation stay stable).
+    """
     bands = data.get("bands")
     base = list(data.get("parameters") or [])
+    trailing = [dict(p) for p in (data.get("trailing_parameters") or [])]
     if not bands:
-        return base
+        return base + trailing
     count = int(bands["count"])
     template = bands["params"]
     defaults = list(bands.get("defaults") or [])
@@ -79,6 +84,7 @@ def expand_bands(data: dict[str, Any]) -> list[dict[str, Any]]:
             if key in override:
                 p["default"] = override[key]
             out.append(p)
+    out.extend(trailing)
     return out
 
 

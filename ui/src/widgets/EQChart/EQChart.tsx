@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Equalizer as AuxEqualizer,
   EqBand as AuxEqBand,
@@ -20,9 +20,17 @@ import {
   bandSupportsDyn,
 } from '../../host/equalizerHost';
 import { DynamicValue } from '@deutschesoft/awml';
+import { postToHost } from '../../bridge';
 import {
   useChartGradient,
 } from '../../hooks/useChartGradient';
+import {
+  SPECTRUM_DB_MIN,
+  SPECTRUM_VIZ_ID,
+  binToHz,
+  parseSpectrumPayload,
+  tiltDb,
+} from '../SpectrumChart/SpectrumChart';
 import './EQChart.scss';
 
 const EqualizerBindings = {};
@@ -59,6 +67,47 @@ export interface EQChartProps {
   /** Select a band (never null — empty chart clicks do not clear selection). */
   onSelectBand?: (id: string) => void;
   className?: string;
+  /**
+   * Optional analyzer overlay. `spectrumMode`: 0 Off / 1 Linear / 2 −3 / 3 −4.5.
+   * When Off, no vizcfg and no graph updates (DSP also skips FFT).
+   */
+  spectrum$?: DynamicValue<number[]>;
+  spectrumMode?: number;
+}
+
+/**
+ * Map spectrum dBFS onto the full EQ gain axis (same visual span as Analyzer,
+ * just relabeled): −96 → yMin (−24), 0 → yMax (+24).
+ */
+function spectrumDbToEqY(db: number, yMin: number, yMax: number): number {
+  const t = (db - SPECTRUM_DB_MIN) / (0 - SPECTRUM_DB_MIN);
+  return yMin + Math.min(1, Math.max(0, t)) * (yMax - yMin);
+}
+
+function spectrumSlope(mode: number): number {
+  const m = Math.round(mode);
+  if (m === 2) return 3;
+  if (m === 3) return 4.5;
+  return 0;
+}
+
+function spectrumSeriesDots(
+  data: Float32Array,
+  bins: number,
+  yMin: number,
+  yMax: number,
+  slope: number,
+): { x: number; y: number }[] {
+  if (bins < 1) return [];
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i < bins; ++i) {
+    const hz = binToHz(i, bins);
+    if (hz < EQ_FREQ_MIN || hz > EQ_FREQ_MAX) continue;
+    const raw = data[i] ?? SPECTRUM_DB_MIN;
+    const db = tiltDb(raw, hz, slope);
+    pts.push({ x: hz, y: spectrumDbToEqY(db, yMin, yMax) });
+  }
+  return pts;
 }
 
 /**
@@ -76,10 +125,21 @@ export function EQChart(props: EQChartProps) {
     selectedBandId = null,
     onSelectBand,
     className,
+    spectrum$,
+    spectrumMode = 0,
   } = props;
 
   const [eqWidget, setEqWidget] = useState<unknown>(null);
   const isMini = size === 'mini';
+  const spectrumOn = !isMini && Math.round(spectrumMode) >= 1;
+  const spectrumGraphRef = useRef<{
+    set: (k: string, v: unknown) => void;
+    element?: SVGElement;
+  } | null>(null);
+  const spectrumModeRef = useRef(spectrumMode);
+  const yRangeRef = useRef(yRange);
+  spectrumModeRef.current = spectrumMode;
+  yRangeRef.current = yRange;
 
   const eq = eqWidget as {
     svg: SVGSVGElement;
@@ -348,6 +408,113 @@ export function EQChart(props: EQChartProps) {
     ]);
     return () => unsubs.forEach((u) => u());
   }, [handles, graphs, bandModels, selectedBandId]);
+
+  // Spectrum analyzer fill (behind EQ curves). Off → no vizcfg / no updates.
+  useEffect(() => {
+    if (!eqWidget || isMini || !spectrum$) return;
+    const eq = eqWidget as {
+      addGraph: (opts: unknown) => {
+        set: (k: string, v: unknown) => void;
+        element?: SVGElement;
+      };
+      removeGraph: (g: unknown) => void;
+      isDestructed?: () => boolean;
+      element?: Element;
+      svg?: SVGSVGElement;
+      baseline?: { toFront: () => void };
+    };
+    if (eq.isDestructed?.()) return;
+
+    if (!spectrumOn) {
+      const g = spectrumGraphRef.current;
+      if (g) {
+        g.set('dots', null);
+      }
+      return;
+    }
+
+    if (!spectrumGraphRef.current) {
+      const g = eq.addGraph({
+        dots: null,
+        type: 'H2',
+        mode: 'bottom',
+        class: 'eq-spectrum',
+      });
+      g.element?.classList.add('eq-spectrum');
+      spectrumGraphRef.current = g;
+      // Keep under band curves / baseline.
+      eq.baseline?.toFront?.();
+    }
+
+    const el = eq.element ?? eq.svg;
+    let ro: ResizeObserver | null = null;
+    if (el) {
+      const sendBins = () => {
+        const width = Math.round(el.getBoundingClientRect().width);
+        const next = Math.max(32, Math.min(256, width));
+        postToHost({ t: 'vizcfg', id: SPECTRUM_VIZ_ID, bins: next });
+      };
+      sendBins();
+      let raf = 0;
+      ro = new ResizeObserver(() => {
+        if (raf) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(sendBins);
+      });
+      ro.observe(el);
+    }
+
+    let raf = 0;
+    const paint = (raw: number[]) => {
+      const g = spectrumGraphRef.current;
+      if (!g || eq.isDestructed?.()) return;
+      const payload = parseSpectrumPayload(raw);
+      if (!payload) {
+        g.set('dots', null);
+        return;
+      }
+      const yr = yRangeRef.current;
+      const slope = spectrumSlope(spectrumModeRef.current);
+      g.set(
+        'dots',
+        spectrumSeriesDots(
+          payload.avg,
+          payload.bins,
+          yr.min,
+          yr.max,
+          slope,
+        ),
+      );
+    };
+
+    const unsub = spectrum$.subscribe((v) => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        paint(Array.isArray(v) ? v : []);
+      });
+    }, false);
+    paint(Array.isArray(spectrum$.value) ? spectrum$.value : []);
+
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      unsub();
+      ro?.disconnect();
+    };
+  }, [eqWidget, isMini, spectrum$, spectrumOn]);
+
+  // Detach spectrum graph on unmount / mini switch.
+  useEffect(() => {
+    return () => {
+      const eq = eqWidget as {
+        removeGraph?: (g: unknown) => void;
+        isDestructed?: () => boolean;
+      } | null;
+      const g = spectrumGraphRef.current;
+      spectrumGraphRef.current = null;
+      if (!eq || !g || eq.isDestructed?.()) return;
+      eq.removeGraph?.(g);
+    };
+  }, [eqWidget]);
 
   const cls = ['EQChart', size, className ?? ''].filter(Boolean).join(' ');
 

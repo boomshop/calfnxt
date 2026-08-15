@@ -1,14 +1,28 @@
 .EqualizerUI {
   display: grid;
-  grid-template-areas: 'graph bands' 'controls controls';
+  grid-template-areas: 'graph spectrum' 'graph bands' 'controls controls';
   grid-template-columns: 1fr auto;
-  grid-template-rows: 1fr 168px;
+  grid-template-rows: auto 1fr 168px;
   gap: var(--gap);
   align-items: stretch;
 
-  > .chart {
+  > .EQChart {
     grid-area: graph;
     position: relative;
+  }
+
+  > .spectrum {
+    grid-area: spectrum;
+
+    > .WithInfo {
+      > .Buttons {
+        > .Button {
+          height: auto;
+          min-height: 0;
+          flex: 1 1 auto;
+        }
+      }
+    }
   }
 
   > .controls {
@@ -52,7 +66,7 @@
   > .bands {
     grid-area: bands;
     display: grid;
-    gap: 4px;
+    gap: 2px;
     grid-template-columns: 1fr 1fr;
     position: relative;
     width: 216px;

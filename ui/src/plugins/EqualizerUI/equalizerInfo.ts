@@ -39,4 +39,7 @@ export const equalizerInfo = {
 
   listen:
     'Solos this band’s detector into the output so you can tune Dyn (and the band focus) by ear. While listening, the normal EQ audio path is bypassed for that solo — you’re hearing what triggers the dynamics, not the final mix.',
+
+  spectrum:
+    'Analyzer fill behind the EQ curve (post-EQ, before Out gain). Off = no FFT cost. Linear = raw dBFS. −3 / −4.5 dB/oct = pink-style tilt pivoted at 1 kHz.',
 } as const;

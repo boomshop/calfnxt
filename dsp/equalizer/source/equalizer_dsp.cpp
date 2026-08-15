@@ -13,7 +13,8 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5845u; // 'CNXE'
-constexpr uint32 kStateVersion = 2;         // 12 params/band incl. dyn_listen
+constexpr uint32 kStateVersion = 3;         // + spectrum (trailing, after bands)
+constexpr uint32 kStateVersionBandsOnly = 2;
 } // namespace
 
 EqualizerPlugin::EqualizerPlugin()
@@ -43,6 +44,8 @@ tresult PLUGIN_API EqualizerPlugin::setActive(TBool state)
       bands_[i].setSampleRate(sampleRate_);
       bands_[i].reset();
     }
+    spectrum_.setSampleRate(sampleRate_);
+    spectrum_.reset();
     applyBandTargetsFromParams();
   }
   return EffectBase::setActive(state);
@@ -53,6 +56,7 @@ tresult PLUGIN_API EqualizerPlugin::setupProcessing(ProcessSetup& newSetup)
   sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
   for (int i = 0; i < kEqBandCount; ++i)
     bands_[i].setSampleRate(sampleRate_);
+  spectrum_.setSampleRate(sampleRate_);
   return EffectBase::setupProcessing(newSetup);
 }
 
@@ -70,6 +74,21 @@ int EqualizerPlugin::takeBandGainsDb(float* out, int maxOut)
   for (int i = 0; i < n; ++i)
     out[i] = displayGainsDb_[i];
   return n;
+}
+
+int EqualizerPlugin::takeSpectrum(float* out, int maxOut)
+{
+  if (!spectrumActive_.load(std::memory_order_relaxed))
+    return 0;
+  return spectrum_.takeSpectrum(out, maxOut);
+}
+
+void EqualizerPlugin::configureVizBins(const char* id, int bins)
+{
+  if (!id || bins < 1)
+    return;
+  if (std::strcmp(id, "fft") == 0)
+    spectrum_.configureBins(bins);
 }
 
 void EqualizerPlugin::applyBandTargetsFromParams()
@@ -115,39 +134,54 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
   applyBandTargetsFromParams();
 
   const bool bypass = params_[kParamBypass] >= 0.5f;
+  const int spectrumMode =
+    static_cast<int>(std::lround(std::clamp(params_[kParamSpectrum], 0.f, 3.f)));
+  const bool spectrumOn = spectrumMode >= 1;
+  spectrumActive_.store(spectrumOn, std::memory_order_relaxed);
+
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
   io_.setBypassGains(bypass);
   if (!io_.begin(data))
     return kResultOk;
 
-  if (!hasAnyActiveBandsOrListen())
+  const bool doEq = !bypass && hasAnyActiveBandsOrListen();
+  if (!doEq && !spectrumOn)
   {
     io_.end(data);
     return kResultOk;
   }
 
-  if (!bypass)
+  if (spectrumOn)
   {
-    int listenBand = -1;
+    spectrum_.setSampleRate(sampleRate_);
+    spectrum_.setFftSize(2048);
+    spectrum_.setHold(false);
+  }
+
+  int listenBand = -1;
+  if (doEq)
+  {
     for (int b = 0; b < kEqBandCount; ++b)
     {
       if (listenBand < 0 && bands_[b].isListening())
         listenBand = b;
     }
-
     for (int b = 0; b < kEqBandCount; ++b)
       bands_[b].prepareBlock();
+  }
 
-    const int32 nFrames = data.numSamples;
-    const int32 nCh = data.outputs[0].numChannels;
+  const int32 nFrames = data.numSamples;
+  const int32 nCh = data.outputs[0].numChannels;
 
-    if (data.symbolicSampleSize == kSample32)
+  if (data.symbolicSampleSize == kSample32)
+  {
+    auto** out = data.outputs[0].channelBuffers32;
+    for (int32 i = 0; i < nFrames; ++i)
     {
-      auto** out = data.outputs[0].channelBuffers32;
-      for (int32 i = 0; i < nFrames; ++i)
+      float L = nCh > 0 ? out[0][i] : 0.f;
+      float R = nCh > 1 ? out[1][i] : L;
+      if (doEq)
       {
-        float L = out[0][i];
-        float R = nCh > 1 ? out[1][i] : L;
         if (listenBand >= 0)
           bands_[listenBand].processListen(L, R);
         else
@@ -155,18 +189,25 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
           for (int b = 0; b < kEqBandCount; ++b)
             bands_[b].process(L, R);
         }
-        out[0][i] = L;
-        if (nCh > 1)
-          out[1][i] = R;
       }
+      // Post-EQ tap (before out_gain) — overlay shows the shaped signal.
+      if (spectrumOn)
+        spectrum_.process(L, R);
+      if (nCh > 0)
+        out[0][i] = L;
+      if (nCh > 1)
+        out[1][i] = R;
     }
-    else
+  }
+  else
+  {
+    auto** out = data.outputs[0].channelBuffers64;
+    for (int32 i = 0; i < nFrames; ++i)
     {
-      auto** out = data.outputs[0].channelBuffers64;
-      for (int32 i = 0; i < nFrames; ++i)
+      float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
+      float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
+      if (doEq)
       {
-        float L = static_cast<float>(out[0][i]);
-        float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
         if (listenBand >= 0)
           bands_[listenBand].processListen(L, R);
         else
@@ -174,17 +215,25 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
           for (int b = 0; b < kEqBandCount; ++b)
             bands_[b].process(L, R);
         }
-        out[0][i] = L;
-        if (nCh > 1)
-          out[1][i] = R;
       }
+      if (spectrumOn)
+        spectrum_.process(L, R);
+      if (nCh > 0)
+        out[0][i] = L;
+      if (nCh > 1)
+        out[1][i] = R;
     }
+  }
 
+  if (doEq)
+  {
     for (int b = 0; b < kEqBandCount; ++b)
       bands_[b].sanitize();
-
     publishDisplayGains();
   }
+
+  if (spectrumOn)
+    spectrum_.publish();
 
   io_.end(data);
   return kResultOk;
@@ -203,17 +252,26 @@ tresult PLUGIN_API EqualizerPlugin::setState(IBStream* state)
   int32 count = 0;
   if (!streamer.readInt32u(magic) || magic != kStateMagic)
     return kResultFalse;
-  if (!streamer.readInt32u(version) || version != kStateVersion)
+  if (!streamer.readInt32u(version))
     return kResultFalse;
-  if (!streamer.readInt32(count) || count != kParamCount)
+  if (!streamer.readInt32(count) || count <= 0)
     return kResultFalse;
 
-  float plains[kParamCount];
-  for (int i = 0; i < kParamCount; ++i)
+  // v2: bands only (no trailing spectrum). v3: + spectrum at end.
+  const int32 expect =
+    version == kStateVersion             ? kParamCount
+    : version == kStateVersionBandsOnly  ? kParamCount - 1
+                                         : -1;
+  if (expect < 0 || count != expect)
+    return kResultFalse;
+
+  float plains[kParamCount] {};
+  for (int i = 0; i < count; ++i)
   {
     if (!streamer.readFloat(plains[i]))
       return kResultFalse;
   }
+  // New trailing params keep their registered defaults when loading older state.
   for (int i = 0; i < kParamCount; ++i)
   {
     if (auto* p = getParameterObject(static_cast<ParamID>(i)))

@@ -8,6 +8,12 @@
         fill: var(--color);
         fill-opacity: 0.05;
 
+        &.eq-spectrum {
+          stroke: none !important;
+          fill: var(--color);
+          fill-opacity: 0.1;
+        }
+
         &.eq-selected {
           stroke: var(--color-least);
           stroke-width: 1px;
