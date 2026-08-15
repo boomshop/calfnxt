@@ -7,8 +7,11 @@ import { useChartGradient } from '../../hooks/useChartGradient';
 import { themeColors$ } from '../../theme/themeColors';
 import './SpectrumChart.scss';
 
-export const SPECTRUM_DB_MIN = -90;
+/** Chart display range (visible). DSP floor is lower (−120) for tilt footroom. */
+export const SPECTRUM_DB_MIN = -96;
 export const SPECTRUM_DB_MAX = 0;
+/** Matches SpectrumTap::kFloorDb — silence sits below the chart after tilt. */
+const SPECTRUM_DSP_FLOOR_DB = -120;
 export const SPECTRUM_VIZ_ID = 'fft';
 
 /** Analyzer display modes — keep in sync with DSP `mode` param. */
@@ -33,7 +36,7 @@ const DB_GRID = 6;
 const DB_LABEL = 12;
 const F_MIN = 20;
 const F_MAX = 20000;
-const CORRIDOR_HALF_DB = 6;
+const CORRIDOR_HALF_DB = 9;
 /**
  * Extra UI smooth on L−R. L/R are already DSP-EMA'd (~100 ms); this adds a
  * light calm on the bipolar balance curve (~120 ms at ~30 Hz viz).
@@ -190,10 +193,8 @@ function seriesDots(
   if (bins < 1) return [];
   const ys: number[] = [];
   for (let i = 0; i < bins; ++i) {
-    const raw = data[i] ?? yMin;
-    let y = tiltDb(raw, binToHz(i, bins), slope);
-    // Snap near-floor to floor so the fill/stroke ends at the bottom.
-    if (y <= yMin + 0.75) y = yMin;
+    const raw = data[i] ?? SPECTRUM_DSP_FLOOR_DB;
+    const y = tiltDb(raw, binToHz(i, bins), slope);
     ys.push(Math.min(yMax, Math.max(yMin, y)));
   }
   const first = ys[0]!;
@@ -215,7 +216,7 @@ function midbandMean(data: Float32Array, bins: number, slope: number): number {
   for (let i = 0; i < bins; ++i) {
     const f = binToHz(i, bins);
     if (f < 200 || f > 2000) continue;
-    sum += tiltDb(data[i] ?? SPECTRUM_DB_MIN, f, slope);
+    sum += tiltDb(data[i] ?? SPECTRUM_DSP_FLOOR_DB, f, slope);
     n += 1;
   }
   return n > 0 ? sum / n : -24;
@@ -288,6 +289,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
   const modeRef = useRef(mode);
   const holdRef = useRef(hold);
   const scaleRef = useRef(scale);
+  const binsRef = useRef(128);
   const diffSmoothRef = useRef<Float32Array | null>(null);
   modeRef.current = mode;
   holdRef.current = hold;
@@ -299,6 +301,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
   const [gradTargets, setGradTargets] = useState<SVGElement[]>([]);
   const [bins, setBins] = useState(128);
+  binsRef.current = bins;
   const corridorElRef = useRef<HTMLDivElement | null>(null);
   const isSpectralizer = Math.round(mode) === SPECTRUM_MODE.Spectralizer;
   const isStereo = Math.round(mode) === SPECTRUM_MODE.Stereo;
@@ -362,7 +365,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
 
       for (let x = 0; x < w; ++x) {
         const bin = Math.min(n - 1, Math.floor((x / w) * n));
-        const raw = payload.avg[bin] ?? SPECTRUM_DB_MIN;
+        const raw = payload.avg[bin] ?? SPECTRUM_DSP_FLOOR_DB;
         const db = tiltDb(raw, binToHz(bin, n), slope);
         const t = Math.min(1, Math.max(0, (db - SPECTRUM_DB_MIN) / range));
         const i = y0 + x * 4;
@@ -403,7 +406,8 @@ export function SpectrumChart(props: SpectrumChartProps) {
       const graphs = graphsRef.current;
       if (!chart || chart.isDestructed?.()) return;
 
-      if (payload.bins !== bins) {
+      if (payload.bins !== binsRef.current) {
+        binsRef.current = payload.bins;
         setBins(payload.bins);
         chart.set('range_x', { min: 0, max: payload.bins });
         chart.set('grid_x', buildFreqGridX(payload.bins));
@@ -446,7 +450,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
           diffSmoothRef.current = smooth;
         }
         for (let i = 0; i < payload.bins; ++i) {
-          const d = (payload.L[i] ?? SPECTRUM_DB_MIN) - (payload.R[i] ?? SPECTRUM_DB_MIN);
+          const d = (payload.L[i] ?? SPECTRUM_DSP_FLOOR_DB) - (payload.R[i] ?? SPECTRUM_DSP_FLOOR_DB);
           smooth[i] = DIFF_EMA * smooth[i] + (1 - DIFF_EMA) * d;
         }
         gHold?.set('dots', seriesDots(smooth, payload.bins, -24, 24, 0));
@@ -473,7 +477,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
       gHold?.toFront?.();
       reassertRef.current();
     },
-    [bins, paintWaterfall],
+    [paintWaterfall],
   );
 
   const detach = useCallback(() => {
@@ -494,53 +498,63 @@ export function SpectrumChart(props: SpectrumChartProps) {
       chartRef.current = chart;
       if (chart.isDestructed?.()) return;
 
-      chart.set('range_x', { min: 0, max: bins });
-      chart.set('grid_x', buildFreqGridX(bins));
+      const b = binsRef.current;
+      chart.set('range_x', { min: 0, max: b });
+      chart.set('grid_x', buildFreqGridX(b));
 
-      const specs = [
-        { className: 'spec-primary', mode: 'bottom' as const, gradient: true },
-        { className: 'spec-secondary', mode: 'bottom' as const, gradient: false },
-        { className: 'spec-hold', mode: 'line' as const, gradient: false },
-      ];
-      const aux: AuxGraph[] = [];
-      const grads: SVGElement[] = [];
-      for (const spec of specs) {
-        const g = chart.addGraph({
-          dots: null,
-          type: 'L',
-          mode: spec.mode,
-          class: spec.className,
-        });
-        g.element?.classList.add(spec.className);
-        if (spec.gradient && g.element) grads.push(g.element);
-        aux.push(g);
+      // Idempotent: use-aux-widgets re-calls widgetRef when the callback
+      // identity changes, without nulling the old ref — never double-add.
+      if (graphsRef.current.length === 0) {
+        const specs = [
+          // H2 = horizontal smooth (no vertical overshoot); softer than L polylines.
+          { className: 'spec-primary', mode: 'bottom' as const, gradient: true, type: 'H2' },
+          { className: 'spec-secondary', mode: 'bottom' as const, gradient: false, type: 'H2' },
+          { className: 'spec-hold', mode: 'line' as const, gradient: false, type: 'H2' },
+        ];
+        const aux: AuxGraph[] = [];
+        const grads: SVGElement[] = [];
+        for (const spec of specs) {
+          const g = chart.addGraph({
+            dots: null,
+            type: spec.type,
+            mode: spec.mode,
+            class: spec.className,
+          });
+          g.element?.classList.add(spec.className);
+          if (spec.gradient && g.element) grads.push(g.element);
+          aux.push(g);
+        }
+        graphsRef.current = aux;
+        setGradTargets(grads);
       }
-      graphsRef.current = aux;
+
       setChartSvg(chart.svg ?? null);
-      setGradTargets(grads);
       buildPoints(dataRef.current);
 
-      const el = chart.element ?? chart.svg;
-      if (el) {
-        sendVizBins(el);
-        let raf = 0;
-        const ro = new ResizeObserver(() => {
-          if (raf) cancelAnimationFrame(raf);
-          raf = requestAnimationFrame(() => sendVizBins(el));
-        });
-        ro.observe(el);
-        resizeRoRef.current = ro;
+      if (!resizeRoRef.current) {
+        const el = chart.element ?? chart.svg;
+        if (el) {
+          sendVizBins(el);
+          let raf = 0;
+          const ro = new ResizeObserver(() => {
+            if (raf) cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(() => sendVizBins(el));
+          });
+          ro.observe(el);
+          resizeRoRef.current = ro;
+        }
       }
     },
-    [bins, buildPoints, sendVizBins],
+    [buildPoints, sendVizBins],
   );
 
   /** Spectralizer: AUX Chart used only as frequency/dB grid overlay. */
   const gridAttach = useCallback(
     (chart: AuxChartInstance) => {
       if (chart.isDestructed?.()) return;
-      chart.set('range_x', { min: 0, max: bins });
-      chart.set('grid_x', buildFreqGridX(bins));
+      const b = binsRef.current;
+      chart.set('range_x', { min: 0, max: b });
+      chart.set('grid_x', buildFreqGridX(b));
       chart.set('range_y', { min: SPECTRUM_DB_MIN, max: SPECTRUM_DB_MAX });
       chart.set(
         'grid_y',
@@ -548,7 +562,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
       );
       chart.set('show_grid', true);
     },
-    [bins],
+    [],
   );
 
   const gridWidgetRef = useCallback(
@@ -564,7 +578,6 @@ export function SpectrumChart(props: SpectrumChartProps) {
         detach();
         return;
       }
-      detach();
       attach(chart);
     },
     [attach, detach],

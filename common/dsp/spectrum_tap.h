@@ -9,7 +9,7 @@
 // Viz payload layout (kind:"spectrum"):
 //   v[0] = bins N
 //   v[1] = hold (0/1)
-//   then avg[N], max[N], L[N], R[N]  (dBFS, typically −90…0)
+//   then avg[N], max[N], L[N], R[N]  (dBFS, typically −120…0)
 // Total floats: 2 + 4*N
 
 #include "dsp_math.h"
@@ -36,7 +36,7 @@ public:
   static constexpr int kMaxFftSize = 8192;
   static constexpr int kMaxBins = 256;
   static constexpr int kMinBins = 32;
-  static constexpr float kFloorDb = -90.f;
+  static constexpr float kFloorDb = -120.f;
   static constexpr float kCeilDb = 0.f;
   /** Display EMA time constant (Average / L / R). */
   static constexpr double kEmaTauSec = 0.1;
@@ -70,7 +70,14 @@ public:
     pendingFftSize_.store(size, std::memory_order_relaxed);
   }
 
-  void setHold(bool on) { hold_ = on; }
+  void setHold(bool on)
+  {
+    // Clear peak buffer when Hold is turned off so re-enabling does not
+    // briefly show the previous frozen capture.
+    if (!on && hold_)
+      std::fill(maxDb_.begin(), maxDb_.end(), kFloorDb);
+    hold_ = on;
+  }
   bool hold() const { return hold_; }
 
   /** UI→DSP bin request (applied on next hop; audio-thread safe). */

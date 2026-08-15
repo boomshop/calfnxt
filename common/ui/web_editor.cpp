@@ -1022,7 +1022,7 @@ void WebEditor::flushViz()
       {
         float v = spectrum[i];
         if (!std::isfinite(v))
-          v = -90.f;
+          v = -120.f;
         spectrum[i] = std::clamp(v, -120.f, 12.f);
       }
       flushVizArray(spectrumId, "spectrum", spectrum, nSpec);

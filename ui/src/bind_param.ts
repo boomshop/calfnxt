@@ -296,7 +296,7 @@ export function bindVizSpectrum(dv: DynamicValue<number[]>, id: string): () => v
     }
     const clean = v.map((x, i) => {
       if (typeof x !== "number" || !Number.isFinite(x))
-        return i < 2 ? 0 : -90;
+        return i < 2 ? 0 : -120;
       if (i === 0)
         return Math.min(256, Math.max(1, Math.round(x)));
       if (i === 1)

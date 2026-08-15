@@ -28,18 +28,12 @@
     z-index: 3;
     pointer-events: none;
     box-sizing: border-box;
-    background: transparent;
-    opacity: 0.33;
-    border-top: 1px solid var(--color);
-    border-bottom: 1px solid var(--color);
-
-    &::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: var(--color);
-      opacity: 0.25;
-    }
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--color) 8%, transparent),
+      color-mix(in srgb, var(--color) 25%, transparent),
+      color-mix(in srgb, var(--color) 8%, transparent)
+    );
   }
 
   > .SpectrumChart-waterfall {
@@ -86,7 +80,6 @@
   .spec-primary,
   .spec-secondary {
     stroke: var(--chart-level-stroke);
-    stroke-width: 2px !important;
     fill: var(--color);
     fill-opacity: 0.08;
   }
@@ -106,7 +99,8 @@
   .spec-hold {
     fill: none;
     stroke: var(--color);
-    stroke-width: 1.2px;
+    stroke-width: 1px !important;
+    stroke-dasharray: 2 2;
     stroke-opacity: 0.5;
   }
 
