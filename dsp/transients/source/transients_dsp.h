@@ -1,9 +1,10 @@
 #pragma once
 
+#include "compressor.h" // StereoLink
 #include "effect_base.h"
 #include "io_stage.h"
-#include "transients.h"
 #include "sidechain_filter.h"
+#include "transients.h"
 #include "viz_source.h"
 
 #include "transients_params.h"
@@ -48,8 +49,8 @@ protected:
   const char* editorHtml() const override { return kEditorHtml; }
 
 private:
-  // 5 values per display slot: input peak, output peak, envelope, attack, release
-  static constexpr int kEnvChannels = 5;
+  /** original, filtered, output, envelope, attack, release */
+  static constexpr int kEnvChannels = 6;
   static constexpr int kEnvSlots = 512;
   static constexpr int kEnvMinSlots = 48;
   static constexpr int kEnvBufSize = kEnvSlots * kEnvChannels;
@@ -58,9 +59,12 @@ private:
   {
     float mix = 1.f;
     float dry = 0.f;
+    float softClip = 0.f;
     bool listen = false;
+    bool delta = false;
     bool neutral = true;
     bool bypass = false;
+    Dsp::StereoLink link = Dsp::StereoLink::Max;
   };
 
   void updateLatency(bool bypass, int lookaheadSamples);
@@ -68,8 +72,11 @@ private:
   void processSample(const BlockState& state, float& L, float& R);
   void processSilence(const BlockState& state, int nFrames);
   void resetProcessing();
-  void envBufFeedSample(float inPeak, float outPeak);
+  /** @p scale = mix*gain+(1-mix); used so Output history shows boost/cut under coarse slots. */
+  void envBufFeedSample(float dryPeak, float filteredPeak, float wetPeak, float scale);
   void publishEnvSnapshot();
+  void resetEnvSlotAccum(float dryPeak, float filteredPeak, float wetPeak, float scale,
+                         float env, float att, float rel);
 
   float params_[kParamCount] {};
   Dsp::IoStage io_;
@@ -78,11 +85,19 @@ private:
   Dsp::Transients transients_;
   Dsp::SidechainFilter sc_;
 
-  // Envelope display ring buffer (written in process, snapshot for UI)
   float envBuf_[kEnvBufSize] {};
   int envPos_ = 0;
   int envSampleCount_ = 0;
   int envSamplesPerSlot_ = 1;
+  // Per-slot accumulators (peak-hold alone hides attack boost on quieter rising samples).
+  float envSlotMaxDry_ = 0.f;
+  float envSlotMaxFilt_ = 0.f;
+  float envSlotMaxWet_ = 0.f;
+  float envSlotMaxBoost_ = 1.f;
+  float envSlotMinCut_ = 1.f;
+  float envSlotMaxEnv_ = 0.f;
+  float envSlotMaxAtt_ = 0.f;
+  float envSlotMaxRel_ = 0.f;
   std::mutex envMutex_;
   float envSnapshot_[kEnvBufSize] {};
   int envSnapshotPos_ = 0;

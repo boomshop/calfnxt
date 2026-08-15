@@ -10,8 +10,11 @@ export const TRANSIENTS_VIEW_ENTRIES = [
   { label: 'Release', value: 3 },
 ];
 
-/** Discrete display window lengths (ms) — keep in sync with DSP snapDisplayMs. */
-export const TRANSIENTS_DISPLAY_MS = [100, 250, 500, 1000, 2500, 5000] as const;
+export const TRANSIENTS_LINK_ENTRIES = [
+  { label: 'Max', value: 0 },
+  { label: 'Avg', value: 1 },
+  { label: 'Mid', value: 2 },
+];
 
 /** @deprecated Prefer FREQUENCY_RANGE_MODE_ENTRIES from FrequencyRange. */
 export const TRANSIENTS_FILTER_MODE_ENTRIES = FREQUENCY_RANGE_MODE_ENTRIES;
@@ -25,7 +28,6 @@ export type ITransientsHost = {
   sustainThreshold$: DynamicValue<number>;
   releaseTime$: DynamicValue<number>;
   releaseBoost$: DynamicValue<number>;
-  display$: DynamicValue<number>;
   lookahead$: DynamicValue<number>;
   view$: DynamicValue<number>;
   hipass$: DynamicValue<number>;
@@ -33,6 +35,11 @@ export type ITransientsHost = {
   hpMode$: DynamicValue<number>;
   lpMode$: DynamicValue<number>;
   listen$: DynamicValue<boolean>;
+  softClip$: DynamicValue<number>;
+  link$: DynamicValue<number>;
+  sensitivity$: DynamicValue<number>;
+  delta$: DynamicValue<boolean>;
+  /** Envelope buffer: original, filtered, output, envelope, attack, release + phase. */
   envelopeData$: DynamicValue<Float32Array | null>;
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
@@ -75,7 +82,6 @@ export function createBoundTransientsHost(): ITransientsHost {
     sustainThreshold$: bindNum('sustain_threshold', 0),
     releaseTime$: bindNum('release_time', 300),
     releaseBoost$: bindNum('release_boost', 0),
-    display$: bindNum('display', 1000),
     lookahead$: bindNum('lookahead', 0),
     view$: bindNum('view', 0),
     hipass$: bindNum('hipass', 100),
@@ -83,6 +89,10 @@ export function createBoundTransientsHost(): ITransientsHost {
     hpMode$: bindNum('hp_mode', 0),
     lpMode$: bindNum('lp_mode', 0),
     listen$: bindBool('listen'),
+    softClip$: bindNum('soft_clip', 0),
+    link$: bindNum('link', 0),
+    sensitivity$: bindNum('sensitivity', 0),
+    delta$: bindBool('delta'),
     envelopeData$,
     beginEdit: (id) => postBegin(id),
     endEdit: (id) => postEnd(id),

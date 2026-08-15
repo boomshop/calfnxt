@@ -14,7 +14,7 @@
   ],
   "editor": {
     "width": 1024,
-    "height": 360
+    "height": 480
   },
   "buses": {
     "audio_inputs": [
@@ -109,17 +109,6 @@
       "precision": 2
     },
     {
-      "id": "display",
-      "name": "Display",
-      "type": "float",
-      "unit": "ms",
-      "min": 100.0,
-      "max": 5000.0,
-      "default": 1000.0,
-      "scale": "linear",
-      "precision": 0
-    },
-    {
       "id": "lookahead",
       "name": "Lookahead",
       "type": "float",
@@ -188,6 +177,50 @@
     {
       "id": "listen",
       "name": "Listen",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "soft_clip",
+      "name": "Soft Clip",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "link",
+      "name": "Stereo Link",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "sensitivity",
+      "name": "Sensitivity",
+      "type": "float",
+      "unit": "dB",
+      "min": 0.0,
+      "max": 12.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 1
+    },
+    {
+      "id": "delta",
+      "name": "Delta",
       "type": "float",
       "unit": "",
       "min": 0.0,

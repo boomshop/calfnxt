@@ -53,7 +53,8 @@ public:
   }
 
   void setParams(float attackTimeMs, float attackBoost, float releaseTimeMs,
-                 float releaseBoost, float sustainThreshold, int lookaheadSamples)
+                 float releaseBoost, float sustainThreshold, int lookaheadSamples,
+                 float sensitivityDb = 0.f)
   {
     attackTimeMs_ = std::max(0.001f, attackTimeMs);
     releaseTimeMs_ = std::max(0.001f, releaseTimeMs);
@@ -63,6 +64,8 @@ public:
                                      : -0.25f * std::pow(attackBoost * 4.f, 2.f);
     releaseLevel_ = releaseBoost > 0.f ? 0.5f * std::pow(releaseBoost * 8.f, 2.f)
                                        : -0.25f * std::pow(releaseBoost * 4.f, 2.f);
+    // Minimum envelope rise (nepers) before attack shaping applies.
+    minAttDiff_ = std::max(0.f, sensitivityDb) * (std::log(10.f) / 20.f);
     calcRelFac();
   }
 
@@ -107,7 +110,10 @@ public:
     release_ *= sustainEnded_ ? relFac_ : 1.f;
     release_ = std::max(envelope_, release_);
 
-    const double attDiff = attack_ > 1.0e-12f ? std::log(envelope_ / attack_) : 0.0;
+    double attDiff = attack_ > 1.0e-12f ? std::log(envelope_ / attack_) : 0.0;
+    // Soft knee: only the rise above Sensitivity (dB) drives attack shaping.
+    if (attDiff > 0.0 && minAttDiff_ > 0.f)
+      attDiff = std::max(0.0, attDiff - static_cast<double>(minAttDiff_));
     const double relDiff = envelope_ > 1.0e-12f ? std::log(release_ / envelope_) : 0.0;
     const double ampFactor = attDiff * attackLevel_ + relDiff * releaseLevel_;
 
@@ -167,6 +173,7 @@ private:
   float releaseTimeMs_ = 300.f;
   float releaseLevel_ = 0.f;
   float sustainThreshold_ = 1.f;
+  float minAttDiff_ = 0.f;
   float relFac_ = 1.f;
   float maxDelta_ = 1.f;
   float newReturn_ = 1.f;

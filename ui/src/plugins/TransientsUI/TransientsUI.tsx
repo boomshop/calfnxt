@@ -1,5 +1,7 @@
+import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { Header } from '../../components';
 import {
+  Buttons,
   EnvelopeChart,
   FrequencyRange,
   Knob,
@@ -9,7 +11,7 @@ import {
 } from '../../widgets';
 import { paramIds } from '../../generated/transientsModel';
 import {
-  TRANSIENTS_DISPLAY_MS,
+  TRANSIENTS_LINK_ENTRIES,
   TRANSIENTS_VIEW_ENTRIES,
   transientsParamDefault,
   type ITransientsHost,
@@ -17,6 +19,7 @@ import {
 import '../PluginUI.scss';
 import './TransientsUI.scss';
 import { transientsInfo } from './transientsInfo';
+
 
 export interface TransientsUIProps {
   host: ITransientsHost;
@@ -90,22 +93,14 @@ const RELEASE_MS_LABELS = [
   { pos: 5000, label: '5k' },
 ];
 
-const DISPLAY_DOTS = [...TRANSIENTS_DISPLAY_MS];
-const DISPLAY_LABELS = [
-  { pos: 100, label: '100' },
-  { pos: 250, label: '250' },
-  { pos: 500, label: '500' },
-  { pos: 1000, label: '1s' },
-  { pos: 2500, label: '2.5' },
-  { pos: 5000, label: '5s' },
+const SENS_DOTS = [0, 2, 4, 6, 8, 10, 12];
+const SENS_LABELS = [
+  { pos: 0, label: '0' },
+  { pos: 3, label: '3' },
+  { pos: 6, label: '6' },
+  { pos: 9, label: '9' },
+  { pos: 12, label: '12' },
 ];
-
-function formatDisplayMs(v: number): string {
-  const ms = TRANSIENTS_DISPLAY_MS.reduce((best, cand) =>
-    Math.abs(cand - v) < Math.abs(best - v) ? cand : best,
-  );
-  return ms >= 1000 ? `${ms / 1000} s` : `${ms} ms`;
-}
 
 export function TransientsUI(props: TransientsUIProps) {
   const { host } = props;
@@ -113,12 +108,19 @@ export function TransientsUI(props: TransientsUIProps) {
     beginEdit: () => host.beginEdit(id),
     endEdit: () => host.endEdit(id),
   });
+  const link = useDynamicValueReadonly(host.link$, 0);
 
   return (
     <div className="TransientsUI PluginUI">
       <Header title="Transients">
         <WithInfo title={transientsInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
+        <WithInfo title={transientsInfo.delta}>
+          <Toggle state$={host.delta$} icon="headphones" />
+        </WithInfo>
+        <WithInfo title={transientsInfo.view}>
+          <Select value$={host.view$} entries={TRANSIENTS_VIEW_ENTRIES} />
         </WithInfo>
         <WithInfo title={transientsInfo.mix}>
           <Knob
@@ -136,8 +138,12 @@ export function TransientsUI(props: TransientsUIProps) {
         </WithInfo>
       </Header>
 
+      <div className="history">
+        <EnvelopeChart data$={host.envelopeData$} view$={host.view$} />
+      </div>
+
       <div className="block envelope">
-        <div className="title">Envelope Filter</div>
+        <div className="title">Detector</div>
 
         <FrequencyRange
           hipass$={host.hipass$}
@@ -150,6 +156,19 @@ export function TransientsUI(props: TransientsUIProps) {
           hipassEdit={edit(paramIds.hipass)}
           lopassEdit={edit(paramIds.lopass)}
         />
+
+        <WithInfo title={transientsInfo.link} className="info-block">
+          <Buttons
+            layout="horizontal"
+            entries={[...TRANSIENTS_LINK_ENTRIES]}
+            value={Math.round(link)}
+            onChange={(v) => {
+              host.beginEdit(paramIds.link);
+              host.link$.set(v as number);
+              host.endEdit(paramIds.link);
+            }}
+          />
+        </WithInfo>
       </div>
 
       <div className="block shape">
@@ -170,21 +189,21 @@ export function TransientsUI(props: TransientsUIProps) {
               {...edit(paramIds.attack_boost)}
             />
           </WithInfo>
-          <WithInfo title={transientsInfo.lookahead}>
+
+          <WithInfo title={transientsInfo.sustain}>
             <Knob
-              label="Look"
-              className="look"
-              value$={host.lookahead$}
-              min={0}
-              max={100}
-              reset={transientsParamDefault('lookahead')}
-              size="small"
-              dots={LOOKAHEAD_DOTS}
-              labels={LOOKAHEAD_LABELS}
-              {...{ 'value.format': (v: number) => v.toFixed(0) }}
-              {...edit(paramIds.lookahead)}
+              label="Sustain"
+              value$={host.sustainThreshold$}
+              min={-60}
+              max={0}
+              reset={transientsParamDefault('sustain_threshold')}
+              scale="decibel"
+              dots={SUSTAIN_DOTS}
+              labels={SUSTAIN_LABELS}
+              {...edit(paramIds.sustain_threshold)}
             />
           </WithInfo>
+
           <WithInfo title={transientsInfo.releaseBoost}>
             <Knob
               label="Release"
@@ -202,6 +221,21 @@ export function TransientsUI(props: TransientsUIProps) {
           </WithInfo>
         </div>
         <div className="lower">
+          <WithInfo title={transientsInfo.softClip}>
+            <Knob
+              label="Clip"
+              value$={host.softClip$}
+              min={0}
+              max={1}
+              reset={transientsParamDefault('soft_clip')}
+              dots={MIX_DOTS}
+              labels={PERCENT_LABELS}
+              {...{ 'value.format': formatPercent }}
+              {...edit(paramIds.soft_clip)}
+              className="clip"
+            />
+          </WithInfo>
+
           <WithInfo title={transientsInfo.attackTime}>
             <Knob
               label="Attack ms"
@@ -214,21 +248,26 @@ export function TransientsUI(props: TransientsUIProps) {
               dots={ATTACK_MS_DOTS}
               labels={ATTACK_MS_LABELS}
               {...edit(paramIds.attack_time)}
+              className="attack"
             />
           </WithInfo>
-          <WithInfo title={transientsInfo.sustain}>
+
+          <WithInfo title={transientsInfo.lookahead}>
             <Knob
-              label="Sustain"
-              value$={host.sustainThreshold$}
-              min={-60}
-              max={0}
-              reset={transientsParamDefault('sustain_threshold')}
-              scale="decibel"
-              dots={SUSTAIN_DOTS}
-              labels={SUSTAIN_LABELS}
-              {...edit(paramIds.sustain_threshold)}
+              label="Look"
+              value$={host.lookahead$}
+              min={0}
+              max={100}
+              reset={transientsParamDefault('lookahead')}
+              size="small"
+              dots={LOOKAHEAD_DOTS}
+              labels={LOOKAHEAD_LABELS}
+              {...{ 'value.format': (v: number) => v.toFixed(0) }}
+              {...edit(paramIds.lookahead)}
+              className="look"
             />
           </WithInfo>
+
           <WithInfo title={transientsInfo.releaseTime}>
             <Knob
               label="Release ms"
@@ -241,38 +280,22 @@ export function TransientsUI(props: TransientsUIProps) {
               dots={RELEASE_MS_DOTS}
               labels={RELEASE_MS_LABELS}
               {...edit(paramIds.release_time)}
+              className="release"
             />
           </WithInfo>
-        </div>
-      </div>
 
-      <div className="block display">
-        <div className="title">Display</div>
-
-        <EnvelopeChart
-          data$={host.envelopeData$}
-          view$={host.view$}
-          display$={host.display$}
-        />
-
-        <div className="controls">
-          <WithInfo title={transientsInfo.view}>
-            <Select value$={host.view$} entries={TRANSIENTS_VIEW_ENTRIES} />
-          </WithInfo>
-          <WithInfo title={transientsInfo.window}>
+          <WithInfo title={transientsInfo.sensitivity}>
             <Knob
-              label="Window"
-              size="small"
-              value$={host.display$}
-              min={100}
-              max={5000}
-              reset={transientsParamDefault('display')}
-              scale="frequency"
-              snap={[...TRANSIENTS_DISPLAY_MS]}
-              dots={DISPLAY_DOTS}
-              labels={DISPLAY_LABELS}
-              {...{ 'value.format': formatDisplayMs }}
-              {...edit(paramIds.display)}
+              label="Sens"
+              value$={host.sensitivity$}
+              min={0}
+              max={12}
+              reset={transientsParamDefault('sensitivity')}
+              scale="linear"
+              dots={SENS_DOTS}
+              labels={SENS_LABELS}
+              {...edit(paramIds.sensitivity)}
+              className="sensitivity"
             />
           </WithInfo>
         </div>

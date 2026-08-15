@@ -17,7 +17,7 @@ export const transientsInfo = {
     'Push or pull the sustain/release body after the hit. Positive = more body, ring, and room in the note. Negative = tighter, shorter notes — less bloom, more “gated” or dry. Balance with Attack: all attack / no body can sound brittle.',
 
   attackTime:
-    'How long the attack window lasts (ms). Shorter = only the initial spike is shaped (click/beater). Longer = more of the front of the note is treated as “attack” — bigger change to the whole hit. Match it to the instrument’s real transient length.',
+    'How long the attack window lasts (ms). Shorter = only the initial spike is shaped (click/beater). Longer = more of the front of the note is treated as “attack” — bigger change to the whole hit. Match it to the instrument’s real transient length. Works with Sensitivity: longer windows make the same hit look like a bigger jump.',
 
   sustain:
     'Level where “attack” hands off to “release” shaping (dB). Higher threshold = the sustain region starts earlier (more of the note is treated as body). Lower = longer attack region. Fine-tune so Attack Boost isn’t chewing into the body you wanted Release Boost to handle.',
@@ -26,8 +26,17 @@ export const transientsInfo = {
     'How long the release/body shaping window lasts (ms). Longer = more of the note tail is affected (room, sustain, ring). Shorter = only the early decay. On pads, longer windows matter; on tight drums, shorter often feels cleaner.',
 
   view:
-    'What the envelope display shows (input / output / envelope overlays). Display only — helps you see whether shaping lines up with the hits you hear.',
+    'What the result curve shows: Output (shaped vs dry — boost/cut should lift or drop it off the blue fill), Envelope, Attack, or Release follower. Blue fill = delayed dry; light = filtered detector.',
 
-  window:
-    'Time span of the scrolling envelope display (not an audio parameter). Zoom out for phrases; zoom in to align attack/release windows with a single hit.',
+  softClip:
+    'Rounds peaks only while Attack Boost is pushing the signal louder — soft ceiling into 0 dBFS, no gain on quieter parts or the body. 0 = off; turn up when boosted hits clip harshly or sound brittle. Does nothing on Attack Cut / unity gain.',
+
+  link:
+    'How L/R feed the detector: Max = louder channel wins (classic), Avg = average, Mid = mono mid only. Mid keeps the image stable; Max follows the louder side on wide sources.',
+
+  sensitivity:
+    'How big a jump (in dB) the attack must make before Attack Boost/Cut engages. 0 = every little rise gets shaped — busy hats, HF flutter, room noise too. Raise it so only clearer hits (kick, snare, pluck) snap or soften; smaller flanks stay closer to dry. Does not gate by loudness — quiet but sharp attacks still count if the jump is big enough.',
+
+  delta:
+    'Listen to wet − dry only (the change the shaper makes). Great for hearing exactly what Attack/Release are doing. Sidechain Listen still solos the detector filter when enabled.',
 } as const;

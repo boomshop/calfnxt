@@ -40,25 +40,6 @@ function history3ch(slots, audioDbFn, filtDbFn, grDbFn) {
   return out;
 }
 
-/** Transients: 5 channels (in, out, env, att, rel) + phase. */
-function envelope5(slots) {
-  const out = new Array(slots * 5 + 1);
-  for (let i = 0; i < slots; ++i) {
-    const t = i / (slots - 1);
-    const hit = Math.exp(-18 * Math.max(0, t - 0.12) ** 2) * 0.7
-      + Math.exp(-40 * Math.max(0, t - 0.45) ** 2) * 0.45
-      + 0.08;
-    const env = hit * (0.85 + 0.15 * Math.sin(t * 40));
-    out[i * 5] = hit;
-    out[i * 5 + 1] = hit * 0.92;
-    out[i * 5 + 2] = env;
-    out[i * 5 + 3] = env * 0.6;
-    out[i * 5 + 4] = env * 0.35;
-  }
-  out[slots * 5] = 0;
-  return out;
-}
-
 /**
  * Mbcomp: per band [full, band, grLin] × slots + shared phase.
  * Prefer seeding from fixtures/compressor/viz.json when present.
@@ -203,6 +184,27 @@ function gonioCloud(n = 320) {
 
 const slots = 240;
 
+/** Transients: original, filtered, output, envelope, attack, release + phase. */
+function envelope6(slots) {
+  const out = new Array(slots * 6 + 1);
+  for (let i = 0; i < slots; ++i) {
+    const t = i / (slots - 1);
+    const hit =
+      Math.exp(-18 * Math.max(0, t - 0.12) ** 2) * 0.7 +
+      Math.exp(-40 * Math.max(0, t - 0.45) ** 2) * 0.45 +
+      0.08;
+    const env = hit * (0.85 + 0.15 * Math.sin(t * 40));
+    out[i * 6] = hit;
+    out[i * 6 + 1] = hit * 0.72;
+    out[i * 6 + 2] = hit * 0.95;
+    out[i * 6 + 3] = env;
+    out[i * 6 + 4] = env * 0.6;
+    out[i * 6 + 5] = env * 0.35;
+  }
+  out[slots * 6] = 0;
+  return out;
+}
+
 const packs = {
   compressor: {
     levelsIn: [-8.5, -9.2],
@@ -248,7 +250,7 @@ const packs = {
   transients: {
     levelsIn: [-7, -7.5],
     levelsOut: [-6.5, -7],
-    envelope: envelope5(180),
+    envelope: envelope6(240),
   },
   stereo: {
     levelsIn: [-9, -9.5],

@@ -1,7 +1,8 @@
 .EnvelopeChart {
   width: 100%;
   height: 100%;
-  min-height: 120px;
+  min-height: 100px;
+  background: var(--background);
 
   > svg {
     > .aux-grid {
@@ -16,15 +17,26 @@
       }
     }
 
-    .env-input-graph {
-      fill: var(--color);
-      fill-opacity: 0.2;
-      stroke: var(--color);
+    // Original input — accent blue, behind everything.
+    .env-original-graph {
+      fill: var(--color-accent);
+      fill-opacity: 0.18;
+      stroke: var(--color-accent);
       stroke-width: 1px;
-      stroke-opacity: 0.5;
+      stroke-opacity: 0.45;
     }
 
-    .env-curve-graph {
+    // Filtered detector — light/white, above original.
+    .env-filtered-graph {
+      fill: var(--color);
+      fill-opacity: 0.12;
+      stroke: var(--color);
+      stroke-width: 1.25px;
+      stroke-opacity: 0.85;
+    }
+
+    // Result / view overlay — always on top.
+    .env-result-graph {
       fill: none;
       stroke: var(--chart-level-stroke, var(--color-accent));
       stroke-width: 1.5px;

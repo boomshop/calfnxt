@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace calfNXT {
 namespace Transients {
@@ -15,27 +16,44 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5854u; // 'CNXT'
-constexpr uint32 kStateVersion = 2;
+/** v2: had display window. v3: display removed; + soft_clip/link/sensitivity/delta.
+ *  v4: sensitivity = rise threshold (dB), not level gate. */
+constexpr uint32 kStateVersion = 4;
+constexpr uint32 kStateVersionWithDisplay = 2;
+/** Fixed envelope plot window (ms) — keep in sync with EnvelopeChart. */
+constexpr float kEnvelopeWindowMs = 10000.f;
 
-/** Discrete display window lengths (ms) — keep in sync with UI / EnvelopeChart. */
-constexpr float kDisplayMs[] = {100.f, 250.f, 500.f, 1000.f, 2500.f, 5000.f};
-
-float snapDisplayMs(float v)
+/**
+ * Soft ceiling into ±1: unity below the knee, no quiet-signal makeup.
+ * @p amount 0 = off; 1 = knee ~ −6 dBFS, asymptotic into full scale.
+ */
+float softClipSample(float x, float amount)
 {
-  float best = kDisplayMs[0];
-  float bestErr = std::fabs(v - best);
-  for (float cand : kDisplayMs)
+  if (!(amount > 1.0e-6f))
+    return x;
+  constexpr float kCeiling = 1.f;
+  const float knee = kCeiling * (1.f - 0.5f * std::clamp(amount, 0.f, 1.f));
+  const float ax = std::fabs(x);
+  if (ax <= knee)
+    return x;
+  const float room = std::max(1.0e-6f, kCeiling - knee);
+  const float shaped = knee + room * std::tanh((ax - knee) / room);
+  return std::copysign(std::min(shaped, kCeiling), x);
+}
+
+Dsp::StereoLink stereoLinkFromPlain(float v)
+{
+  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
   {
-    const float err = std::fabs(v - cand);
-    if (err < bestErr)
-    {
-      best = cand;
-      bestErr = err;
-    }
+    case 1:
+      return Dsp::StereoLink::Average;
+    case 2:
+      return Dsp::StereoLink::Mid;
+    default:
+      return Dsp::StereoLink::Max;
   }
-  return best;
 }
-}
+} // namespace
 
 TransientsPlugin::TransientsPlugin()
 : Plugin::EffectBase(ViewRect(0, 0, kEditorWidth, kEditorHeight))
@@ -66,7 +84,14 @@ void TransientsPlugin::resetProcessing()
   envPos_ = 0;
   envSampleCount_ = 0;
   envSamplesPerSlot_ = 1;
-  envVisibleSlots_ = 160;
+  envSlotMaxDry_ = 0.f;
+  envSlotMaxFilt_ = 0.f;
+  envSlotMaxWet_ = 0.f;
+  envSlotMaxBoost_ = 1.f;
+  envSlotMinCut_ = 1.f;
+  envSlotMaxEnv_ = 0.f;
+  envSlotMaxAtt_ = 0.f;
+  envSlotMaxRel_ = 0.f;
   {
     std::lock_guard<std::mutex> lock(envMutex_);
     std::memset(envSnapshot_, 0, sizeof(envSnapshot_));
@@ -111,84 +136,73 @@ TransientsPlugin::BlockState TransientsPlugin::makeBlockState() const
   BlockState state;
   state.mix = std::clamp(params_[kParamMix], 0.f, 1.f);
   state.dry = 1.f - state.mix;
+  state.softClip = std::clamp(params_[kParamSoftClip], 0.f, 1.f);
   state.listen = params_[kParamListen] >= 0.5f;
+  state.delta = params_[kParamDelta] >= 0.5f;
   state.bypass = params_[kParamBypass] >= 0.5f;
   state.neutral = transients_.isNeutral();
+  state.link = stereoLinkFromPlain(params_[kParamLink]);
   return state;
 }
 
-void TransientsPlugin::processSample(const BlockState& state, float& L, float& R)
+void TransientsPlugin::resetEnvSlotAccum(float dryPeak, float filteredPeak, float wetPeak,
+                                         float scale, float env, float att, float rel)
 {
-  const float inL = L;
-  const float inR = R;
-  float detector = sc_.processMono(0.5f * (L + R));
-
-  if (state.listen && !state.bypass)
-  {
-    L = detector;
-    R = detector;
-    envBufFeedSample(std::fabs(detector), std::fabs(detector));
-    return;
-  }
-
-  // Delay line always advances (meters). Mix uses delayed dry so wet/dry stay
-  // phase-aligned: out = delayed * (mix * gain + dry).
-  float delayed[2] = {L, R};
-  const float gain = transients_.processFrame(delayed, detector);
-  if (!state.bypass)
-  {
-    const float scale = state.neutral ? 1.f : (state.mix * gain + state.dry);
-    L = delayed[0] * scale;
-    R = delayed[1] * scale;
-  }
-
-  const float inPeak = 0.5f * (std::fabs(inL) + std::fabs(inR));
-  envBufFeedSample(inPeak, 0.5f * (std::fabs(L) + std::fabs(R)));
+  envSlotMaxDry_ = dryPeak;
+  envSlotMaxFilt_ = filteredPeak;
+  envSlotMaxWet_ = wetPeak;
+  envSlotMaxBoost_ = std::max(1.f, scale);
+  envSlotMinCut_ = std::min(1.f, scale);
+  envSlotMaxEnv_ = env;
+  envSlotMaxAtt_ = att;
+  envSlotMaxRel_ = rel;
 }
 
-void TransientsPlugin::processSilence(const BlockState& state, int nFrames)
-{
-  // Decay filters + shaper and keep the envelope chart scrolling on silence.
-  for (int i = 0; i < nFrames; ++i)
-  {
-    float detector = sc_.processMono(0.f);
-    float values[2] = {0.f, 0.f};
-    (void)transients_.processFrame(values, detector);
-    envBufFeedSample(0.f, 0.f);
-  }
-}
-
-uint32 PLUGIN_API TransientsPlugin::getLatencySamples()
-{
-  return latencySamples_;
-}
-
-void TransientsPlugin::envBufFeedSample(float inPeak, float outPeak)
+void TransientsPlugin::envBufFeedSample(float dryPeak, float filteredPeak, float wetPeak,
+                                        float scale)
 {
   const int pos = envPos_;
   const float env = transients_.envelope();
   const float att = transients_.attack();
   const float rel = transients_.release();
 
-  envBuf_[pos + 0] = std::max(inPeak, envBuf_[pos + 0]);
-  envBuf_[pos + 1] = std::max(outPeak, envBuf_[pos + 1]);
-  // Peak within the slot keeps the overlay from flickering on last-sample picks.
-  envBuf_[pos + 2] = std::max(env, envBuf_[pos + 2]);
-  envBuf_[pos + 3] = std::max(att, envBuf_[pos + 3]);
-  envBuf_[pos + 4] = std::max(rel, envBuf_[pos + 4]);
+  envSlotMaxDry_ = std::max(dryPeak, envSlotMaxDry_);
+  envSlotMaxFilt_ = std::max(filteredPeak, envSlotMaxFilt_);
+  envSlotMaxWet_ = std::max(wetPeak, envSlotMaxWet_);
+  envSlotMaxBoost_ = std::max(envSlotMaxBoost_, std::max(1.f, scale));
+  envSlotMinCut_ = std::min(envSlotMinCut_, std::min(1.f, scale));
+  envSlotMaxEnv_ = std::max(env, envSlotMaxEnv_);
+  envSlotMaxAtt_ = std::max(att, envSlotMaxAtt_);
+  envSlotMaxRel_ = std::max(rel, envSlotMaxRel_);
+
+  // Coarse history slots (~tens of ms): peak(|wet|) often equals peak(|dry|) because
+  // attack boost lands on the quieter rising edge while the sample-peak sits at gain≈1.
+  // Combine slot peak dry with max boost / min cut so Output separates from Original.
+  float outDisp = envSlotMaxWet_;
+  if (envSlotMaxBoost_ > 1.001f)
+    outDisp = std::max(outDisp, envSlotMaxDry_ * envSlotMaxBoost_);
+  else if (envSlotMinCut_ < 0.999f)
+    outDisp = std::min(outDisp, envSlotMaxDry_ * envSlotMinCut_);
+
+  envBuf_[pos + 0] = envSlotMaxDry_;
+  envBuf_[pos + 1] = envSlotMaxFilt_;
+  envBuf_[pos + 2] = outDisp;
+  envBuf_[pos + 3] = envSlotMaxEnv_;
+  envBuf_[pos + 4] = envSlotMaxAtt_;
+  envBuf_[pos + 5] = envSlotMaxRel_;
 
   envSampleCount_ += 1;
   if (envSampleCount_ >= envSamplesPerSlot_)
   {
     envPos_ = (pos + kEnvChannels) % kEnvBufSize;
     envSampleCount_ = 0;
-    // Seed the next slot with the current sample so the right edge does not
-    // drop to zero between slots (was the main chart "stutter").
-    envBuf_[envPos_ + 0] = inPeak;
-    envBuf_[envPos_ + 1] = outPeak;
-    envBuf_[envPos_ + 2] = env;
-    envBuf_[envPos_ + 3] = att;
-    envBuf_[envPos_ + 4] = rel;
+    resetEnvSlotAccum(dryPeak, filteredPeak, wetPeak, scale, env, att, rel);
+    envBuf_[envPos_ + 0] = envSlotMaxDry_;
+    envBuf_[envPos_ + 1] = envSlotMaxFilt_;
+    envBuf_[envPos_ + 2] = wetPeak; // single sample; boost/cut accrues as slot fills
+    envBuf_[envPos_ + 3] = envSlotMaxEnv_;
+    envBuf_[envPos_ + 4] = envSlotMaxAtt_;
+    envBuf_[envPos_ + 5] = envSlotMaxRel_;
   }
 }
 
@@ -201,20 +215,112 @@ void TransientsPlugin::publishEnvSnapshot()
   envSnapshotSamplesPerSlot_ = envSamplesPerSlot_;
 }
 
+void TransientsPlugin::processSample(const BlockState& state, float& L, float& R)
+{
+  const float inL = L;
+  const float inR = R;
+
+  float detL = inL;
+  float detR = inR;
+  float detector = 0.f;
+  if (state.link == Dsp::StereoLink::Mid)
+  {
+    detector = sc_.processMono(0.5f * (inL + inR));
+    detL = detector;
+    detR = detector;
+  }
+  else if (state.link == Dsp::StereoLink::Average)
+  {
+    detL = sc_.processChannel(0, inL);
+    detR = sc_.processChannel(1, inR);
+    detector = 0.5f * (std::fabs(detL) + std::fabs(detR));
+  }
+  else
+  {
+    detL = sc_.processChannel(0, inL);
+    detR = sc_.processChannel(1, inR);
+    detector = std::max(std::fabs(detL), std::fabs(detR));
+  }
+
+  const float filteredPeak = std::max(std::fabs(detL), std::fabs(detR));
+
+  if (state.listen && !state.bypass)
+  {
+    L = detL;
+    R = detR;
+    float delayed[2] = {inL, inR};
+    (void)transients_.processFrame(delayed, detector);
+    const float dryPeak = std::max(std::fabs(delayed[0]), std::fabs(delayed[1]));
+    envBufFeedSample(dryPeak, filteredPeak, filteredPeak, 1.f);
+    return;
+  }
+
+  float delayed[2] = {L, R};
+  const float gain = transients_.processFrame(delayed, detector);
+
+  const float dryL = delayed[0];
+  const float dryR = delayed[1];
+  const float dryPeak = std::max(std::fabs(dryL), std::fabs(dryR));
+
+  float scale = 1.f;
+  float wetL = dryL;
+  float wetR = dryR;
+  if (!state.bypass)
+  {
+    scale = state.neutral ? 1.f : (state.mix * gain + state.dry);
+    wetL = dryL * scale;
+    wetR = dryR * scale;
+    // Soft-clip attack boosts only (gain > 1): round peaks, leave body dry.
+    if (state.softClip > 1.0e-6f && scale > 1.f)
+    {
+      wetL = softClipSample(wetL, state.softClip);
+      wetR = softClipSample(wetR, state.softClip);
+    }
+    if (state.delta)
+    {
+      L = wetL - dryL;
+      R = wetR - dryR;
+    }
+    else
+    {
+      L = wetL;
+      R = wetR;
+    }
+  }
+
+  // History: delayed dry vs shaped wet (before delta listen).
+  const float wetPeak = std::max(std::fabs(wetL), std::fabs(wetR));
+  envBufFeedSample(dryPeak, filteredPeak, wetPeak, state.bypass ? 1.f : scale);
+}
+
+void TransientsPlugin::processSilence(const BlockState& state, int nFrames)
+{
+  for (int i = 0; i < nFrames; ++i)
+  {
+    float detector = sc_.processMono(0.f);
+    float values[2] = {0.f, 0.f};
+    (void)transients_.processFrame(values, detector);
+    envBufFeedSample(0.f, 0.f, 0.f, 1.f);
+  }
+  (void)state;
+}
+
+uint32 PLUGIN_API TransientsPlugin::getLatencySamples()
+{
+  return latencySamples_;
+}
+
 int TransientsPlugin::takeEnvelopeDisplay(float* out, int maxOut)
 {
   const int slots = std::max(kEnvMinSlots, std::min(kEnvSlots, envVisibleSlots_));
   const int outCount = slots * kEnvChannels;
-  // Trailing phase float (0…1) for sub-slot scroll interpolation in the UI.
   if (maxOut < outCount + 1)
     return 0;
 
-  int startPos = 0;
   float phase = 0.f;
   {
     std::lock_guard<std::mutex> lock(envMutex_);
-    // Include the in-progress slot as newest so the right edge updates live.
-    startPos =
+    const int startPos =
       (kEnvBufSize + envSnapshotPos_ - (slots - 1) * kEnvChannels) % kEnvBufSize;
     const int sps = std::max(1, envSnapshotSamplesPerSlot_);
     phase = static_cast<float>(envSnapshotSampleCount_) / static_cast<float>(sps);
@@ -253,14 +359,14 @@ tresult PLUGIN_API TransientsPlugin::process(ProcessData& data)
     params_[kParamReleaseTime],
     params_[kParamReleaseBoost],
     Dsp::dbToLin(params_[kParamSustainThreshold]),
-    lookahead);
+    lookahead,
+    std::clamp(params_[kParamSensitivity], 0.f, 12.f));
   const BlockState state = makeBlockState();
   updateLatency(state.bypass, lookahead);
 
-  const float displayMs = snapDisplayMs(params_[kParamDisplay]);
   const int slots = std::max(kEnvMinSlots, std::min(kEnvSlots, envVisibleSlots_));
   envSamplesPerSlot_ = std::max(
-    1, static_cast<int>(sampleRate_ * displayMs * 0.001f / static_cast<float>(slots)));
+    1, static_cast<int>(sampleRate_ * kEnvelopeWindowMs * 0.001f / static_cast<float>(slots)));
 
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
@@ -320,29 +426,53 @@ tresult PLUGIN_API TransientsPlugin::setState(IBStream* state)
   int32 count = 0;
   if (!streamer.readInt32u(magic) || magic != kStateMagic)
     return kResultFalse;
-  if (!streamer.readInt32u(version) || (version != kStateVersion && version != 1))
+  if (!streamer.readInt32u(version)
+      || (version != kStateVersion && version != 3 && version != kStateVersionWithDisplay
+          && version != 1))
     return kResultFalse;
   if (!streamer.readInt32(count) || count <= 0)
     return kResultFalse;
 
-  // v1 had an extra display_threshold after display; skip it when present.
-  const bool skipDisplayThreshold = (version == 1 && count == kParamCount + 1);
-  if (count != kParamCount && !skipDisplayThreshold)
-    return kResultFalse;
-
-  float plains[kParamCount];
-  int plainIdx = 0;
+  std::vector<float> raw(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i)
   {
-    float v = 0.f;
-    if (!streamer.readFloat(v))
+    if (!streamer.readFloat(raw[static_cast<size_t>(i)]))
       return kResultFalse;
-    if (skipDisplayThreshold && i == 10)
-      continue;
-    if (plainIdx < kParamCount)
-      plains[plainIdx++] = v;
   }
-  if (plainIdx != kParamCount)
+
+  float plains[kParamCount] {};
+  readParamPlains(plains, kParamCount);
+
+  if ((version == kStateVersion || version == 3) && count == kParamCount)
+  {
+    for (int i = 0; i < kParamCount; ++i)
+      plains[i] = raw[static_cast<size_t>(i)];
+    // v3 sensitivity was a level gate (−60…0 dB); v4 is rise threshold (0…12 dB).
+    if (version == 3)
+      plains[kParamSensitivity] = 0.f;
+  }
+  else if (version == kStateVersionWithDisplay || version == 1)
+  {
+    const int expectV2 = kParamCount - 3;
+    const int expectV1 = expectV2 + 1;
+    if (count != expectV2 && count != expectV1)
+      return kResultFalse;
+
+    int src = 0;
+    int dst = 0;
+    while (src < count && dst < kParamCount)
+    {
+      if (src == 9)
+      {
+        ++src;
+        if (version == 1 && src < count)
+          ++src;
+        continue;
+      }
+      plains[dst++] = raw[static_cast<size_t>(src++)];
+    }
+  }
+  else
     return kResultFalse;
 
   for (int i = 0; i < kParamCount; ++i)
@@ -372,7 +502,6 @@ tresult PLUGIN_API TransientsPlugin::getState(IBStream* state)
   streamer.writeInt32u(kStateMagic);
   streamer.writeInt32u(kStateVersion);
   streamer.writeInt32(kParamCount);
-  // Parameter objects are authoritative (params_ only updates in process()).
   readParamPlains(params_, kParamCount);
   for (int i = 0; i < kParamCount; ++i)
     streamer.writeFloat(params_[i]);

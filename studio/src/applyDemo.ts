@@ -168,7 +168,6 @@ export function applyTransientsDemo(
   setNum(host.sustainThreshold$, params.sustain_threshold);
   setNum(host.releaseTime$, params.release_time);
   setNum(host.releaseBoost$, params.release_boost);
-  setNum(host.display$, params.display);
   setNum(host.lookahead$, params.lookahead);
   setNum(host.view$, params.view);
   setNum(host.hipass$, params.hipass);
@@ -176,6 +175,10 @@ export function applyTransientsDemo(
   setNum(host.hpMode$, params.hp_mode);
   setNum(host.lpMode$, params.lp_mode);
   setBool(host.listen$, params.listen);
+  setNum(host.softClip$, params.soft_clip);
+  setNum(host.link$, params.link);
+  setNum(host.sensitivity$, params.sensitivity);
+  setBool(host.delta$, params.delta);
 
   applySharedViz(viz);
   if (viz.envelope)
