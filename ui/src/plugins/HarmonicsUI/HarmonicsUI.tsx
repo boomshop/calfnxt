@@ -161,6 +161,7 @@ export function HarmonicsUI(props: HarmonicsUIProps) {
               reset={harmonicsParamDefault('asymmetry')}
               {...edit(paramIds.asymmetry)}
               size="medium"
+              className="asym"
             />
           </WithInfo>
           <WithInfo title={harmonicsInfo.tone}>
