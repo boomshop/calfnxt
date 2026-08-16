@@ -343,7 +343,14 @@ void holdFrameClock()
   GdkFrameClock* clock = gtk_widget_get_frame_clock(w);
   if (!clock && g.plug)
     clock = gtk_widget_get_frame_clock(g.plug);
-  if (!clock || g.frameClock == clock)
+  if (!clock)
+  {
+    hostLog("[calfnxt-web-host] frame-clock none (plug realized=%d webview realized=%d)\n",
+            (g.plug && gtk_widget_get_realized(g.plug)) ? 1 : 0,
+            (g.webview && gtk_widget_get_realized(GTK_WIDGET(g.webview))) ? 1 : 0);
+    return;
+  }
+  if (g.frameClock == clock)
     return;
   releaseFrameClock();
   gdk_frame_clock_begin_updating(clock);
@@ -955,7 +962,7 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=present-xwayland-1 hw-accel=%s\n", noGpu ? "never" : "always");
+  hostLog("[calfnxt-web-host] build=present-xwayland-1b hw-accel=%s\n", noGpu ? "never" : "always");
   if (envFlag("CALFNXT_WEB_DEBUG"))
   {
     hostLog("[calfnxt-web-host] env dmabuf_disable=%s compositing_disable=%s no_gpu=%s\n",
