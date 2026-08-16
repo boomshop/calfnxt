@@ -19,6 +19,7 @@ const vizPointApplies = new Map<string, VizLevelsApply>();
 const vizShapeApplies = new Map<string, VizLevelsApply>();
 const vizTempoApplies = new Map<string, VizLevelsApply>();
 const vizSpectrumApplies = new Map<string, VizLevelsApply>();
+const vizHzApplies = new Map<string, HostApply>();
 const channelCountApplies = new Set<ChannelCountApply>();
 let hostWired = false;
 
@@ -67,6 +68,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizTempoApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "spectrum" && Array.isArray(msg.v))
     vizSpectrumApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "hz" && Array.isArray(msg.v) && typeof msg.v[0] === "number")
+    vizHzApplies.get(msg.id)?.(msg.v[0]);
 }
 
 function ensureHostWire(): void {
@@ -307,6 +310,22 @@ export function bindVizSpectrum(dv: DynamicValue<number[]>, id: string): () => v
   });
   return () => {
     vizSpectrumApplies.delete(id);
+  };
+}
+
+/** Wire live frequency in Hz (id e.g. "filt") from DSP viz kind "hz". */
+export function bindVizHz(dv: DynamicValue<number>, id: string): () => void {
+  ensureHostWire();
+  vizHzApplies.set(id, (v) => {
+    if (typeof v !== "number" || !Number.isFinite(v))
+      return;
+    const hz = Math.min(20000, Math.max(10, v));
+    if (nearlyEqual(dv.value, hz))
+      return;
+    dv.set(hz);
+  });
+  return () => {
+    vizHzApplies.delete(id);
   };
 }
 

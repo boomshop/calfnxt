@@ -1,0 +1,15 @@
+{
+  "bypass": false,
+  "mode": 0,
+  "resonance": 2.5,
+  "frequency": 800,
+  "inertia": 20,
+  "env_power": true,
+  "mix": 1,
+  "soft_clip": 0.35,
+  "target": 5000,
+  "activation": 0,
+  "attack": 20,
+  "release": 200,
+  "detection": 2
+}

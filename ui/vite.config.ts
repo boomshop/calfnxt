@@ -31,6 +31,7 @@ const knownPlugins = [
   "mblimiter",
   "harmonics",
   "analyzer",
+  "filter",
 ] as const;
 
 export default defineConfig(({ command }) => {

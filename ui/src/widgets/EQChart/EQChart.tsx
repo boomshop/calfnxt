@@ -172,17 +172,26 @@ export function EQChart(props: EQChartProps) {
 
   const handleOptions = useMemo(
     () =>
-      bandModels.map((_, i) => ({
-        type: 'parametric',
-        label: showLabels ? `B${i + 1}` : '',
-        ...(!showLabels ? { format_label: false as const } : {}),
-        class: `eq-band eq-band-${i}`,
-        min_size: isMini ? 4 : 24,
-        max_size: isMini ? 10 : 64,
-        y_min: yRange.min,
-        y_max: yRange.max,
-        show_axis: false,
-      })),
+      bandModels.map((band, i) => {
+        const customLabel = band.handleLabel;
+        const show =
+          showLabels || customLabel != null || band.formatHandleLabel != null;
+        return {
+          type: 'parametric',
+          label: customLabel ?? (showLabels ? `B${i + 1}` : ''),
+          ...(band.formatHandleLabel
+            ? { format_label: band.formatHandleLabel }
+            : !show
+              ? { format_label: false as const }
+              : {}),
+          class: `eq-band eq-band-${i}`,
+          min_size: isMini ? 4 : 24,
+          max_size: isMini ? 10 : 64,
+          y_min: yRange.min,
+          y_max: yRange.max,
+          show_axis: false,
+        };
+      }),
     [bandModels, isMini, showLabels, yRange.max, yRange.min],
   );
 
@@ -236,7 +245,11 @@ export function EQChart(props: EQChartProps) {
         const active$ = interactive ? band.active$ : alwaysOn$;
         return [
           { name: 'gain', backendValue: band.effectiveGain$, readonly: true },
-          { name: 'freq', backendValue: band.frequency$, readonly: true },
+          {
+            name: 'freq',
+            backendValue: band.effectiveFrequency$ ?? band.frequency$,
+            readonly: true,
+          },
           { name: 'q', backendValue: band.q$, readonly: true },
           { name: 'active', backendValue: active$, readonly: true },
           {

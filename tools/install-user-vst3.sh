@@ -37,6 +37,7 @@ declare -A PLUGIN_TARGET=(
   [mblimiter]=calfnxt-mblimiter
   [harmonics]=calfnxt-harmonics
   [analyzer]=calfnxt-analyzer
+  [filter]=calfnxt-filter
 )
 declare -A PLUGIN_VST3=(
   [equalizer]=calfNXTEqualizer
@@ -52,6 +53,7 @@ declare -A PLUGIN_VST3=(
   [mblimiter]=calfNXTMblimiter
   [harmonics]=calfNXTHarmonics
   [analyzer]=calfNXTAnalyzer
+  [filter]=calfNXTFilter
 )
 
 usage() {

@@ -1028,6 +1028,18 @@ void WebEditor::flushViz()
       flushVizArray(spectrumId, "spectrum", spectrum, nSpec);
     }
   }
+
+  if (const char* filtId = vizSource_->vizFilterCutoffId())
+  {
+    float fc = 0.f;
+    if (vizSource_->takeFilterCutoffHz(&fc, 1) >= 1)
+    {
+      if (!std::isfinite(fc))
+        fc = 1000.f;
+      fc = std::clamp(fc, 10.f, 20000.f);
+      flushVizArray(filtId, "hz", &fc, 1);
+    }
+  }
 }
 
 void WebEditor::pushAllParams()

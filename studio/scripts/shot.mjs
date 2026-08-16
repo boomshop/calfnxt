@@ -34,6 +34,7 @@ const ALL = [
   'stereo',
   'transients',
   'analyzer',
+  'filter',
 ];
 
 function parsePlugins(argv) {

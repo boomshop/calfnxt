@@ -16,6 +16,7 @@ namespace Ui {
  *   {t:"viz", id:"comp", kind:"point", v:[inDb,outDb]} // transfer operating point
  *   {t:"viz", id:"comp", kind:"envelope", v:[…]}   // history: audio, GR (2×slots + phase)
  *   {t:"viz", id:"fft", kind:"spectrum", v:[bins,hold,avg…,max…,L…,R…]}
+ *   {t:"viz", id:"filt", kind:"hz", v:[fcHz]}       // live filter cutoff
  *   UI→host {t:"vizcfg", id:"fft", bins:N} after measuring pixel width.
  */
 class IVizSource
@@ -167,6 +168,20 @@ public:
 
   /** Stream id for shape viz (nullptr = do not flush). */
   virtual const char* vizShapeId() const { return nullptr; }
+
+  /**
+   * Live filter cutoff in Hz (envelope / inertia). Returns 1 if available.
+   * Flushed as {t:"viz", id, kind:"hz", v:[fc]}.
+   */
+  virtual int takeFilterCutoffHz(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for filter cutoff (nullptr = do not flush). */
+  virtual const char* vizFilterCutoffId() const { return nullptr; }
 };
 
 } // namespace Ui

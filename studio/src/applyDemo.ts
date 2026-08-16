@@ -13,6 +13,7 @@ import type {
   IStereoHost,
   ITransientsHost,
   IAnalyzerHost,
+  IFilterHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -240,6 +241,27 @@ export function applyAnalyzerDemo(
     host.spectrum$.set(viz.spectrum);
     pushViz('fft', 'spectrum', viz.spectrum);
   }
+}
+
+export function applyFilterDemo(
+  host: IFilterHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.mode$, params.mode);
+  setNum(host.resonance$, params.resonance);
+  setNum(host.frequency$, params.frequency);
+  setNum(host.inertia$, params.inertia);
+  setBool(host.envPower$, params.env_power);
+  setNum(host.mix$, params.mix);
+  setNum(host.softClip$, params.soft_clip);
+  setNum(host.target$, params.target);
+  setNum(host.activation$, params.activation);
+  setNum(host.attack$, params.attack);
+  setNum(host.release$, params.release);
+  setNum(host.detection$, params.detection);
+  applySharedViz(viz);
 }
 
 export function applyDelayDemo(
@@ -602,4 +624,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   stereo: applyStereoDemo as DemoApplier,
   transients: applyTransientsDemo as DemoApplier,
   analyzer: applyAnalyzerDemo as DemoApplier,
+  filter: applyFilterDemo as DemoApplier,
 };
