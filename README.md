@@ -44,7 +44,7 @@ will follow.
 |--------|--------|------|
 | **Equalizer** | `calfNXTEqualizer.vst3` | 16-band parametric / dyn EQ |
 | **Stereo** | `calfNXTStereo.vst3` | Width, M/S, decorrelation, imaging |
-| **Transients** | `calfNXTTransients.vst3` | Attack / release shaping |
+| **Transients** | `calfNXTTransients.vst3` | Attack / release shaper (sensitivity, soft clip) |
 | **Compressor** | `calfNXTCompressor.vst3` | Feed-forward dynamics (threshold / ratio / knee) |
 | **Expander** | `calfNXTExpander.vst3` | Downward expander / gate with hysteresis + hold |
 | **Multiband Compressor** | `calfNXTMbcomp.vst3` | 2–6 band LR dynamics with per-band history |
@@ -74,9 +74,11 @@ will follow.
 ### Transients
 
 - Independent **attack / release** boost with time constants and sustain threshold
-- Optional **lookahead** (reported to the host for PDC; wet/dry stay in phase)
-- Detector **HP/LP** (12/24/36/48 dB) + listen; wet/dry **mix**
-- Live **envelope chart** (input / output / envelope overlays, selectable display window)
+- **Sensitivity** as rise threshold (dB) — ignore HF flutter, catch clearer hits
+- Optional **lookahead** (host PDC); wet/dry **mix**; **Delta** listen (wet − dry)
+- Detector **HP/LP** (12/24/36/48 dB) + listen; stereo **link** (Max / Avg / Mid)
+- Soft **clip** only while attack boost pushes peaks; scrolling **envelope history**
+  (dry / filtered / output · envelope / attack / release)
 
 ### Compressor
 
