@@ -48,6 +48,8 @@ struct HostState
   guint mapPollSource = 0;
   int mapPollTries = 0;
   bool mapOk = false;
+  /** Held so WebKit keeps presenting without a host Configure (XWayland). */
+  GdkFrameClock* frameClock = nullptr;
 };
 
 HostState g;
@@ -311,6 +313,54 @@ void mapX11Windows()
   mapOne(g.webview ? GTK_WIDGET(g.webview) : nullptr);
 }
 
+void disableFrameSync(GtkWidget* widget)
+{
+  if (!widget)
+    return;
+  GdkWindow* win = gtk_widget_get_window(widget);
+  if (!win)
+    return;
+  // GtkPlug already does this on its own GdkWindow. WebKit's child window
+  // still waits for _NET_WM_SYNC that Ardour/XWayland never acks → one
+  // present per user resize.
+  gdk_x11_window_set_frame_sync_enabled(win, FALSE);
+}
+
+void releaseFrameClock()
+{
+  if (!g.frameClock)
+    return;
+  gdk_frame_clock_end_updating(g.frameClock);
+  g_object_unref(g.frameClock);
+  g.frameClock = nullptr;
+}
+
+void holdFrameClock()
+{
+  GtkWidget* w = g.webview ? GTK_WIDGET(g.webview) : g.plug;
+  if (!w)
+    return;
+  GdkFrameClock* clock = gtk_widget_get_frame_clock(w);
+  if (!clock && g.plug)
+    clock = gtk_widget_get_frame_clock(g.plug);
+  if (!clock || g.frameClock == clock)
+    return;
+  releaseFrameClock();
+  gdk_frame_clock_begin_updating(clock);
+  g.frameClock = GDK_FRAME_CLOCK(g_object_ref(clock));
+  hostLog("[calfnxt-web-host] frame-clock held\n");
+}
+
+void enablePresent(const char* why)
+{
+  disableFrameSync(g.plug);
+  if (g.webview)
+    disableFrameSync(GTK_WIDGET(g.webview));
+  holdFrameClock();
+  if (why)
+    hostLog("[calfnxt-web-host] present %s\n", why);
+}
+
 /**
  * Evidence (tester vs working host): after XEmbed, both start Unmapped;
  * working host becomes Viewable within ~500ms, tester stays Unmapped forever
@@ -328,6 +378,7 @@ gboolean onMapPoll(gpointer)
             g.mapPollTries * kMapPollMs);
     g.mapOk = true;
     g.mapPollSource = 0;
+    enablePresent("map-ok");
     reportSocketSize("map-ok");
     return G_SOURCE_REMOVE;
   }
@@ -343,6 +394,7 @@ gboolean onMapPoll(gpointer)
             g.mapPollTries * kMapPollMs);
     g.mapOk = true;
     g.mapPollSource = 0;
+    enablePresent("map-ok");
     reportSocketSize("map-ok");
     return G_SOURCE_REMOVE;
   }
@@ -366,6 +418,7 @@ void startMapPoll()
   if (surfaceX11Viewable())
   {
     g.mapOk = true;
+    enablePresent("map-already");
     return;
   }
   g.mapPollTries = 0;
@@ -701,6 +754,7 @@ void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
     hostLog("[calfnxt-web-host] load-finished → _ready\n");
     if (gtkAllocTiny())
       forceGtkAllocation("load-finished");
+    enablePresent("load-finished");
     startMapPoll();
     reportSocketSize("load-finished");
     sendLine("{\"t\":\"_ready\"}");
@@ -901,7 +955,7 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=map-fix-2 hw-accel=%s\n", noGpu ? "never" : "always");
+  hostLog("[calfnxt-web-host] build=present-xwayland-1 hw-accel=%s\n", noGpu ? "never" : "always");
   if (envFlag("CALFNXT_WEB_DEBUG"))
   {
     hostLog("[calfnxt-web-host] env dmabuf_disable=%s compositing_disable=%s no_gpu=%s\n",
@@ -934,6 +988,13 @@ int main(int argc, char** argv)
                      scheduleForceAlloc();
                    }),
                    nullptr);
+
+  auto onRealize = +[](GtkWidget* widget, gpointer) {
+    disableFrameSync(widget);
+    holdFrameClock();
+  };
+  g_signal_connect(g.plug, "realize", G_CALLBACK(onRealize), nullptr);
+  g_signal_connect(GTK_WIDGET(g.webview), "realize", G_CALLBACK(onRealize), nullptr);
 
   gtk_widget_show_all(g.plug);
   syncNativeSize();
@@ -972,6 +1033,7 @@ int main(int argc, char** argv)
 
   if (g.sockSource)
     g_source_remove(g.sockSource);
+  releaseFrameClock();
   if (g.plug)
   {
     gtk_widget_destroy(g.plug);
