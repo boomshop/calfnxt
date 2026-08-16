@@ -11,5 +11,6 @@
   "activation": 0,
   "attack": 20,
   "release": 200,
-  "detection": 2
+  "detection": 2,
+  "spectrum": 1
 }

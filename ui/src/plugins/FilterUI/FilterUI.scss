@@ -16,8 +16,19 @@
     min-width: 200px;
 
     > .mode,
-    > .top-row {
-      margin: 0 8px;
+    > .top-row,
+    > .filter-top {
+    }
+
+    > .filter-top {
+      display: flex;
+      gap: var(--gap);
+
+      > .mode,
+      > .spectrum {
+        min-width: 0;
+        width: auto;
+      }
     }
 
     > .top-row {

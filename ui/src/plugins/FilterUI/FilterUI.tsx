@@ -12,6 +12,7 @@ import { paramIds } from '../../generated/filterModel';
 import {
   FILTER_DETECTION_ENTRIES,
   FILTER_MODE_ENTRIES,
+  FILTER_SPECTRUM_ENTRIES,
   filterParamDefault,
   type IFilterHost,
 } from '../../host/filterHost';
@@ -105,6 +106,7 @@ export function FilterUI(props: FilterUIProps) {
   });
   const envOn = useDynamicValueReadonly(host.envPower$, false);
   const detection = useDynamicValueReadonly(host.detection$, 0);
+  const spectrumMode = useDynamicValueReadonly(host.spectrum$, 0);
 
   return (
     <div className="FilterUI PluginUI">
@@ -116,9 +118,23 @@ export function FilterUI(props: FilterUIProps) {
 
       <div className="block filter">
         <div className="title">Filter</div>
-        <WithInfo title={filterInfo.mode} className="info-block mode">
-          <Select value$={host.mode$} entries={FILTER_MODE_ENTRIES} />
-        </WithInfo>
+        <div className="filter-top">
+          <WithInfo title={filterInfo.mode} className="info-block mode">
+            <Select value$={host.mode$} entries={FILTER_MODE_ENTRIES} />
+          </WithInfo>
+          <WithInfo title={filterInfo.spectrum} className="info-block spectrum">
+            <Buttons
+              layout="horizontal"
+              entries={[...FILTER_SPECTRUM_ENTRIES]}
+              value={Math.round(spectrumMode)}
+              onChange={(v) => {
+                host.beginEdit(paramIds.spectrum);
+                host.spectrum$.set(v);
+                host.endEdit(paramIds.spectrum);
+              }}
+            />
+          </WithInfo>
+        </div>
         <div className="knobs">
           <WithInfo title={filterInfo.frequency}>
             <Knob
@@ -203,6 +219,8 @@ export function FilterUI(props: FilterUIProps) {
           showLabels
           yRange={{ min: -60, max: 24 }}
           dbGrid={12}
+          spectrum$={host.spectrumData$}
+          spectrumMode={Math.round(spectrumMode)}
         />
       </div>
 

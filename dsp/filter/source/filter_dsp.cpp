@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace calfNXT {
 namespace Filter {
@@ -14,7 +15,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5846u; // 'CNXF'
-constexpr uint32 kStateVersion = 4; // v4: + soft_clip (trailing)
+constexpr uint32 kStateVersion = 5; // v5: + spectrum (trailing)
 
 Dsp::DetectorMode detectorModeFromPlain(float v)
 {
@@ -53,6 +54,8 @@ void FilterPlugin::resetProcessing()
   filter_.reset();
   envelope_.setSampleRate(static_cast<float>(sampleRate_));
   envelope_.reset();
+  spectrum_.setSampleRate(sampleRate_);
+  spectrum_.reset();
 }
 
 tresult PLUGIN_API FilterPlugin::setActive(TBool state)
@@ -74,6 +77,8 @@ FilterPlugin::BlockState FilterPlugin::makeBlockState() const
   BlockState s;
   s.bypass = params_[kParamBypass] >= 0.5f;
   s.envOn = params_[kParamEnvPower] >= 0.5f;
+  s.spectrumOn =
+    static_cast<int>(std::lround(std::clamp(params_[kParamSpectrum], 0.f, 3.f))) >= 1;
   s.mode = static_cast<int>(std::lround(std::clamp(params_[kParamMode], 0.f, 12.f)));
   s.resonance = params_[kParamResonance];
   s.frequency = params_[kParamFrequency];
@@ -93,6 +98,7 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
   syncParamPlains(data, params_, kParamCount);
 
   const BlockState state = makeBlockState();
+  spectrumActive_.store(state.spectrumOn, std::memory_order_relaxed);
   filter_.setInertiaMs(state.inertiaMs);
   filter_.setMode(state.mode);
   filter_.setResonanceInertia(state.resonance);
@@ -105,18 +111,25 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
   if (!io_.begin(data))
     return kResultOk;
 
-  if (state.bypass)
+  if (state.bypass && !state.spectrumOn)
   {
     effectiveCutoffHz_.store(state.frequency, std::memory_order_relaxed);
     io_.end(data);
     return kResultOk;
   }
 
+  if (state.spectrumOn)
+  {
+    spectrum_.setSampleRate(sampleRate_);
+    spectrum_.setFftSize(2048);
+    spectrum_.setHold(false);
+  }
+
   const int32 nFrames = data.numSamples;
   const int32 nCh = data.outputs[0].numChannels;
 
   // Block-rate envelope prep + log endpoints (avoid per-sample log10).
-  if (state.envOn)
+  if (!state.bypass && state.envOn)
     envelope_.prepare(state.attackMs, state.releaseMs);
   const float floorHz = std::clamp(state.frequency, 10.f, 20000.f);
   const float ceilHz = std::clamp(state.target, 10.f, 20000.f);
@@ -130,22 +143,29 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
       float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
       float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
 
-      if (state.envOn)
+      if (!state.bypass)
       {
-        const float env = std::clamp(
-          envelope_.process(
-            L, R, state.activationLin, state.attackMs, state.releaseMs,
-            state.detection),
-          0.f, 1.f);
-        float freq = std::pow(10.f, (logCeil - logFloor) * env + logFloor);
-        if (targetBelow)
-          freq = std::max(ceilHz, std::min(floorHz, freq));
-        else
-          freq = std::min(ceilHz, std::max(floorHz, freq));
-        filter_.setCutoffNow(freq);
+        if (state.envOn)
+        {
+          const float env = std::clamp(
+            envelope_.process(
+              L, R, state.activationLin, state.attackMs, state.releaseMs,
+              state.detection),
+            0.f, 1.f);
+          float freq = std::pow(10.f, (logCeil - logFloor) * env + logFloor);
+          if (targetBelow)
+            freq = std::max(ceilHz, std::min(floorHz, freq));
+          else
+            freq = std::min(ceilHz, std::max(floorHz, freq));
+          filter_.setCutoffNow(freq);
+        }
+
+        filter_.processStereo(L, R, state.mix, state.softClip);
       }
 
-      filter_.processStereo(L, R, state.mix, state.softClip);
+      // Post-filter tap (before out_gain) — overlay shows the filtered signal.
+      if (state.spectrumOn)
+        spectrum_.process(L, R);
 
       if (nCh > 0)
         out[0][i] = L;
@@ -159,7 +179,14 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
   else
     run(data.outputs[0].channelBuffers64);
 
-  effectiveCutoffHz_.store(filter_.lastCutoffHz(), std::memory_order_relaxed);
+  if (state.bypass)
+    effectiveCutoffHz_.store(state.frequency, std::memory_order_relaxed);
+  else
+    effectiveCutoffHz_.store(filter_.lastCutoffHz(), std::memory_order_relaxed);
+
+  if (state.spectrumOn)
+    spectrum_.publish();
+
   io_.end(data);
   return kResultOk;
 }
@@ -170,6 +197,21 @@ int FilterPlugin::takeFilterCutoffHz(float* out, int maxOut)
     return 0;
   out[0] = effectiveCutoffHz_.load(std::memory_order_relaxed);
   return 1;
+}
+
+int FilterPlugin::takeSpectrum(float* out, int maxOut)
+{
+  if (!spectrumActive_.load(std::memory_order_relaxed))
+    return 0;
+  return spectrum_.takeSpectrum(out, maxOut);
+}
+
+void FilterPlugin::configureVizBins(const char* id, int bins)
+{
+  if (!id || bins < 1)
+    return;
+  if (std::strcmp(id, "fft") == 0)
+    spectrum_.configureBins(bins);
 }
 
 tresult PLUGIN_API FilterPlugin::setState(IBStream* state)
@@ -185,7 +227,7 @@ tresult PLUGIN_API FilterPlugin::setState(IBStream* state)
     return kResultFalse;
   if (!streamer.readInt32u(version) || version < 1 || version > kStateVersion)
     return kResultFalse;
-  // Append-only soft_clip (v4): older saves may have fewer plains.
+  // Append-only soft_clip / spectrum: older saves may have fewer plains.
   if (!streamer.readInt32(count) || count <= 0 || count > kParamCount)
     return kResultFalse;
 

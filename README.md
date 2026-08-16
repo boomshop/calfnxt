@@ -147,6 +147,7 @@ will follow.
 - Optional **Envelope** follower: Peak / RMS / Opto detector → cutoff between Frequency and Target
 - **Mix** dry/wet (always; complementary dry for LP/HP when Resonance is moderate)
 - **Soft** clip on the wet path to tame hot resonance
+- Optional **spectrum** overlay on the response chart (post-filter, same tilts as Equalizer)
 - Response chart (Frequency + Target handles when Envelope is on; live cutoff when Envelope moves)
 - Shared In/Out gain + peak meters
 

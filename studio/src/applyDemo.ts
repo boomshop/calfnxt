@@ -261,6 +261,7 @@ export function applyFilterDemo(
   setNum(host.attack$, params.attack);
   setNum(host.release$, params.release);
   setNum(host.detection$, params.detection);
+  setNum(host.spectrum$, params.spectrum);
   applySharedViz(viz);
 }
 

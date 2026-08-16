@@ -3,6 +3,7 @@
 #include "effect_base.h"
 #include "io_stage.h"
 #include "multimode_filter.h"
+#include "spectrum_tap.h"
 #include "viz_source.h"
 
 #include "filter_params.h"
@@ -34,6 +35,9 @@ public:
   int takeOutputLevelsDb(float* out, int maxOut) override { return io_.takeOutputLevelsDb(out, maxOut); }
   int takeFilterCutoffHz(float* out, int maxOut) override;
   const char* vizFilterCutoffId() const override { return "filt"; }
+  int takeSpectrum(float* out, int maxOut) override;
+  const char* vizSpectrumId() const override { return "fft"; }
+  void configureVizBins(const char* id, int bins) override;
 
   OBJ_METHODS(FilterPlugin, Plugin::EffectBase)
   DEFINE_INTERFACES
@@ -48,6 +52,7 @@ private:
   {
     bool bypass = false;
     bool envOn = false;
+    bool spectrumOn = false;
     int mode = 0;
     float resonance = 0.707f;
     float frequency = 1000.f;
@@ -70,6 +75,8 @@ private:
 
   Dsp::MultimodeFilter filter_;
   Dsp::LevelEnvelope envelope_;
+  Dsp::SpectrumTap spectrum_;
+  std::atomic<bool> spectrumActive_{false};
   std::atomic<float> effectiveCutoffHz_ { 1000.f };
 };
 

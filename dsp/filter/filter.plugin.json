@@ -173,6 +173,17 @@
       "default": 0.0,
       "scale": "linear",
       "precision": 2
+    },
+    {
+      "id": "spectrum",
+      "name": "Spectrum",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
     }
   ]
 }

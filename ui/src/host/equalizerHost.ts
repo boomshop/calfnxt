@@ -516,7 +516,7 @@ export interface IEqualizerHost {
 
 export const EQ_SPECTRUM_ENTRIES = [
   { label: 'Off', value: 0 },
-  { label: 'Linear', value: 1 },
+  { label: 'Lin', value: 1 },
   { label: '−3 dB', value: 2 },
   { label: '−4.5 dB', value: 3 },
 ] as const;

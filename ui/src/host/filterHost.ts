@@ -4,10 +4,12 @@ import {
   bindBoolParamToHost,
   bindParamToHost,
   bindVizHz,
+  bindVizSpectrum,
   postBegin,
   postEnd,
 } from '../bind_param';
 import {
+  EQ_SPECTRUM_ENTRIES,
   type EqFilterType,
   type EqPassSlope,
   type IEqualizerBand,
@@ -25,18 +27,18 @@ import {
 
 /** Multimode list (plain 0…12). LP/HP top slope is 48 dB (not Calf 36). */
 export const FILTER_MODE_ENTRIES = [
-  { label: 'Low Pass 12', value: 0 },
-  { label: 'Low Pass 24', value: 1 },
-  { label: 'Low Pass 48', value: 2 },
-  { label: 'High Pass 12', value: 3 },
-  { label: 'High Pass 24', value: 4 },
-  { label: 'High Pass 48', value: 5 },
-  { label: 'Band Pass 6', value: 6 },
-  { label: 'Band Pass 12', value: 7 },
-  { label: 'Band Pass 18', value: 8 },
-  { label: 'Band Reject 6', value: 9 },
-  { label: 'Band Reject 12', value: 10 },
-  { label: 'Band Reject 18', value: 11 },
+  { label: 'LP 12', value: 0 },
+  { label: 'LP 24', value: 1 },
+  { label: 'LP 48', value: 2 },
+  { label: 'HP 12', value: 3 },
+  { label: 'HP 24', value: 4 },
+  { label: 'HP 48', value: 5 },
+  { label: 'BP 6', value: 6 },
+  { label: 'BP 12', value: 7 },
+  { label: 'BP 18', value: 8 },
+  { label: 'BR 6', value: 9 },
+  { label: 'BR 12', value: 10 },
+  { label: 'BR 18', value: 11 },
   { label: 'Allpass', value: 12 },
 ];
 
@@ -45,6 +47,8 @@ export const FILTER_DETECTION_ENTRIES = [
   { label: 'RMS', value: 1 },
   { label: 'Opto', value: 2 },
 ];
+
+export { EQ_SPECTRUM_ENTRIES as FILTER_SPECTRUM_ENTRIES };
 
 export type IFilterHost = {
   meta: typeof pluginMeta;
@@ -61,6 +65,8 @@ export type IFilterHost = {
   attack$: DynamicValue<number>;
   release$: DynamicValue<number>;
   detection$: DynamicValue<number>;
+  spectrum$: DynamicValue<number>;
+  spectrumData$: DynamicValue<number[]>;
   /** Main response + optional Target handle when envelope is on. */
   filterBands: IEqualizerBand[];
   beginEdit: (id: number) => void;
@@ -322,6 +328,12 @@ export function createBoundFilterHost(): IFilterHost {
     attack$: bindNum('attack', 20),
     release$: bindNum('release', 200),
     detection$: bindNum('detection', 2),
+    spectrum$: bindNum('spectrum', 0),
+    spectrumData$: (() => {
+      const dv = DynamicValue.fromConstant<number[]>([]);
+      bindVizSpectrum(dv, 'fft');
+      return dv;
+    })(),
     filterBands: makeFilterBands(
       mode$,
       frequency$,

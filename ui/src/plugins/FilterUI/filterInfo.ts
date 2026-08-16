@@ -25,6 +25,9 @@ export const filterInfo = {
   softClip:
     'Rounds hot resonant peaks on the filtered (wet) path so high Resonance screams less and sits better in a mix. 0 = clean linear filter. Raise it when LP/HP/BP with high Res gets harsh, whistly, or digital — you keep the “sing” but with softer edges. Soft Clip does not touch the dry Mix path; at Mix 0 it has no effect. Too much can dull transients and add odd harmonics — A/B with the knob at 0.',
 
+  spectrum:
+    'Analyzer fill behind the filter curve (post-filter, before Out gain). Off = no FFT cost. Linear = raw dBFS. −3 / −4.5 dB/oct = pink-style tilt pivoted at 1 kHz — same as the Equalizer overlay.',
+
   target:
     'Where the envelope sends the cutoff when the detector is loud (env = 1). Above Frequency = opens/brightens on hits (classic auto-wah). Below Frequency = closes/darkens on hits (ducking filter). Set the range so quiet notes sit at Freq and accents reach Target — then tune Attack/Release so it follows the groove, not the noise floor.',
 
