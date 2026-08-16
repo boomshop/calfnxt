@@ -114,27 +114,25 @@ export function FilterUI(props: FilterUIProps) {
         <WithInfo title={filterInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>
+        <WithInfo title={filterInfo.spectrum} className="info-block spectrum">
+          <Buttons
+            layout="horizontal"
+            entries={[...FILTER_SPECTRUM_ENTRIES]}
+            value={Math.round(spectrumMode)}
+            onChange={(v) => {
+              host.beginEdit(paramIds.spectrum);
+              host.spectrum$.set(v);
+              host.endEdit(paramIds.spectrum);
+            }}
+          />
+        </WithInfo>
       </Header>
 
       <div className="block filter">
         <div className="title">Filter</div>
-        <div className="filter-top">
-          <WithInfo title={filterInfo.mode} className="info-block mode">
-            <Select value$={host.mode$} entries={FILTER_MODE_ENTRIES} />
-          </WithInfo>
-          <WithInfo title={filterInfo.spectrum} className="info-block spectrum">
-            <Buttons
-              layout="horizontal"
-              entries={[...FILTER_SPECTRUM_ENTRIES]}
-              value={Math.round(spectrumMode)}
-              onChange={(v) => {
-                host.beginEdit(paramIds.spectrum);
-                host.spectrum$.set(v);
-                host.endEdit(paramIds.spectrum);
-              }}
-            />
-          </WithInfo>
-        </div>
+        <WithInfo title={filterInfo.mode} className="info-block mode">
+          <Select value$={host.mode$} entries={FILTER_MODE_ENTRIES} />
+        </WithInfo>
         <div className="knobs">
           <WithInfo title={filterInfo.frequency}>
             <Knob

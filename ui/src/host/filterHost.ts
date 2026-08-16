@@ -27,18 +27,18 @@ import {
 
 /** Multimode list (plain 0…12). LP/HP top slope is 48 dB (not Calf 36). */
 export const FILTER_MODE_ENTRIES = [
-  { label: 'LP 12', value: 0 },
-  { label: 'LP 24', value: 1 },
-  { label: 'LP 48', value: 2 },
-  { label: 'HP 12', value: 3 },
-  { label: 'HP 24', value: 4 },
-  { label: 'HP 48', value: 5 },
-  { label: 'BP 6', value: 6 },
-  { label: 'BP 12', value: 7 },
-  { label: 'BP 18', value: 8 },
-  { label: 'BR 6', value: 9 },
-  { label: 'BR 12', value: 10 },
-  { label: 'BR 18', value: 11 },
+  { label: 'Low Pass 12', value: 0 },
+  { label: 'Low Pass 24', value: 1 },
+  { label: 'Low Pass 48', value: 2 },
+  { label: 'High Pass 12', value: 3 },
+  { label: 'High Pass 24', value: 4 },
+  { label: 'High Pass 48', value: 5 },
+  { label: 'Band Pass 6', value: 6 },
+  { label: 'Band Pass 12', value: 7 },
+  { label: 'Band Pass 18', value: 8 },
+  { label: 'Band Reject 6', value: 9 },
+  { label: 'Band Reject 12', value: 10 },
+  { label: 'Band Reject 18', value: 11 },
   { label: 'Allpass', value: 12 },
 ];
 
