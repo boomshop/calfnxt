@@ -503,6 +503,8 @@ export function createBoundEqualizerBands(): {
 
 export interface IEqualizerHost {
   bypass$: DynamicValue<boolean>;
+  /** Soft-mono: process Left only, copy to both outs. */
+  mono$: DynamicValue<boolean>;
   /** 0 Off / 1 Linear / 2 −3 dB/oct / 3 −4.5 dB/oct */
   spectrum$: DynamicValue<number>;
   spectrumData$: DynamicValue<number[]>;
@@ -525,6 +527,9 @@ export function createBoundEqualizerHost(): IEqualizerHost {
   const bypass$ = DynamicValue.fromConstant(false);
   const unbindBypass = bindBoolParamToHost(bypass$, paramIds.bypass);
 
+  const mono$ = DynamicValue.fromConstant(false);
+  const unbindMono = bindBoolParamToHost(mono$, paramIds.mono);
+
   const spectrum$ = DynamicValue.fromConstant(0);
   const unbindSpectrum = bindParamToHost(spectrum$, paramIds.spectrum);
 
@@ -534,6 +539,7 @@ export function createBoundEqualizerHost(): IEqualizerHost {
   const { bands, dispose: disposeBands } = createBoundEqualizerBands();
   return {
     bypass$,
+    mono$,
     spectrum$,
     spectrumData$,
     bands,
@@ -543,6 +549,7 @@ export function createBoundEqualizerHost(): IEqualizerHost {
     endEdit: (id) => postEnd(id),
     dispose: () => {
       unbindBypass();
+      unbindMono();
       unbindSpectrum();
       unbindSpectrumData();
       disposeBands();

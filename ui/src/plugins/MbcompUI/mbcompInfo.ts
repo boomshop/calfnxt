@@ -4,6 +4,9 @@ export const mbcompInfo = {
   bypass:
     'Turns all band compression off so you hear the dry path (In/Out gains still apply). A/B the whole multiband treatment — glue vs. lifeless or phasey.',
 
+  mono:
+    'Process the Left channel only (one crossover + dynamics path) and copy to both outs. Big CPU win with many bands / steep slopes — ideal on mono tracks. Right is ignored while on.',
+
   numBands:
     'How many frequency bands you split into. Fewer = broader, simpler control (less crossover coloration). More = surgical (kick vs. vocal vs. cymbals), but more phase rotation and more to manage. Adding a band splits the top band at a new crossover.',
 

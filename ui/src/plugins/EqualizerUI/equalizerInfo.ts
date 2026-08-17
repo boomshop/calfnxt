@@ -4,6 +4,9 @@ export const equalizerInfo = {
   bypass:
     'Turns all EQ processing off (In/Out gains still apply). A/B to hear whether the curve is clarifying the mix or just making things louder/harsher.',
 
+  mono:
+    'Process the Left channel only and copy the result to both outs. Roughly halves filter CPU — ideal on mono tracks. Right-channel content is ignored while on.',
+
   type:
     'Filter shape for this band. Peaking = boost/cut a region; shelves = tilt highs or lows; HP/LP = remove below/above a cutoff; band-pass = isolate a band. Type changes what Gain and Slope mean — a “gain” on HP/LP isn’t the same as a bell boost.',
 

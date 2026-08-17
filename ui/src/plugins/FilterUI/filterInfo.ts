@@ -4,6 +4,9 @@ export const filterInfo = {
   bypass:
     'Turns the filter off so you hear dry input (In/Out gains and meters still work). Use this to A/B whether the filter is shaping tone usefully or just thinning / hollowing the track.',
 
+  mono:
+    'Process the Left channel only and copy the result to both outs. Roughly halves filter CPU — ideal on mono tracks. Right-channel content is ignored while on.',
+
   mode:
     'Filter shape. Low-pass = darkens / removes highs (mud control, dulling harshness, synth “closed filter”). High-pass = thins / removes lows (cleanup, rumble, air without boom). Band-pass = mid “wah” / telephone / auto-wah territory. Band-reject (notch) = scoops a band (hum, resonance, harsh spot). Allpass ≈ same loudness curve but twists phase — subtle when soloed; with Mix < 100% it can add comb-like color. Steeper slopes (24 / 48) cut harder and sound more “surgical”; gentler slopes sound smoother and more musical.',
 

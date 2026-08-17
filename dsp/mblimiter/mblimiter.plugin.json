@@ -386,5 +386,18 @@
         "release": -0.75
       }
     ]
-  }
+  },
+  "trailing_parameters": [
+    {
+      "id": "mono",
+      "name": "Mono",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    }
+  ]
 }

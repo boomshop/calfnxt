@@ -79,6 +79,7 @@ export interface IMbcompHost {
   meta: typeof pluginMeta;
   io: IHeaderIo;
   bypass$: DynamicValue<boolean>;
+  mono$: DynamicValue<boolean>;
   numBands$: DynamicValue<number>;
   slope$: DynamicValue<number>;
   xover$: DynamicValue<number>[];
@@ -193,6 +194,9 @@ export function createBoundMbcompHost(): IMbcompHost {
 
   const bypass$ = DynamicValue.fromConstant(globalDefault('bypass', 0) >= 0.5);
   disposers.push(bindBoolParamToHost(bypass$, paramIds.bypass));
+
+  const mono$ = DynamicValue.fromConstant(globalDefault('mono', 0) >= 0.5);
+  disposers.push(bindBoolParamToHost(mono$, paramIds.mono));
 
   const numBands$ = DynamicValue.fromConstant(
     clampBands(globalDefault('num_bands', 4)),
@@ -329,6 +333,7 @@ export function createBoundMbcompHost(): IMbcompHost {
     meta: pluginMeta,
     io,
     bypass$,
+    mono$,
     numBands$,
     slope$,
     xover$,

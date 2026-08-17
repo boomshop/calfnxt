@@ -348,6 +348,9 @@ export function MblimiterUI(props: MblimiterUIProps) {
   return (
     <div className="MblimiterUI PluginUI">
       <Header title="Multiband Limiter" io={host.io}>
+        <WithInfo title={mblimiterInfo.mono}>
+          <Toggle state$={host.mono$} icon="stereo" icon_active="mono" />
+        </WithInfo>
         <WithInfo title={mblimiterInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>

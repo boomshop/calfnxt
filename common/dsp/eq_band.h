@@ -208,11 +208,40 @@ public:
     right = static_cast<float>(yR);
   }
 
+  /** Mono (Left) path — half the biquad work; caller copies to R. */
+  void processMono(float& sample)
+  {
+    if (!active_)
+      return;
+
+    if (dynEnabled_ && typeUsesGain(type_))
+    {
+      const float d = static_cast<float>(detL_.process(sample));
+      const float gr = gr_.processDetector(d, d);
+      const float effectiveDb = gainCur_ + linToDb(gr);
+      if (std::fabs(effectiveDb - lastAppliedGainDb_) > 0.01f)
+      {
+        updateAudioCoeffs(effectiveDb);
+        lastAppliedGainDb_ = effectiveDb;
+      }
+    }
+
+    double y = sample;
+    for (int s = 0; s < stages_; ++s)
+      y = L_[s].process(y);
+    sample = static_cast<float>(y);
+  }
+
   /** Solo detector / sidechain signal (EQ bands bypassed by caller). */
   void processListen(float& left, float& right)
   {
     left = static_cast<float>(detL_.process(left));
     right = static_cast<float>(detR_.process(right));
+  }
+
+  void processListenMono(float& sample)
+  {
+    sample = static_cast<float>(detL_.process(sample));
   }
 
   void sanitize()

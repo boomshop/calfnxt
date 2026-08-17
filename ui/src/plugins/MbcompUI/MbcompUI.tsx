@@ -604,6 +604,9 @@ export function MbcompUI(props: MbcompUIProps) {
   return (
     <div className="MbcompUI PluginUI">
       <Header title="Multiband Compressor" io={host.io}>
+        <WithInfo title={mbcompInfo.mono}>
+          <Toggle state$={host.mono$} icon="stereo" icon_active="mono" />
+        </WithInfo>
         <WithInfo title={mbcompInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>

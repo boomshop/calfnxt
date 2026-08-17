@@ -661,6 +661,7 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
   syncParamPlains(data, params_, kParamCount);
 
   const bool bypass = params_[kParamBypass] >= 0.5f;
+  const bool mono = params_[kParamMono] >= 0.5f;
   applyParams(false);
 
   const int bands = numBands();
@@ -727,20 +728,31 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
   const int32 nFrames = data.numSamples;
 
   auto processFrame = [&](float& outL, float& outR) {
+    if (mono)
+      outR = outL;
     const float inL = outL;
     const float inR = outR;
 
     if (color > 0.f)
     {
       outL = applyColor(outL, color);
-      outR = applyColor(outR, color);
+      if (!mono)
+        outR = applyColor(outR, color);
+      else
+        outR = outL;
     }
 
     const float fullPeak = std::max(std::fabs(outL), std::fabs(outR));
     float bandsL[kMaxBands] {};
     float bandsR[kMaxBands] {};
     splitL_.process(outL, bandsL);
-    splitR_.process(outR, bandsR);
+    if (mono)
+    {
+      for (int b = 0; b < bands; ++b)
+        bandsR[b] = bandsL[b];
+    }
+    else
+      splitR_.process(outR, bandsR);
 
     float bandPeak[kMaxBands] {};
     for (int b = 0; b < bands; ++b)
@@ -761,9 +773,14 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
       for (int b = 0; b < bands; ++b)
       {
         double* samplesL = resamplerL_[b].upsample(static_cast<double>(bandsL[b]));
-        double* samplesR = resamplerR_[b].upsample(static_cast<double>(bandsR[b]));
         std::memcpy(overL[b], samplesL, sizeof(double) * static_cast<size_t>(os));
-        std::memcpy(overR[b], samplesR, sizeof(double) * static_cast<size_t>(os));
+        if (mono)
+          std::memcpy(overR[b], overL[b], sizeof(double) * static_cast<size_t>(os));
+        else
+        {
+          double* samplesR = resamplerR_[b].upsample(static_cast<double>(bandsR[b]));
+          std::memcpy(overR[b], samplesR, sizeof(double) * static_cast<size_t>(os));
+        }
       }
 
       for (int s = 0; s < os; ++s)
@@ -773,8 +790,11 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
         for (int b = 0; b < bands; ++b)
         {
           sumClipL += clipToLimit(static_cast<float>(overL[b][s]), limitLin) * weightLin_[b];
-          sumClipR += clipToLimit(static_cast<float>(overR[b][s]), limitLin) * weightLin_[b];
+          if (!mono)
+            sumClipR += clipToLimit(static_cast<float>(overR[b][s]), limitLin) * weightLin_[b];
         }
+        if (mono)
+          sumClipR = sumClipL;
         const float peakSum = std::max(std::fabs(sumClipL), std::fabs(sumClipR));
         const float multiCoeff =
           peakSum > 1.0e-12f ? std::min(limitLin / peakSum, 1.f) : 1.f;
@@ -786,8 +806,10 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
         for (int b = 0; b < bands; ++b)
         {
           float tmpL = static_cast<float>(overL[b][s]);
-          float tmpR = static_cast<float>(overR[b][s]);
+          float tmpR = mono ? tmpL : static_cast<float>(overR[b][s]);
           strip_[b].process(tmpL, tmpR, multiBuf);
+          if (mono)
+            tmpR = tmpL;
           stripOutPeak[b] =
             std::max(stripOutPeak[b], std::max(std::fabs(tmpL), std::fabs(tmpR)));
           if (solo[b] || noSolo)
@@ -801,19 +823,23 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
 
         Dsp::sanitizeDenormal(sumL);
         Dsp::sanitizeDenormal(sumR);
+        if (mono)
+          sumR = sumL;
         broadband_.process(sumL, sumR, nullptr);
+        if (mono)
+          sumR = sumL;
         resOsL[s] = sumL;
         resOsR[s] = sumR;
         cleanOsL[s] = broadband_.cleanLeft();
-        cleanOsR[s] = broadband_.cleanRight();
+        cleanOsR[s] = mono ? cleanOsL[s] : broadband_.cleanRight();
         if (broadband_.takeAsc())
           ascActive = true;
       }
 
       outL = static_cast<float>(bbResamplerL_.downsample(resOsL));
-      outR = static_cast<float>(bbResamplerR_.downsample(resOsR));
+      outR = mono ? outL : static_cast<float>(bbResamplerR_.downsample(resOsR));
       cleanL = static_cast<float>(cleanResamplerL_.downsample(cleanOsL));
-      cleanR = static_cast<float>(cleanResamplerR_.downsample(cleanOsR));
+      cleanR = mono ? cleanL : static_cast<float>(cleanResamplerR_.downsample(cleanOsR));
     }
     else
     {
@@ -822,8 +848,11 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
       for (int b = 0; b < bands; ++b)
       {
         sumClipL += clipToLimit(bandsL[b], limitLin) * weightLin_[b];
-        sumClipR += clipToLimit(bandsR[b], limitLin) * weightLin_[b];
+        if (!mono)
+          sumClipR += clipToLimit(bandsR[b], limitLin) * weightLin_[b];
       }
+      if (mono)
+        sumClipR = sumClipL;
       const float peakSum = std::max(std::fabs(sumClipL), std::fabs(sumClipR));
       const float multiCoeff =
         peakSum > 1.0e-12f ? std::min(limitLin / peakSum, 1.f) : 1.f;
@@ -835,8 +864,10 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
       for (int b = 0; b < bands; ++b)
       {
         float tmpL = bandsL[b];
-        float tmpR = bandsR[b];
+        float tmpR = mono ? tmpL : bandsR[b];
         strip_[b].process(tmpL, tmpR, multiBuf);
+        if (mono)
+          tmpR = tmpL;
         stripOutPeak[b] = std::max(std::fabs(tmpL), std::fabs(tmpR));
         if (solo[b] || noSolo)
         {
@@ -849,11 +880,13 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
 
       Dsp::sanitizeDenormal(sumL);
       Dsp::sanitizeDenormal(sumR);
+      if (mono)
+        sumR = sumL;
       broadband_.process(sumL, sumR, nullptr);
       outL = sumL;
-      outR = sumR;
+      outR = mono ? sumL : sumR;
       cleanL = broadband_.cleanLeft();
-      cleanR = broadband_.cleanRight();
+      cleanR = mono ? cleanL : broadband_.cleanRight();
       if (broadband_.takeAsc())
         ascActive = true;
     }
@@ -863,6 +896,8 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
 
     outL = std::clamp(outL, -displayLimit, displayLimit);
     outR = std::clamp(outR, -displayLimit, displayLimit);
+    if (mono)
+      outR = outL;
 
     if (autoLevel)
     {
@@ -870,6 +905,11 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
       outR *= invLimit;
       cleanL *= invLimit;
       cleanR *= invLimit;
+      if (mono)
+      {
+        outR = outL;
+        cleanR = cleanL;
+      }
     }
 
     if (diffListen)
@@ -878,17 +918,23 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
       Dsp::sanitizeDenormal(cleanR);
       outL = cleanL - outL;
       outR = cleanR - outR;
+      if (mono)
+        outR = outL;
     }
 
     // Pad variable look up to constant reported latency (no PDC restart on knob).
     const int pad = std::max(
       0, static_cast<int>(latencySamples_) - static_cast<int>(actualLatencySamples()));
     lookPad_.process(outL, outR, pad, outL, outR);
+    if (mono)
+      outR = outL;
 
     float dryL = inL;
     float dryR = inR;
     bypassDelay_.process(
       inL, inR, static_cast<int>(latencySamples_), dryL, dryR);
+    if (mono)
+      dryR = dryL;
 
     if (bypassXfadePos_ < bypassXfadeLen_)
     {
@@ -914,6 +960,9 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
       outL = dryL;
       outR = dryR;
     }
+
+    if (mono)
+      outR = outL;
 
     Dsp::sanitizeDenormal(outL);
     Dsp::sanitizeDenormal(outR);

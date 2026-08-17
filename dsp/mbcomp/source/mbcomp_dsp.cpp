@@ -276,6 +276,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
 
   const int bands = numBands();
   const bool globalBypass = params_[kParamBypass] >= 0.5f;
+  const bool mono = params_[kParamMono] >= 0.5f;
   const float slopeDb = params_[kParamSlope];
 
   BandState bandState[kMaxBands];
@@ -361,21 +362,32 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     xoversBypass[3] = params_[kParamXover4];
     xoversBypass[4] = params_[kParamXover5];
     splitL_.setBands(bands);
-    splitR_.setBands(bands);
     splitL_.setSlopeDb(slopeDb);
-    splitR_.setSlopeDb(slopeDb);
     splitL_.setFreqs(xoversBypass, bands - 1);
-    splitR_.setFreqs(xoversBypass, bands - 1);
     splitL_.prepareBlock();
-    splitR_.prepareBlock();
+    if (!mono)
+    {
+      splitR_.setBands(bands);
+      splitR_.setSlopeDb(slopeDb);
+      splitR_.setFreqs(xoversBypass, bands - 1);
+      splitR_.prepareBlock();
+    }
 
     float bandsL[kMaxBands];
     float bandsR[kMaxBands];
     for (int i = 0; i < nSamples; ++i)
     {
+      if (mono)
+        outR[i] = outL[i];
       const float fullPeak = std::max(std::fabs(outL[i]), std::fabs(outR[i]));
       splitL_.process(outL[i], bandsL);
-      splitR_.process(outR[i], bandsR);
+      if (mono)
+      {
+        for (int b = 0; b < bands; ++b)
+          bandsR[b] = bandsL[b];
+      }
+      else
+        splitR_.process(outR[i], bandsR);
       for (int b = 0; b < bands; ++b)
       {
         const float bandPeak =
@@ -410,13 +422,16 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
 
   // Configure only the splits in use for this band count / slope.
   splitL_.setBands(bands);
-  splitR_.setBands(bands);
   splitL_.setSlopeDb(slopeDb);
-  splitR_.setSlopeDb(slopeDb);
   splitL_.setFreqs(xovers, bands - 1);
-  splitR_.setFreqs(xovers, bands - 1);
   splitL_.prepareBlock();
-  splitR_.prepareBlock();
+  if (!mono)
+  {
+    splitR_.setBands(bands);
+    splitR_.setSlopeDb(slopeDb);
+    splitR_.setFreqs(xovers, bands - 1);
+    splitR_.prepareBlock();
+  }
 
   float bandsL[kMaxBands];
   float bandsR[kMaxBands];
@@ -424,11 +439,17 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
   for (int i = 0; i < nSamples; ++i)
   {
     float L = outL[i];
-    float R = outR[i];
+    float R = mono ? L : outR[i];
     const float fullPeak = std::max(std::fabs(L), std::fabs(R));
 
     splitL_.process(L, bandsL);
-    splitR_.process(R, bandsR);
+    if (mono)
+    {
+      for (int b = 0; b < bands; ++b)
+        bandsR[b] = bandsL[b];
+    }
+    else
+      splitR_.process(R, bandsR);
 
     float sumL = 0.f;
     float sumR = 0.f;
@@ -452,9 +473,9 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
       {
         float detL = bL;
         float detR = bR;
-        if (st.link == Dsp::StereoLink::Mid)
+        if (mono || st.link == Dsp::StereoLink::Mid)
         {
-          const float mid = 0.5f * (bL + bR);
+          const float mid = mono ? bL : 0.5f * (bL + bR);
           detL = mid;
           detR = mid;
         }
@@ -463,12 +484,22 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
         if (!(grLin > 0.f) || !std::isfinite(grLin))
           grLin = 1.f;
 
-        const float wetL = bL * grLin * st.makeupLin;
-        const float wetR = bR * grLin * st.makeupLin;
-        bL = st.dry * bL + st.mix * wetL;
-        bR = st.dry * bR + st.mix * wetR;
-        Dsp::sanitizeDenormal(bL);
-        Dsp::sanitizeDenormal(bR);
+        if (mono)
+        {
+          const float wetL = bL * grLin * st.makeupLin;
+          bL = st.dry * bL + st.mix * wetL;
+          bR = bL;
+          Dsp::sanitizeDenormal(bL);
+        }
+        else
+        {
+          const float wetL = bL * grLin * st.makeupLin;
+          const float wetR = bR * grLin * st.makeupLin;
+          bL = st.dry * bL + st.mix * wetL;
+          bR = st.dry * bR + st.mix * wetR;
+          Dsp::sanitizeDenormal(bL);
+          Dsp::sanitizeDenormal(bR);
+        }
 
         const float grDb = linToDbSafe(grLin);
         grMeter_[b].process(grLin);
@@ -485,6 +516,8 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
       else
       {
         // Bypassed band: passthrough only — compressor already reset above.
+        if (mono)
+          bR = bL;
         grMeter_[b].forceZero();
         lastGrDb_[b] = 0.f;
         const float inDb = linToDbSafe(bandPeak);
@@ -511,12 +544,12 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     if (anyListen)
     {
       outL[i] = listenL;
-      outR[i] = listenR;
+      outR[i] = mono ? listenL : listenR;
     }
     else
     {
       outL[i] = sumL;
-      outR[i] = sumR;
+      outR[i] = mono ? sumL : sumR;
     }
   }
 
@@ -538,11 +571,16 @@ tresult PLUGIN_API MbcompPlugin::setState(IBStream* state)
     return kResultFalse;
   if (!streamer.readInt32u(version) || version != kStateVersion)
     return kResultFalse;
-  if (!streamer.readInt32(count) || count != kParamCount)
+  if (!streamer.readInt32(count) || count <= 0 || count > kParamCount)
     return kResultFalse;
 
-  float plains[kParamCount];
+  float plains[kParamCount] {};
   for (int i = 0; i < kParamCount; ++i)
+  {
+    if (auto* p = getParameterObject(static_cast<ParamID>(i)))
+      plains[i] = static_cast<float>(p->toPlain(p->getNormalized()));
+  }
+  for (int i = 0; i < count; ++i)
   {
     if (!streamer.readFloat(plains[i]))
       return kResultFalse;

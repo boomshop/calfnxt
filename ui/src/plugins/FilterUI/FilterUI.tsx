@@ -111,6 +111,9 @@ export function FilterUI(props: FilterUIProps) {
   return (
     <div className="FilterUI PluginUI">
       <Header title="Filter">
+        <WithInfo title={filterInfo.mono}>
+          <Toggle state$={host.mono$} icon="stereo" icon_active="mono" />
+        </WithInfo>
         <WithInfo title={filterInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>

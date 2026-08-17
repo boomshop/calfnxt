@@ -15,7 +15,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5846u; // 'CNXF'
-constexpr uint32 kStateVersion = 5; // v5: + spectrum (trailing)
+constexpr uint32 kStateVersion = 6; // v6: + mono (trailing)
 
 Dsp::DetectorMode detectorModeFromPlain(float v)
 {
@@ -76,6 +76,7 @@ FilterPlugin::BlockState FilterPlugin::makeBlockState() const
 {
   BlockState s;
   s.bypass = params_[kParamBypass] >= 0.5f;
+  s.mono = params_[kParamMono] >= 0.5f;
   s.envOn = params_[kParamEnvPower] >= 0.5f;
   s.spectrumOn =
     static_cast<int>(std::lround(std::clamp(params_[kParamSpectrum], 0.f, 3.f))) >= 1;
@@ -145,27 +146,49 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
 
       if (!state.bypass)
       {
-        if (state.envOn)
+        if (state.mono)
         {
-          const float env = std::clamp(
-            envelope_.process(
-              L, R, state.activationLin, state.attackMs, state.releaseMs,
-              state.detection),
-            0.f, 1.f);
-          float freq = std::pow(10.f, (logCeil - logFloor) * env + logFloor);
-          if (targetBelow)
-            freq = std::max(ceilHz, std::min(floorHz, freq));
-          else
-            freq = std::min(ceilHz, std::max(floorHz, freq));
-          filter_.setCutoffNow(freq);
+          if (state.envOn)
+          {
+            const float env = std::clamp(
+              envelope_.process(
+                L, L, state.activationLin, state.attackMs, state.releaseMs,
+                state.detection),
+              0.f, 1.f);
+            float freq = std::pow(10.f, (logCeil - logFloor) * env + logFloor);
+            if (targetBelow)
+              freq = std::max(ceilHz, std::min(floorHz, freq));
+            else
+              freq = std::min(ceilHz, std::max(floorHz, freq));
+            filter_.setCutoffNow(freq);
+          }
+          filter_.processMono(L, state.mix, state.softClip);
+          R = L;
         }
+        else
+        {
+          if (state.envOn)
+          {
+            const float env = std::clamp(
+              envelope_.process(
+                L, R, state.activationLin, state.attackMs, state.releaseMs,
+                state.detection),
+              0.f, 1.f);
+            float freq = std::pow(10.f, (logCeil - logFloor) * env + logFloor);
+            if (targetBelow)
+              freq = std::max(ceilHz, std::min(floorHz, freq));
+            else
+              freq = std::min(ceilHz, std::max(floorHz, freq));
+            filter_.setCutoffNow(freq);
+          }
 
-        filter_.processStereo(L, R, state.mix, state.softClip);
+          filter_.processStereo(L, R, state.mix, state.softClip);
+        }
       }
 
       // Post-filter tap (before out_gain) — overlay shows the filtered signal.
       if (state.spectrumOn)
-        spectrum_.process(L, R);
+        spectrum_.process(L, state.mono ? L : R);
 
       if (nCh > 0)
         out[0][i] = L;

@@ -51,6 +51,7 @@ private:
   struct BlockState
   {
     bool bypass = false;
+    bool mono = false;
     bool envOn = false;
     bool spectrumOn = false;
     int mode = 0;

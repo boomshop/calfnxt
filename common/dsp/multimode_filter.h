@@ -329,6 +329,54 @@ public:
     sanitizeChain(wet_[1]);
   }
 
+  /** Mono (Left) path — half the filter chains; caller copies to R. */
+  void processMono(float& sample, float mix, float softClip = 0.f)
+  {
+    advanceTimer();
+    if (dirty_ || cutoff_.active() || resonance_.active())
+      recalculate();
+
+    mix = std::clamp(mix, 0.f, 1.f);
+    softClip = std::clamp(softClip, 0.f, 1.f);
+    const float in = sample;
+    const bool clip = softClip > 1.0e-6f;
+
+    if (mix >= 1.f)
+    {
+      sample = processChain(wet_[0], in);
+      if (clip)
+        sample = softClipSample(sample, softClip);
+      sanitizeChain(wet_[0]);
+      return;
+    }
+
+    if (mix <= 0.f)
+    {
+      if (complementary_)
+      {
+        const float comp = processChain(dry_[0], in);
+        sample = in + (comp - in) * complementAmt_;
+        sanitizeChain(dry_[0]);
+      }
+      return;
+    }
+
+    float wet = processChain(wet_[0], in);
+    if (clip)
+      wet = softClipSample(wet, softClip);
+
+    float dry = in;
+    if (complementary_)
+    {
+      const float comp = processChain(dry_[0], in);
+      dry = in + (comp - in) * complementAmt_;
+      sanitizeChain(dry_[0]);
+    }
+
+    sample = mix * wet + (1.f - mix) * dry;
+    sanitizeChain(wet_[0]);
+  }
+
 private:
   void advanceTimer()
   {

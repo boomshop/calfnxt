@@ -13,7 +13,8 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5845u; // 'CNXE'
-constexpr uint32 kStateVersion = 3;         // + spectrum (trailing, after bands)
+constexpr uint32 kStateVersion = 4;         // + mono (trailing)
+constexpr uint32 kStateVersionSpectrum = 3; // + spectrum
 constexpr uint32 kStateVersionBandsOnly = 2;
 } // namespace
 
@@ -134,6 +135,7 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
   applyBandTargetsFromParams();
 
   const bool bypass = params_[kParamBypass] >= 0.5f;
+  const bool mono = params_[kParamMono] >= 0.5f;
   const int spectrumMode =
     static_cast<int>(std::lround(std::clamp(params_[kParamSpectrum], 0.f, 3.f)));
   const bool spectrumOn = spectrumMode >= 1;
@@ -145,7 +147,8 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
     return kResultOk;
 
   const bool doEq = !bypass && hasAnyActiveBandsOrListen();
-  if (!doEq && !spectrumOn)
+  // Idle fast-path only when there is nothing to do — Mono still folds L→R.
+  if (!doEq && !spectrumOn && !mono)
   {
     io_.end(data);
     return kResultOk;
@@ -182,7 +185,17 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
       float R = nCh > 1 ? out[1][i] : L;
       if (doEq)
       {
-        if (listenBand >= 0)
+        if (mono)
+        {
+          if (listenBand >= 0)
+            bands_[listenBand].processListenMono(L);
+          else
+          {
+            for (int b = 0; b < kEqBandCount; ++b)
+              bands_[b].processMono(L);
+          }
+        }
+        else if (listenBand >= 0)
           bands_[listenBand].processListen(L, R);
         else
         {
@@ -190,9 +203,11 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
             bands_[b].process(L, R);
         }
       }
+      if (mono)
+        R = L;
       // Post-EQ tap (before out_gain) — overlay shows the shaped signal.
       if (spectrumOn)
-        spectrum_.process(L, R);
+        spectrum_.process(L, mono ? L : R);
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)
@@ -208,7 +223,17 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
       float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
       if (doEq)
       {
-        if (listenBand >= 0)
+        if (mono)
+        {
+          if (listenBand >= 0)
+            bands_[listenBand].processListenMono(L);
+          else
+          {
+            for (int b = 0; b < kEqBandCount; ++b)
+              bands_[b].processMono(L);
+          }
+        }
+        else if (listenBand >= 0)
           bands_[listenBand].processListen(L, R);
         else
         {
@@ -216,8 +241,10 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
             bands_[b].process(L, R);
         }
       }
+      if (mono)
+        R = L;
       if (spectrumOn)
-        spectrum_.process(L, R);
+        spectrum_.process(L, mono ? L : R);
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)
@@ -257,10 +284,11 @@ tresult PLUGIN_API EqualizerPlugin::setState(IBStream* state)
   if (!streamer.readInt32(count) || count <= 0)
     return kResultFalse;
 
-  // v2: bands only (no trailing spectrum). v3: + spectrum at end.
+  // v2: bands only. v3: + spectrum. v4: + mono.
   const int32 expect =
     version == kStateVersion             ? kParamCount
-    : version == kStateVersionBandsOnly  ? kParamCount - 1
+    : version == kStateVersionSpectrum   ? kParamCount - 1
+    : version == kStateVersionBandsOnly  ? kParamCount - 2
                                          : -1;
   if (expect < 0 || count != expect)
     return kResultFalse;

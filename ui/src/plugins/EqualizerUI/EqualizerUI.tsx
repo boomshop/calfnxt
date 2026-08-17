@@ -370,6 +370,9 @@ export function EqualizerUI(props: EqualizerUIProps) {
   return (
     <div className="EqualizerUI PluginUI">
       <Header title="Equalizer">
+        <WithInfo title={equalizerInfo.mono}>
+          <Toggle state$={host.mono$} icon="stereo" icon_active="mono" />
+        </WithInfo>
         <WithInfo title={equalizerInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>

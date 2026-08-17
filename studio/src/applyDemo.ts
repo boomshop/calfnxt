@@ -252,6 +252,7 @@ export function applyFilterDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setBool(host.mono$, params.mono);
   setNum(host.mode$, params.mode);
   setNum(host.resonance$, params.resonance);
   setNum(host.frequency$, params.frequency);
@@ -421,6 +422,7 @@ export function applyEqualizerDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setBool(host.mono$, params.mono);
   setNum(host.spectrum$, params.spectrum);
   const bands = params.bands;
   if (Array.isArray(bands)) {
@@ -593,6 +595,7 @@ export function applyMblimiterDemo(
   viz: VizFixture,
 ): () => void {
   setBool(host.bypass$, params.bypass);
+  setBool(host.mono$, params.mono);
   setNum(host.numBands$, params.num_bands);
   setNum(host.slope$, params.slope);
   const xovers = params.xovers;
@@ -647,6 +650,7 @@ export function applyMbcompDemo(
   viz: VizFixture,
 ): () => void {
   setBool(host.bypass$, params.bypass);
+  setBool(host.mono$, params.mono);
   setNum(host.numBands$, params.num_bands);
   setNum(host.slope$, params.slope);
   const xovers = params.xovers;

@@ -63,6 +63,7 @@ export interface IMblimiterHost {
   meta: typeof pluginMeta;
   io: IHeaderIo;
   bypass$: DynamicValue<boolean>;
+  mono$: DynamicValue<boolean>;
   diffListen$: DynamicValue<boolean>;
   numBands$: DynamicValue<number>;
   slope$: DynamicValue<number>;
@@ -187,6 +188,7 @@ export function createBoundMblimiterHost(): IMblimiterHost {
   };
 
   const bypass$ = bindBool('bypass');
+  const mono$ = bindBool('mono');
   const diffListen$ = bindBool('diff_listen');
 
   const numBands$ = DynamicValue.fromConstant(
@@ -338,6 +340,7 @@ export function createBoundMblimiterHost(): IMblimiterHost {
     meta: pluginMeta,
     io,
     bypass$,
+    mono$,
     diffListen$,
     numBands$,
     slope$,

@@ -4,6 +4,9 @@ export const mblimiterInfo = {
   bypass:
     'Turns all limiting off so you hear the dry path (In/Out gains still apply). A/B the whole multiband treatment — loudness vs. squashed dynamics.',
 
+  mono:
+    'Process the Left channel only (one crossover path) and copy to both outs. Big CPU win with many bands / steep slopes — ideal on mono tracks. Right is ignored while on.',
+
   diffListen:
     'Lets you hear only what the limiter removes (dry minus limited). Loud, clicky, or tonal junk here means you’re taking a lot away — often too much. Clean, brief “tick” on hits means tasteful peak control.',
 

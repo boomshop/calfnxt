@@ -65,6 +65,7 @@ will follow.
 - Fixed **16 bands** (peaking, shelves, LP/HP with 12/24/36/48 dB slopes, band-pass)
 - Per-band **Dynamic EQ** (detector-matched GR on peaking / shelves / BP)
 - **Listen** solos one band’s detector into the output
+- Header **Mono** switch: process Left only, copy to both outs (~½ filter CPU)
 - Interactive frequency response (static handles + dyn effective-gain ghosts)
 - Shared In/Out gain + peak meters
 
@@ -107,6 +108,7 @@ will follow.
 - **2–6** Linkwitz-Riley bands; adjustable **crossovers** and slope (**24 / 48 / 96** dB/oct)
 - Per-band compressor (threshold, ratio, knee, attack / release, makeup, mix, detector mode / link / PDR)
 - Band **bypass** / **listen**; selection opens the detail strip (transfer curve + full dynamics)
+- Header **Mono** switch: Left-only crossover + dynamics, copy to both outs (big CPU save on steep slopes)
 - Frequency **response chart** with threshold handles; **bridge** guides to per-band strips
 - Per-band **history** (full-range / band peak / GR), In/Out/GR meters
 - Shared In/Out gain + peak meters
@@ -125,6 +127,7 @@ will follow.
 - **2–6** Linkwitz-Riley bands (same splitter/slope as Multiband Compressor); band count −/+ in the header
 - Per-band **weight** and relative **release** (Calf-style interdependence via shared multi-coefficient)
 - Per-band listen, In/Out/GR meters, scrolling history; crossover chart with **GR curves** (no thresholds) + band bridge
+- Header **Mono** switch: Left-only crossover path, copy to both outs (CPU win with many bands / steep slopes)
 - Shared master limiter block (Limit / Attenuation / Character, **Min Release**) + **final broadband** brickwall after the sum
 - Shared In/Out gain + peak meters
 
@@ -150,6 +153,7 @@ will follow.
 - Optional **Envelope** follower: Peak / RMS / Opto detector → cutoff between Frequency and Target
 - **Mix** dry/wet (always; complementary dry for LP/HP when Resonance is moderate)
 - **Soft** clip on the wet path to tame hot resonance
+- Header **Mono** switch: process Left only, copy to both outs (~½ filter CPU)
 - Optional **spectrum** overlay on the response chart (post-filter, same tilts as Equalizer)
 - Response chart (Frequency + Target handles when Envelope is on; live cutoff when Envelope moves)
 - Shared In/Out gain + peak meters

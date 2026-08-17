@@ -53,6 +53,7 @@ export { EQ_SPECTRUM_ENTRIES as FILTER_SPECTRUM_ENTRIES };
 export type IFilterHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  mono$: DynamicValue<boolean>;
   mode$: DynamicValue<number>;
   resonance$: DynamicValue<number>;
   frequency$: DynamicValue<number>;
@@ -316,6 +317,7 @@ export function createBoundFilterHost(): IFilterHost {
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    mono$: bindBool('mono'),
     mode$,
     resonance$,
     frequency$,
