@@ -50,6 +50,10 @@ struct HostState
   bool mapOk = false;
   /** Held so WebKit keeps presenting without a host Configure (XWayland). */
   GdkFrameClock* frameClock = nullptr;
+  /** Short burst of 1px Configure after load — same signal as a user resize. */
+  guint nudgeSource = 0;
+  int nudgeTries = 0;
+  bool liveExposeLogged = false;
 };
 
 HostState g;
@@ -368,6 +372,110 @@ void enablePresent(const char* why)
     hostLog("[calfnxt-web-host] present %s\n", why);
 }
 
+void exposeXid(Display* dpy, Window xid)
+{
+  if (!dpy || !xid)
+    return;
+  GdkDisplay* gd = gdk_display_get_default();
+  if (gd)
+    gdk_x11_display_error_trap_push(gd);
+  XClearArea(dpy, xid, 0, 0, 0, 0, True);
+  XFlush(dpy);
+  if (gd)
+  {
+    const gint err = gdk_x11_display_error_trap_pop(gd);
+    if (err && envFlag("CALFNXT_WEB_DEBUG"))
+      hostLog("[calfnxt-web-host] expose xid=0x%lx xerr=%d\n", static_cast<unsigned long>(xid),
+              static_cast<int>(err));
+  }
+}
+
+void bumpGdkSize(GtkWidget* widget, int w, int h)
+{
+  if (!widget || w < 2 || h < 2)
+    return;
+  GdkWindow* win = gtk_widget_get_window(widget);
+  if (!win)
+    return;
+  gdk_window_resize(win, w, h + 1);
+  gdk_window_resize(win, w, h);
+}
+
+/** Same class of event as a user resize: Configure on our plug, Expose on the
+ *  XEmbed parent. Do not XResize the foreign parent (BadAccess). */
+void syntheticConfigure(const char* why)
+{
+  int w = g.width;
+  int h = g.height;
+  Display* dpy = nullptr;
+  if (g.plug)
+  {
+    if (GdkWindow* win = gtk_widget_get_window(g.plug))
+    {
+      int gw = 0;
+      int gh = 0;
+      gdk_window_get_geometry(win, nullptr, nullptr, &gw, &gh);
+      if (gw >= 2 && gh >= 2)
+      {
+        w = gw;
+        h = gh;
+      }
+      dpy = GDK_WINDOW_XDISPLAY(win);
+      bumpGdkSize(g.plug, w, h);
+      exposeXid(dpy, gdk_x11_window_get_xid(win));
+    }
+  }
+  if (g.webview)
+    bumpGdkSize(GTK_WIDGET(g.webview), w, h);
+  if (dpy && g.parentXid)
+    exposeXid(dpy, static_cast<Window>(g.parentXid));
+  if (why)
+    hostLog("[calfnxt-web-host] nudge %s %dx%d\n", why, w, h);
+}
+
+void kickExpose()
+{
+  if (!g.plug)
+    return;
+  GdkWindow* win = gtk_widget_get_window(g.plug);
+  if (!win)
+    return;
+  gtk_widget_queue_draw(g.plug);
+  if (g.webview)
+    gtk_widget_queue_draw(GTK_WIDGET(g.webview));
+  Display* dpy = GDK_WINDOW_XDISPLAY(win);
+  exposeXid(dpy, gdk_x11_window_get_xid(win));
+  if (g.parentXid)
+    exposeXid(dpy, static_cast<Window>(g.parentXid));
+  if (!g.liveExposeLogged)
+  {
+    g.liveExposeLogged = true;
+    hostLog("[calfnxt-web-host] nudge live-expose\n");
+  }
+}
+
+gboolean onNudge(gpointer)
+{
+  ++g.nudgeTries;
+  char why[24];
+  std::snprintf(why, sizeof why, "cfg-%d", g.nudgeTries);
+  syntheticConfigure(why);
+  if (g.nudgeTries >= 4)
+  {
+    g.nudgeSource = 0;
+    return G_SOURCE_REMOVE;
+  }
+  return G_SOURCE_CONTINUE;
+}
+
+void scheduleNudge()
+{
+  if (g.nudgeSource)
+    return;
+  g.nudgeTries = 0;
+  g.nudgeSource = g_timeout_add(80, onNudge, nullptr);
+}
+
 /**
  * Evidence (tester vs working host): after XEmbed, both start Unmapped;
  * working host becomes Viewable within ~500ms, tester stays Unmapped forever
@@ -579,6 +687,7 @@ void evalJs(const char* js)
         g_object_unref(value);
     },
     nullptr);
+  kickExpose();
 }
 
 /** Probe DOM/CSS sizes after load — distinguishes layout-0 vs paint/compositing hole. */
@@ -762,6 +871,7 @@ void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
     if (gtkAllocTiny())
       forceGtkAllocation("load-finished");
     enablePresent("load-finished");
+    scheduleNudge();
     startMapPoll();
     reportSocketSize("load-finished");
     sendLine("{\"t\":\"_ready\"}");
@@ -962,7 +1072,7 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=present-xwayland-1b hw-accel=%s\n", noGpu ? "never" : "always");
+  hostLog("[calfnxt-web-host] build=present-xwayland-2 hw-accel=%s\n", noGpu ? "never" : "always");
   if (envFlag("CALFNXT_WEB_DEBUG"))
   {
     hostLog("[calfnxt-web-host] env dmabuf_disable=%s compositing_disable=%s no_gpu=%s\n",
@@ -1040,6 +1150,11 @@ int main(int argc, char** argv)
 
   if (g.sockSource)
     g_source_remove(g.sockSource);
+  if (g.nudgeSource)
+  {
+    g_source_remove(g.nudgeSource);
+    g.nudgeSource = 0;
+  }
   releaseFrameClock();
   if (g.plug)
   {
