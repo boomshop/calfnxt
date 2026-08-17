@@ -494,7 +494,7 @@ Set these in the **plugin host** environment (the helper inherits it via
 | `CALFNXT_WEB_DEBUG` | any non-empty | Extra logging to stderr; also enables WebKit developer extras and console→stdout. Diagnostics always append to `/tmp/calfnxt-ui.log`. |
 | `CALFNXT_WEB_INSPECTOR` | any non-empty | Opens the WebKit Web Inspector on editor load (also enables developer extras). |
 | `CALFNXT_WEB_NO_GPU` | any non-empty | WebKit hardware acceleration **off** (`NEVER`). Default without this flag is **on** (`ALWAYS`). Use if the embed paints blank/transparent on your GPU stack. |
-| `CALFNXT_XWAYLAND_NUDGE` | any non-empty | Opt-in workaround for GNOME/Mutter + Ardour on Wayland: 1px Configure burst after load, then a 33 ms loop so the UI keeps presenting. Off by default (CPU/relayout cost). Must be in the **plugin host** environment. |
+| `CALFNXT_XWAYLAND_NUDGE` | any non-empty | Opt-in workaround for GNOME/Mutter + Ardour on Wayland (black / frozen editor). See [Editor black or frozen on GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland). Off by default. Must be in the **plugin host** environment. |
 
 Related (not calfNXT-owned, but often useful with WebKitGTK / X11 embed):
 
@@ -525,8 +525,178 @@ Configure-time `-D` flags, documented here so they are not confused with `getenv
 
 ---
 
+## Editor black or frozen on GNOME/Wayland
+
+This is the long form of the `CALFNXT_XWAYLAND_NUDGE` row above. The short
+version: **VST3 Linux editors are X11-only**. On a GNOME Wayland session that
+embed runs under **XWayland**. Mutter often only commits the parent Wayland
+surface when it sees a **Configure** (a real window resize). WebKit has already
+painted; the compositor just does not show the new buffers until then.
+
+The workaround is **opt-in** and **off by default**. Native GNOME on Xorg, and
+Qt hosts such as Carla, typically do not need it.
+
+### Symptoms
+
+On **Ardour** under **GNOME/Mutter on Wayland** (reproduced on Debian Trixie and
+Ubuntu 26.04):
+
+1. The plugin **loads** and the editor window opens at the design size.
+2. The surface stays **black** (or empty) until you **resize** the editor.
+3. After that, **knobs, meters, and other live UI** only update on the **next**
+   resize. Parameter changes from the host still reach the DSP; only the
+   **pixels** stay stale.
+
+The same binary is fine in:
+
+- a normal browser (`cd ui && npm run dev` — no XEmbed, no XWayland parent);
+- **GNOME on Xorg** (real X11, no XWayland);
+- **Carla** on Wayland (Qt embedder; different present path).
+
+Diagnostics in `/tmp/calfnxt-ui.log` look **healthy** without the workaround:
+`force-alloc`, `map-ok` / `map-already`, `load-finished`, CSS viewport matching
+the host, scale 1. This is **not** a missing package, a failed UI build, or a
+React `Suspense`/`Loading` flash. Production plugin entries do not use the
+dev-only loading shell in `App.tsx`. Seeing the full UI after the first commit
+also does **not** mean later frames will present — that is a separate Mutter
+commit, not a first-paint SPA issue.
+
+`kids=0` in `_diag` is a red herring: the probe can run before React mounts, and
+the same line appears on working X11 hosts.
+
+### Why this stack behaves that way
+
+Linux VST3 plugin views are still **X11 `X11EmbedWindowID`**. There is no
+standard Wayland view type for this, so every host (Ardour, Carla, Qtractor, …)
+hands the plugin an **X11 window ID**. calfNXT must not link GTK/WebKit into the
+plugin `.so` (Ardour’s internalized toolkit collides with system GTK3). So the
+editor is a thin proxy in the host process that spawns **`calfnxt-web-host`**:
+GTK3 `GtkPlug` + WebKitGTK, **XEmbedded** into that foreign XID, talking JSON
+over a Unix socketpair.
+
+On a Wayland session that X11 tree is hosted by **XWayland**. WebKit composites
+into its own buffers (often DMA-BUF / GPU). The pixels exist. What fails is the
+**present** of the **parent** `wl_surface` that Mutter associates with the
+Ardour editor socket: without a Configure, the compositor keeps showing the
+previous (often empty) commit. A user drag-resize generates exactly that
+Configure, which is why “just resize it” appears to fix both first paint and
+later knob motion.
+
+JUCE 8’s Linux WebView is the same class of stack (WebKitGTK + GtkPlug
+subprocess) and has the same family of black / stuck Linux reports. This is not
+unique to calfNXT’s React UI.
+
+### Where a real fix would live
+
+Application-side workarounds cannot make Mutter treat an XWayland child present
+as a reason to commit the parent. A proper fix belongs in one of:
+
+- **Mutter / XWayland** — commit the parent `wl_surface` when an embedded X11
+  child presents, not only on Configure;
+- **WebKitGTK / GDK** — a reliable present path for a `GtkPlug` inside a
+  *foreign* XID (not a normal top-level GTK window);
+- **the VST3 Linux view ABI** — a native Wayland surface so the editor is not
+  an XEmbed tree at all.
+
+Until one of those exists, hosts that embed X11 on Wayland will keep hitting
+this. Many Linux apps still do not support Wayland correctly; that is why this
+workaround stays **explicit** rather than on for everyone.
+
+### What did not help
+
+These were tried against the tester’s Ardour + GNOME/Wayland setup and either
+did nothing or broke working hosts:
+
+- Defaulting WebKit DMA-BUF or GPU off (`WEBKIT_DISABLE_DMABUF_RENDERER`,
+  `CALFNXT_WEB_NO_GPU`) — GPU-off blanked a working Carla/CachyOS embed.
+- `WEBKIT_DISABLE_COMPOSITING_MODE=1` — still black.
+- `gdk_x11_window_set_frame_sync_enabled(FALSE)` plus holding the GDK frame
+  clock — GtkPlug in Ardour’s foreign XID is not a reliable present path.
+- `XClearArea` / `queue_draw` **without** a size change — first paint still
+  needed a Configure; knobs stayed frozen.
+
+Do **not** `XResizeWindow` the **host’s** foreign parent: that is not our
+window (`BadAccess`).
+
+Environment variables in `~/.bashrc` also do **not** reach Ardour when GNOME
+starts it from the overview / `.desktop` file. The helper inherits the **host
+process** `environ` via `posix_spawn`. If the log shows
+`xwayland_nudge=(unset)`, the flag never arrived.
+
+### Workaround: `CALFNXT_XWAYLAND_NUDGE`
+
+Set any non-empty value (typically `1`) in the **plugin host** environment.
+`calfnxt-web-host` then synthesizes the same class of event as a user resize,
+without touching the foreign parent XID:
+
+1. After `load-finished`, four **Configure bursts** (~80 ms apart):
+   `gdk_window_resize(w, h+1)` then `gdk_window_resize(w, h)` on the GtkPlug
+   and the WebKit widget, plus an Expose. Log lines: `nudge cfg-1` … `cfg-4`
+   at the design size (e.g. `1024x488`). That is usually enough for the **first
+   paint** without a manual resize.
+2. Then a **33 ms live loop** (`nudge live-cfg 33ms`) repeating the same 1px
+   bump for the lifetime of the editor, so knobs, meters, and viz keep
+   presenting.
+
+Without the flag, the helper behaves like a build that never had this code:
+map-poll, force-alloc, WebKit hardware acceleration `ALWAYS`. Startup log:
+
+```text
+[calfnxt-web-host] build=nudge-opt-1 hw-accel=always xwayland_nudge=(unset)
+```
+
+With the flag:
+
+```text
+[calfnxt-web-host] build=nudge-opt-1 hw-accel=always xwayland_nudge=1
+[calfnxt-web-host] env dmabuf_disable=(unset) compositing_disable=(unset) no_gpu=(unset) xwayland_nudge=1
+[calfnxt-web-host] nudge cfg-1 1024x488
+[calfnxt-web-host] nudge cfg-2 1024x488
+[calfnxt-web-host] nudge cfg-3 1024x488
+[calfnxt-web-host] nudge cfg-4 1024x488
+[calfnxt-web-host] nudge live-cfg 33ms
+```
+
+The 1px bump is intended to be invisible. Testers have not reported flicker.
+The cost is **CPU / WebKit relayout**: each nudge can relayout a full plugin
+SPA, so the loop is **not** enabled for every user. Leave it unset on Xorg,
+Carla, and any host that already presents.
+
+### How to enable it
+
+The variable must be in **Ardour’s** environment (or whichever host embeds the
+plugin), not only in an interactive shell.
+
+**One session from a terminal** (close Ardour first):
+
+```bash
+CALFNXT_XWAYLAND_NUDGE=1 ardour8
+# or: CALFNXT_XWAYLAND_NUDGE=1 ardour9
+```
+
+**Session-wide** (GNOME-started hosts, survives logout). Create
+`~/.config/environment.d/calfnxt.conf`:
+
+```text
+CALFNXT_XWAYLAND_NUDGE=1
+```
+
+Then **log out and back in** (or reboot). `systemctl --user import-environment`
+is not enough for an already-running GNOME session in all setups.
+
+Confirm in `/tmp/calfnxt-ui.log` after opening an editor: `xwayland_nudge=1`
+and the `nudge cfg-*` / `live-cfg` lines. If you still see `(unset)`, the host
+was started without that environment — typical when Ardour is launched from the
+GNOME overview while the flag only lives in `.bashrc`.
+
+Optional extras (not required for this workaround): `GDK_BACKEND=x11` if the
+session is Wayland-only and the helper cannot see `DISPLAY`;
+`CALFNXT_WEB_DEBUG=1` for more helper logging on stderr.
+
+---
+
 ## Notes
 
 - Codegen runs as part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++ params + `ui/src/generated/`).
 - Environment variables: see [Environment variables](#environment-variables) above.
-- The editor UI runs **out-of-process** (`calfnxt-web-host` next to the `.so`) so Ardour does not load GTK3 into its process. Embed is still X11 `GtkPlug`; Wayland-only sessions may need `GDK_BACKEND=x11` for the host/helper.
+- The editor UI runs **out-of-process** (`calfnxt-web-host` next to the `.so`) so Ardour does not load GTK3 into its process. Embed is still X11 `GtkPlug`; Wayland-only sessions may need `GDK_BACKEND=x11` for the host/helper. Black or frozen UI on GNOME/Mutter + Ardour: [Editor black or frozen on GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland).
