@@ -31,8 +31,31 @@ declare global {
     calfnxtNative?: { post: (msg: calfNXTMsg | string) => void };
     __calfnxtOnHost?: (msg: calfNXTMsg) => void;
     __calfnxtHostQ?: calfNXTMsg[];
+    /**
+     * Latest viz payloads keyed by `id:kind`. Returns pretty JSON (also tries
+     * clipboard + console.log) for Studio / WebKit inspector snapshots.
+     */
+    __calfnxtDumpViz?: () => string;
   }
 }
+
+/** Latest host→UI viz samples (`id:kind` → `v`). Filled by `onHostMessage`. */
+const vizDump: Record<string, number[]> = {};
+
+function installVizDumpApi(): void {
+  window.__calfnxtDumpViz = () => {
+    const json = JSON.stringify(vizDump, null, 2);
+    try {
+      void navigator.clipboard?.writeText(json);
+    } catch {
+      /* WebKit may deny clipboard without a gesture — still return the string. */
+    }
+    console.log(json);
+    return json;
+  };
+}
+
+installVizDumpApi();
 
 export function postToHost(msg: calfNXTMsg): void {
   window.calfnxtNative?.post(msg);
@@ -40,11 +63,15 @@ export function postToHost(msg: calfNXTMsg): void {
 
 /** Install host→UI handler and flush messages queued before React mounted. */
 export function onHostMessage(handler: (msg: calfNXTMsg) => void): void {
-  window.__calfnxtOnHost = handler;
+  window.__calfnxtOnHost = (msg) => {
+    if (msg?.t === "viz" && typeof msg.id === "string" && Array.isArray(msg.v))
+      vizDump[`${msg.id}:${msg.kind}`] = msg.v.slice();
+    handler(msg);
+  };
   const q = window.__calfnxtHostQ;
   if (q && q.length) {
     window.__calfnxtHostQ = [];
     for (const msg of q)
-      handler(msg);
+      window.__calfnxtOnHost!(msg);
   }
 }
