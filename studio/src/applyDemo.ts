@@ -317,7 +317,8 @@ export function applyPulsatorDemo(
   setNum(host.bpm$, params.bpm);
   setNum(host.ms$, params.ms);
   applySharedViz(viz);
-  host.lfo$.set([0.22, 0.55, 0.72, -0.4]);
+  // Shared phase (L+R advance together); Y differs by Offset L/R.
+  host.lfo$.set([0.22, 0, 0.22, 0]);
   host.hostTempo$.set([1, 120]);
 }
 

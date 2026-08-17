@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
-import { sampleLfoWave, pulseWidthFromEnum } from '../../dsp/simpleLfo';
+import {
+  lfoValueFromPhase,
+  pulseWidthFromEnum,
+  sampleLfoWave,
+} from '../../dsp/simpleLfo';
 import './PulsatorChart.scss';
 
 export interface PulsatorChartProps {
@@ -10,7 +14,7 @@ export interface PulsatorChartProps {
   offsetL$: DynamicValue<number>;
   offsetR$: DynamicValue<number>;
   pulseWidth$: DynamicValue<number>;
-  /** Live [phaseL, valL, phaseR, valR] from DSP. */
+  /** Live [phaseL, valL?, phaseR, valR?] — Y is derived from phase + params. */
   lfo$: DynamicValue<number[]>;
 }
 
@@ -103,10 +107,11 @@ export function PulsatorChart(props: PulsatorChartProps) {
   const pathL = pathThrough(curveL, toX, toY);
   const pathR = pathThrough(curveR, toX, toY);
   const midY = toY(0);
-  const dotLX = toX(Math.min(1, Math.max(0, lfo[0] ?? 0)));
-  const dotLY = toY(lfo[1] ?? 0);
-  const dotRX = toX(Math.min(1, Math.max(0, lfo[2] ?? 0)));
-  const dotRY = toY(lfo[3] ?? 0);
+  // Both LFOs share one phase (Calf): same X, Y differs via Offset L/R.
+  const phase = Math.min(1, Math.max(0, lfo[0] ?? lfo[2] ?? 0));
+  const dotX = toX(phase);
+  const dotLY = toY(lfoValueFromPhase(phase, mode, offsetL, amount, pw));
+  const dotRY = toY(lfoValueFromPhase(phase, mode, offsetR, amount, pw));
 
   return (
     <svg
@@ -118,8 +123,8 @@ export function PulsatorChart(props: PulsatorChartProps) {
       <line className="grid" x1={padX} y1={midY} x2={size.w - padX} y2={midY} />
       <path className="wave wave-l" d={pathL} />
       <path className="wave wave-r" d={pathR} />
-      <circle className="dot dot-l" cx={dotLX} cy={dotLY} r={4} />
-      <circle className="dot dot-r" cx={dotRX} cy={dotRY} r={4} />
+      <circle className="dot dot-l" cx={dotX} cy={dotLY} r={4} />
+      <circle className="dot dot-r" cx={dotX} cy={dotRY} r={4} />
     </svg>
   );
 }
