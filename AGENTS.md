@@ -42,7 +42,7 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | URI scheme | `calfnxt://bundle/...` |
 | JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
 | Script message handler | `webkit.messageHandlers.calfnxt` |
-| Env flags | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU` (full list in `README.md`) |
+| Env flags | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_XWAYLAND_NUDGE` (full list in `README.md`) |
 | Install (packaging) | `cmake --install` → `${prefix}/${CALFNXT_VST3_INSTALL_DIR}` (default `lib/vst3`); user copy via `./tools/install-user-vst3.sh` `[plugin…]` / `[--dest dir]` |
 | Msg type (TS) | `calfNXTMsg` |
 
@@ -138,9 +138,9 @@ Do **not** call `restartComponent` / begin/perform/end from `setComponentHandler
 
 `WebEditor` (proxy): IRunLoop ~16 ms pumps the socket + param/viz flush.
 `calfnxt-web-host`: HW accel **on** by default (`ALWAYS`); force software with
-`CALFNXT_WEB_NO_GPU=1` if the embed paints blank/transparent. XWayland/GNOME:
-after load, synthetic Configure (1px bump) plus a 33 ms live nudge on
-Wayland so knobs keep presenting (`build=present-xwayland-3`). Diagnostics always
+`CALFNXT_WEB_NO_GPU=1` if the embed paints blank/transparent. Opt-in XWayland
+Configure nudge: `CALFNXT_XWAYLAND_NUDGE=1` (4× start burst + 33 ms loop;
+off by default). Diagnostics always
 append to `/tmp/calfnxt-ui.log` (URI misses, JS errors). Env reference: `README.md`.
 GtkPlug size sync, `web-process-terminated` → reload + `{t:"_ready"}`.
 Verify Ardour-safe link: `ldd …/*.so` must not list `libgtk-3` / `libwebkit`.

@@ -48,12 +48,9 @@ struct HostState
   guint mapPollSource = 0;
   int mapPollTries = 0;
   bool mapOk = false;
-  /** Held so WebKit keeps presenting without a host Configure (XWayland). */
-  GdkFrameClock* frameClock = nullptr;
-  /** Short burst of 1px Configure after load — same signal as a user resize. */
+  /** Opt-in XWayland Configure nudge (`CALFNXT_XWAYLAND_NUDGE`). */
   guint nudgeSource = 0;
   int nudgeTries = 0;
-  /** Wayland: keep Configure-nudging; knob paints are JS-local, not evalJs. */
   guint liveNudgeSource = 0;
 };
 
@@ -318,61 +315,6 @@ void mapX11Windows()
   mapOne(g.webview ? GTK_WIDGET(g.webview) : nullptr);
 }
 
-void disableFrameSync(GtkWidget* widget)
-{
-  if (!widget)
-    return;
-  GdkWindow* win = gtk_widget_get_window(widget);
-  if (!win)
-    return;
-  // GtkPlug already does this on its own GdkWindow. WebKit's child window
-  // still waits for _NET_WM_SYNC that Ardour/XWayland never acks → one
-  // present per user resize.
-  gdk_x11_window_set_frame_sync_enabled(win, FALSE);
-}
-
-void releaseFrameClock()
-{
-  if (!g.frameClock)
-    return;
-  gdk_frame_clock_end_updating(g.frameClock);
-  g_object_unref(g.frameClock);
-  g.frameClock = nullptr;
-}
-
-void holdFrameClock()
-{
-  GtkWidget* w = g.webview ? GTK_WIDGET(g.webview) : g.plug;
-  if (!w)
-    return;
-  GdkFrameClock* clock = gtk_widget_get_frame_clock(w);
-  if (!clock && g.plug)
-    clock = gtk_widget_get_frame_clock(g.plug);
-  if (!clock)
-  {
-    hostLog("[calfnxt-web-host] frame-clock none (plug realized=%d webview realized=%d)\n",
-            (g.plug && gtk_widget_get_realized(g.plug)) ? 1 : 0,
-            (g.webview && gtk_widget_get_realized(GTK_WIDGET(g.webview))) ? 1 : 0);
-    return;
-  }
-  if (g.frameClock == clock)
-    return;
-  releaseFrameClock();
-  gdk_frame_clock_begin_updating(clock);
-  g.frameClock = GDK_FRAME_CLOCK(g_object_ref(clock));
-  hostLog("[calfnxt-web-host] frame-clock held\n");
-}
-
-void enablePresent(const char* why)
-{
-  disableFrameSync(g.plug);
-  if (g.webview)
-    disableFrameSync(GTK_WIDGET(g.webview));
-  holdFrameClock();
-  if (why)
-    hostLog("[calfnxt-web-host] present %s\n", why);
-}
-
 void exposeXid(Display* dpy, Window xid)
 {
   if (!dpy || !xid)
@@ -402,8 +344,7 @@ void bumpGdkSize(GtkWidget* widget, int w, int h)
   gdk_window_resize(win, w, h);
 }
 
-/** Same class of event as a user resize: Configure on our plug, Expose on the
- *  XEmbed parent. Do not XResize the foreign parent (BadAccess). */
+/** Same class of event as a user resize. Do not XResize the foreign parent. */
 void syntheticConfigure(const char* why)
 {
   int w = g.width;
@@ -447,7 +388,7 @@ gboolean onLiveNudge(gpointer)
 
 void startLiveNudge()
 {
-  if (g.liveNudgeSource || !std::getenv("WAYLAND_DISPLAY"))
+  if (g.liveNudgeSource || !envFlag("CALFNXT_XWAYLAND_NUDGE"))
     return;
   g.liveNudgeSource = g_timeout_add(33, onLiveNudge, nullptr);
   hostLog("[calfnxt-web-host] nudge live-cfg 33ms\n");
@@ -472,7 +413,7 @@ void scheduleNudge()
 {
   if (g.nudgeSource || g.liveNudgeSource)
     return;
-  if (!std::getenv("WAYLAND_DISPLAY"))
+  if (!envFlag("CALFNXT_XWAYLAND_NUDGE"))
     return;
   g.nudgeTries = 0;
   g.nudgeSource = g_timeout_add(80, onNudge, nullptr);
@@ -495,7 +436,6 @@ gboolean onMapPoll(gpointer)
             g.mapPollTries * kMapPollMs);
     g.mapOk = true;
     g.mapPollSource = 0;
-    enablePresent("map-ok");
     reportSocketSize("map-ok");
     return G_SOURCE_REMOVE;
   }
@@ -511,7 +451,6 @@ gboolean onMapPoll(gpointer)
             g.mapPollTries * kMapPollMs);
     g.mapOk = true;
     g.mapPollSource = 0;
-    enablePresent("map-ok");
     reportSocketSize("map-ok");
     return G_SOURCE_REMOVE;
   }
@@ -535,7 +474,6 @@ void startMapPoll()
   if (surfaceX11Viewable())
   {
     g.mapOk = true;
-    enablePresent("map-already");
     return;
   }
   g.mapPollTries = 0;
@@ -871,7 +809,6 @@ void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
     hostLog("[calfnxt-web-host] load-finished → _ready\n");
     if (gtkAllocTiny())
       forceGtkAllocation("load-finished");
-    enablePresent("load-finished");
     scheduleNudge();
     startMapPoll();
     reportSocketSize("load-finished");
@@ -1073,15 +1010,17 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=present-xwayland-3 hw-accel=%s\n", noGpu ? "never" : "always");
+  hostLog("[calfnxt-web-host] build=nudge-opt-1 hw-accel=%s xwayland_nudge=%s\n",
+          noGpu ? "never" : "always", envFlag("CALFNXT_XWAYLAND_NUDGE") ? "1" : "(unset)");
   if (envFlag("CALFNXT_WEB_DEBUG"))
   {
-    hostLog("[calfnxt-web-host] env dmabuf_disable=%s compositing_disable=%s no_gpu=%s\n",
+    hostLog("[calfnxt-web-host] env dmabuf_disable=%s compositing_disable=%s no_gpu=%s xwayland_nudge=%s\n",
             std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER") ? std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER")
                                                             : "(unset)",
             std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE") ? std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE")
                                                            : "(unset)",
-            noGpu ? "1" : "(unset)");
+            noGpu ? "1" : "(unset)",
+            envFlag("CALFNXT_XWAYLAND_NUDGE") ? "1" : "(unset)");
   }
 
   // Opaque WebView clear color (does not fix XEmbed present; helps if paint works).
@@ -1106,13 +1045,6 @@ int main(int argc, char** argv)
                      scheduleForceAlloc();
                    }),
                    nullptr);
-
-  auto onRealize = +[](GtkWidget* widget, gpointer) {
-    disableFrameSync(widget);
-    holdFrameClock();
-  };
-  g_signal_connect(g.plug, "realize", G_CALLBACK(onRealize), nullptr);
-  g_signal_connect(GTK_WIDGET(g.webview), "realize", G_CALLBACK(onRealize), nullptr);
 
   gtk_widget_show_all(g.plug);
   syncNativeSize();
@@ -1161,7 +1093,6 @@ int main(int argc, char** argv)
     g_source_remove(g.liveNudgeSource);
     g.liveNudgeSource = 0;
   }
-  releaseFrameClock();
   if (g.plug)
   {
     gtk_widget_destroy(g.plug);

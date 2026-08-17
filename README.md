@@ -466,6 +466,7 @@ Set these in the **plugin host** environment (the helper inherits it via
 | `CALFNXT_WEB_DEBUG` | any non-empty | Extra logging to stderr; also enables WebKit developer extras and console→stdout. Diagnostics always append to `/tmp/calfnxt-ui.log`. |
 | `CALFNXT_WEB_INSPECTOR` | any non-empty | Opens the WebKit Web Inspector on editor load (also enables developer extras). |
 | `CALFNXT_WEB_NO_GPU` | any non-empty | WebKit hardware acceleration **off** (`NEVER`). Default without this flag is **on** (`ALWAYS`). Use if the embed paints blank/transparent on your GPU stack. |
+| `CALFNXT_XWAYLAND_NUDGE` | any non-empty | Opt-in workaround for GNOME/Mutter + Ardour on Wayland: 1px Configure burst after load, then a 33 ms loop so the UI keeps presenting. Off by default (CPU/relayout cost). Must be in the **plugin host** environment. |
 
 Related (not calfNXT-owned, but often useful with WebKitGTK / X11 embed):
 
