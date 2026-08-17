@@ -1,5 +1,6 @@
 {
   "bypass": false,
+  "spectrum": 2,
   "bands": [
     { "index": 0, "active": true, "type": "parametric", "frequency": 350, "gain": -6, "q": 5 },
     { "index": 1, "active": false },

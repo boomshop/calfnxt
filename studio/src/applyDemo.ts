@@ -421,6 +421,7 @@ export function applyEqualizerDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setNum(host.spectrum$, params.spectrum);
   const bands = params.bands;
   if (Array.isArray(bands)) {
     for (const b of bands) {
@@ -445,6 +446,10 @@ export function applyEqualizerDemo(
   applySharedViz(viz);
   if (viz.gains)
     pushViz('eq', 'gains', viz.gains);
+  if (viz.spectrum) {
+    host.spectrumData$.set(viz.spectrum);
+    pushViz('fft', 'spectrum', viz.spectrum);
+  }
 }
 
 function applyMbcompMeters(host: IMbcompHost, viz: VizFixture) {

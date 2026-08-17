@@ -31,20 +31,27 @@ declare global {
     calfnxtNative?: { post: (msg: calfNXTMsg | string) => void };
     __calfnxtOnHost?: (msg: calfNXTMsg) => void;
     __calfnxtHostQ?: calfNXTMsg[];
+    /** Shared viz snapshot bag (`id:kind` → `v`), also filled by web-host inject. */
+    __calfnxtVizDump?: Record<string, number[]>;
     /**
-     * Latest viz payloads keyed by `id:kind`. Returns pretty JSON (also tries
-     * clipboard + console.log) for Studio / WebKit inspector snapshots.
+     * Latest viz payloads as pretty JSON (console.log + return). Installed as a
+     * classic global by calfnxt-web-host so bare `__calfnxtDumpViz()` works in
+     * the WebKit inspector (ES-module `window.x=` alone often does not).
      */
     __calfnxtDumpViz?: () => string;
   }
 }
 
-/** Latest host→UI viz samples (`id:kind` → `v`). Filled by `onHostMessage`. */
-const vizDump: Record<string, number[]> = {};
+function vizDumpBag(): Record<string, number[]> {
+  if (!window.__calfnxtVizDump)
+    window.__calfnxtVizDump = {};
+  return window.__calfnxtVizDump;
+}
 
 function installVizDumpApi(): void {
+  // Keep / refresh the classic global (web-host injects a stub at document start).
   window.__calfnxtDumpViz = () => {
-    const json = JSON.stringify(vizDump, null, 2);
+    const json = JSON.stringify(vizDumpBag(), null, 2);
     try {
       void navigator.clipboard?.writeText(json);
     } catch {
@@ -65,7 +72,7 @@ export function postToHost(msg: calfNXTMsg): void {
 export function onHostMessage(handler: (msg: calfNXTMsg) => void): void {
   window.__calfnxtOnHost = (msg) => {
     if (msg?.t === "viz" && typeof msg.id === "string" && Array.isArray(msg.v))
-      vizDump[`${msg.id}:${msg.kind}`] = msg.v.slice();
+      vizDumpBag()[`${msg.id}:${msg.kind}`] = msg.v.slice();
     handler(msg);
   };
   const q = window.__calfnxtHostQ;

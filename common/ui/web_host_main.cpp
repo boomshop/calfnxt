@@ -962,7 +962,14 @@ int main(int argc, char** argv)
 
   static const char bridge[] =
     "window.__calfnxtHostQ=window.__calfnxtHostQ||[];"
-    "window.__calfnxtOnHost=window.__calfnxtOnHost||function(m){window.__calfnxtHostQ.push(m);};"
+    "window.__calfnxtVizDump=window.__calfnxtVizDump||{};"
+    "window.__calfnxtDumpViz=function(){"
+    "var json=JSON.stringify(window.__calfnxtVizDump||{},null,2);"
+    "console.log(json);return json;};"
+    "window.__calfnxtOnHost=window.__calfnxtOnHost||function(m){"
+    "if(m&&m.t==='viz'&&m.id!=null&&Array.isArray(m.v))"
+    "window.__calfnxtVizDump[String(m.id)+':'+String(m.kind)]=m.v;"
+    "window.__calfnxtHostQ.push(m);};"
     "window.calfnxtNative={post:function(m){"
     "var src=typeof m==='string'?JSON.parse(m):m;"
     "var o={t:src.t};"
