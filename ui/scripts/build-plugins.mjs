@@ -36,6 +36,7 @@ const ALL_PLUGINS = [
   'filter',
   'ringmod',
   'pulsator',
+  'crusher',
 ];
 
 const rawArgs = process.argv.slice(2);

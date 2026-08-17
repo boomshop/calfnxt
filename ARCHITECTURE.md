@@ -84,12 +84,13 @@ dsp/transients/
 dsp/compressor/
 dsp/deesser/
 dsp/delay/
+dsp/crusher/
 tools/codegen/
 ui/
   index.html            # SPA shell
   src/
     App.tsx             # hash router
-    plugins/            # EqualizerUI, StereoUI, TransientsUI, CompressorUI, DeesserUI, DelayUI, registry
+    plugins/            # … PulsatorUI, CrusherUI, registry
     generated/          # codegen TS models
 external/vst3sdk/
 ```

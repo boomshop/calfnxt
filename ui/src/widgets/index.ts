@@ -19,6 +19,7 @@ export * from "./SpectrumChart";
 export * from "./Toggle";
 export * from "./State";
 export * from "./PulsatorChart";
+export * from "./CrusherChart";
 export * from "./Select";
 export * from "./Button";
 export * from "./Buttons";

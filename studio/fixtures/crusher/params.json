@@ -1,0 +1,8 @@
+{
+  "bypass": false,
+  "bits": 4,
+  "morph": 0.75,
+  "mode": false,
+  "dc": 2,
+  "anti_aliasing": 0.35
+}

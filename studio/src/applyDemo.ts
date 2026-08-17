@@ -16,6 +16,7 @@ import type {
   IFilterHost,
   IRingmodHost,
   IPulsatorHost,
+  ICrusherHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -320,6 +321,31 @@ export function applyPulsatorDemo(
   // Shared phase (L+R advance together); Y differs by Offset L/R.
   host.lfo$.set([0.22, 0, 0.22, 0]);
   host.hostTempo$.set([1, 120]);
+}
+
+export function applyCrusherDemo(
+  host: ICrusherHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.bits$, params.bits);
+  setNum(host.morph$, params.morph);
+  setBool(host.mode$, params.mode);
+  setNum(host.dc$, params.dc);
+  setNum(host.aa$, params.anti_aliasing);
+  applySharedViz(viz);
+  const applyShape = () => {
+    if (!viz.shape) return;
+    host.shapePoint$.set(viz.shape);
+    pushViz('crusher', 'shape', viz.shape);
+  };
+  applyShape();
+  const hold = window.setInterval(() => {
+    applySharedViz(viz);
+    applyShape();
+  }, 50);
+  return () => window.clearInterval(hold);
 }
 
 export function applyDelayDemo(
@@ -685,4 +711,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   filter: applyFilterDemo as DemoApplier,
   ringmod: applyRingmodDemo as DemoApplier,
   pulsator: applyPulsatorDemo as DemoApplier,
+  crusher: applyCrusherDemo as DemoApplier,
 };

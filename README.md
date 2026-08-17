@@ -55,6 +55,7 @@ will follow.
 | **Filter** | `calfNXTFilter.vst3` | Multimode filter + optional envelope follower |
 | **Ring Modulator** | `calfNXTRingmodulator.vst3` | Stereo ring mod + dual LFOs (Calf heritage) |
 | **Pulsator** | `calfNXTPulsator.vst3` | Tremolo / autopanner with dual-phase LFO chart |
+| **Crusher** | `calfNXTCrusher.vst3` | Bit crusher with live response heat |
 | **DeEsser** | `calfNXTDeesser.vst3` | Sibilance / rumble control (Ess / Rumble, Wide / Split) |
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo / Ping-Pong / L-R) |
 | **Reverb** | `calfNXTReverb.vst3` | Algorithmic room (ER + late, no IR) |
@@ -169,6 +170,13 @@ will follow.
 - Timing like Delay: **Tempo** ↔ **Beat ms** (0.5…300 BPM / 0.2 s…2 min), optional **Host Sync**, Tap Tempo; Reset phases
 - Mode: Sine / Triangle / Square / Saw up / Saw down; Pulse Width; Amount; Offset L/R; Mono-in
 - Live dual-waveform chart with phase dots; ~1.5 ms gain slew against square/saw clicks
+- Shared In/Out gain + peak meters
+
+### Crusher
+
+- Calf-heritage **bit crusher** (no sample-rate reduction)
+- Bit Reduction (continuous 1…16), Mix, DC asymmetry, soft-step “Anti-Aliasing”, Linear / Logarithmic
+- Response chart: crushed sine probe with live heat + active zone (Harmonics-style)
 - Shared In/Out gain + peak meters
 
 ### DeEsser
@@ -370,6 +378,7 @@ Then rescan plugins in your host. Bundles appear as:
 | Filter    | `~/.vst3/calfNXTFilter.vst3`    |
 | Ring Modulator | `~/.vst3/calfNXTRingmodulator.vst3` |
 | Pulsator | `~/.vst3/calfNXTPulsator.vst3` |
+| Crusher   | `~/.vst3/calfNXTCrusher.vst3`   |
 | DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
 | Delay     | `~/.vst3/calfNXTDelay.vst3`     |
 | Reverb    | `~/.vst3/calfNXTReverb.vst3`    |
@@ -414,6 +423,7 @@ UI pack. `install-user-vst3` / `./tools/install-user-vst3.sh` then copies the bu
 | Filter    | `~/.vst3/calfNXTFilter.vst3`    |
 | Ring Modulator | `~/.vst3/calfNXTRingmodulator.vst3` |
 | Pulsator | `~/.vst3/calfNXTPulsator.vst3` |
+| Crusher   | `~/.vst3/calfNXTCrusher.vst3`   |
 
 Rescan / reload the plugins in the host after install.
 
@@ -455,7 +465,7 @@ cd ui && npm install   # once
 cd ui && npm run dev
 ```
 
-Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` · `#reverb` · `#mbcomp` · `#limiter` · `#mblimiter` · `#harmonics` · `#analyzer` · `#filter` · `#ringmod` · `#pulsator`
+Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` · `#reverb` · `#mbcomp` · `#limiter` · `#mblimiter` · `#harmonics` · `#analyzer` · `#filter` · `#ringmod` · `#pulsator` · `#crusher`
 
 This is useful for layout and widget work. It does **not** replace installing into `~/.vst3` for Carla / other hosts.
 
@@ -479,7 +489,7 @@ npm run studio -- mbcomp    # one plugin
 | Configure                   | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` |
 | Build **all** plugins (+ UI)| `cmake --build build --target calfnxt-plugins -j` |
 | Embed SPA + install (all)   | `./tools/install-user-vst3.sh` or `cmake --build build --target install-user-vst3` |
-| Embed + install **one** plugin | `./tools/install-user-vst3.sh mbcomp` (ids: `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay` `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter` `ringmod` `pulsator`) |
+| Embed + install **one** plugin | `./tools/install-user-vst3.sh mbcomp` (ids: `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay` `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter` `ringmod` `pulsator` `crusher`) |
 | UI pack only (one / all)    | `cd ui && npm run build -- mbcomp` or `npm run build` |
 | System install (packaging)  | `cmake --install build --prefix /usr` (→ `$prefix/lib/vst3`) |
 | Cut a GitHub release        | `./tools/release.sh` (see `VERSIONING.md`) |

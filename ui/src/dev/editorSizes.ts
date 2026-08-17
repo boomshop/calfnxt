@@ -15,6 +15,7 @@ import { pluginMeta as analyzerMeta } from "../generated/analyzerModel";
 import { pluginMeta as filterMeta } from "../generated/filterModel";
 import { pluginMeta as ringmodMeta } from "../generated/ringmodModel";
 import { pluginMeta as pulsatorMeta } from "../generated/pulsatorModel";
+import { pluginMeta as crusherMeta } from "../generated/crusherModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
 export const editorSizes: Record<PluginId, { width: number; height: number }> = {
@@ -34,4 +35,5 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   filter: filterMeta.editor,
   ringmod: ringmodMeta.editor,
   pulsator: pulsatorMeta.editor,
+  crusher: crusherMeta.editor,
 };

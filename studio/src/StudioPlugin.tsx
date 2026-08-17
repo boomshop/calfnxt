@@ -16,6 +16,7 @@ import {
   FilterUI,
   RingmodUI,
   PulsatorUI,
+  CrusherUI,
   createBoundCompressorHost,
   createBoundExpanderHost,
   createBoundDeesserHost,
@@ -32,6 +33,7 @@ import {
   createBoundFilterHost,
   createBoundRingmodHost,
   createBoundPulsatorHost,
+  createBoundCrusherHost,
   showWidgetInfo$,
   type PluginId,
 } from '@calfnxt/ui';
@@ -82,6 +84,10 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
   pulsator: async () => ({
     params: (await import('../fixtures/pulsator/params.json')).default,
     viz: (await import('../fixtures/pulsator/viz.json')).default,
+  }),
+  crusher: async () => ({
+    params: (await import('../fixtures/crusher/params.json')).default,
+    viz: (await import('../fixtures/crusher/viz.json')).default,
   }),
   limiter: async () => ({
     params: (await import('../fixtures/limiter/params.json')).default,
@@ -137,6 +143,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundRingmodHost();
       case 'pulsator':
         return createBoundPulsatorHost();
+      case 'crusher':
+        return createBoundCrusherHost();
       case 'limiter':
         return createBoundLimiterHost();
       case 'mbcomp':
@@ -217,6 +225,10 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
     case 'pulsator':
       return (
         <PulsatorUI host={host as ReturnType<typeof createBoundPulsatorHost>} />
+      );
+    case 'crusher':
+      return (
+        <CrusherUI host={host as ReturnType<typeof createBoundCrusherHost>} />
       );
     case 'limiter':
       return <LimiterUI host={host as ReturnType<typeof createBoundLimiterHost>} />;

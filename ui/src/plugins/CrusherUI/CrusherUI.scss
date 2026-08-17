@@ -1,0 +1,31 @@
+.CrusherUI {
+  display: grid;
+  grid-template-areas: 'response bits shape';
+  grid-template-columns: 1fr auto auto;
+  grid-template-rows: 1fr;
+  align-items: stretch;
+
+  > .response {
+    grid-area: response;
+  }
+
+  > .bits {
+    grid-area: bits;
+    align-items: center;
+  }
+
+  > .shape {
+    grid-area: shape;
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    gap: 16px;
+    align-items: center;
+    align-content: space-evenly;
+    padding-left: 16px;
+    padding-right: 16px;
+
+    > .log {
+      align-self: center;
+    }
+  }
+}
