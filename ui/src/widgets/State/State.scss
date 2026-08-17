@@ -1,0 +1,23 @@
+.State {
+  /* AUX blank theme leaves these unset — without them the mask is transparent
+     and opacity changes are invisible (LED always looks fully on). */
+  --aux-state-width: 8px;
+  --aux-state-height: 8px;
+  --aux-warn-base: var(--color-warn, #ff0066);
+  --aux-widget-base: var(--background, #000);
+
+  position: relative;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  flex: 0 0 auto;
+  background: var(--aux-warn-base);
+
+  > .aux-mask {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--aux-widget-base);
+    pointer-events: none;
+  }
+}

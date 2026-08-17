@@ -52,6 +52,8 @@ will follow.
 | **Multiband Limiter** | `calfNXTMblimiter.vst3` | Weighted multiband brickwall + final limiter |
 | **Harmonics** | `calfNXTHarmonics.vst3` | Saturator / Exciter / Bass Enhancer — Drive, Blend, Asym, Tone, OS |
 | **Analyzer** | `calfNXTAnalyzer.vst3` | Spectrum + gonio/correlation monitor (passthrough) |
+| **Filter** | `calfNXTFilter.vst3` | Multimode filter + optional envelope follower |
+| **Ring Modulator** | `calfNXTRingmodulator.vst3` | Stereo ring mod + dual LFOs (Calf heritage) |
 | **DeEsser** | `calfNXTDeesser.vst3` | Sibilance / rumble control (Ess / Rumble, Wide / Split) |
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo / Ping-Pong / L-R) |
 | **Reverb** | `calfNXTReverb.vst3` | Algorithmic room (ER + late, no IR) |
@@ -139,6 +141,26 @@ will follow.
 - **Scale**: Linear / −3 dB/oct (pink) / −4.5 dB/oct (modern) with midband ±6 dB balance corridor when tilted
 - **Hold** freezes peak-hold; always-on **goniometer** + **correlation**
 - Shared In/Out gain + peak meters; spectrum layout ready for a future EQ overlay
+
+### Filter
+
+- Multimode **LP / HP / BP / BR / Allpass** (12/24/48 dB LP/HP; Calf-style BP/BR) with Resonance + Frequency + Inertia
+- Optional **Envelope** follower: Peak / RMS / Opto detector → cutoff between Frequency and Target
+- **Mix** dry/wet (always; complementary dry for LP/HP when Resonance is moderate)
+- **Soft** clip on the wet path to tame hot resonance
+- Optional **spectrum** overlay on the response chart (post-filter, same tilts as Equalizer)
+- Response chart (Frequency + Target handles when Envelope is on; live cutoff when Envelope moves)
+- Shared In/Out gain + peak meters
+
+### Ring Modulator
+
+- Stereo **ring modulation** (carrier × input) with dry blend via Amount
+- Carrier: Frequency, Amount, Phase (R vs L), Detune (cents), Waveform (Sine / Triangle / Square / Saw), Listen
+- **LFO 1** → Modulator Frequency and/or Detune (Min/Max + Active; Min≤Max clamp)
+- **LFO 2** → LFO 1 Frequency and/or Amount (Min/Max + Active)
+- Default start: **LFO1→Freq** on with range 200…4000 Hz
+- Overridden knobs show live effective value + label hint (`· LFO1` / `· LFO2`) and warn LED
+- LFO activity LEDs + Reset; shared In/Out gain + peak meters
 
 ### DeEsser
 
@@ -335,6 +357,9 @@ Then rescan plugins in your host. Bundles appear as:
 | Limiter   | `~/.vst3/calfNXTLimiter.vst3`   |
 | Multiband Limiter | `~/.vst3/calfNXTMblimiter.vst3` |
 | Harmonics | `~/.vst3/calfNXTHarmonics.vst3` |
+| Analyzer  | `~/.vst3/calfNXTAnalyzer.vst3`  |
+| Filter    | `~/.vst3/calfNXTFilter.vst3`    |
+| Ring Modulator | `~/.vst3/calfNXTRingmodulator.vst3` |
 | DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
 | Delay     | `~/.vst3/calfNXTDelay.vst3`     |
 | Reverb    | `~/.vst3/calfNXTReverb.vst3`    |
@@ -375,6 +400,9 @@ UI pack. `install-user-vst3` / `./tools/install-user-vst3.sh` then copies the bu
 | Limiter   | `~/.vst3/calfNXTLimiter.vst3` |
 | Multiband Limiter | `~/.vst3/calfNXTMblimiter.vst3` |
 | Harmonics | `~/.vst3/calfNXTHarmonics.vst3` |
+| Analyzer  | `~/.vst3/calfNXTAnalyzer.vst3`  |
+| Filter    | `~/.vst3/calfNXTFilter.vst3`    |
+| Ring Modulator | `~/.vst3/calfNXTRingmodulator.vst3` |
 
 Rescan / reload the plugins in the host after install.
 
@@ -416,7 +444,7 @@ cd ui && npm install   # once
 cd ui && npm run dev
 ```
 
-Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` · `#reverb` · `#mbcomp` · `#limiter` · `#mblimiter` · `#harmonics` · `#analyzer`
+Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` · `#reverb` · `#mbcomp` · `#limiter` · `#mblimiter` · `#harmonics` · `#analyzer` · `#filter` · `#ringmod`
 
 This is useful for layout and widget work. It does **not** replace installing into `~/.vst3` for Carla / other hosts.
 
@@ -440,7 +468,7 @@ npm run studio -- mbcomp    # one plugin
 | Configure                   | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` |
 | Build **all** plugins (+ UI)| `cmake --build build --target calfnxt-plugins -j` |
 | Embed SPA + install (all)   | `./tools/install-user-vst3.sh` or `cmake --build build --target install-user-vst3` |
-| Embed + install **one** plugin | `./tools/install-user-vst3.sh mbcomp` (ids: `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay` `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer`) |
+| Embed + install **one** plugin | `./tools/install-user-vst3.sh mbcomp` (ids: `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay` `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter` `ringmod`) |
 | UI pack only (one / all)    | `cd ui && npm run build -- mbcomp` or `npm run build` |
 | System install (packaging)  | `cmake --install build --prefix /usr` (→ `$prefix/lib/vst3`) |
 | Cut a GitHub release        | `./tools/release.sh` (see `VERSIONING.md`) |

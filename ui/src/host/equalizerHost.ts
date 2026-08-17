@@ -161,6 +161,11 @@ export interface IEqualizerBand {
   gain$: DynamicValue<number>;
   /** DSP-applied gain for curves (static or dyn); from viz, mirrored from gain$ in dev. */
   effectiveGain$: DynamicValue<number>;
+  /**
+   * Optional live cutoff for response curves (envelope / inertia).
+   * Handle still uses frequency$; ghost/baseline use this when set.
+   */
+  effectiveFrequency$?: DynamicValue<number>;
   frequency$: DynamicValue<number>;
   q$: DynamicValue<number>;
   type$: DynamicValue<EqFilterType>;
@@ -174,6 +179,10 @@ export interface IEqualizerBand {
   dynRatio$: DynamicValue<number>;
   /** Solo detector / sidechain into the plugin output. */
   listen$: DynamicValue<boolean>;
+  /** Optional chart handle title (EQ defaults to B1…). */
+  handleLabel?: string;
+  /** Optional AUX format_label(label, freqHz) for the handle. */
+  formatHandleLabel?: (label: string, freqHz: number) => string;
   /** DSP descriptor defaults for AUX Knob double-click reset. */
   defaults: {
     frequency: number;
@@ -507,7 +516,7 @@ export interface IEqualizerHost {
 
 export const EQ_SPECTRUM_ENTRIES = [
   { label: 'Off', value: 0 },
-  { label: 'Linear', value: 1 },
+  { label: 'Lin', value: 1 },
   { label: '−3 dB', value: 2 },
   { label: '−4.5 dB', value: 3 },
 ] as const;

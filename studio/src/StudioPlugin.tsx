@@ -13,6 +13,8 @@ import {
   StereoUI,
   TransientsUI,
   AnalyzerUI,
+  FilterUI,
+  RingmodUI,
   createBoundCompressorHost,
   createBoundExpanderHost,
   createBoundDeesserHost,
@@ -26,6 +28,8 @@ import {
   createBoundStereoHost,
   createBoundTransientsHost,
   createBoundAnalyzerHost,
+  createBoundFilterHost,
+  createBoundRingmodHost,
   showWidgetInfo$,
   type PluginId,
 } from '@calfnxt/ui';
@@ -64,6 +68,14 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
   analyzer: async () => ({
     params: (await import('../fixtures/analyzer/params.json')).default,
     viz: (await import('../fixtures/analyzer/viz.json')).default,
+  }),
+  filter: async () => ({
+    params: (await import('../fixtures/filter/params.json')).default,
+    viz: (await import('../fixtures/filter/viz.json')).default,
+  }),
+  ringmod: async () => ({
+    params: (await import('../fixtures/ringmod/params.json')).default,
+    viz: (await import('../fixtures/ringmod/viz.json')).default,
   }),
   limiter: async () => ({
     params: (await import('../fixtures/limiter/params.json')).default,
@@ -113,6 +125,10 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundHarmonicsHost();
       case 'analyzer':
         return createBoundAnalyzerHost();
+      case 'filter':
+        return createBoundFilterHost();
+      case 'ringmod':
+        return createBoundRingmodHost();
       case 'limiter':
         return createBoundLimiterHost();
       case 'mbcomp':
@@ -181,6 +197,14 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
     case 'analyzer':
       return (
         <AnalyzerUI host={host as ReturnType<typeof createBoundAnalyzerHost>} />
+      );
+    case 'filter':
+      return (
+        <FilterUI host={host as ReturnType<typeof createBoundFilterHost>} />
+      );
+    case 'ringmod':
+      return (
+        <RingmodUI host={host as ReturnType<typeof createBoundRingmodHost>} />
       );
     case 'limiter':
       return <LimiterUI host={host as ReturnType<typeof createBoundLimiterHost>} />;

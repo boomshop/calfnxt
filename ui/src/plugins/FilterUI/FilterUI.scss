@@ -1,0 +1,95 @@
+.FilterUI {
+  display: grid;
+  grid-template-areas: 'filter chart envelope';
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: 1fr;
+  gap: var(--gap);
+  justify-content: stretch;
+  align-items: stretch;
+
+  > .filter,
+  > .envelope {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap);
+    align-items: stretch;
+    min-width: 200px;
+
+    > .mode,
+    > .top-row,
+    > .filter-top {
+    }
+
+    > .filter-top {
+      display: flex;
+      gap: var(--gap);
+
+      > .mode,
+      > .spectrum {
+        min-width: 0;
+        width: auto;
+      }
+    }
+
+    > .top-row {
+      display: flex;
+      gap: var(--gap);
+      align-items: center;
+      justify-content: space-between;
+
+      > .WithInfo:first-child {
+        flex: 0 0 auto;
+      }
+
+      > .mode,
+      > .WithInfo.mode {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      &.is-disabled > .mode,
+      &.is-disabled > .WithInfo.mode {
+        opacity: 0.4;
+        pointer-events: none;
+      }
+    }
+
+    > .knobs {
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+      align-items: center;
+      justify-content: space-evenly;
+      flex: 1;
+    }
+
+    > .knobs .knobs-row {
+      display: flex;
+      gap: var(--gap);
+      justify-content: space-evenly;
+      align-items: center;
+      width: 100%;
+    }
+  }
+
+  > .filter {
+    grid-area: filter;
+  }
+
+  > .chart {
+    grid-area: chart;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+
+    > .EQChart {
+      flex: 1;
+      background: var(--background);
+    }
+  }
+
+  > .envelope {
+    grid-area: envelope;
+    min-width: 200px;
+  }
+}

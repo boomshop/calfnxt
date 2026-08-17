@@ -183,6 +183,14 @@ body,
   .aux-chart {
     background: var(--background) !important;
   }
+
+  > .block {
+    background: var(--background);
+    > .title {
+      background: transparent;
+      color: var(--color-least);
+    }
+  }
 }
 
 .panel {

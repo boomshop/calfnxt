@@ -1,0 +1,310 @@
+{
+  "id": "ringmod",
+  "name": "calfNXT Ring Modulator",
+  "vendor": "calfNXT",
+  "vendor_url": "https://calfnxt.org",
+  "vendor_email": "mailto:schmidt@boomshop.net",
+  "version": "0.11.0",
+  "category": "Fx|Modulation",
+  "vst3_uid": [
+    "0xC4A1F00F",
+    "0x01E6F0D1",
+    "0xCA1F000F",
+    "0xB0000001"
+  ],
+  "editor": {
+    "width": 1024,
+    "height": 360
+  },
+  "buses": {
+    "audio_inputs": [
+      {
+        "name": "Stereo In",
+        "channels": 2
+      }
+    ],
+    "audio_outputs": [
+      {
+        "name": "Stereo Out",
+        "channels": 2
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "id": "bypass",
+      "name": "Bypass",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "mod_mode",
+      "name": "Waveform",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "mod_freq",
+      "name": "Frequency",
+      "type": "float",
+      "unit": "Hz",
+      "min": 1.0,
+      "max": 20000.0,
+      "default": 1000.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "mod_amount",
+      "name": "Amount",
+      "type": "float",
+      "unit": "%",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "mod_phase",
+      "name": "Phase",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "mod_detune",
+      "name": "Detune",
+      "type": "float",
+      "unit": "ct",
+      "min": -200.0,
+      "max": 200.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "mod_listen",
+      "name": "Listen",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "lfo1_mode",
+      "name": "LFO 1 Wave",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "lfo1_freq",
+      "name": "LFO 1 Frequency",
+      "type": "float",
+      "unit": "Hz",
+      "min": 0.01,
+      "max": 10.0,
+      "default": 0.1,
+      "scale": "log",
+      "precision": 3
+    },
+    {
+      "id": "lfo1_reset",
+      "name": "LFO 1 Reset",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "lfo1_mod_freq_lo",
+      "name": "LFO1→Freq Min",
+      "type": "float",
+      "unit": "Hz",
+      "min": 1.0,
+      "max": 20000.0,
+      "default": 200.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "lfo1_mod_freq_hi",
+      "name": "LFO1→Freq Max",
+      "type": "float",
+      "unit": "Hz",
+      "min": 1.0,
+      "max": 20000.0,
+      "default": 4000.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "lfo1_mod_freq_active",
+      "name": "LFO1→Freq",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "lfo1_mod_detune_lo",
+      "name": "LFO1→Detune Min",
+      "type": "float",
+      "unit": "ct",
+      "min": -200.0,
+      "max": 200.0,
+      "default": -100.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "lfo1_mod_detune_hi",
+      "name": "LFO1→Detune Max",
+      "type": "float",
+      "unit": "ct",
+      "min": -200.0,
+      "max": 200.0,
+      "default": 100.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "lfo1_mod_detune_active",
+      "name": "LFO1→Detune",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "lfo2_mode",
+      "name": "LFO 2 Wave",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "lfo2_freq",
+      "name": "LFO 2 Frequency",
+      "type": "float",
+      "unit": "Hz",
+      "min": 0.01,
+      "max": 10.0,
+      "default": 0.2,
+      "scale": "log",
+      "precision": 3
+    },
+    {
+      "id": "lfo2_reset",
+      "name": "LFO 2 Reset",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "lfo2_lfo1_freq_lo",
+      "name": "LFO2→LFO1 Min",
+      "type": "float",
+      "unit": "Hz",
+      "min": 0.01,
+      "max": 10.0,
+      "default": 0.05,
+      "scale": "log",
+      "precision": 3
+    },
+    {
+      "id": "lfo2_lfo1_freq_hi",
+      "name": "LFO2→LFO1 Max",
+      "type": "float",
+      "unit": "Hz",
+      "min": 0.01,
+      "max": 10.0,
+      "default": 0.5,
+      "scale": "log",
+      "precision": 3
+    },
+    {
+      "id": "lfo2_lfo1_freq_active",
+      "name": "LFO2→LFO1",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "lfo2_mod_amount_lo",
+      "name": "LFO2→Amount Min",
+      "type": "float",
+      "unit": "%",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.3,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "lfo2_mod_amount_hi",
+      "name": "LFO2→Amount Max",
+      "type": "float",
+      "unit": "%",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.6,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "lfo2_mod_amount_active",
+      "name": "LFO2→Amount",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    }
+  ]
+}

@@ -147,10 +147,59 @@ export function flatGainRbj(O: EqFilterOpts) {
   };
 }
 
+/** Notch / band-reject — matches setBrRbj. */
+export function notchRbj(O: EqFilterOpts) {
+  const w0 = (2 * Math.PI * O.freq) / O.sample_rate;
+  const alpha = Math.sin(w0) / (2 * O.q);
+  const cw = Math.cos(w0);
+  const g = dbToLin(O.gain ?? 0);
+  return {
+    b0: g,
+    b1: -2 * g * cw,
+    b2: g,
+    a0: 1 + alpha,
+    a1: -2 * cw,
+    a2: 1 - alpha,
+    sample_rate: O.sample_rate,
+  };
+}
+
+/** Flat magnitude allpass (UI marker only). */
+export function allpassFlatRbj(O: EqFilterOpts) {
+  return {
+    b0: 1,
+    b1: 0,
+    b2: 0,
+    a0: 1,
+    a1: 0,
+    a2: 0,
+    sample_rate: O.sample_rate,
+  };
+}
+
 export const auxPeaking = biquadFilter(withDrawSr(peakingRbj));
 export const auxLowShelf = biquadFilter(withDrawSr(lowShelfRbj));
 export const auxHighShelf = biquadFilter(withDrawSr(highShelfRbj));
 export const auxBandPass = biquadFilter(withDrawSr(bandPassRbj));
+export const auxBandPass12 = auxBandPass;
+export const auxBandPass24 = biquadFilter(
+  withDrawSr(bandPassRbj),
+  withDrawSr(bandPassRbj),
+);
+export const auxBandPass36 = biquadFilter(
+  withDrawSr(bandPassRbj),
+  withDrawSr(bandPassRbj),
+  withDrawSr(bandPassRbj),
+);
+export const auxNotch = biquadFilter(withDrawSr(notchRbj));
+export const auxNotch12 = auxNotch;
+export const auxNotch24 = biquadFilter(withDrawSr(notchRbj), withDrawSr(notchRbj));
+export const auxNotch36 = biquadFilter(
+  withDrawSr(notchRbj),
+  withDrawSr(notchRbj),
+  withDrawSr(notchRbj),
+);
+export const auxAllpassFlat = biquadFilter(withDrawSr(allpassFlatRbj));
 export const auxLowpass12 = biquadFilter(withDrawSr(lowPassRbj));
 export const auxLowpass24 = biquadFilter(withDrawSr(lowPassRbj), withDrawSr(lowPassRbj));
 export const auxLowpass36 = biquadFilter(

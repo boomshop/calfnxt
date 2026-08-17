@@ -72,6 +72,43 @@ public:
     b2 = (1.0 - alpha) * inv;
   }
 
+  /** RBJ notch / band-reject. */
+  void setBrRbj(double fc, double q, double sr, double gain = 1.0)
+  {
+    const double omega = 2.0 * M_PI * fc / sr;
+    const double sn = std::sin(omega);
+    const double cs = std::cos(omega);
+    const double alpha = sn / (2.0 * q);
+    const double inv = 1.0 / (1.0 + alpha);
+    a0 = gain * inv;
+    a1 = -gain * inv * 2.0 * cs;
+    a2 = gain * inv;
+    b1 = -2.0 * cs * inv;
+    b2 = (1.0 - alpha) * inv;
+  }
+
+  /** Calf-style allpass (bilinear). poleR typically 1. */
+  void setAllpass(float freq, float poleR, float sr)
+  {
+    float f = freq;
+    if (f > sr * 0.49f)
+      f = static_cast<float>(sr * 0.49);
+    const double a = std::tan(M_PI * f / sr);
+    const double q = poleR;
+    const double aa0 = a * a + q * q;
+    const double aa1 = -2.0 * a;
+    const double aa2 = 1.0;
+    const double ab0 = aa0;
+    const double ab1 = 2.0 * a;
+    const double ab2 = 1.0;
+    const double inv = 1.0 / (ab0 + ab1 + ab2);
+    a0 = (aa0 + aa1 + aa2) * inv;
+    a1 = 2.0 * (aa0 - aa2) * inv;
+    a2 = (aa0 - aa1 + aa2) * inv;
+    b1 = 2.0 * (ab0 - ab2) * inv;
+    b2 = (ab0 - ab1 + ab2) * inv;
+  }
+
   /** peak: linear gain (1 = unity). */
   void setPeakeqRbj(double freq, double q, double peak, double sr)
   {

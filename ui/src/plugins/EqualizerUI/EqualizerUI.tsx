@@ -373,19 +373,6 @@ export function EqualizerUI(props: EqualizerUIProps) {
         <WithInfo title={equalizerInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>
-      </Header>
-
-      <EQChart
-        bands={bands}
-        size="normal"
-        selectedBandId={selectedBandId}
-        onSelectBand={selectBand}
-        spectrum$={host.spectrumData$}
-        spectrumMode={Math.round(spectrumMode)}
-      />
-
-      <div className="block spectrum">
-        <div className="title">Analyzer</div>
         <WithInfo title={equalizerInfo.spectrum} className="info-block">
           <Buttons
             layout="horizontal"
@@ -398,7 +385,16 @@ export function EqualizerUI(props: EqualizerUIProps) {
             }}
           />
         </WithInfo>
-      </div>
+      </Header>
+
+      <EQChart
+        bands={bands}
+        size="normal"
+        selectedBandId={selectedBandId}
+        onSelectBand={selectBand}
+        spectrum$={host.spectrumData$}
+        spectrumMode={Math.round(spectrumMode)}
+      />
 
       {selectedBand ? <BandControls band={selectedBand} /> : null}
 

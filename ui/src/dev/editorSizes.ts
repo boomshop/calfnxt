@@ -12,6 +12,8 @@ import { pluginMeta as limiterMeta } from "../generated/limiterModel";
 import { pluginMeta as mblimiterMeta } from "../generated/mblimiterModel";
 import { pluginMeta as harmonicsMeta } from "../generated/harmonicsModel";
 import { pluginMeta as analyzerMeta } from "../generated/analyzerModel";
+import { pluginMeta as filterMeta } from "../generated/filterModel";
+import { pluginMeta as ringmodMeta } from "../generated/ringmodModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
 export const editorSizes: Record<PluginId, { width: number; height: number }> = {
@@ -28,4 +30,6 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   mblimiter: mblimiterMeta.editor,
   harmonics: harmonicsMeta.editor,
   analyzer: analyzerMeta.editor,
+  filter: filterMeta.editor,
+  ringmod: ringmodMeta.editor,
 };

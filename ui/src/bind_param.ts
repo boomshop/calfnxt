@@ -19,6 +19,8 @@ const vizPointApplies = new Map<string, VizLevelsApply>();
 const vizShapeApplies = new Map<string, VizLevelsApply>();
 const vizTempoApplies = new Map<string, VizLevelsApply>();
 const vizSpectrumApplies = new Map<string, VizLevelsApply>();
+const vizHzApplies = new Map<string, HostApply>();
+const vizCtrlApplies = new Map<string, VizLevelsApply>();
 const channelCountApplies = new Set<ChannelCountApply>();
 let hostWired = false;
 
@@ -67,6 +69,10 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizTempoApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "spectrum" && Array.isArray(msg.v))
     vizSpectrumApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "hz" && Array.isArray(msg.v) && typeof msg.v[0] === "number")
+    vizHzApplies.get(msg.id)?.(msg.v[0]);
+  if (msg.t === "viz" && msg.kind === "ctrl" && Array.isArray(msg.v))
+    vizCtrlApplies.get(msg.id)?.(msg.v);
 }
 
 function ensureHostWire(): void {
@@ -126,6 +132,25 @@ export function bindVizLevels(dv: DynamicValue<number[]>, id: string): () => voi
       if (typeof x !== "number" || !Number.isFinite(x))
         return -96;
       return Math.min(12, Math.max(-96, x));
+    });
+    dv.set(clean);
+  });
+  return () => {
+    vizLevelsApplies.delete(id);
+  };
+}
+
+/** Wire unit-interval level arrays from DSP viz (id e.g. "lfo" activity 0…1). */
+export function bindVizUnitLevels(
+  dv: DynamicValue<number[]>,
+  id: string,
+): () => void {
+  ensureHostWire();
+  vizLevelsApplies.set(id, (v) => {
+    const clean = v.map((x) => {
+      if (typeof x !== "number" || !Number.isFinite(x))
+        return 0;
+      return Math.min(1, Math.max(0, x));
     });
     dv.set(clean);
   });
@@ -307,6 +332,38 @@ export function bindVizSpectrum(dv: DynamicValue<number[]>, id: string): () => v
   });
   return () => {
     vizSpectrumApplies.delete(id);
+  };
+}
+
+/** Wire live frequency in Hz (id e.g. "filt") from DSP viz kind "hz". */
+export function bindVizHz(dv: DynamicValue<number>, id: string): () => void {
+  ensureHostWire();
+  vizHzApplies.set(id, (v) => {
+    if (typeof v !== "number" || !Number.isFinite(v))
+      return;
+    const hz = Math.min(20000, Math.max(10, v));
+    if (nearlyEqual(dv.value, hz))
+      return;
+    dv.set(hz);
+  });
+  return () => {
+    vizHzApplies.delete(id);
+  };
+}
+
+/**
+ * Wire mixed-unit control arrays from DSP viz kind "ctrl"
+ * (e.g. ringmod [modFreqHz, modDetuneCents, modAmount, lfo1FreqHz]).
+ */
+export function bindVizCtrl(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizCtrlApplies.set(id, (v) => {
+    dv.set(
+      v.map((x) => (typeof x === "number" && Number.isFinite(x) ? x : 0)),
+    );
+  });
+  return () => {
+    vizCtrlApplies.delete(id);
   };
 }
 

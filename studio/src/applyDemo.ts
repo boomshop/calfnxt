@@ -13,6 +13,8 @@ import type {
   IStereoHost,
   ITransientsHost,
   IAnalyzerHost,
+  IFilterHost,
+  IRingmodHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -240,6 +242,62 @@ export function applyAnalyzerDemo(
     host.spectrum$.set(viz.spectrum);
     pushViz('fft', 'spectrum', viz.spectrum);
   }
+}
+
+export function applyFilterDemo(
+  host: IFilterHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.mode$, params.mode);
+  setNum(host.resonance$, params.resonance);
+  setNum(host.frequency$, params.frequency);
+  setNum(host.inertia$, params.inertia);
+  setBool(host.envPower$, params.env_power);
+  setNum(host.mix$, params.mix);
+  setNum(host.softClip$, params.soft_clip);
+  setNum(host.target$, params.target);
+  setNum(host.activation$, params.activation);
+  setNum(host.attack$, params.attack);
+  setNum(host.release$, params.release);
+  setNum(host.detection$, params.detection);
+  setNum(host.spectrum$, params.spectrum);
+  applySharedViz(viz);
+}
+
+export function applyRingmodDemo(
+  host: IRingmodHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.modMode$, params.mod_mode);
+  setNum(host.modFreq$, params.mod_freq);
+  setNum(host.modAmount$, params.mod_amount);
+  setNum(host.modPhase$, params.mod_phase);
+  setNum(host.modDetune$, params.mod_detune);
+  setBool(host.modListen$, params.mod_listen);
+  setNum(host.lfo1Mode$, params.lfo1_mode);
+  setNum(host.lfo1Freq$, params.lfo1_freq);
+  setNum(host.lfo1ModFreqLo$, params.lfo1_mod_freq_lo);
+  setNum(host.lfo1ModFreqHi$, params.lfo1_mod_freq_hi);
+  setBool(host.lfo1ModFreqActive$, params.lfo1_mod_freq_active);
+  setNum(host.lfo1ModDetuneLo$, params.lfo1_mod_detune_lo);
+  setNum(host.lfo1ModDetuneHi$, params.lfo1_mod_detune_hi);
+  setBool(host.lfo1ModDetuneActive$, params.lfo1_mod_detune_active);
+  setNum(host.lfo2Mode$, params.lfo2_mode);
+  setNum(host.lfo2Freq$, params.lfo2_freq);
+  setNum(host.lfo2Lfo1FreqLo$, params.lfo2_lfo1_freq_lo);
+  setNum(host.lfo2Lfo1FreqHi$, params.lfo2_lfo1_freq_hi);
+  setBool(host.lfo2Lfo1FreqActive$, params.lfo2_lfo1_freq_active);
+  setNum(host.lfo2ModAmountLo$, params.lfo2_mod_amount_lo);
+  setNum(host.lfo2ModAmountHi$, params.lfo2_mod_amount_hi);
+  setBool(host.lfo2ModAmountActive$, params.lfo2_mod_amount_active);
+  applySharedViz(viz);
+  host.lfoActivity$.set([0.55, 0.4]);
+  host.lfo1Activity$.set(0.55);
+  host.lfo2Activity$.set(0.4);
 }
 
 export function applyDelayDemo(
@@ -602,4 +660,6 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   stereo: applyStereoDemo as DemoApplier,
   transients: applyTransientsDemo as DemoApplier,
   analyzer: applyAnalyzerDemo as DemoApplier,
+  filter: applyFilterDemo as DemoApplier,
+  ringmod: applyRingmodDemo as DemoApplier,
 };
