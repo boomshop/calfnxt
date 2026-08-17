@@ -19,7 +19,8 @@ export type PluginId =
   | 'mblimiter'
   | 'harmonics'
   | 'analyzer'
-  | 'filter';
+  | 'filter'
+  | 'ringmod';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -36,6 +37,7 @@ const PLUGIN_IDS: PluginId[] = [
   'harmonics',
   'analyzer',
   'filter',
+  'ringmod',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -132,6 +134,12 @@ export {
   createBoundFilterHost,
   type IFilterHost,
 } from './host/filterHost';
+
+export { RingmodUI } from './plugins/RingmodUI/RingmodUI';
+export {
+  createBoundRingmodHost,
+  type IRingmodHost,
+} from './host/ringmodHost';
 
 export { createHeaderIo, type IHeaderIo } from './host/headerMeters';
 

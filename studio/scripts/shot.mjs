@@ -35,6 +35,7 @@ const ALL = [
   'transients',
   'analyzer',
   'filter',
+  'ringmod',
 ];
 
 function parsePlugins(argv) {

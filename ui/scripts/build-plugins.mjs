@@ -34,6 +34,7 @@ const ALL_PLUGINS = [
   'harmonics',
   'analyzer',
   'filter',
+  'ringmod',
 ];
 
 const rawArgs = process.argv.slice(2);

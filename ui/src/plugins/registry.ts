@@ -14,7 +14,8 @@ export type PluginId =
   | "mblimiter"
   | "harmonics"
   | "analyzer"
-  | "filter";
+  | "filter"
+  | "ringmod";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
 
@@ -34,6 +35,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   harmonics: () => import("./HarmonicsUI/BoundHarmonicsUI"),
   analyzer: () => import("./AnalyzerUI/BoundAnalyzerUI"),
   filter: () => import("./FilterUI/BoundFilterUI"),
+  ringmod: () => import("./RingmodUI/BoundRingmodUI"),
 };
 
 export function isPluginId(id: string): id is PluginId {

@@ -20,6 +20,7 @@ declare module '@deutschesoft/aux-widgets/src/index.pure.js' {
   export const Expander: new (...args: unknown[]) => unknown;
   export const Dynamics: new (...args: unknown[]) => unknown;
   export const Reverb: new (...args: unknown[]) => unknown;
+  export const State: new (...args: unknown[]) => unknown;
 }
 
 declare module '@deutschesoft/aux-widgets/src/widgets/icon.js' {

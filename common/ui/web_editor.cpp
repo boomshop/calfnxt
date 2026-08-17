@@ -1040,6 +1040,44 @@ void WebEditor::flushViz()
       flushVizArray(filtId, "hz", &fc, 1);
     }
   }
+
+  if (const char* lfoId = vizSource_->vizLfoActivityId())
+  {
+    float act[2] {};
+    const int n = vizSource_->takeLfoActivity(act, 2);
+    if (n >= 1)
+    {
+      for (int i = 0; i < n; ++i)
+      {
+        if (!std::isfinite(act[i]))
+          act[i] = 0.f;
+        act[i] = std::clamp(act[i], 0.f, 1.f);
+      }
+      flushVizArray(lfoId, "levels", act, n);
+    }
+  }
+
+  if (const char* rmId = vizSource_->vizRingmodEffectiveId())
+  {
+    float ctrl[4] {};
+    const int n = vizSource_->takeRingmodEffective(ctrl, 4);
+    if (n >= 4)
+    {
+      if (!std::isfinite(ctrl[0]))
+        ctrl[0] = 1000.f;
+      ctrl[0] = std::clamp(ctrl[0], 1.f, 20000.f);
+      if (!std::isfinite(ctrl[1]))
+        ctrl[1] = 0.f;
+      ctrl[1] = std::clamp(ctrl[1], -200.f, 200.f);
+      if (!std::isfinite(ctrl[2]))
+        ctrl[2] = 0.f;
+      ctrl[2] = std::clamp(ctrl[2], 0.f, 1.f);
+      if (!std::isfinite(ctrl[3]))
+        ctrl[3] = 0.1f;
+      ctrl[3] = std::clamp(ctrl[3], 0.01f, 10.f);
+      flushVizArray(rmId, "ctrl", ctrl, 4);
+    }
+  }
 }
 
 void WebEditor::pushAllParams()

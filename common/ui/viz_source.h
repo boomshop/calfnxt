@@ -182,6 +182,35 @@ public:
 
   /** Stream id for filter cutoff (nullptr = do not flush). */
   virtual const char* vizFilterCutoffId() const { return nullptr; }
+
+  /**
+   * LFO activity LEDs 0…1 (e.g. ringmod). Returns count written (typically 2).
+   * Flushed as {t:"viz", id, kind:"levels", v:[…]}.
+   */
+  virtual int takeLfoActivity(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for LFO activity (nullptr = do not flush). */
+  virtual const char* vizLfoActivityId() const { return nullptr; }
+
+  /**
+   * Effective modulated controls while LFO routes override knobs.
+   * Writes [modFreqHz, modDetuneCents, modAmount, lfo1FreqHz]; returns count (4).
+   * Flushed as {t:"viz", id, kind:"ctrl", v:[…]}.
+   */
+  virtual int takeRingmodEffective(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for ringmod effective controls (nullptr = do not flush). */
+  virtual const char* vizRingmodEffectiveId() const { return nullptr; }
 };
 
 } // namespace Ui
