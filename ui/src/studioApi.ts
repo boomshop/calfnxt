@@ -20,7 +20,8 @@ export type PluginId =
   | 'harmonics'
   | 'analyzer'
   | 'filter'
-  | 'ringmod';
+  | 'ringmod'
+  | 'pulsator';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -38,6 +39,7 @@ const PLUGIN_IDS: PluginId[] = [
   'analyzer',
   'filter',
   'ringmod',
+  'pulsator',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -140,6 +142,12 @@ export {
   createBoundRingmodHost,
   type IRingmodHost,
 } from './host/ringmodHost';
+
+export { PulsatorUI } from './plugins/PulsatorUI/PulsatorUI';
+export {
+  createBoundPulsatorHost,
+  type IPulsatorHost,
+} from './host/pulsatorHost';
 
 export { createHeaderIo, type IHeaderIo } from './host/headerMeters';
 

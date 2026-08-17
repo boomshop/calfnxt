@@ -36,6 +36,7 @@ const ALL = [
   'analyzer',
   'filter',
   'ringmod',
+  'pulsator',
 ];
 
 function parsePlugins(argv) {

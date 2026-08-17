@@ -64,6 +64,7 @@ add_subdirectory(dsp/harmonics)
 add_subdirectory(dsp/analyzer)
 add_subdirectory(dsp/filter)
 add_subdirectory(dsp/ringmod)
+add_subdirectory(dsp/pulsator)
 
 # After every plugin registered via calfnxt_copy_web_host: refresh helpers whenever
 # calfnxt-web-host is rebuilt (plugin .so may be unchanged).
@@ -84,7 +85,7 @@ add_custom_target(calfnxt-web-host-bundles
 )
 
 # UI build needs generated models from every plugin descriptor
-add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen expander_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen limiter_codegen mblimiter_codegen harmonics_codegen analyzer_codegen filter_codegen ringmod_codegen)
+add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen expander_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen limiter_codegen mblimiter_codegen harmonics_codegen analyzer_codegen filter_codegen ringmod_codegen pulsator_codegen)
 
 # Meta-target: all plugins + embedded UI packs (add new plugins here).
 add_custom_target(calfnxt-plugins
@@ -119,6 +120,8 @@ add_custom_target(calfnxt-plugins
     calfnxt-filter-resources
     calfnxt-ringmod
     calfnxt-ringmod-resources
+    calfnxt-pulsator
+    calfnxt-pulsator-resources
     calfnxt-web-host
     calfnxt-web-host-bundles
   COMMENT "Build all calfNXT VST3 plugins (+ embedded UI + web-host)"

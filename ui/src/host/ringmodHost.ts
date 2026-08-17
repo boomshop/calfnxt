@@ -9,14 +9,6 @@ import {
   postEnd,
 } from '../bind_param';
 
-export const RINGMOD_WAVE_ENTRIES = [
-  { icon: 'sine', value: 0 },
-  { icon: 'triangle', value: 1 },
-  { icon: 'rect', value: 2 },
-  { icon: 'saw', value: 3 },
-  { icon: 'saw', value: 4 },
-];
-
 export type IRingmodHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;

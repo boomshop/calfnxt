@@ -70,13 +70,6 @@
       > .wave {
         flex: 1 1 auto;
         min-width: 0;
-
-        .Buttons > .Button {
-          flex: 1;
-          &:last-child .aux-icon {
-            transform: scaleX(-1);
-          }
-        }
       }
 
       > .State {

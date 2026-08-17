@@ -14,6 +14,7 @@ import { pluginMeta as harmonicsMeta } from "../generated/harmonicsModel";
 import { pluginMeta as analyzerMeta } from "../generated/analyzerModel";
 import { pluginMeta as filterMeta } from "../generated/filterModel";
 import { pluginMeta as ringmodMeta } from "../generated/ringmodModel";
+import { pluginMeta as pulsatorMeta } from "../generated/pulsatorModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
 export const editorSizes: Record<PluginId, { width: number; height: number }> = {
@@ -32,4 +33,5 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   analyzer: analyzerMeta.editor,
   filter: filterMeta.editor,
   ringmod: ringmodMeta.editor,
+  pulsator: pulsatorMeta.editor,
 };

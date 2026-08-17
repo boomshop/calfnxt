@@ -21,6 +21,7 @@ const vizTempoApplies = new Map<string, VizLevelsApply>();
 const vizSpectrumApplies = new Map<string, VizLevelsApply>();
 const vizHzApplies = new Map<string, HostApply>();
 const vizCtrlApplies = new Map<string, VizLevelsApply>();
+const vizLfoApplies = new Map<string, VizLevelsApply>();
 const channelCountApplies = new Set<ChannelCountApply>();
 let hostWired = false;
 
@@ -73,6 +74,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizHzApplies.get(msg.id)?.(msg.v[0]);
   if (msg.t === "viz" && msg.kind === "ctrl" && Array.isArray(msg.v))
     vizCtrlApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "lfo" && Array.isArray(msg.v))
+    vizLfoApplies.get(msg.id)?.(msg.v);
 }
 
 function ensureHostWire(): void {
@@ -364,6 +367,22 @@ export function bindVizCtrl(dv: DynamicValue<number[]>, id: string): () => void 
   });
   return () => {
     vizCtrlApplies.delete(id);
+  };
+}
+
+/**
+ * Wire LFO display arrays from DSP viz kind "lfo"
+ * (e.g. pulsator [phaseL, valL, phaseR, valR]).
+ */
+export function bindVizLfo(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizLfoApplies.set(id, (v) => {
+    dv.set(
+      v.map((x) => (typeof x === "number" && Number.isFinite(x) ? x : 0)),
+    );
+  });
+  return () => {
+    vizLfoApplies.delete(id);
   };
 }
 

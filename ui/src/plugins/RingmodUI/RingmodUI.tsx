@@ -1,9 +1,8 @@
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { Header } from '../../components';
-import { Button, Buttons, Knob, State, Toggle, WithInfo } from '../../widgets';
+import { Button, Knob, State, Toggle, WaveformButtons, WithInfo } from '../../widgets';
 import { paramIds } from '../../generated/ringmodModel';
 import {
-  RINGMOD_WAVE_ENTRIES,
   ringmodParamDefault,
   type IRingmodHost,
 } from '../../host/ringmodHost';
@@ -193,13 +192,11 @@ export function RingmodUI(props: RingmodUIProps) {
             <Button label="Reset" onClick={() => host.pulseReset(1)} />
           </WithInfo>
           <WithInfo title={ringmodInfo.lfo1Mode} className="info-block wave">
-            <Buttons
-              layout="horizontal"
-              entries={RINGMOD_WAVE_ENTRIES}
-              value={Math.round(lfo1Mode)}
+            <WaveformButtons
+              value={lfo1Mode}
               onChange={(v) => {
                 host.beginEdit(paramIds.lfo1_mode);
-                host.lfo1Mode$.set(v as number);
+                host.lfo1Mode$.set(v);
                 host.endEdit(paramIds.lfo1_mode);
               }}
             />
@@ -289,13 +286,11 @@ export function RingmodUI(props: RingmodUIProps) {
 
         <div className="footer-row">
           <WithInfo title={ringmodInfo.modMode} className="info-block wave">
-            <Buttons
-              layout="horizontal"
-              entries={RINGMOD_WAVE_ENTRIES}
-              value={Math.round(modMode)}
+            <WaveformButtons
+              value={modMode}
               onChange={(v) => {
                 host.beginEdit(paramIds.mod_mode);
-                host.modMode$.set(v as number);
+                host.modMode$.set(v);
                 host.endEdit(paramIds.mod_mode);
               }}
             />
@@ -397,13 +392,11 @@ export function RingmodUI(props: RingmodUIProps) {
         <div className="footer-row">
           <State state$={host.lfo2Activity$} />
           <WithInfo title={ringmodInfo.lfo2Mode} className="info-block wave">
-            <Buttons
-              layout="horizontal"
-              entries={RINGMOD_WAVE_ENTRIES}
-              value={Math.round(lfo2Mode)}
+            <WaveformButtons
+              value={lfo2Mode}
               onChange={(v) => {
                 host.beginEdit(paramIds.lfo2_mode);
-                host.lfo2Mode$.set(v as number);
+                host.lfo2Mode$.set(v);
                 host.endEdit(paramIds.lfo2_mode);
               }}
             />

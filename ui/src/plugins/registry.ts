@@ -15,7 +15,8 @@ export type PluginId =
   | "harmonics"
   | "analyzer"
   | "filter"
-  | "ringmod";
+  | "ringmod"
+  | "pulsator";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
 
@@ -36,6 +37,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   analyzer: () => import("./AnalyzerUI/BoundAnalyzerUI"),
   filter: () => import("./FilterUI/BoundFilterUI"),
   ringmod: () => import("./RingmodUI/BoundRingmodUI"),
+  pulsator: () => import("./PulsatorUI/BoundPulsatorUI"),
 };
 
 export function isPluginId(id: string): id is PluginId {

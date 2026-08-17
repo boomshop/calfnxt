@@ -1,0 +1,13 @@
+{
+  "bypass": false,
+  "mode": 0,
+  "amount": 1,
+  "offset_l": 0,
+  "offset_r": 0.5,
+  "mono": false,
+  "reset": 0,
+  "pulsewidth": 3,
+  "sync": false,
+  "bpm": 120,
+  "ms": 500
+}

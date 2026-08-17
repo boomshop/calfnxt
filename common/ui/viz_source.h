@@ -211,6 +211,21 @@ public:
 
   /** Stream id for ringmod effective controls (nullptr = do not flush). */
   virtual const char* vizRingmodEffectiveId() const { return nullptr; }
+
+  /**
+   * Pulsator LFO display: [phaseL, valL, phaseR, valR]
+   * phases in 0…1, values bipolar (−amount…+amount). Returns 4, or 0 if unused.
+   * Flushed as {t:"viz", id, kind:"lfo", v:[…]}.
+   */
+  virtual int takePulsatorLfo(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for pulsator LFO display (nullptr = do not flush). */
+  virtual const char* vizPulsatorId() const { return nullptr; }
 };
 
 } // namespace Ui

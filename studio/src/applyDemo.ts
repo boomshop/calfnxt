@@ -15,6 +15,7 @@ import type {
   IAnalyzerHost,
   IFilterHost,
   IRingmodHost,
+  IPulsatorHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -298,6 +299,26 @@ export function applyRingmodDemo(
   host.lfoActivity$.set([0.55, 0.4]);
   host.lfo1Activity$.set(0.55);
   host.lfo2Activity$.set(0.4);
+}
+
+export function applyPulsatorDemo(
+  host: IPulsatorHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.mode$, params.mode);
+  setNum(host.amount$, params.amount);
+  setNum(host.offsetL$, params.offset_l);
+  setNum(host.offsetR$, params.offset_r);
+  setBool(host.mono$, params.mono);
+  setNum(host.pulseWidth$, params.pulsewidth);
+  setBool(host.sync$, params.sync);
+  setNum(host.bpm$, params.bpm);
+  setNum(host.ms$, params.ms);
+  applySharedViz(viz);
+  host.lfo$.set([0.22, 0.55, 0.72, -0.4]);
+  host.hostTempo$.set([1, 120]);
 }
 
 export function applyDelayDemo(
@@ -662,4 +683,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   analyzer: applyAnalyzerDemo as DemoApplier,
   filter: applyFilterDemo as DemoApplier,
   ringmod: applyRingmodDemo as DemoApplier,
+  pulsator: applyPulsatorDemo as DemoApplier,
 };

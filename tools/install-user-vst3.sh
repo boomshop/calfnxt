@@ -39,6 +39,7 @@ declare -A PLUGIN_TARGET=(
   [analyzer]=calfnxt-analyzer
   [filter]=calfnxt-filter
   [ringmod]=calfnxt-ringmod
+  [pulsator]=calfnxt-pulsator
 )
 declare -A PLUGIN_VST3=(
   [equalizer]=calfNXTEqualizer
@@ -56,6 +57,7 @@ declare -A PLUGIN_VST3=(
   [analyzer]=calfNXTAnalyzer
   [filter]=calfNXTFilter
   [ringmod]=calfNXTRingmodulator
+  [pulsator]=calfNXTPulsator
 )
 
 usage() {
