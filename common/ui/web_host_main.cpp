@@ -53,7 +53,8 @@ struct HostState
   /** Short burst of 1px Configure after load — same signal as a user resize. */
   guint nudgeSource = 0;
   int nudgeTries = 0;
-  bool liveExposeLogged = false;
+  /** Wayland: keep Configure-nudging; knob paints are JS-local, not evalJs. */
+  guint liveNudgeSource = 0;
 };
 
 HostState g;
@@ -433,25 +434,23 @@ void syntheticConfigure(const char* why)
     hostLog("[calfnxt-web-host] nudge %s %dx%d\n", why, w, h);
 }
 
-void kickExpose()
+gboolean onLiveNudge(gpointer)
 {
   if (!g.plug)
-    return;
-  GdkWindow* win = gtk_widget_get_window(g.plug);
-  if (!win)
-    return;
-  gtk_widget_queue_draw(g.plug);
-  if (g.webview)
-    gtk_widget_queue_draw(GTK_WIDGET(g.webview));
-  Display* dpy = GDK_WINDOW_XDISPLAY(win);
-  exposeXid(dpy, gdk_x11_window_get_xid(win));
-  if (g.parentXid)
-    exposeXid(dpy, static_cast<Window>(g.parentXid));
-  if (!g.liveExposeLogged)
   {
-    g.liveExposeLogged = true;
-    hostLog("[calfnxt-web-host] nudge live-expose\n");
+    g.liveNudgeSource = 0;
+    return G_SOURCE_REMOVE;
   }
+  syntheticConfigure(nullptr);
+  return G_SOURCE_CONTINUE;
+}
+
+void startLiveNudge()
+{
+  if (g.liveNudgeSource || !std::getenv("WAYLAND_DISPLAY"))
+    return;
+  g.liveNudgeSource = g_timeout_add(33, onLiveNudge, nullptr);
+  hostLog("[calfnxt-web-host] nudge live-cfg 33ms\n");
 }
 
 gboolean onNudge(gpointer)
@@ -463,6 +462,7 @@ gboolean onNudge(gpointer)
   if (g.nudgeTries >= 4)
   {
     g.nudgeSource = 0;
+    startLiveNudge();
     return G_SOURCE_REMOVE;
   }
   return G_SOURCE_CONTINUE;
@@ -470,7 +470,9 @@ gboolean onNudge(gpointer)
 
 void scheduleNudge()
 {
-  if (g.nudgeSource)
+  if (g.nudgeSource || g.liveNudgeSource)
+    return;
+  if (!std::getenv("WAYLAND_DISPLAY"))
     return;
   g.nudgeTries = 0;
   g.nudgeSource = g_timeout_add(80, onNudge, nullptr);
@@ -687,7 +689,6 @@ void evalJs(const char* js)
         g_object_unref(value);
     },
     nullptr);
-  kickExpose();
 }
 
 /** Probe DOM/CSS sizes after load — distinguishes layout-0 vs paint/compositing hole. */
@@ -1072,7 +1073,7 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=present-xwayland-2 hw-accel=%s\n", noGpu ? "never" : "always");
+  hostLog("[calfnxt-web-host] build=present-xwayland-3 hw-accel=%s\n", noGpu ? "never" : "always");
   if (envFlag("CALFNXT_WEB_DEBUG"))
   {
     hostLog("[calfnxt-web-host] env dmabuf_disable=%s compositing_disable=%s no_gpu=%s\n",
@@ -1154,6 +1155,11 @@ int main(int argc, char** argv)
   {
     g_source_remove(g.nudgeSource);
     g.nudgeSource = 0;
+  }
+  if (g.liveNudgeSource)
+  {
+    g_source_remove(g.liveNudgeSource);
+    g.liveNudgeSource = 0;
   }
   releaseFrameClock();
   if (g.plug)

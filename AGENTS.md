@@ -139,8 +139,8 @@ Do **not** call `restartComponent` / begin/perform/end from `setComponentHandler
 `WebEditor` (proxy): IRunLoop ~16 ms pumps the socket + param/viz flush.
 `calfnxt-web-host`: HW accel **on** by default (`ALWAYS`); force software with
 `CALFNXT_WEB_NO_GPU=1` if the embed paints blank/transparent. XWayland/GNOME:
-after load, synthetic Configure (1px bump + parent Expose) so WebKit presents
-without a host resize (`build=present-xwayland-2`). Diagnostics always
+after load, synthetic Configure (1px bump) plus a 33 ms live nudge on
+Wayland so knobs keep presenting (`build=present-xwayland-3`). Diagnostics always
 append to `/tmp/calfnxt-ui.log` (URI misses, JS errors). Env reference: `README.md`.
 GtkPlug size sync, `web-process-terminated` → reload + `{t:"_ready"}`.
 Verify Ardour-safe link: `ldd …/*.so` must not list `libgtk-3` / `libwebkit`.
