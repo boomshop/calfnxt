@@ -30,21 +30,21 @@ More Calf-heritage processors planned.
 Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring back
 `Calf Next`, `CalfNext`, `calf-next`, `calf_next`, `calfNative`.
 
-| Kind | Value |
-|------|--------|
-| Display / vendor | `calfNXT` |
-| Vendor URL / email | `https://calfnxt.org`, `mailto:schmidt@boomshop.net` |
-| C++ namespace | `calfNXT` |
-| CMake project / libs | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui` |
-| Plugin targets | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-expander`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics`, `calfnxt-analyzer`, `calfnxt-filter`, `calfnxt-ringmod` |
-| VST3 package / `.so` | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTExpander`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics`, `calfNXTAnalyzer`, `calfNXTFilter`, `calfNXTRingmodulator` (must match; Carla/JUCE) |
-| Install names | `~/.vst3/calfNXTEqualizer.vst3`, …, `calfNXTFilter.vst3`, `calfNXTRingmodulator.vst3` |
-| URI scheme | `calfnxt://bundle/...` |
-| JS bridge | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ` |
-| Script message handler | `webkit.messageHandlers.calfnxt` |
-| Env flags | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU` (full list in `README.md`) |
-| Install (packaging) | `cmake --install` → `${prefix}/${CALFNXT_VST3_INSTALL_DIR}` (default `lib/vst3`); user copy via `./tools/install-user-vst3.sh` `[plugin…]` / `[--dest dir]` |
-| Msg type (TS) | `calfNXTMsg` |
+| Kind                   | Value                                                                                                                                                                                                                                                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Display / vendor       | `calfNXT`                                                                                                                                                                                                                                                                                                           |
+| Vendor URL / email     | `https://calfnxt.org`, `mailto:schmidt@boomshop.net`                                                                                                                                                                                                                                                                |
+| C++ namespace          | `calfNXT`                                                                                                                                                                                                                                                                                                           |
+| CMake project / libs   | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui`                                                                                                                                                                                                                                                            |
+| Plugin targets         | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-expander`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics`, `calfnxt-analyzer`, `calfnxt-filter`, `calfnxt-ringmod`                 |
+| VST3 package / `.so`   | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTExpander`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics`, `calfNXTAnalyzer`, `calfNXTFilter`, `calfNXTRingmodulator` (must match; Carla/JUCE) |
+| Install names          | `~/.vst3/calfNXTEqualizer.vst3`, …, `calfNXTFilter.vst3`, `calfNXTRingmodulator.vst3`                                                                                                                                                                                                                               |
+| URI scheme             | `calfnxt://bundle/...`                                                                                                                                                                                                                                                                                              |
+| JS bridge              | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ`                                                                                                                                                                                                                                                    |
+| Script message handler | `webkit.messageHandlers.calfnxt`                                                                                                                                                                                                                                                                                    |
+| Env flags              | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU` (full list in `README.md`)                                                                                                                                                                                                   |
+| Install (packaging)    | `cmake --install` → `${prefix}/${CALFNXT_VST3_INSTALL_DIR}` (default `lib/vst3`); user copy via `./tools/install-user-vst3.sh` `[plugin…]` / `[--dest dir]`                                                                                                                                                         |
+| Msg type (TS)          | `calfNXTMsg`                                                                                                                                                                                                                                                                                                        |
 
 Classic upstream “Calf Studio Gear” may still be mentioned as the DSP heritage; that is not this product name.
 
@@ -83,6 +83,7 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 **Two value spaces:** plain (dB etc., UI + DSP) vs VST normalized `0…1` (host).
 
 ### Host/DSP → UI
+
 1. `process()`: `syncParamPlains(data, params_, kParamCount)` — one pass over host queues
    (`setNormalized`), then fill **plain** array from Parameters (auxvst-style; not O(n×queues)).
 2. Plugin DSP reads `params_[kParam…]` (plain: dB, etc.). Do **not** store 0…1 in DSP.
@@ -93,14 +94,17 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 5. AUX widget via `use-aux-widgets` (`value$`, Fader often `sync: true`).
 
 ### UI → Host/DSP
+
 1. Gesture: `begin` / `end` (`composeInteractingOnSet` on Fader/Knob).
 2. `set`: TS posts `{t:"set",id,v}`; **injected bridge** converts to fixed-point `q`/`d` (WebKit IPC was coercing floats to ints).
 3. C++: `plain=q/d` → `toNormalized` → `setParamNormalized` + `performEdit` (echo suppressed).
 
 ### Host default quirks (Carla etc.)
+
 Do **not** call `restartComponent` / begin/perform/end from `setComponentHandler` or `setActive` — Qtractor SIGSEGVs on that re-entrancy. Defaults live on Parameter objects (`getParamNormalized`); after `setState`, `notifyHostStateRestored()` only snapshots plains + suppress-stomps (no host restart).
 
 ### Real fixes — do not “clean up” as debug junk
+
 - Polling + param dependents
 - Queue → `setNormalized` inside `syncParamPlains`
 - UI→host `q`/`d`
@@ -182,7 +186,7 @@ cmake --build build --target calfnxt-plugins -j
 
 UI pack alone (no install): `cd ui && npm run build -- mbcomp` (or omit the id for all plugins).
 
-Install paths (user default): `~/.vst3/calfNXTEqualizer.vst3`, … `calfNXTMbcomp.vst3`  
+Install paths (user default): `~/.vst3/calfNXTEqualizer.vst3`, … `calfNXTMbcomp.vst3`
 System / packaging: `${CMAKE_INSTALL_PREFIX}/${CALFNXT_VST3_INSTALL_DIR}/` (default `lib/vst3`).
 
 Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
@@ -253,49 +257,42 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
 ## Open / deferred
 
-1. Optional binary/base64 spectrum payloads (JSON headroom at high bin counts).
-2. **Plugin backlog** (Calf heritage → calfNXT name; order not fixed):
-   - Multi Chorus → **Chorus**
-   - **Phaser**
-   - **Flanger**
-   - **Pulsator**
-   - ~~**Ring Modulator**~~ (done)
-   - ~~Gate / Sidechain Gate → **Expander**~~ (done)
-   - **Vinyl**
-   - **Crusher**
-   - **Mono Input**
-   - Optional: **Vocoder** (FIR-based if done)
-   - Optional: **Crossovers** (dynamic band count if done)
-3. macOS / Windows WebView hosts.
-4. Optional: compare `examples/auxvst` WebView hosting; optional SVF upgrade if steep bass still artifacts.
-5. EQ spectrum overlay (reuse `SpectrumTap`, fixed bins) — API ready, UI not yet.
+- Multi Chorus → **Chorus**
+- **Phaser**
+- **Flanger**
+- **Pulsator**
+- **Vinyl**
+- **Crusher**
+- **Mono Input**
+- Optional: **Vocoder** (FIR-based if done)
+- Optional: **Crossovers** (dynamic band count if done)
 
 ---
 
 ## Quick file index
 
-| Concern | Files |
-|---------|--------|
-| Editor / bridge | `common/ui/web_editor.{h,cpp}`, `web_host_main.cpp`, `viz_source.h` |
-| DSP base / I/O / peaks / EQ | `common/dsp/effect_base.*`, `io_stage.h`, `peak_hold.h`, `biquad.h`, `eq_band.h`, `compressor.h` |
-| Reference (WebView/params) | `examples/auxvst/` (call it **auxvst**, not MDA) |
-| Equalizer DSP | `dsp/equalizer/source/*_dsp.*` |
-| Stereo DSP | `dsp/stereo/source/*_dsp.*` |
-| Transients DSP | `dsp/transients/source/*_dsp.*`, `common/dsp/transients.h` |
-| Compressor DSP | `dsp/compressor/source/*_dsp.*`, `common/dsp/compressor.h`, `common/dsp/sidechain_filter.h` |
-| Expander DSP | `dsp/expander/source/*_dsp.*`, `common/dsp/expander.h`, `common/dsp/sidechain_filter.h` |
-| DeEsser DSP | `dsp/deesser/source/*_dsp.*`, `common/dsp/deesser_detector.h`, `common/dsp/band_splitter.h` (Ess/Rumble target) |
-| Delay DSP | `dsp/delay/source/*_dsp.*`, `common/dsp/sidechain_filter.h`, `common/dsp/smooth_gain.h` |
-| Reverb DSP | `dsp/reverb/source/*_dsp.*`, `common/dsp/reverb_*.h`, `common/dsp/delay_line.h` |
-| Multiband Compressor | `dsp/mbcomp/source/*_dsp.*`, `common/dsp/band_splitter.h`, `common/dsp/compressor.h`; UI `ui/src/plugins/MbcompUI/*`, `host/mbcompHost.ts`, `widgets/MultibandChart/*`, `widgets/BandBridgeChart/*` |
-| Limiter | `dsp/limiter/source/*_dsp.*`, `common/dsp/lookahead_limiter.h`, `common/dsp/resample_n.h`; UI `ui/src/plugins/LimiterUI/*`, `host/limiterHost.ts` |
-| Multiband Limiter | `dsp/mblimiter/source/*_dsp.*`, `band_splitter.h`, `lookahead_limiter.h`; UI `ui/src/plugins/MblimiterUI/*`, `host/mblimiterHost.ts` |
-| Harmonics | `dsp/harmonics/source/*_dsp.*`, `common/dsp/tap_distortion.h`; UI `ui/src/plugins/HarmonicsUI/*`, `host/harmonicsHost.ts` |
-| Analyzer | `dsp/analyzer/source/*_dsp.*`, `common/dsp/fft_r2.h`, `common/dsp/spectrum_tap.h`; UI `ui/src/plugins/AnalyzerUI/*`, `host/analyzerHost.ts`, `widgets/SpectrumChart/*` |
-| Filter DSP | `dsp/filter/source/*_dsp.*`, `common/dsp/multimode_filter.h`, `common/dsp/inertia.h` |
-| Ring Modulator DSP | `dsp/ringmod/source/*_dsp.*`, `common/dsp/simple_lfo.h` |
-| Param bind | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts` |
-| Header I/O | `ui/src/components/Header/*`, `host/headerMeters.ts` |
-| Meters | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*` |
-| Codegen | `tools/codegen/generate_plugin.py` |
-| Release / SemVer | `VERSIONING.md`, `tools/release.sh` |
+| Concern                     | Files                                                                                                                                                                                               |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Editor / bridge             | `common/ui/web_editor.{h,cpp}`, `web_host_main.cpp`, `viz_source.h`                                                                                                                                 |
+| DSP base / I/O / peaks / EQ | `common/dsp/effect_base.*`, `io_stage.h`, `peak_hold.h`, `biquad.h`, `eq_band.h`, `compressor.h`                                                                                                    |
+| Reference (WebView/params)  | `examples/auxvst/` (call it **auxvst**, not MDA)                                                                                                                                                    |
+| Equalizer DSP               | `dsp/equalizer/source/*_dsp.*`                                                                                                                                                                      |
+| Stereo DSP                  | `dsp/stereo/source/*_dsp.*`                                                                                                                                                                         |
+| Transients DSP              | `dsp/transients/source/*_dsp.*`, `common/dsp/transients.h`                                                                                                                                          |
+| Compressor DSP              | `dsp/compressor/source/*_dsp.*`, `common/dsp/compressor.h`, `common/dsp/sidechain_filter.h`                                                                                                         |
+| Expander DSP                | `dsp/expander/source/*_dsp.*`, `common/dsp/expander.h`, `common/dsp/sidechain_filter.h`                                                                                                             |
+| DeEsser DSP                 | `dsp/deesser/source/*_dsp.*`, `common/dsp/deesser_detector.h`, `common/dsp/band_splitter.h` (Ess/Rumble target)                                                                                     |
+| Delay DSP                   | `dsp/delay/source/*_dsp.*`, `common/dsp/sidechain_filter.h`, `common/dsp/smooth_gain.h`                                                                                                             |
+| Reverb DSP                  | `dsp/reverb/source/*_dsp.*`, `common/dsp/reverb_*.h`, `common/dsp/delay_line.h`                                                                                                                     |
+| Multiband Compressor        | `dsp/mbcomp/source/*_dsp.*`, `common/dsp/band_splitter.h`, `common/dsp/compressor.h`; UI `ui/src/plugins/MbcompUI/*`, `host/mbcompHost.ts`, `widgets/MultibandChart/*`, `widgets/BandBridgeChart/*` |
+| Limiter                     | `dsp/limiter/source/*_dsp.*`, `common/dsp/lookahead_limiter.h`, `common/dsp/resample_n.h`; UI `ui/src/plugins/LimiterUI/*`, `host/limiterHost.ts`                                                   |
+| Multiband Limiter           | `dsp/mblimiter/source/*_dsp.*`, `band_splitter.h`, `lookahead_limiter.h`; UI `ui/src/plugins/MblimiterUI/*`, `host/mblimiterHost.ts`                                                                |
+| Harmonics                   | `dsp/harmonics/source/*_dsp.*`, `common/dsp/tap_distortion.h`; UI `ui/src/plugins/HarmonicsUI/*`, `host/harmonicsHost.ts`                                                                           |
+| Analyzer                    | `dsp/analyzer/source/*_dsp.*`, `common/dsp/fft_r2.h`, `common/dsp/spectrum_tap.h`; UI `ui/src/plugins/AnalyzerUI/*`, `host/analyzerHost.ts`, `widgets/SpectrumChart/*`                              |
+| Filter DSP                  | `dsp/filter/source/*_dsp.*`, `common/dsp/multimode_filter.h`, `common/dsp/inertia.h`                                                                                                                |
+| Ring Modulator DSP          | `dsp/ringmod/source/*_dsp.*`, `common/dsp/simple_lfo.h`                                                                                                                                             |
+| Param bind                  | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts`                                                                                                                                                |
+| Header I/O                  | `ui/src/components/Header/*`, `host/headerMeters.ts`                                                                                                                                                |
+| Meters                      | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*`                                                                                                                                                       |
+| Codegen                     | `tools/codegen/generate_plugin.py`                                                                                                                                                                  |
+| Release / SemVer            | `VERSIONING.md`, `tools/release.sh`                                                                                                                                                                 |
