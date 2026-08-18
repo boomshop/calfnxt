@@ -5,756 +5,333 @@
 </p>
 
 **calfNXT** is the successor to [Calf Studio Gear](https://calf-studio-gear.org):
-a greenfield **VST3** plugin suite with a React + AUX web UI (Linux first).
-WebKitGTK runs in a separate **`calfnxt-web-host`** process (X11 embed) so the
-plugin `.so` stays free of GTK — required for hosts like Ardour. Parts of the
-classic Calf DSP are reused but substantially reworked; more processors will
-follow over time.
+a **VST3** plugin suite with a React + AUX web UI (**Linux + X11**). WebKitGTK
+runs in a separate **`calfnxt-web-host`** process (X11 embed) so the plugin `.so`
+stays free of GTK — required for hosts like Ardour. Classic Calf DSP heritage is
+reused where it fits, substantially reworked for this stack.
 
-Project site: [https://calfnxt.org](https://calfnxt.org/)
-
-Branding / namespace: **calfNXT**. Shared React SPA UI, packed per plugin into
-each `.vst3` bundle’s `Resources/`.
-
-This project is free software licensed under the **GNU General Public License
-v3 or later** — see [`LICENSE`](LICENSE) and [`COPYRIGHT`](COPYRIGHT).
-
-For architecture and agent handoff, see [`ARCHITECTURE.md`](ARCHITECTURE.md)
-and [`AGENTS.md`](AGENTS.md). Suite SemVer rules: [`VERSIONING.md`](VERSIONING.md).
+- Site: [https://calfnxt.org](https://calfnxt.org/)
+- Branding / namespace: **calfNXT** (shared SPA packed per plugin into each
+  `.vst3` `Resources/`)
+- License: **GNU GPL v3 or later** — [`LICENSE`](LICENSE), [`COPYRIGHT`](COPYRIGHT)
+- Architecture / agent handoff: [`ARCHITECTURE.md`](ARCHITECTURE.md),
+  [`AGENTS.md`](AGENTS.md)
+- Suite SemVer: [`VERSIONING.md`](VERSIONING.md)
 
 ### Scope
 
-calfNXT is a **personal studio project**: plugins I need for my own work, built
-in spare time — not a product roadmap or a community product org. If it helps
-you too, great; if not, that’s fine. Bug reports and distro packaging help are
-welcome. Feature requests and pull requests for things outside this VST3/Linux
-scope (or that I simply don’t need) may be declined without a long debate —
-forking is explicitly encouraged. That narrower focus is intentional; classic
-Calf’s “take every request” culture is one of the things this project is trying
-not to repeat.
+A **personal studio project** — the set of processors I use myself; not a
+product org or feature bazaar. Bug reports and packaging help are welcome.
+Feature requests or PRs outside this VST3/Linux focus (or that I simply don’t
+need) may be declined; forking is encouraged. Classic Calf’s “take every
+request” culture is one of the things this project is trying not to repeat.
+
+DSP heritage from Calf (LGPL-2.1) is used under the GPL as permitted by the LGPL.
+UI building blocks include GPL-licensed `@deutschesoft/aux-widgets` / AWML.
 
 ---
 
 ## Plugins
 
-Early public preview (**Linux + X11** hosts). More processors from classic Calf
-will follow.
+Install paths are always `~/.vst3/<Bundle>` (or `$CALFNXT_VST3_DIR` /
+`cmake --install` — see [Build and install](#build-and-install)). Every effect
+shares **In/Out gain + peak meters** in the header (not repeated below).
 
-| Plugin | Bundle | Role |
-|--------|--------|------|
-| **Equalizer** | `calfNXTEqualizer.vst3` | 16-band parametric / dyn EQ |
-| **Stereo** | `calfNXTStereo.vst3` | Width, M/S, decorrelation, imaging |
-| **Transients** | `calfNXTTransients.vst3` | Attack / release shaper (sensitivity, soft clip) |
-| **Compressor** | `calfNXTCompressor.vst3` | Feed-forward dynamics (threshold / ratio / knee) |
-| **Expander** | `calfNXTExpander.vst3` | Downward expander / gate with hysteresis + hold |
-| **Multiband Compressor** | `calfNXTMbcomp.vst3` | 2–6 band LR dynamics with per-band history |
-| **Limiter** | `calfNXTLimiter.vst3` | Lookahead brickwall with ASC + oversampling |
-| **Multiband Limiter** | `calfNXTMblimiter.vst3` | Weighted multiband brickwall + final limiter |
-| **Harmonics** | `calfNXTHarmonics.vst3` | Saturator / Exciter / Bass Enhancer — Drive, Blend, Asym, Tone, OS |
-| **Analyzer** | `calfNXTAnalyzer.vst3` | Spectrum + gonio/correlation monitor (passthrough) |
-| **Filter** | `calfNXTFilter.vst3` | Multimode filter + optional envelope follower |
-| **Ring Modulator** | `calfNXTRingmodulator.vst3` | Stereo ring mod + dual LFOs (Calf heritage) |
-| **Pulsator** | `calfNXTPulsator.vst3` | Tremolo / autopanner with dual-phase LFO chart |
-| **Crusher** | `calfNXTCrusher.vst3` | Bit crusher with live response heat |
-| **Phaser** | `calfNXTPhaser.vst3` | Stereo allpass phaser with live L/R response |
-| **Flanger** | `calfNXTFlanger.vst3` | Stereo delay flanger with live L/R response |
-| **Chorus** | `calfNXTChorus.vst3` | Multi-tap chorus with LFO position charts |
-| **DeEsser** | `calfNXTDeesser.vst3` | Sibilance / rumble control (Ess / Rumble, Wide / Split) |
-| **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo / Ping-Pong / L-R) |
-| **Reverb** | `calfNXTReverb.vst3` | Algorithmic room (ER + late, no IR) |
+| Plugin | Bundle | Highlights |
+|--------|--------|------------|
+| **Equalizer** | `calfNXTEqualizer.vst3` | 16-band parametric / dyn EQ; Listen; Mono; interactive response |
+| **Stereo** | `calfNXTStereo.vst3` | Width, M/S, decorrelator, imaging; gonio + correlation |
+| **Transients** | `calfNXTTransients.vst3` | Attack/release shaper; sensitivity; lookahead; HP/LP; envelope history |
+| **Compressor** | `calfNXTCompressor.vst3` | Feed-forward GR; Peak/RMS/Opto; sidechain HP/LP; history |
+| **Expander** | `calfNXTExpander.vst3` | Downward expander/gate; hysteresis + hold; dual transfer curves |
+| **DeEsser** | `calfNXTDeesser.vst3` | Ess/Rumble; Wide/Split; detector HP/LP + peaking; history |
+| **Multiband Compressor** | `calfNXTMbcomp.vst3` | 2–6 LR bands; per-band dynamics; Mono; response + history |
+| **Limiter** | `calfNXTLimiter.vst3` | Lookahead brickwall; ASC; OS 1–4×; True Peak; Diff Listen |
+| **Multiband Limiter** | `calfNXTMblimiter.vst3` | Weighted multi-band brickwall + final limiter; Mono |
+| **Harmonics** | `calfNXTHarmonics.vst3` | Saturator / Exciter / Bass; Feed→shape→Post; Drive/Blend/Asym/Tone/OS |
+| **Analyzer** | `calfNXTAnalyzer.vst3` | Spectrum + spectralizer + gonio/correlation (passthrough) |
+| **Filter** | `calfNXTFilter.vst3` | Multimode LP/HP/BP/BR/AP; optional envelope; Mono; spectrum overlay |
+| **Ring Modulator** | `calfNXTRingmodulator.vst3` | Stereo ring mod; dual LFOs; live effective knobs |
+| **Pulsator** | `calfNXTPulsator.vst3` | Tremolo / autopanner; tempo sync; dual-phase LFO chart |
+| **Crusher** | `calfNXTCrusher.vst3` | Bit crusher; response heat chart |
+| **Phaser** | `calfNXTPhaser.vst3` | Allpass phaser; LFO freeze/Reset; live L/R response chart |
+| **Flanger** | `calfNXTFlanger.vst3` | Delay comb + feedback; LFO freeze/Reset; comb peak/notch chart |
+| **Chorus** | `calfNXTChorus.vst3` | Multi-tap (≤8 voices); LFO position charts; post FrequencyRange |
+| **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo/Ping-Pong/L-R); tempo sync; echo charts |
+| **Reverb** | `calfNXTReverb.vst3` | Algorithmic ER + late (no IR); duck/gate/freeze; room presets |
 
-### Equalizer
-
-- Fixed **16 bands** (peaking, shelves, LP/HP with 12/24/36/48 dB slopes, band-pass)
-- Per-band **Dynamic EQ** (detector-matched GR on peaking / shelves / BP)
-- **Listen** solos one band’s detector into the output
-- Header **Mono** switch: process Left only, copy to both outs (~½ filter CPU)
-- Interactive frequency response (static handles + dyn effective-gain ghosts)
-- Shared In/Out gain + peak meters
-
-### Stereo
-
-- Mode matrix (LR↔MS, mono folds, L/R swap, …) with live bus labels
-- Mid/Side level & pan/balance, optional **decorrelator** (amount, xover, slope, stages, spread)
-- Per-channel mute / phase, stereo delay, base width, stereo phase, output balance
-- **Goniometer** + correlation meter
-
-### Transients
-
-- Independent **attack / release** boost with time constants and sustain threshold
-- **Sensitivity** as rise threshold (dB) — ignore HF flutter, catch clearer hits
-- Optional **lookahead** (host PDC); wet/dry **mix**; **Delta** listen (wet − dry)
-- Detector **HP/LP** (12/24/36/48 dB) + listen; stereo **link** (Max / Avg / Mid)
-- Soft **clip** only while attack boost pushes peaks; scrolling **envelope history**
-  (dry / filtered / output · envelope / attack / release)
-
-### Compressor
-
-- Calf-heritage **feed-forward** gain reduction (shared `GainReduction` with DynEQ)
-- **Peak / RMS / Opto** detector modes; **Max / Avg / Mid** stereo link; adjustable **PDR**
-- Sidechain **HP/LP** (shared `SidechainFilter` + `FrequencyRange` UI) with listen
-- Threshold, ratio, soft **knee**, attack / release, makeup, wet/dry **mix**, bypass
-- **GR meter** + AUX transfer curve with live DSP operating point
-- Scrolling **history** chart (audio peak + GR over time, selectable window)
-
-### Expander
-
-- Calf Gate–heritage **downward expander** / gate (`GainExpansion`)
-- **Open** + **release** thresholds (hysteresis), optional **hold**, ratio, soft **knee**, **range** floor
-- **Peak / RMS / Opto** detector; **Max / Avg / Mid** stereo link
-- Sidechain **HP/LP** with listen; bypass
-- Dual transfer curves (open + release) + live operating point; **GR meter**
-- Scrolling **history** (audio / filtered detector / GR)
-
-### Multiband Compressor
-
-- **2–6** Linkwitz-Riley bands; adjustable **crossovers** and slope (**24 / 48 / 96** dB/oct)
-- Per-band compressor (threshold, ratio, knee, attack / release, makeup, mix, detector mode / link / PDR)
-- Band **bypass** / **listen**; selection opens the detail strip (transfer curve + full dynamics)
-- Header **Mono** switch: Left-only crossover + dynamics, copy to both outs (big CPU save on steep slopes)
-- Frequency **response chart** with threshold handles; **bridge** guides to per-band strips
-- Per-band **history** (full-range / band peak / GR), In/Out/GR meters
-- Shared In/Out gain + peak meters
-
-### Limiter
-
-- Calf-heritage **lookahead brickwall** with gliding look changes (click-free) and host latency
-- **ASC** adaptive release, selectable gain **curves** (Lin / Log / Cos), soft **knee**
-- **Oversampling** (1–4×), optional **True Peak** (+ margin), **Auto Level** makeup
-- Character: pre-limit **Color**, release **Hold**, program **Emphasis**; **Diff Listen**
-- **GR meter** + scrolling history (audio peak + GR)
-- Shared In/Out gain + peak meters
-
-### Multiband Limiter
-
-- **2–6** Linkwitz-Riley bands (same splitter/slope as Multiband Compressor); band count −/+ in the header
-- Per-band **weight** and relative **release** (Calf-style interdependence via shared multi-coefficient)
-- Per-band listen, In/Out/GR meters, scrolling history; crossover chart with **GR curves** (no thresholds) + band bridge
-- Header **Mono** switch: Left-only crossover path, copy to both outs (CPU win with many bands / steep slopes)
-- Shared master limiter block (Limit / Attenuation / Character, **Min Release**) + **final broadband** brickwall after the sum
-- Shared In/Out gain + peak meters
-
-### Harmonics
-
-- Merged Calf **Saturator / Exciter / Bass Enhancer**: Feed filters → TAP waveshaper → Post filters
-- Parallel mix: **Dry** = raw input; **Wet** = toned(shaped − clean) (no cancellation notches)
-- **Drive** / **Blend** (even↔odd); **Asymmetry** bias; **Tone** (shelf tracks Feed∩Post band centre); **Oversampling** 1×…4×
-- Presets Wide / Exciter / Bass; live **transfer curve** + relative **harmonic bars**
-- Shared In/Out gain + peak meters
-
-### Analyzer
-
-- Monitor-only passthrough with shared **`SpectrumTap`** (Hann FFT 1k/2k/4k/8k, log bins, EMA ~100 ms for Average/L/R + max-hold)
-- Modes: **Average**, **Max**, **Stereo** (L/R), **Difference** (calm L−R dB), **Spectralizer** (scrolling canvas waterfall)
-- **Scale**: Linear / −3 dB/oct (pink) / −4.5 dB/oct (modern) with midband ±6 dB balance corridor when tilted
-- **Hold** freezes peak-hold; always-on **goniometer** + **correlation**
-- Shared In/Out gain + peak meters; spectrum layout ready for a future EQ overlay
-
-### Filter
-
-- Multimode **LP / HP / BP / BR / Allpass** (12/24/48 dB LP/HP; Calf-style BP/BR) with Resonance + Frequency + Inertia
-- Optional **Envelope** follower: Peak / RMS / Opto detector → cutoff between Frequency and Target
-- **Mix** dry/wet (always; complementary dry for LP/HP when Resonance is moderate)
-- **Soft** clip on the wet path to tame hot resonance
-- Header **Mono** switch: process Left only, copy to both outs (~½ filter CPU)
-- Optional **spectrum** overlay on the response chart (post-filter, same tilts as Equalizer)
-- Response chart (Frequency + Target handles when Envelope is on; live cutoff when Envelope moves)
-- Shared In/Out gain + peak meters
-
-### Ring Modulator
-
-- Stereo **ring modulation** (carrier × input) with dry blend via Amount
-- Carrier: Frequency, Amount, Phase (R vs L), Detune (cents), Waveform (Sine / Triangle / Square / Saw), Listen
-- **LFO 1** → Modulator Frequency and/or Detune (Min/Max + Active; Min≤Max clamp)
-- **LFO 2** → LFO 1 Frequency and/or Amount (Min/Max + Active)
-- Default start: **LFO1→Freq** on with range 200…4000 Hz
-- Overridden knobs show live effective value + label hint (`· LFO1` / `· LFO2`) and warn LED
-- LFO activity LEDs + Reset; shared In/Out gain + peak meters
-
-### Pulsator
-
-- Stereo **tremolo / autopanner** (Calf heritage): two phase-offset LFOs modulate amplitude
-- Timing like Delay: **Tempo** ↔ **Beat ms** (0.5…300 BPM / 0.2 s…2 min), optional **Host Sync**, Tap Tempo; Reset phases
-- Mode: Sine / Triangle / Square / Saw up / Saw down; Pulse Width; Amount; Offset L/R; Mono-in
-- Live dual-waveform chart with phase dots; ~1.5 ms gain slew against square/saw clicks
-- Shared In/Out gain + peak meters
-
-### Crusher
-
-- Calf-heritage **bit crusher** (no sample-rate reduction)
-- Bit Reduction (continuous 1…16), Mix, DC asymmetry, soft-step “Anti-Aliasing”, Linear / Logarithmic
-- Response chart: crushed sine probe with live heat + active zone (Harmonics-style)
-- Shared In/Out gain + peak meters
-
-### Phaser
-
-- Calf-heritage **stereo allpass phaser** (cascaded first-order APs + feedback)
-- Center / Depth (cents) / Rate / Feedback / Stages / Stereo phase / Amount / Dry
-- LFO freeze + Reset; Power mutes wet (Dry + In/Out stay)
-- Live L/R frequency response (`ModulationChart`, shared with Flanger)
-- Shared In/Out gain + peak meters
-
-### Flanger
-
-- Calf-heritage **stereo delay flanger** (single-tap delay comb + feedback)
-- Min Delay / Depth (ms) / Rate / Feedback / Stereo phase / Amount / Dry
-- LFO freeze + Reset; Power mutes wet (Dry + In/Out stay)
-- Live L/R comb peaks & notches (`ModulationChart` `mode="comb"`)
-- Shared In/Out gain + peak meters
-
-### Chorus
-
-- Calf-heritage **multi-tap chorus** (no feedback; up to 8 voices)
-- Min Delay / Depth / Rate / Voices / VPhase / Overlap / Stereo / Amount / Dry
-- Soft Power; LFO freeze + Reset; post-filter **FrequencyRange** (LR slopes on wet only)
-- Dual **ChorusChart** LFO panels (depth dots + rate sines) — not `ModulationChart`
-- Shared In/Out gain + peak meters
-
-### DeEsser
-
-- Calf-heritage dynamics: **Wide** (full-band GR) or **Split** (Linkwitz-Riley band only)
-- **Ess / Rumble** target: Ess = detection HP + Split reduces the high band; Rumble flips to LP + low band (no preset swap — retune Split/Peak yourself)
-- Detection chain: multi-slope HP/LP (12/24/48 dB, resonant Q) + **peaking** EQ; Peak / RMS / Opto
-- Threshold, ratio, **laxity** (attack/release), makeup, listen (detector solo)
-- **GR meter** + history (input / filtered detector / GR)
-- Shared In/Out gain + peak meters
-
-### Delay
-
-- Calf-heritage dual delay: **Stereo** / **Ping-Pong** / **L then R** / **R then L**
-- Timing: linked **Tempo** ↔ **Beat ms**, optional **Host Sync** (shows host BPM), **Tap Tempo**
-- **Subdivide** + Time L/R; feedback, wet/dry levels, stereo width
-- **Active** gates delay-line input only (trails ring out)
-- Feedback **FrequencyRange** (HP/LP)
-- Predictive L/R **echo charts** (DSP-matched levels, hybrid time window, fixed bar width)
-- Shared In/Out gain + peak meters
-
-### Reverb
-
-- Algorithmic go-to room (no impulse responses): improved Calf **allpass-loop late** + switchable **Early Reflections**
-- ER modes: **Multi-Tap** / **Velvet**; path **Parallel** or **Serial** (ER→Late)
-- Continuous **room size** (meters), **distance** macro, ms/SR-correct delays, predelay **on late only**
-- Pre-late **diffusion**, HF/LF damp, air shelf, mod rate/depth
-- Wet **width**: Mid/Side, Haas, or decorrelate
-- **Duck**, **Gate** (hold/release), **Freeze**
-- AUX **Reverb** chart (dry / ER / predelay / late) + room presets (Booth / Room / Chamber / Hall / Plate / Arena / Gated)
-- Shared In/Out gain + peak meters
-
----
-
-## License
-
-calfNXT is released under the **GNU GPL version 3 (or later)**.
-
-- Full license text: [`LICENSE`](LICENSE)
-- Copyright, warranty disclaimer, and third-party notes: [`COPYRIGHT`](COPYRIGHT)
-
-DSP heritage from Calf Studio Gear (LGPL-2.1) is used under the GPL as
-permitted by the LGPL. UI building blocks include GPL-licensed
-`@deutschesoft/aux-widgets` / AWML.
+Site and per-plugin descriptors: [calfnxt.org](https://calfnxt.org/),
+`dsp/<id>/<id>.plugin.json`.
 
 ---
 
 ## Dependencies
 
-Target platform today: **Linux + X11** (the editor forces the GDK X11 backend for host embedding).
+Target: **Linux + X11** (the editor forces the GDK X11 backend for host embedding).
 
 ### Tools
 
-| Tool | Role | Notes |
-|------|------|--------|
-| **CMake** ≥ 3.25 | Build | |
-| **C/C++ toolchain** (GCC or Clang) | Compile plugins | C++17 |
-| **pkg-config** | Find GTK / WebKit | |
-| **Python 3** | Parameter codegen | Interpreter only |
-| **Node.js** + **npm** | React / Vite UI | Required for a normal UI build; not needed with `CALFNXT_USE_PREBUILT_UI=ON` |
+| Tool | Role |
+|------|------|
+| **CMake** ≥ 3.25 | Build |
+| **GCC or Clang** (C++17) | Compile |
+| **pkg-config** | Find GTK / WebKit |
+| **Python 3** | Parameter codegen |
+| **Node.js** + **npm** | React / Vite UI (not needed with `CALFNXT_USE_PREBUILT_UI=ON`) |
 
-Optional: **Ninja** (faster CMake generator).
+Optional: **Ninja**.
 
 ### System libraries (pkg-config)
 
-CMake requires these modules (see root `CMakeLists.txt`):
-
-| pkg-config id | Purpose |
-|---------------|---------|
+| Module | Purpose |
+|--------|---------|
 | `gtk+-3.0` | GtkPlug / X11 embed (**only** in `calfnxt-web-host`, not the `.so`) |
-| `webkit2gtk-4.1` | WebKitGTK editor in `calfnxt-web-host` |
+| `webkit2gtk-4.1` | WebKitGTK in `calfnxt-web-host` (do **not** substitute 4.0) |
 
-Related runtime pieces (usually pulled in as dependencies of the packages above): GLib, GObject, Cairo, Soup, X11.
+Usually pulled in as deps: GLib, GObject, Cairo, Soup, X11.
+
+**Arch / CachyOS:**
+
+```bash
+sudo pacman -S --needed base-devel cmake ninja pkgconf python nodejs npm gtk3 webkit2gtk-4.1
+```
+
+**Debian / Ubuntu:**
+
+```bash
+sudo apt install --no-install-recommends \
+  build-essential cmake ninja-build pkg-config python3 nodejs npm \
+  libgtk-3-dev libwebkit2gtk-4.1-dev
+```
+
+Host for testing (e.g. **Carla**, Ardour) is not required to compile.
 
 ### Steinberg VST3 SDK
 
-The SDK lives at `external/vst3sdk/` and is **not** always shipped inside this git tree (it is large). After cloning calfNXT, clone the SDK there if missing:
+Lives at `external/vst3sdk/` (often not in this git tree). If missing:
 
 ```bash
 git clone --recursive https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
-# Optional pin, e.g.:
-#   git -C external/vst3sdk checkout v3.8.0_build_66
-#   git -C external/vst3sdk submodule update --init --recursive
+# Optional pin, e.g. v3.8.0_build_66 + submodule update --init --recursive
 ```
 
-VSTGUI is **disabled** in this project (`SMTG_ENABLE_VSTGUI_SUPPORT=OFF`); you only need the core SDK sources that CMake already pulls in.
+VSTGUI is disabled (`SMTG_ENABLE_VSTGUI_SUPPORT=OFF`).
 
-### npm packages (UI)
+### npm (UI)
 
-Installed automatically when CMake builds the UI (`npm ci` in `ui/` when
-`node_modules` is missing, otherwise `npm run build` only), or manually:
-
-```bash
-cd ui && npm ci
-```
-
-Main UI stack: React, Vite, TypeScript, Sass, `@deutschesoft/aux-widgets`, `@deutschesoft/awml`, `@deutschesoft/use-aux-widgets`.
+CMake runs `npm ci` in `ui/` when `node_modules` is missing, otherwise
+`npm run build` only. Manual: `cd ui && npm ci`. Stack: React, Vite, TypeScript,
+Sass, `@deutschesoft/aux-widgets`, `awml`, `use-aux-widgets`.
 
 ### Packaging / offline UI
 
-Distro builds often have **no network** during `%build`. calfNXT keeps `ui/dist`
-out of git and publishes a **prebuilt UI tarball** on each GitHub Release instead.
+`ui/dist` is **not** in git. Each GitHub Release ships a **prebuilt UI tarball**.
 
-1. **Source0** — sources for tag `vX.Y.Z` (e.g. `calfnxt-X.Y.Z.tar.gz` from the release, or a git archive).
-2. **Source1** — `calfnxt-X.Y.Z-ui-dist.tar.xz` (+ checksum from the matching `.sha256` asset).
-3. In `%prep`, unpack Source1 at the **source tree root** so `ui/dist/` (including `.stamp`) appears.
-4. Configure with prebuilt UI (no Node/npm required for the SPA):
+1. **Source0** — sources for tag `vX.Y.Z`
+2. **Source1** — `calfnxt-X.Y.Z-ui-dist.tar.xz` (+ `.sha256`)
+3. Unpack Source1 at the **source tree root** so `ui/dist/` (incl. `.stamp`) appears
+4. Configure without Node:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCALFNXT_USE_PREBUILT_UI=ON
 cmake --build build --target calfnxt-plugins -j
-# system-wide (packaging): DESTDIR + prefix — default libdir/vst3 (e.g. /usr/lib/vst3)
 DESTDIR=/tmp/pkgroot cmake --install build --prefix /usr
-# optional override: -DCALFNXT_VST3_INSTALL_DIR=lib64/vst3
+# optional: -DCALFNXT_VST3_INSTALL_DIR=lib64/vst3
 ```
 
-Developer / local install still defaults to `~/.vst3`. Override the destination
-or limit to one plugin while iterating:
+Fetching Source0/Source1 before the build is fine; `npm` / registry access during
+`%build` must stay offline. The VST3 SDK remains a separate dependency.
+
+Release helper (bump, tag, ui-dist asset, GitHub Release):
 
 ```bash
-./tools/install-user-vst3.sh                    # all plugins → ~/.vst3
-./tools/install-user-vst3.sh mbcomp             # one plugin (faster)
-./tools/install-user-vst3.sh --dest /usr/lib/vst3 mbcomp
-# or: CALFNXT_VST3_DIR=/usr/lib/vst3 cmake --build build --target install-user-vst3-copy
-```
-
-Fetching Source0/Source1 (with checksums) before the build is normal and allowed;
-what must stay offline is `npm install` / registry access during compile.
-The VST3 SDK remains a separate dependency (`external/vst3sdk` or a distro package).
-
-Upstream release helper (bumps version, tags, builds the ui-dist asset, pushes,
-creates the GitHub Release):
-
-```bash
-./tools/release.sh          # prints current version, then asks for the new one
+./tools/release.sh          # asks for the new version
 ./tools/release.sh minor    # or patch / major / X.Y.Z
 ```
 
-See [`VERSIONING.md`](VERSIONING.md) for when to bump patch vs minor vs major.
-
-### Distro package examples
-
-**Arch / CachyOS** (headers ship with the runtime packages):
-
-```bash
-sudo pacman -S --needed \
-  base-devel cmake ninja pkgconf python \
-  nodejs npm \
-  gtk3 webkit2gtk-4.1
-```
-
-**Debian / Ubuntu** (names vary slightly by release; you need the `-dev` packages):
-
-```bash
-sudo apt update
-sudo apt install --no-install-recommends \
-  build-essential cmake ninja-build pkg-config python3 \
-  nodejs npm \
-  libgtk-3-dev libwebkit2gtk-4.1-dev
-```
-
-If `pkg-config --exists webkit2gtk-4.1` fails, install the matching WebKitGTK 4.1 development package for your distro (do **not** substitute `webkit2gtk-4.0` — CMake asks for **4.1**).
-
-### Host for testing
-
-Any VST3 host that loads `~/.vst3` (e.g. **Carla**, Ardour). Not required to compile.
+See [`VERSIONING.md`](VERSIONING.md).
 
 ---
 
-## Getting started (fresh clone)
+## Build and install
+
+Hosts load plugins from `~/.vst3/` (or a packaging prefix) — **not** from the
+CMake build tree alone. Flow after DSP/UI changes: **build → embed UI into
+`Resources/` → install**.
+
+### Fresh clone
 
 ```bash
-git clone <this-repo-url> calfnxt
-cd calfnxt
-
-# VST3 SDK (if not already present)
+git clone <this-repo-url> calfnxt && cd calfnxt
 git clone --recursive https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
 
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target calfnxt-plugins -j
-# or: ./tools/install-user-vst3.sh  (force-rebuilds UI + embeds + installs)
-cmake --build build --target install-user-vst3
+./tools/install-user-vst3.sh          # all plugins → ~/.vst3 (UI rebuild + embed + copy)
+# or stepwise:
+#   cmake --build build --target calfnxt-plugins -j
+#   cmake --build build --target install-user-vst3
 ```
 
-Then rescan plugins in your host. Bundles appear as:
+Then rescan in the host. Bundles: `~/.vst3/calfNXTEqualizer.vst3`, …
+`calfNXTChorus.vst3`, … (names match the [Plugins](#plugins) table).
 
-| Plugin    | Path                         |
-|-----------|------------------------------|
-| Equalizer | `~/.vst3/calfNXTEqualizer.vst3` |
-| Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
-| Transients | `~/.vst3/calfNXTTransients.vst3` |
-| Compressor | `~/.vst3/calfNXTCompressor.vst3` |
-| Expander  | `~/.vst3/calfNXTExpander.vst3`  |
-| Multiband Compressor | `~/.vst3/calfNXTMbcomp.vst3` |
-| Limiter   | `~/.vst3/calfNXTLimiter.vst3`   |
-| Multiband Limiter | `~/.vst3/calfNXTMblimiter.vst3` |
-| Harmonics | `~/.vst3/calfNXTHarmonics.vst3` |
-| Analyzer  | `~/.vst3/calfNXTAnalyzer.vst3`  |
-| Filter    | `~/.vst3/calfNXTFilter.vst3`    |
-| Ring Modulator | `~/.vst3/calfNXTRingmodulator.vst3` |
-| Pulsator | `~/.vst3/calfNXTPulsator.vst3` |
-| Crusher   | `~/.vst3/calfNXTCrusher.vst3`   |
-| Phaser    | `~/.vst3/calfNXTPhaser.vst3`    |
-| Flanger   | `~/.vst3/calfNXTFlanger.vst3`   |
-| Chorus    | `~/.vst3/calfNXTChorus.vst3`    |
-| DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
-| Delay     | `~/.vst3/calfNXTDelay.vst3`     |
-| Reverb    | `~/.vst3/calfNXTReverb.vst3`    |
+### Day-to-day
 
----
+| Goal | Command |
+|------|---------|
+| All plugins + embed + `~/.vst3` | `./tools/install-user-vst3.sh` |
+| One plugin (fast iterate) | `./tools/install-user-vst3.sh mbcomp` |
+| Custom dest | `./tools/install-user-vst3.sh --dest /usr/lib/vst3 mbcomp` |
+| UI pack only (no install) | `cd ui && npm run build -- mbcomp` (omit id = all) |
+| DSP/C++ only, then install | `cmake --build build --target calfnxt-plugins -j` then `install-user-vst3` / the script |
+| System install (packaging) | `cmake --install build --prefix /usr` → `$prefix/lib/vst3` |
+| Single cmake targets | `cmake --build build --target calfnxt-<id> calfnxt-<id>-resources -j` then `install-user-vst3-copy` |
 
-## Build and install (what hosts actually load)
+A Vite build **alone** does not update the VST editor — Resources must be
+re-embedded (the install script does that). Plugin ids for the script / Vite:
+`equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay`
+`reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter`
+`ringmod` `pulsator` `crusher` `phaser` `flanger` `chorus`.
 
-Hosts such as Carla load plugins from `~/.vst3/`, **not** from the CMake build tree alone.  
-After UI or DSP changes you typically need: **build → embed UI into Resources → install to `~/.vst3`**.
+Codegen is part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++
+params + `ui/src/generated/`).
 
-### Full rebuild (DSP + plugins + UI embed)
-
-```bash
-cmake --build build --target calfnxt-plugins -j
-cmake --build build --target install-user-vst3
-# equivalent shortcut (also clears UI stamps so Resources always refresh):
-#   ./tools/install-user-vst3.sh
-# while working on one plugin only (UI + embed + copy that bundle):
-#   ./tools/install-user-vst3.sh mbcomp
-```
-
-`calfnxt-plugins` builds **every** plugin (Equalizer, Stereo, Transients, Compressor,
-Expander, Multiband Compressor, Limiter, DeEsser, Delay, Reverb, …) and embeds each
-UI pack. `install-user-vst3` / `./tools/install-user-vst3.sh` then copies the bundles into `~/.vst3/`:
-
-| Plugin    | Path                         |
-|-----------|------------------------------|
-| Equalizer | `~/.vst3/calfNXTEqualizer.vst3` |
-| Stereo    | `~/.vst3/calfNXTStereo.vst3`    |
-| Transients | `~/.vst3/calfNXTTransients.vst3` |
-| Compressor | `~/.vst3/calfNXTCompressor.vst3` |
-| Expander  | `~/.vst3/calfNXTExpander.vst3`  |
-| DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
-| Delay     | `~/.vst3/calfNXTDelay.vst3`     |
-| Reverb    | `~/.vst3/calfNXTReverb.vst3`    |
-| Multiband Compressor | `~/.vst3/calfNXTMbcomp.vst3` |
-| Limiter   | `~/.vst3/calfNXTLimiter.vst3` |
-| Multiband Limiter | `~/.vst3/calfNXTMblimiter.vst3` |
-| Harmonics | `~/.vst3/calfNXTHarmonics.vst3` |
-| Analyzer  | `~/.vst3/calfNXTAnalyzer.vst3`  |
-| Filter    | `~/.vst3/calfNXTFilter.vst3`    |
-| Ring Modulator | `~/.vst3/calfNXTRingmodulator.vst3` |
-| Pulsator | `~/.vst3/calfNXTPulsator.vst3` |
-| Crusher   | `~/.vst3/calfNXTCrusher.vst3`   |
-| Phaser    | `~/.vst3/calfNXTPhaser.vst3`    |
-| Flanger   | `~/.vst3/calfNXTFlanger.vst3`   |
-| Chorus    | `~/.vst3/calfNXTChorus.vst3`    |
-
-Rescan / reload the plugins in the host after install.
-
-### UI-only changes (React / SCSS / widgets)
-
-A Vite build **alone** does **not** update what the VST editor shows.  
-You must copy the SPA into each bundle’s `Resources/`:
-
-```bash
-# all plugins
-./tools/install-user-vst3.sh
-# one plugin while iterating (recommended — skips the other Vite packs)
-./tools/install-user-vst3.sh mbcomp
-# UI pack only (no CMake / no ~/.vst3 copy):
-cd ui && npm run build -- mbcomp
-# or manually via cmake after a full/partial SPA build:
-cmake --build build --target calfnxt-mbcomp-resources -j
-cmake --build build --target install-user-vst3-copy -j
-```
-
-`npm run build` / `node scripts/build-plugins.mjs` runs one Vite build per selected
-plugin id → `ui/dist/plugins/<id>/`. Omit ids to rebuild every pack.
-
-### DSP / C++ only
-
-```bash
-cmake --build build --target calfnxt-plugins -j
-cmake --build build --target install-user-vst3
-```
-
-Re-run `*-resources` (or `./tools/install-user-vst3.sh [plugin…]`) as well if the UI also changed.
-
----
-
-## Browser / HMR development (not the VST embed)
+### Browser HMR (not the VST embed)
 
 ```bash
 cd ui && npm install   # once
-cd ui && npm run dev
+cd ui && npm run dev   # e.g. http://localhost:5173/#chorus
 ```
 
-Open e.g. http://localhost:5173/#equalizer · `#stereo` · `#transients` · `#compressor` · `#deesser` · `#delay` · `#reverb` · `#mbcomp` · `#limiter` · `#mblimiter` · `#harmonics` · `#analyzer` · `#filter` · `#ringmod` · `#pulsator` · `#crusher`
+Useful for layout/widgets; does **not** replace `~/.vst3` for hosts.
 
-This is useful for layout and widget work. It does **not** replace installing into `~/.vst3` for Carla / other hosts.
-
-### Website screenshots (optional Studio)
-
-Refresh `website/images/*.png` with static demo data (Playwright). Install only if
-you need it — see [`studio/README.md`](studio/README.md).
+### Website screenshots (optional)
 
 ```bash
-cd studio && npm install    # once (downloads Chromium)
-npm run studio              # from repo root — all plugins
-npm run studio -- mbcomp    # one plugin
+cd studio && npm install    # once (Chromium)
+npm run studio              # from repo root — all / one plugin
 ```
 
----
-
-## Quick reference
-
-| Goal                         | Command |
-|-----------------------------|---------|
-| Configure                   | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` |
-| Build **all** plugins (+ UI)| `cmake --build build --target calfnxt-plugins -j` |
-| Embed SPA + install (all)   | `./tools/install-user-vst3.sh` or `cmake --build build --target install-user-vst3` |
-| Embed + install **one** plugin | `./tools/install-user-vst3.sh mbcomp` (ids: `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay` `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter` `ringmod` `pulsator` `crusher`) |
-| UI pack only (one / all)    | `cd ui && npm run build -- mbcomp` or `npm run build` |
-| System install (packaging)  | `cmake --install build --prefix /usr` (→ `$prefix/lib/vst3`) |
-| Cut a GitHub release        | `./tools/release.sh` (see `VERSIONING.md`) |
-| Single plugin (cmake only)  | `cmake --build build --target calfnxt-<id> calfnxt-<id>-resources -j` then `install-user-vst3-copy` |
-| UI HMR in the browser       | `cd ui && npm run dev` |
-| Website UI screenshots      | `cd studio && npm i` then `npm run studio` (see `studio/README.md`) |
+See [`studio/README.md`](studio/README.md).
 
 ---
 
 ## Environment variables
 
-Runtime / tooling knobs read from the process environment. Boolean-style flags
-are **on** when the variable is set to any non-empty value (e.g. `1`).
+Boolean-style flags are **on** when set to any non-empty value (e.g. `1`).
+Editor / WebKit vars must be in the **plugin host** environment (`calfnxt-web-host`
+inherits via `posix_spawn`). Example: `CALFNXT_WEB_DEBUG=1 carla …`.
 
 ### Editor / WebKit (`calfnxt-web-host`)
 
-Set these in the **plugin host** environment (the helper inherits it via
-`posix_spawn`). Example: `CALFNXT_WEB_DEBUG=1 carla …`.
-
 | Variable | Values | Effect |
 |----------|--------|--------|
-| `CALFNXT_UI_SCALE` | float ≈ `0.05`…`8` | Forces editor scale instead of measuring CSS vs host pixels (HiDPI). Examples: `1`, `1.35`, `2`. Invalid / out-of-range → ignored. |
-| `CALFNXT_WEB_DEBUG` | any non-empty | Extra logging to stderr; also enables WebKit developer extras and console→stdout. Diagnostics always append to `/tmp/calfnxt-ui.log`. |
-| `CALFNXT_WEB_INSPECTOR` | any non-empty | Opens the WebKit Web Inspector on editor load (also enables developer extras). |
-| `CALFNXT_WEB_NO_GPU` | any non-empty | WebKit hardware acceleration **off** (`NEVER`). Default without this flag is **on** (`ALWAYS`). Use if the embed paints blank/transparent on your GPU stack. |
-| `CALFNXT_XWAYLAND_NUDGE` | any non-empty | Opt-in workaround for GNOME/Mutter + Ardour on Wayland (black / frozen editor). See [Editor black or frozen on GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland). Off by default. Must be in the **plugin host** environment. |
+| `CALFNXT_UI_SCALE` | float ≈ `0.05`…`8` | Force editor scale (HiDPI) instead of measuring CSS vs host pixels. Invalid → ignored. |
+| `CALFNXT_WEB_DEBUG` | non-empty | Extra stderr logging; WebKit developer extras + console→stdout. Always also logs to `/tmp/calfnxt-ui.log`. |
+| `CALFNXT_WEB_INSPECTOR` | non-empty | Open WebKit Inspector on editor load. |
+| `CALFNXT_WEB_NO_GPU` | non-empty | Hardware accel **off** (`NEVER`). Default is **on** (`ALWAYS`). Use if the embed paints blank. |
+| `CALFNXT_XWAYLAND_NUDGE` | non-empty | Opt-in GNOME/Mutter + Ardour on Wayland workaround. **Off by default.** See [Editor black or frozen on GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland). |
 
-Related (not calfNXT-owned, but often useful with WebKitGTK / X11 embed):
+Related (not calfNXT-owned):
 
 | Variable | Notes |
 |----------|--------|
-| `GDK_BACKEND=x11` | Force X11 for the helper when the session is Wayland-only. |
-| `WEBKIT_DISABLE_DMABUF_RENDERER` | WebKitGTK blank-window workaround on some drivers; set yourself if needed. |
-| `WEBKIT_DISABLE_COMPOSITING_MODE` | Last-resort WebKit compositing disable; not set by calfNXT. |
+| `GDK_BACKEND=x11` | Force X11 for the helper on Wayland-only sessions. |
+| `WEBKIT_DISABLE_DMABUF_RENDERER` | Blank-window workaround on some drivers; set yourself if needed. |
+| `WEBKIT_DISABLE_COMPOSITING_MODE` | Last-resort compositing disable; not set by calfNXT. |
 | `DISPLAY` | Required for the X11 `GtkPlug` embed. |
 
-### Install / packaging helpers
+### Install helpers
 
-| Variable | Values | Effect |
-|----------|--------|--------|
-| `CALFNXT_VST3_DIR` | absolute path | Destination for `install-user-vst3-copy` / `./tools/install-user-vst3.sh` (default `~/.vst3`). Example: `./tools/install-user-vst3.sh --dest /usr/lib/vst3 mbcomp`. |
-| `BUILD_DIR` | path | Override build tree for `./tools/install-user-vst3.sh` (default `<repo>/build`). |
-| `JOBS` | integer | Parallelism for that script’s `cmake --build` (default `nproc`). |
+| Variable | Effect |
+|----------|--------|
+| `CALFNXT_VST3_DIR` | Dest for user install (default `~/.vst3`). |
+| `BUILD_DIR` | Build tree for `./tools/install-user-vst3.sh` (default `<repo>/build`). |
+| `JOBS` | Parallelism for that script (default `nproc`). |
 
-### CMake options (not environment variables)
-
-Configure-time `-D` flags, documented here so they are not confused with `getenv`:
+### CMake options (`-D`, not `getenv`)
 
 | Option | Effect |
 |--------|--------|
-| `CALFNXT_USE_PREBUILT_UI=ON` | Use committed/unpacked `ui/dist` (needs `.stamp`); no `npm` during build. |
-| `CALFNXT_VST3_INSTALL_DIR` | Relative path under prefix for `cmake --install` (default `${CMAKE_INSTALL_LIBDIR}/vst3`). |
-| `CALFNXT_USER_VST3_DIR` | Cache default for user-copy install when `CALFNXT_VST3_DIR` env is unset. |
+| `CALFNXT_USE_PREBUILT_UI=ON` | Use unpacked `ui/dist` (needs `.stamp`); no `npm` during build. |
+| `CALFNXT_VST3_INSTALL_DIR` | Path under prefix for `cmake --install` (default `${CMAKE_INSTALL_LIBDIR}/vst3`). |
+| `CALFNXT_USER_VST3_DIR` | Cache default for user-copy when `CALFNXT_VST3_DIR` is unset. |
 
 ---
 
 ## Editor black or frozen on GNOME/Wayland
 
-This is the long form of the `CALFNXT_XWAYLAND_NUDGE` row above. The short
-version: **VST3 Linux editors are X11-only**. On a GNOME Wayland session that
-embed runs under **XWayland**. Mutter often only commits the parent Wayland
-surface when it sees a **Configure** (a real window resize). WebKit has already
-painted; the compositor just does not show the new buffers until then.
+Long form of `CALFNXT_XWAYLAND_NUDGE`. **VST3 Linux editors are X11-only.** On
+GNOME Wayland that embed runs under **XWayland**. Mutter often only commits the
+parent Wayland surface on a real **Configure** (window resize). WebKit has
+already painted; the compositor does not show new buffers until then.
 
 The workaround is **opt-in** and **off by default**. Native GNOME on Xorg, and
 Qt hosts such as Carla, typically do not need it.
 
 ### Symptoms
 
-On **Ardour** under **GNOME/Mutter on Wayland** (reproduced on Debian Trixie and
-Ubuntu 26.04):
+On **Ardour** under **GNOME/Mutter on Wayland** (Debian Trixie, Ubuntu 26.04):
 
-1. The plugin **loads** and the editor window opens at the design size.
-2. The surface stays **black** (or empty) until you **resize** the editor.
-3. After that, **knobs, meters, and other live UI** only update on the **next**
-   resize. Parameter changes from the host still reach the DSP; only the
-   **pixels** stay stale.
+1. Plugin loads; editor opens at design size.
+2. Surface stays **black** until you **resize** the editor.
+3. After that, knobs/meters/UI only update on the **next** resize. Host→DSP still
+   works; **pixels** stay stale.
 
-The same binary is fine in:
+Fine in: browser HMR, **GNOME on Xorg**, **Carla** on Wayland.
 
-- a normal browser (`cd ui && npm run dev` — no XEmbed, no XWayland parent);
-- **GNOME on Xorg** (real X11, no XWayland);
-- **Carla** on Wayland (Qt embedder; different present path).
+`/tmp/calfnxt-ui.log` can look healthy without the workaround (`force-alloc`,
+`map-ok`, `load-finished`, correct viewport). This is **not** a missing package,
+failed UI build, or React loading flash. `kids=0` in `_diag` is a red herring
+(probe can run before React mounts).
 
-Diagnostics in `/tmp/calfnxt-ui.log` look **healthy** without the workaround:
-`force-alloc`, `map-ok` / `map-already`, `load-finished`, CSS viewport matching
-the host, scale 1. This is **not** a missing package, a failed UI build, or a
-React `Suspense`/`Loading` flash. Production plugin entries do not use the
-dev-only loading shell in `App.tsx`. Seeing the full UI after the first commit
-also does **not** mean later frames will present — that is a separate Mutter
-commit, not a first-paint SPA issue.
+### Why
 
-`kids=0` in `_diag` is a red herring: the probe can run before React mounts, and
-the same line appears on working X11 hosts.
+Hosts hand an **X11 embed window ID**. calfNXT must not link GTK/WebKit into the
+`.so` (Ardour toolkit collision), so **`calfnxt-web-host`** does GtkPlug +
+WebKit, XEmbedded into that XID, JSON over a socketpair. On Wayland that tree is
+under **XWayland**. Pixels exist; the parent `wl_surface` present fails without
+Configure. Resize generates Configure — hence “just resize it.”
 
-### Why this stack behaves that way
-
-Linux VST3 plugin views are still **X11 `X11EmbedWindowID`**. There is no
-standard Wayland view type for this, so every host (Ardour, Carla, Qtractor, …)
-hands the plugin an **X11 window ID**. calfNXT must not link GTK/WebKit into the
-plugin `.so` (Ardour’s internalized toolkit collides with system GTK3). So the
-editor is a thin proxy in the host process that spawns **`calfnxt-web-host`**:
-GTK3 `GtkPlug` + WebKitGTK, **XEmbedded** into that foreign XID, talking JSON
-over a Unix socketpair.
-
-On a Wayland session that X11 tree is hosted by **XWayland**. WebKit composites
-into its own buffers (often DMA-BUF / GPU). The pixels exist. What fails is the
-**present** of the **parent** `wl_surface` that Mutter associates with the
-Ardour editor socket: without a Configure, the compositor keeps showing the
-previous (often empty) commit. A user drag-resize generates exactly that
-Configure, which is why “just resize it” appears to fix both first paint and
-later knob motion.
-
-JUCE 8’s Linux WebView is the same class of stack (WebKitGTK + GtkPlug
-subprocess) and has the same family of black / stuck Linux reports. This is not
-unique to calfNXT’s React UI.
-
-### Where a real fix would live
-
-Application-side workarounds cannot make Mutter treat an XWayland child present
-as a reason to commit the parent. A proper fix belongs in one of:
-
-- **Mutter / XWayland** — commit the parent `wl_surface` when an embedded X11
-  child presents, not only on Configure;
-- **WebKitGTK / GDK** — a reliable present path for a `GtkPlug` inside a
-  *foreign* XID (not a normal top-level GTK window);
-- **the VST3 Linux view ABI** — a native Wayland surface so the editor is not
-  an XEmbed tree at all.
-
-Until one of those exists, hosts that embed X11 on Wayland will keep hitting
-this. Many Linux apps still do not support Wayland correctly; that is why this
-workaround stays **explicit** rather than on for everyone.
+JUCE 8’s Linux WebView is the same class of stack. A proper fix belongs in
+Mutter/XWayland, WebKitGTK/GDK, or a native Wayland VST3 view ABI — not an
+app-side hack that can be on for everyone.
 
 ### What did not help
 
-These were tried against the tester’s Ardour + GNOME/Wayland setup and either
-did nothing or broke working hosts:
-
-- Defaulting WebKit DMA-BUF or GPU off (`WEBKIT_DISABLE_DMABUF_RENDERER`,
-  `CALFNXT_WEB_NO_GPU`) — GPU-off blanked a working Carla/CachyOS embed.
-- `WEBKIT_DISABLE_COMPOSITING_MODE=1` — still black.
-- `gdk_x11_window_set_frame_sync_enabled(FALSE)` plus holding the GDK frame
-  clock — GtkPlug in Ardour’s foreign XID is not a reliable present path.
-- `XClearArea` / `queue_draw` **without** a size change — first paint still
-  needed a Configure; knobs stayed frozen.
-
-Do **not** `XResizeWindow` the **host’s** foreign parent: that is not our
-window (`BadAccess`).
-
-Environment variables in `~/.bashrc` also do **not** reach Ardour when GNOME
-starts it from the overview / `.desktop` file. The helper inherits the **host
-process** `environ` via `posix_spawn`. If the log shows
+Tried and either useless or harmful on working hosts: defaulting DMA-BUF/GPU off;
+`WEBKIT_DISABLE_COMPOSITING_MODE`; frame-sync / frame-clock tricks; expose
+without a size change; `XResizeWindow` on the **host’s** foreign parent
+(`BadAccess`). Vars in `~/.bashrc` do **not** reach Ardour started from GNOME
+overview — the helper inherits the **host** `environ`. If the log shows
 `xwayland_nudge=(unset)`, the flag never arrived.
 
 ### Workaround: `CALFNXT_XWAYLAND_NUDGE`
 
-Set any non-empty value (typically `1`) in the **plugin host** environment.
-`calfnxt-web-host` then synthesizes the same class of event as a user resize,
-without touching the foreign parent XID:
+Set any non-empty value in the **plugin host** environment. Then
+`calfnxt-web-host`:
 
-1. After `load-finished`, four **Configure bursts** (~80 ms apart):
-   `gdk_window_resize(w, h+1)` then `gdk_window_resize(w, h)` on the GtkPlug
-   and the WebKit widget, plus an Expose. Log lines: `nudge cfg-1` … `cfg-4`
-   at the design size (e.g. `1024x488`). That is usually enough for the **first
-   paint** without a manual resize.
-2. Then a **33 ms live loop** (`nudge live-cfg 33ms`) repeating the same 1px
-   bump for the lifetime of the editor, so knobs, meters, and viz keep
-   presenting.
+1. After `load-finished`, four **Configure bursts** (~80 ms): 1px
+   `gdk_window_resize` bump on GtkPlug + WebKit (`nudge cfg-1` … `cfg-4`) — usually
+   enough for first paint.
+2. A **33 ms live loop** (`nudge live-cfg 33ms`) for the editor lifetime so
+   knobs/viz keep presenting.
 
-Without the flag, the helper behaves like a build that never had this code:
-map-poll, force-alloc, WebKit hardware acceleration `ALWAYS`. Startup log:
+Without the flag, behavior matches a build that never had this code. Cost:
+**CPU / WebKit relayout** of a full SPA — leave unset on Xorg, Carla, and hosts
+that already present. Testers have not reported visible flicker from the 1px bump.
 
-```text
-[calfnxt-web-host] build=nudge-opt-1 hw-accel=always xwayland_nudge=(unset)
-```
-
-With the flag:
-
-```text
-[calfnxt-web-host] build=nudge-opt-1 hw-accel=always xwayland_nudge=1
-[calfnxt-web-host] env dmabuf_disable=(unset) compositing_disable=(unset) no_gpu=(unset) xwayland_nudge=1
-[calfnxt-web-host] nudge cfg-1 1024x488
-[calfnxt-web-host] nudge cfg-2 1024x488
-[calfnxt-web-host] nudge cfg-3 1024x488
-[calfnxt-web-host] nudge cfg-4 1024x488
-[calfnxt-web-host] nudge live-cfg 33ms
-```
-
-The 1px bump is intended to be invisible. Testers have not reported flicker.
-The cost is **CPU / WebKit relayout**: each nudge can relayout a full plugin
-SPA, so the loop is **not** enabled for every user. Leave it unset on Xorg,
-Carla, and any host that already presents.
-
-### How to enable it
-
-The variable must be in **Ardour’s** environment (or whichever host embeds the
-plugin), not only in an interactive shell.
-
-**One session from a terminal** (close Ardour first):
+**One session** (close Ardour first):
 
 ```bash
-CALFNXT_XWAYLAND_NUDGE=1 ardour8
-# or: CALFNXT_XWAYLAND_NUDGE=1 ardour9
+CALFNXT_XWAYLAND_NUDGE=1 ardour8   # or ardour9
 ```
 
-**Session-wide** (GNOME-started hosts, survives logout). Create
-`~/.config/environment.d/calfnxt.conf`:
+**Session-wide** (GNOME-started hosts): `~/.config/environment.d/calfnxt.conf`
 
 ```text
 CALFNXT_XWAYLAND_NUDGE=1
 ```
 
-Then **log out and back in** (or reboot). `systemctl --user import-environment`
-is not enough for an already-running GNOME session in all setups.
-
-Confirm in `/tmp/calfnxt-ui.log` after opening an editor: `xwayland_nudge=1`
-and the `nudge cfg-*` / `live-cfg` lines. If you still see `(unset)`, the host
-was started without that environment — typical when Ardour is launched from the
-GNOME overview while the flag only lives in `.bashrc`.
-
-Optional extras (not required for this workaround): `GDK_BACKEND=x11` if the
-session is Wayland-only and the helper cannot see `DISPLAY`;
-`CALFNXT_WEB_DEBUG=1` for more helper logging on stderr.
-
----
-
-## Notes
-
-- Codegen runs as part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++ params + `ui/src/generated/`).
-- Environment variables: see [Environment variables](#environment-variables) above.
-- The editor UI runs **out-of-process** (`calfnxt-web-host` next to the `.so`) so Ardour does not load GTK3 into its process. Embed is still X11 `GtkPlug`; Wayland-only sessions may need `GDK_BACKEND=x11` for the host/helper. Black or frozen UI on GNOME/Mutter + Ardour: [Editor black or frozen on GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland).
+Then **log out and back in**. Confirm in `/tmp/calfnxt-ui.log`: `xwayland_nudge=1`
+and `nudge cfg-*` / `live-cfg`. Optional: `GDK_BACKEND=x11`, `CALFNXT_WEB_DEBUG=1`.

@@ -21,7 +21,7 @@ internalized toolkit collides with system GTK3 — `GdkDisplay` GType abort).
 Unix socketpair. Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
 
 Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`).
-More Calf-heritage processors planned.
+Suite focus is this set — no near-term new plugins unless explicitly requested.
 
 ---
 
@@ -262,7 +262,9 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
 ---
 
-## Open / deferred
+## Shelved (not a roadmap)
+
+Ideas only if explicitly revived — do not start these unprompted:
 
 - **Vinyl**
 - **Mono Input**
