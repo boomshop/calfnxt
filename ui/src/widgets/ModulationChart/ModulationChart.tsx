@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { FrequencyResponse as AuxFrequencyResponse } from '@deutschesoft/aux-widgets/src/widgets/frequencyresponse.js';
 import type { DynamicValue } from '@deutschesoft/awml';
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
@@ -25,6 +25,7 @@ export const MOD_DB_MAX_DEFAULT = 24;
 export const MOD_VIZ_ID = 'mod';
 /** Match DSP / web_editor response cap. */
 const MAX_BINS = 512;
+const MAX_TEETH = 128;
 
 function parseResponse(raw: number[]): { bins: number; L: Float32Array; R: Float32Array } {
   const bins = Math.max(1, Math.min(MAX_BINS, Math.round(raw[0] ?? 0)));
@@ -56,10 +57,38 @@ function seriesDots(
   return pts;
 }
 
+/** Vertical stems from 0 dB to each peak/notch magnitude. */
+function combStems(
+  raw: number[],
+  channel: 'L' | 'R',
+  dbMin: number,
+  dbMax: number,
+): { x: number; y: number }[] {
+  const nL = Math.max(0, Math.min(MAX_TEETH, Math.round(raw[0] ?? 0)));
+  const nR = Math.max(0, Math.min(MAX_TEETH, Math.round(raw[1] ?? 0)));
+  const n = channel === 'L' ? nL : nR;
+  const base = channel === 'L' ? 2 : 2 + 2 * nL;
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i < n; ++i) {
+    const f = raw[base + 2 * i];
+    const db = raw[base + 2 * i + 1];
+    if (typeof f !== 'number' || !Number.isFinite(f))
+      continue;
+    const y = Math.min(dbMax, Math.max(dbMin, typeof db === 'number' && Number.isFinite(db) ? db : 0));
+    const x = Math.min(F_MAX, Math.max(F_MIN, f));
+    pts.push({ x, y: 0 });
+    pts.push({ x, y });
+    pts.push({ x, y: 0 });
+  }
+  return pts;
+}
+
 export interface ModulationChartProps {
-  /** Viz payload [bins, L×N, R×N] in dB. */
+  /** Viz payload: response [bins,L×N,R×N] or comb [nL,nR,(f,dB)…]. */
   data$: DynamicValue<number[]>;
   vizId?: string;
+  /** `response` = continuous |H| (Phaser). `comb` = peak/notch stems (Flanger). */
+  mode?: 'response' | 'comb';
   /** Y axis in dB (Phaser/Flanger/Chorus share this widget with different spans). */
   dbMin?: number;
   dbMax?: number;
@@ -67,18 +96,14 @@ export interface ModulationChartProps {
 }
 
 /**
- * L/R frequency-response chart for modulation FX (Phaser, Flanger, Chorus).
- * AUX FrequencyResponse + log frequency axis; curves from DSP viz kind "response".
- *
- * Uses polyline (`L`) rather than H2: high-feedback phaser peaks are needle-thin;
- * horizontal smoothing + fake midpoint densify made those look broken.
- * Real EqualizerGraph oversampling needs a continuous |H|(f) — we densify in DSP
- * instead (multi-sample per bin).
+ * L/R modulation chart (Phaser response curve or Flanger comb stems).
+ * AUX FrequencyResponse + log frequency axis.
  */
 export function ModulationChart(props: ModulationChartProps) {
   const {
     data$,
     vizId = MOD_VIZ_ID,
+    mode = 'response',
     dbMin = MOD_DB_MIN_DEFAULT,
     dbMax = MOD_DB_MAX_DEFAULT,
     className,
@@ -87,28 +112,33 @@ export function ModulationChart(props: ModulationChartProps) {
   const chartRef = useRef<AuxFrInstance | null>(null);
   const graphsRef = useRef<AuxGraph[]>([]);
   const dataRef = useRef<number[]>([]);
-  const binsRef = useRef(128);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
-  const [bins, setBins] = useState(128);
-  binsRef.current = bins;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   const applyCurves = useCallback(() => {
     const chart = chartRef.current;
     const graphs = graphsRef.current;
     if (!chart || chart.isDestructed?.() || graphs.length < 2)
       return;
-    const payload = parseResponse(dataRef.current);
-    const n = Math.max(1, payload.bins || binsRef.current);
+    const raw = dataRef.current;
+    if (modeRef.current === 'comb') {
+      graphs[0]?.set('dots', combStems(raw, 'L', dbMin, dbMax));
+      graphs[1]?.set('dots', combStems(raw, 'R', dbMin, dbMax));
+      return;
+    }
+    const payload = parseResponse(raw);
+    const n = Math.max(1, payload.bins);
     graphs[0]?.set('dots', seriesDots(payload.L, n, dbMin, dbMax));
     graphs[1]?.set('dots', seriesDots(payload.R, n, dbMin, dbMax));
   }, [dbMin, dbMax]);
 
   const sendVizBins = useCallback(
     (el: Element) => {
+      if (modeRef.current === 'comb')
+        return;
       const width = Math.round(el.getBoundingClientRect().width);
       const next = Math.max(32, Math.min(MAX_BINS, width));
-      if (next !== binsRef.current)
-        setBins(next);
       postToHost({ t: 'vizcfg', id: vizId, bins: next });
     },
     [vizId],
@@ -116,11 +146,6 @@ export function ModulationChart(props: ModulationChartProps) {
 
   useEffect(() => data$.subscribe((v) => {
     dataRef.current = Array.isArray(v) ? v : [];
-    const n = Math.round(dataRef.current[0] ?? 0);
-    if (n >= 32 && n !== binsRef.current) {
-      binsRef.current = n;
-      setBins(n);
-    }
     applyCurves();
   }), [data$, applyCurves]);
 
@@ -131,7 +156,7 @@ export function ModulationChart(props: ModulationChartProps) {
     chart.set('range_y', { min: dbMin, max: dbMax, scale: 'linear' });
     chart.set('db_grid', 12);
     applyCurves();
-  }, [dbMin, dbMax, bins, applyCurves]);
+  }, [dbMin, dbMax, mode, applyCurves]);
 
   const widgetRef = useCallback(
     (w: AuxFrInstance | null) => {
@@ -151,19 +176,22 @@ export function ModulationChart(props: ModulationChartProps) {
       w.set('range_y', { min: dbMin, max: dbMax, scale: 'linear' });
       w.set('db_grid', 12);
 
-      // Polyline: honest for steep resonant peaks (H2 overshoots / shreds them).
       const gL = w.addGraph({
         type: 'L',
         mode: 'line',
-        class: 'mod-L',
+        class: mode === 'comb' ? 'mod-L mod-stem' : 'mod-L',
       });
       const gR = w.addGraph({
         type: 'L',
         mode: 'line',
-        class: 'mod-R',
+        class: mode === 'comb' ? 'mod-R mod-stem' : 'mod-R',
       });
       gL.element?.classList.add('mod-L');
       gR.element?.classList.add('mod-R');
+      if (mode === 'comb') {
+        gL.element?.classList.add('mod-stem');
+        gR.element?.classList.add('mod-stem');
+      }
       graphsRef.current = [gL, gR];
       applyCurves();
 
@@ -182,11 +210,11 @@ export function ModulationChart(props: ModulationChartProps) {
         resizeRoRef.current = ro;
       }
     },
-    [applyCurves, dbMin, dbMax, sendVizBins],
+    [applyCurves, dbMin, dbMax, mode, sendVizBins],
   );
 
   return (
-    <div className={['ModulationChart', className].filter(Boolean).join(' ')}>
+    <div className={['ModulationChart', mode === 'comb' ? 'is-comb' : '', className].filter(Boolean).join(' ')}>
       <FrWidget className="ModulationChart-aux" widgetRef={widgetRef} />
     </div>
   );

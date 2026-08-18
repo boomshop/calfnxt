@@ -1,0 +1,11 @@
+{
+  "active": true,
+  "min_delay": 0.5,
+  "mod_depth": 2.0,
+  "mod_rate": 0.12,
+  "feedback": 0.8,
+  "stereo": 90,
+  "amount": -6,
+  "dry": 0,
+  "lfo": true
+}

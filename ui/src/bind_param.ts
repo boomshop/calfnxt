@@ -20,6 +20,7 @@ const vizShapeApplies = new Map<string, VizLevelsApply>();
 const vizTempoApplies = new Map<string, VizLevelsApply>();
 const vizSpectrumApplies = new Map<string, VizLevelsApply>();
 const vizResponseApplies = new Map<string, VizLevelsApply>();
+const vizCombApplies = new Map<string, VizLevelsApply>();
 const vizHzApplies = new Map<string, HostApply>();
 const vizCtrlApplies = new Map<string, VizLevelsApply>();
 const vizLfoApplies = new Map<string, VizLevelsApply>();
@@ -73,6 +74,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizSpectrumApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "response" && Array.isArray(msg.v))
     vizResponseApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "comb" && Array.isArray(msg.v))
+    vizCombApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "hz" && Array.isArray(msg.v) && typeof msg.v[0] === "number")
     vizHzApplies.get(msg.id)?.(msg.v[0]);
   if (msg.t === "viz" && msg.kind === "ctrl" && Array.isArray(msg.v))
@@ -343,7 +346,7 @@ export function bindVizSpectrum(dv: DynamicValue<number[]>, id: string): () => v
 
 /**
  * Wire modulation frequency-response payload (id e.g. "mod"):
- * [bins, L×N, R×N] in dB (−96…48). Shared by Phaser / Flanger / Chorus.
+ * [bins, L×N, R×N] in dB (−96…48). Shared by Phaser / Chorus.
  */
 export function bindVizResponse(dv: DynamicValue<number[]>, id: string): () => void {
   ensureHostWire();
@@ -363,6 +366,40 @@ export function bindVizResponse(dv: DynamicValue<number[]>, id: string): () => v
   });
   return () => {
     vizResponseApplies.delete(id);
+  };
+}
+
+/**
+ * Wire flanger comb teeth (id e.g. "mod"):
+ * [nL, nR, (fHz,dB)×nL, (fHz,dB)×nR].
+ */
+export function bindVizComb(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizCombApplies.set(id, (v) => {
+    if (!v.length) {
+      dv.set([]);
+      return;
+    }
+    const nL = Math.min(128, Math.max(0, Math.round(Number(v[0]) || 0)));
+    const nR = Math.min(128, Math.max(0, Math.round(Number(v[1]) || 0)));
+    const need = 2 + 2 * nL + 2 * nR;
+    const clean = new Array<number>(need);
+    clean[0] = nL;
+    clean[1] = nR;
+    for (let i = 2; i < need; ++i) {
+      const x = v[i];
+      if (typeof x !== "number" || !Number.isFinite(x)) {
+        clean[i] = (i - 2) % 2 === 0 ? 20 : -96;
+        continue;
+      }
+      clean[i] = (i - 2) % 2 === 0
+        ? Math.min(20000, Math.max(20, x))
+        : Math.min(48, Math.max(-96, x));
+    }
+    dv.set(clean);
+  });
+  return () => {
+    vizCombApplies.delete(id);
   };
 }
 

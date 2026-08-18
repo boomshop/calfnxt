@@ -36,6 +36,7 @@ const knownPlugins = [
   "pulsator",
   "crusher",
   "phaser",
+  "flanger",
 ] as const;
 
 export default defineConfig(({ command }) => {

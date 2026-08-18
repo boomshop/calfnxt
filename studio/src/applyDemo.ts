@@ -18,6 +18,7 @@ import type {
   IPulsatorHost,
   ICrusherHost,
   IPhaserHost,
+  IFlangerHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -42,6 +43,8 @@ export type VizFixture = {
   spectrum?: number[];
   /** Modulation L/R response: [bins, L×N, R×N] dB. */
   response?: number[];
+  /** Flanger comb teeth: [nL, nR, (f,dB)×nL, (f,dB)×nR]. */
+  comb?: number[];
 };
 
 function setNum(dv: DynamicValue<number> | undefined, v: unknown) {
@@ -377,6 +380,34 @@ export function applyPhaserDemo(
   const hold = window.setInterval(() => {
     applySharedViz(viz);
     applyResponse();
+  }, 50);
+  return () => window.clearInterval(hold);
+}
+
+export function applyFlangerDemo(
+  host: IFlangerHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.active$, params.active);
+  setNum(host.minDelay$, params.min_delay);
+  setNum(host.modDepth$, params.mod_depth);
+  setNum(host.modRate$, params.mod_rate);
+  setNum(host.feedback$, params.feedback);
+  setNum(host.stereo$, params.stereo);
+  setNum(host.amount$, params.amount);
+  setNum(host.dry$, params.dry);
+  setBool(host.lfo$, params.lfo);
+  applySharedViz(viz);
+  const applyComb = () => {
+    if (!viz.comb) return;
+    host.response$.set(viz.comb);
+    pushViz('mod', 'comb', viz.comb);
+  };
+  applyComb();
+  const hold = window.setInterval(() => {
+    applySharedViz(viz);
+    applyComb();
   }, 50);
   return () => window.clearInterval(hold);
 }
@@ -754,4 +785,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   pulsator: applyPulsatorDemo as DemoApplier,
   crusher: applyCrusherDemo as DemoApplier,
   phaser: applyPhaserDemo as DemoApplier,
+  flanger: applyFlangerDemo as DemoApplier,
 };

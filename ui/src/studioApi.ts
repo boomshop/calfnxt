@@ -23,7 +23,8 @@ export type PluginId =
   | 'ringmod'
   | 'pulsator'
   | 'crusher'
-  | 'phaser';
+  | 'phaser'
+  | 'flanger';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -44,6 +45,7 @@ const PLUGIN_IDS: PluginId[] = [
   'pulsator',
   'crusher',
   'phaser',
+  'flanger',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -164,6 +166,12 @@ export {
   createBoundPhaserHost,
   type IPhaserHost,
 } from './host/phaserHost';
+
+export { FlangerUI } from './plugins/FlangerUI/FlangerUI';
+export {
+  createBoundFlangerHost,
+  type IFlangerHost,
+} from './host/flangerHost';
 
 export { createHeaderIo, type IHeaderIo } from './host/headerMeters';
 

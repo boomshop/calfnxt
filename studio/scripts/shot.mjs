@@ -39,6 +39,7 @@ const ALL = [
   'pulsator',
   'crusher',
   'phaser',
+  'flanger',
 ];
 
 function parsePlugins(argv) {

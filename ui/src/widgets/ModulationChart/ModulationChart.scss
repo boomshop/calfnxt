@@ -29,4 +29,11 @@
     fill: none;
     stroke-width: 1.5px;
   }
+
+  &.is-comb {
+    .mod-stem {
+      stroke-width: 1.25px;
+      stroke-linecap: butt;
+    }
+  }
 }

@@ -16,7 +16,8 @@ namespace Ui {
  *   {t:"viz", id:"comp", kind:"point", v:[inDb,outDb]} // transfer operating point
  *   {t:"viz", id:"comp", kind:"envelope", v:[…]}   // history: audio, GR (2×slots + phase)
    *   {t:"viz", id:"fft", kind:"spectrum", v:[bins,hold,avg…,max…,L…,R…]}
-   *   {t:"viz", id:"mod", kind:"response", v:[bins,L…,R…]} // Phaser/Flanger/Chorus |H|
+   *   {t:"viz", id:"mod", kind:"response", v:[bins,L…,R…]} // Phaser/Chorus |H|
+   *   {t:"viz", id:"mod", kind:"comb", v:[nL,nR,(f,dB)…]} // Flanger peak/notch stems
    *   {t:"viz", id:"filt", kind:"hz", v:[fcHz]}       // live filter cutoff
    *   UI→host {t:"vizcfg", id:"fft"|"mod", bins:N} after measuring pixel width.
    */
@@ -229,7 +230,7 @@ public:
   virtual const char* vizPulsatorId() const { return nullptr; }
 
   /**
-   * Modulation frequency response (Phaser / Flanger / Chorus).
+   * Modulation frequency response (Phaser / Chorus).
    * Layout: [bins, L×N, R×N] as dB (20·log10(|H|)). Returns 1+2·bins, or 0.
    * Flushed as {t:"viz", id, kind:"response", v:[…]}.
    * Bin count follows configureVizBins(id, bins) when supported.
@@ -243,6 +244,21 @@ public:
 
   /** Stream id for L/R frequency response (nullptr = do not flush). */
   virtual const char* vizFreqResponseId() const { return nullptr; }
+
+  /**
+   * Flanger-style comb teeth: vertical peak/notch markers.
+   * Layout: [nL, nR, (fHz,dB)×nL, (fHz,dB)×nR]. Returns float count, or 0.
+   * Flushed as {t:"viz", id, kind:"comb", v:[…]}.
+   */
+  virtual int takeCombExtrema(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for comb extrema (nullptr = do not flush). */
+  virtual const char* vizCombExtremaId() const { return nullptr; }
 };
 
 } // namespace Ui

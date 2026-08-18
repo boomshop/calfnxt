@@ -57,6 +57,7 @@ will follow.
 | **Pulsator** | `calfNXTPulsator.vst3` | Tremolo / autopanner with dual-phase LFO chart |
 | **Crusher** | `calfNXTCrusher.vst3` | Bit crusher with live response heat |
 | **Phaser** | `calfNXTPhaser.vst3` | Stereo allpass phaser with live L/R response |
+| **Flanger** | `calfNXTFlanger.vst3` | Stereo delay flanger with live L/R response |
 | **DeEsser** | `calfNXTDeesser.vst3` | Sibilance / rumble control (Ess / Rumble, Wide / Split) |
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo / Ping-Pong / L-R) |
 | **Reverb** | `calfNXTReverb.vst3` | Algorithmic room (ER + late, no IR) |
@@ -190,6 +191,14 @@ will follow.
 - Center / Depth (cents) / Rate / Feedback / Stages / Stereo phase / Amount / Dry
 - LFO freeze + Reset; Power mutes wet (Dry + In/Out stay)
 - Live L/R frequency response (`ModulationChart`, shared with Flanger / Chorus)
+- Shared In/Out gain + peak meters
+
+### Flanger
+
+- Calf-heritage **stereo delay flanger** (single-tap delay comb + feedback)
+- Min Delay / Depth (ms) / Rate / Feedback / Stereo phase / Amount / Dry
+- LFO freeze + Reset; Power mutes wet (Dry + In/Out stay)
+- Live L/R frequency response (`ModulationChart`, shared with Phaser / Chorus)
 - Shared In/Out gain + peak meters
 
 ### DeEsser
@@ -393,6 +402,7 @@ Then rescan plugins in your host. Bundles appear as:
 | Pulsator | `~/.vst3/calfNXTPulsator.vst3` |
 | Crusher   | `~/.vst3/calfNXTCrusher.vst3`   |
 | Phaser    | `~/.vst3/calfNXTPhaser.vst3`    |
+| Flanger   | `~/.vst3/calfNXTFlanger.vst3`   |
 | DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
 | Delay     | `~/.vst3/calfNXTDelay.vst3`     |
 | Reverb    | `~/.vst3/calfNXTReverb.vst3`    |
@@ -439,6 +449,7 @@ UI pack. `install-user-vst3` / `./tools/install-user-vst3.sh` then copies the bu
 | Pulsator | `~/.vst3/calfNXTPulsator.vst3` |
 | Crusher   | `~/.vst3/calfNXTCrusher.vst3`   |
 | Phaser    | `~/.vst3/calfNXTPhaser.vst3`    |
+| Flanger   | `~/.vst3/calfNXTFlanger.vst3`   |
 
 Rescan / reload the plugins in the host after install.
 

@@ -1049,6 +1049,36 @@ void WebEditor::flushViz()
     }
   }
 
+  if (const char* combId = vizSource_->vizCombExtremaId())
+  {
+    // Layout: nL, nR, (f,dB)×nL, (f,dB)×nR — max 128 teeth/channel
+    constexpr int kMaxTeeth = 128;
+    constexpr int kMaxComb = 2 + 4 * kMaxTeeth;
+    float comb[kMaxComb];
+    const int nComb = vizSource_->takeCombExtrema(comb, kMaxComb);
+    if (nComb >= 2)
+    {
+      int nL = static_cast<int>(std::lround(std::clamp(comb[0], 0.f, float(kMaxTeeth))));
+      int nR = static_cast<int>(std::lround(std::clamp(comb[1], 0.f, float(kMaxTeeth))));
+      const int need = 2 + 2 * nL + 2 * nR;
+      if (nComb >= need)
+      {
+        comb[0] = static_cast<float>(nL);
+        comb[1] = static_cast<float>(nR);
+        for (int i = 2; i < need; ++i)
+        {
+          float v = comb[i];
+          if (!std::isfinite(v))
+            v = (i & 1) ? -96.f : 20.f;
+          // Even indices from 2: frequency; odd: dB
+          const bool isFreq = ((i - 2) % 2) == 0;
+          comb[i] = isFreq ? std::clamp(v, 20.f, 20000.f) : std::clamp(v, -96.f, 48.f);
+        }
+        flushVizArray(combId, "comb", comb, need);
+      }
+    }
+  }
+
   if (const char* filtId = vizSource_->vizFilterCutoffId())
   {
     float fc = 0.f;

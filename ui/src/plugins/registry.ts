@@ -18,7 +18,8 @@ export type PluginId =
   | "ringmod"
   | "pulsator"
   | "crusher"
-  | "phaser";
+  | "phaser"
+  | "flanger";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
 
@@ -42,6 +43,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   pulsator: () => import("./PulsatorUI/BoundPulsatorUI"),
   crusher: () => import("./CrusherUI/BoundCrusherUI"),
   phaser: () => import("./PhaserUI/BoundPhaserUI"),
+  flanger: () => import("./FlangerUI/BoundFlangerUI"),
 };
 
 export function isPluginId(id: string): id is PluginId {
