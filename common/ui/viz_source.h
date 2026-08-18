@@ -15,10 +15,11 @@ namespace Ui {
  *   {t:"viz", id:"comp", kind:"gr", v:[grDb]}       // gain reduction ≤0 dB
  *   {t:"viz", id:"comp", kind:"point", v:[inDb,outDb]} // transfer operating point
  *   {t:"viz", id:"comp", kind:"envelope", v:[…]}   // history: audio, GR (2×slots + phase)
- *   {t:"viz", id:"fft", kind:"spectrum", v:[bins,hold,avg…,max…,L…,R…]}
- *   {t:"viz", id:"filt", kind:"hz", v:[fcHz]}       // live filter cutoff
- *   UI→host {t:"vizcfg", id:"fft", bins:N} after measuring pixel width.
- */
+   *   {t:"viz", id:"fft", kind:"spectrum", v:[bins,hold,avg…,max…,L…,R…]}
+   *   {t:"viz", id:"mod", kind:"response", v:[bins,L…,R…]} // Phaser/Flanger/Chorus |H|
+   *   {t:"viz", id:"filt", kind:"hz", v:[fcHz]}       // live filter cutoff
+   *   UI→host {t:"vizcfg", id:"fft"|"mod", bins:N} after measuring pixel width.
+   */
 class IVizSource
 {
 public:
@@ -226,6 +227,22 @@ public:
 
   /** Stream id for pulsator LFO display (nullptr = do not flush). */
   virtual const char* vizPulsatorId() const { return nullptr; }
+
+  /**
+   * Modulation frequency response (Phaser / Flanger / Chorus).
+   * Layout: [bins, L×N, R×N] as dB (20·log10(|H|)). Returns 1+2·bins, or 0.
+   * Flushed as {t:"viz", id, kind:"response", v:[…]}.
+   * Bin count follows configureVizBins(id, bins) when supported.
+   */
+  virtual int takeFreqResponse(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for L/R frequency response (nullptr = do not flush). */
+  virtual const char* vizFreqResponseId() const { return nullptr; }
 };
 
 } // namespace Ui

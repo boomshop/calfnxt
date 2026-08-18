@@ -17,6 +17,7 @@ import type {
   IRingmodHost,
   IPulsatorHost,
   ICrusherHost,
+  IPhaserHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -39,6 +40,8 @@ export type VizFixture = {
   shape?: number[];
   /** Spectrum: [bins, hold, avg×N, max×N, L×N, R×N] dBFS. */
   spectrum?: number[];
+  /** Modulation L/R response: [bins, L×N, R×N] dB. */
+  response?: number[];
 };
 
 function setNum(dv: DynamicValue<number> | undefined, v: unknown) {
@@ -345,6 +348,35 @@ export function applyCrusherDemo(
   const hold = window.setInterval(() => {
     applySharedViz(viz);
     applyShape();
+  }, 50);
+  return () => window.clearInterval(hold);
+}
+
+export function applyPhaserDemo(
+  host: IPhaserHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.active$, params.active);
+  setNum(host.baseFreq$, params.base_freq);
+  setNum(host.modDepth$, params.mod_depth);
+  setNum(host.modRate$, params.mod_rate);
+  setNum(host.feedback$, params.feedback);
+  setNum(host.stages$, params.stages);
+  setNum(host.stereo$, params.stereo);
+  setNum(host.amount$, params.amount);
+  setNum(host.dry$, params.dry);
+  setBool(host.lfo$, params.lfo);
+  applySharedViz(viz);
+  const applyResponse = () => {
+    if (!viz.response) return;
+    host.response$.set(viz.response);
+    pushViz('mod', 'response', viz.response);
+  };
+  applyResponse();
+  const hold = window.setInterval(() => {
+    applySharedViz(viz);
+    applyResponse();
   }, 50);
   return () => window.clearInterval(hold);
 }
@@ -721,4 +753,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   ringmod: applyRingmodDemo as DemoApplier,
   pulsator: applyPulsatorDemo as DemoApplier,
   crusher: applyCrusherDemo as DemoApplier,
+  phaser: applyPhaserDemo as DemoApplier,
 };

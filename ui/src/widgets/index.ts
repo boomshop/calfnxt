@@ -16,6 +16,7 @@ export * from "./HistoryChart";
 export * from "./DelayEchoChart";
 export * from "./ReverbChart";
 export * from "./SpectrumChart";
+export * from "./ModulationChart";
 export * from "./Toggle";
 export * from "./State";
 export * from "./PulsatorChart";

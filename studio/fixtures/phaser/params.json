@@ -1,0 +1,12 @@
+{
+  "active": true,
+  "base_freq": 1000,
+  "mod_depth": 4000,
+  "mod_rate": 0.12,
+  "feedback": 0.55,
+  "stages": 6,
+  "stereo": 180,
+  "amount": -6,
+  "dry": 0,
+  "lfo": true
+}

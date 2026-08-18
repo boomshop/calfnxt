@@ -20,7 +20,7 @@ internalized toolkit collides with system GTK3 — `GdkDisplay` GType abort).
 (GtkPlug + WebKit, XEmbed into the host XID) and forwards the JSON bridge over a
 Unix socketpair. Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`).
 More Calf-heritage processors planned.
 
 ---
@@ -36,8 +36,8 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Vendor URL / email     | `https://calfnxt.org`, `mailto:schmidt@boomshop.net`                                                                                                                                                                                                                                                                |
 | C++ namespace          | `calfNXT`                                                                                                                                                                                                                                                                                                           |
 | CMake project / libs   | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui`                                                                                                                                                                                                                                                            |
-| Plugin targets         | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-expander`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics`, `calfnxt-analyzer`, `calfnxt-filter`, `calfnxt-ringmod`, `calfnxt-pulsator`, `calfnxt-crusher`                 |
-| VST3 package / `.so`   | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTExpander`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics`, `calfNXTAnalyzer`, `calfNXTFilter`, `calfNXTRingmodulator`, `calfNXTPulsator`, `calfNXTCrusher` (must match; Carla/JUCE) |
+| Plugin targets         | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-expander`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics`, `calfnxt-analyzer`, `calfnxt-filter`, `calfnxt-ringmod`, `calfnxt-pulsator`, `calfnxt-crusher`, `calfnxt-phaser`                 |
+| VST3 package / `.so`   | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTExpander`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics`, `calfNXTAnalyzer`, `calfNXTFilter`, `calfNXTRingmodulator`, `calfNXTPulsator`, `calfNXTCrusher`, `calfNXTPhaser` (must match; Carla/JUCE) |
 | Install names          | `~/.vst3/calfNXTEqualizer.vst3`, …, `calfNXTFilter.vst3`, `calfNXTRingmodulator.vst3`, `calfNXTPulsator.vst3`                                                                                                                                                                                                                               |
 | URI scheme             | `calfnxt://bundle/...`                                                                                                                                                                                                                                                                                              |
 | JS bridge              | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ`                                                                                                                                                                                                                                                    |
@@ -262,7 +262,6 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 ## Open / deferred
 
 - Multi Chorus → **Chorus**
-- **Phaser**
 - **Flanger**
 - **Vinyl**
 - **Mono Input**
@@ -295,6 +294,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 | Ring Modulator DSP          | `dsp/ringmod/source/*_dsp.*`, `common/dsp/simple_lfo.h`                                                                                                                                             |
 | Pulsator DSP                | `dsp/pulsator/source/*_dsp.*`, `common/dsp/simple_lfo.h`                                                                                                                                            |
 | Crusher DSP                 | `dsp/crusher/source/*_dsp.*`, `common/dsp/bitreduction.h`; UI `ui/src/plugins/CrusherUI/*`, `widgets/CrusherChart/*`                                                                                 |
+| Phaser DSP                  | `dsp/phaser/source/*_dsp.*`, `common/dsp/simple_phaser.h`; UI `ui/src/plugins/PhaserUI/*`, `widgets/ModulationChart/*` (shared L/R response for Flanger/Chorus)                                      |
 | Param bind                  | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts`                                                                                                                                                |
 | Header I/O                  | `ui/src/components/Header/*`, `host/headerMeters.ts`                                                                                                                                                |
 | Meters                      | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*`                                                                                                                                                       |

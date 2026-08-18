@@ -1029,6 +1029,26 @@ void WebEditor::flushViz()
     }
   }
 
+  if (const char* respId = vizSource_->vizFreqResponseId())
+  {
+    // Layout: bins, L[N], R[N] — max 1+2*512 (modulation response)
+    constexpr int kMaxResp = 1 + 2 * 512;
+    float resp[kMaxResp];
+    const int nResp = vizSource_->takeFreqResponse(resp, kMaxResp);
+    if (nResp >= 1)
+    {
+      resp[0] = std::clamp(resp[0], 1.f, 512.f);
+      for (int i = 1; i < nResp; ++i)
+      {
+        float v = resp[i];
+        if (!std::isfinite(v))
+          v = -96.f;
+        resp[i] = std::clamp(v, -96.f, 48.f);
+      }
+      flushVizArray(respId, "response", resp, nResp);
+    }
+  }
+
   if (const char* filtId = vizSource_->vizFilterCutoffId())
   {
     float fc = 0.f;

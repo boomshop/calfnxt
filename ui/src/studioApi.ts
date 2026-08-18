@@ -22,7 +22,8 @@ export type PluginId =
   | 'filter'
   | 'ringmod'
   | 'pulsator'
-  | 'crusher';
+  | 'crusher'
+  | 'phaser';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -42,6 +43,7 @@ const PLUGIN_IDS: PluginId[] = [
   'ringmod',
   'pulsator',
   'crusher',
+  'phaser',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -156,6 +158,12 @@ export {
   createBoundCrusherHost,
   type ICrusherHost,
 } from './host/crusherHost';
+
+export { PhaserUI } from './plugins/PhaserUI/PhaserUI';
+export {
+  createBoundPhaserHost,
+  type IPhaserHost,
+} from './host/phaserHost';
 
 export { createHeaderIo, type IHeaderIo } from './host/headerMeters';
 

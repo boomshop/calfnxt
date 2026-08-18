@@ -1,0 +1,156 @@
+{
+  "id": "phaser",
+  "name": "calfNXT Phaser",
+  "vendor": "calfNXT",
+  "vendor_url": "https://calfnxt.org",
+  "vendor_email": "mailto:schmidt@boomshop.net",
+  "version": "0.13.0",
+  "category": "Fx|Modulation",
+  "vst3_uid": [
+    "0x50484153",
+    "0x45523031",
+    "0x43414C46",
+    "0x4E585430"
+  ],
+  "editor": {
+    "width": 1024,
+    "height": 480
+  },
+  "buses": {
+    "audio_inputs": [
+      {
+        "name": "Stereo In",
+        "channels": 2
+      }
+    ],
+    "audio_outputs": [
+      {
+        "name": "Stereo Out",
+        "channels": 2
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "id": "active",
+      "name": "Active",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "base_freq",
+      "name": "Center Freq",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 1000.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "mod_depth",
+      "name": "Mod Depth",
+      "type": "float",
+      "unit": "ct",
+      "min": 0.0,
+      "max": 10800.0,
+      "default": 4000.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "mod_rate",
+      "name": "Mod Rate",
+      "type": "float",
+      "unit": "Hz",
+      "min": 0.01,
+      "max": 20.0,
+      "default": 0.1,
+      "scale": "log",
+      "precision": 3
+    },
+    {
+      "id": "feedback",
+      "name": "Feedback",
+      "type": "float",
+      "unit": "",
+      "min": -0.99,
+      "max": 0.99,
+      "default": 0.5,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "stages",
+      "name": "Stages",
+      "type": "float",
+      "unit": "",
+      "min": 1.0,
+      "max": 12.0,
+      "default": 6.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "stereo",
+      "name": "Stereo Phase",
+      "type": "float",
+      "unit": "°",
+      "min": 0.0,
+      "max": 360.0,
+      "default": 180.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "reset",
+      "name": "Reset",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "amount",
+      "name": "Amount",
+      "type": "float",
+      "unit": "dB",
+      "min": -60.0,
+      "max": 12.0,
+      "default": -6.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "dry",
+      "name": "Dry",
+      "type": "float",
+      "unit": "dB",
+      "min": -60.0,
+      "max": 12.0,
+      "default": 0.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "lfo",
+      "name": "LFO",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    }
+  ]
+}

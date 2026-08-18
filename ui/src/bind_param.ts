@@ -19,6 +19,7 @@ const vizPointApplies = new Map<string, VizLevelsApply>();
 const vizShapeApplies = new Map<string, VizLevelsApply>();
 const vizTempoApplies = new Map<string, VizLevelsApply>();
 const vizSpectrumApplies = new Map<string, VizLevelsApply>();
+const vizResponseApplies = new Map<string, VizLevelsApply>();
 const vizHzApplies = new Map<string, HostApply>();
 const vizCtrlApplies = new Map<string, VizLevelsApply>();
 const vizLfoApplies = new Map<string, VizLevelsApply>();
@@ -70,6 +71,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizTempoApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "spectrum" && Array.isArray(msg.v))
     vizSpectrumApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "response" && Array.isArray(msg.v))
+    vizResponseApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "hz" && Array.isArray(msg.v) && typeof msg.v[0] === "number")
     vizHzApplies.get(msg.id)?.(msg.v[0]);
   if (msg.t === "viz" && msg.kind === "ctrl" && Array.isArray(msg.v))
@@ -335,6 +338,31 @@ export function bindVizSpectrum(dv: DynamicValue<number[]>, id: string): () => v
   });
   return () => {
     vizSpectrumApplies.delete(id);
+  };
+}
+
+/**
+ * Wire modulation frequency-response payload (id e.g. "mod"):
+ * [bins, L×N, R×N] in dB (−96…48). Shared by Phaser / Flanger / Chorus.
+ */
+export function bindVizResponse(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizResponseApplies.set(id, (v) => {
+    if (!v.length) {
+      dv.set([]);
+      return;
+    }
+    const clean = v.map((x, i) => {
+      if (typeof x !== "number" || !Number.isFinite(x))
+        return i === 0 ? 0 : -96;
+      if (i === 0)
+        return Math.min(512, Math.max(1, Math.round(x)));
+      return Math.min(48, Math.max(-96, x));
+    });
+    dv.set(clean);
+  });
+  return () => {
+    vizResponseApplies.delete(id);
   };
 }
 

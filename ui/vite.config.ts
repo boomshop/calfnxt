@@ -35,6 +35,7 @@ const knownPlugins = [
   "ringmod",
   "pulsator",
   "crusher",
+  "phaser",
 ] as const;
 
 export default defineConfig(({ command }) => {

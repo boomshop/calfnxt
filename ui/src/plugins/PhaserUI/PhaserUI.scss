@@ -1,0 +1,56 @@
+.PhaserUI {
+  display: grid;
+  grid-template-areas:
+    'rate chart stereo'
+    'lfo params reset';
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: 1fr auto;
+  gap: var(--gap);
+  align-items: stretch;
+
+  > .rate {
+    grid-area: rate;
+    align-items: center;
+  }
+
+  > .lfo {
+    grid-area: lfo;
+    justify-content: center;
+    align-items: center;
+
+    .Toggle {
+      width: 64px;
+      height: 64px;
+    }
+  }
+
+  > .chart {
+    grid-area: chart;
+
+    > .ModulationChart {
+      flex: 1;
+      min-height: 180px;
+    }
+  }
+
+  > .stereo {
+    grid-area: stereo;
+    align-items: center;
+  }
+
+  > .reset {
+    grid-area: reset;
+    justify-content: center;
+    align-items: center;
+
+    .Button {
+      width: 64px;
+      height: 64px;
+    }
+  }
+
+  > .params {
+    grid-area: params;
+    justify-content: space-evenly;
+  }
+}

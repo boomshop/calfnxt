@@ -56,6 +56,7 @@ will follow.
 | **Ring Modulator** | `calfNXTRingmodulator.vst3` | Stereo ring mod + dual LFOs (Calf heritage) |
 | **Pulsator** | `calfNXTPulsator.vst3` | Tremolo / autopanner with dual-phase LFO chart |
 | **Crusher** | `calfNXTCrusher.vst3` | Bit crusher with live response heat |
+| **Phaser** | `calfNXTPhaser.vst3` | Stereo allpass phaser with live L/R response |
 | **DeEsser** | `calfNXTDeesser.vst3` | Sibilance / rumble control (Ess / Rumble, Wide / Split) |
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo / Ping-Pong / L-R) |
 | **Reverb** | `calfNXTReverb.vst3` | Algorithmic room (ER + late, no IR) |
@@ -181,6 +182,14 @@ will follow.
 - Calf-heritage **bit crusher** (no sample-rate reduction)
 - Bit Reduction (continuous 1…16), Mix, DC asymmetry, soft-step “Anti-Aliasing”, Linear / Logarithmic
 - Response chart: crushed sine probe with live heat + active zone (Harmonics-style)
+- Shared In/Out gain + peak meters
+
+### Phaser
+
+- Calf-heritage **stereo allpass phaser** (cascaded first-order APs + feedback)
+- Center / Depth (cents) / Rate / Feedback / Stages / Stereo phase / Amount / Dry
+- LFO freeze + Reset; Power mutes wet (Dry + In/Out stay)
+- Live L/R frequency response (`ModulationChart`, shared with Flanger / Chorus)
 - Shared In/Out gain + peak meters
 
 ### DeEsser
@@ -383,6 +392,7 @@ Then rescan plugins in your host. Bundles appear as:
 | Ring Modulator | `~/.vst3/calfNXTRingmodulator.vst3` |
 | Pulsator | `~/.vst3/calfNXTPulsator.vst3` |
 | Crusher   | `~/.vst3/calfNXTCrusher.vst3`   |
+| Phaser    | `~/.vst3/calfNXTPhaser.vst3`    |
 | DeEsser   | `~/.vst3/calfNXTDeesser.vst3`   |
 | Delay     | `~/.vst3/calfNXTDelay.vst3`     |
 | Reverb    | `~/.vst3/calfNXTReverb.vst3`    |
@@ -428,6 +438,7 @@ UI pack. `install-user-vst3` / `./tools/install-user-vst3.sh` then copies the bu
 | Ring Modulator | `~/.vst3/calfNXTRingmodulator.vst3` |
 | Pulsator | `~/.vst3/calfNXTPulsator.vst3` |
 | Crusher   | `~/.vst3/calfNXTCrusher.vst3`   |
+| Phaser    | `~/.vst3/calfNXTPhaser.vst3`    |
 
 Rescan / reload the plugins in the host after install.
 
