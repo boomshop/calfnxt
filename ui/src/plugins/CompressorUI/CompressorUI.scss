@@ -35,9 +35,9 @@
 
   > .chart {
     > .DynamicsChart {
-      flex: 0 0 296px;
-      width: 296px;
-      height: 296px;
+      flex: 0 0 288px;
+      width: 288px;
+      height: 288px;
       background: var(--background);
     }
   }
@@ -45,11 +45,17 @@
   > .compressor {
     flex-direction: column;
     justify-content: space-between;
+    gap: 0;
+    padding-top: 24px !important;
 
     > div {
       display: flex;
       align-items: center;
       justify-content: space-evenly;
+
+      &.center {
+        margin-bottom: 8px;
+      }
     }
   }
 }

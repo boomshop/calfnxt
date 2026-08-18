@@ -26,6 +26,8 @@
 
   &.aux-preset-small {
     --aux-main-fontsize: 12px;
+    margin-top: 4px;
+    margin-bottom: 2px;
 
     > .aux-label {
       bottom: -6px;

@@ -179,6 +179,7 @@ function BandControls(props: { band: IEqualizerBand }) {
   return (
     <div className="controls" data-band={band.id}>
       <div className="block eq">
+        <div className="title">Band {band.index + 1}</div>
         <WithInfo title={equalizerInfo.type}>
           <Select value$={band.type$} entries={EQ_FILTER_TYPE_ENTRIES} />
         </WithInfo>

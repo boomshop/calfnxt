@@ -22,7 +22,7 @@
       stroke: var(--chart-level-stroke, var(--color-accent));
       stroke-width: 2px;
       // Soft fill so ER strokes remain readable under the attack slope.
-      fill: var(--color);
+      fill: var(--chart-level-stroke);
       fill-opacity: 0.18;
     }
 

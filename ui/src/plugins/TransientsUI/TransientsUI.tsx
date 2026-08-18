@@ -20,7 +20,6 @@ import '../PluginUI.scss';
 import './TransientsUI.scss';
 import { transientsInfo } from './transientsInfo';
 
-
 export interface TransientsUIProps {
   host: ITransientsHost;
 }
@@ -187,6 +186,7 @@ export function TransientsUI(props: TransientsUIProps) {
               {...{ 'value.format': formatBipolarPercent }}
               size="large"
               {...edit(paramIds.attack_boost)}
+              className="attack"
             />
           </WithInfo>
 
@@ -201,6 +201,7 @@ export function TransientsUI(props: TransientsUIProps) {
               dots={SUSTAIN_DOTS}
               labels={SUSTAIN_LABELS}
               {...edit(paramIds.sustain_threshold)}
+              className="sustain"
             />
           </WithInfo>
 
@@ -217,9 +218,11 @@ export function TransientsUI(props: TransientsUIProps) {
               {...{ 'value.format': formatBipolarPercent }}
               {...edit(paramIds.release_boost)}
               size="large"
+              className="release"
             />
           </WithInfo>
         </div>
+
         <div className="lower">
           <WithInfo title={transientsInfo.softClip}>
             <Knob

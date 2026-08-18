@@ -177,7 +177,7 @@ body,
   }
 
   &:has(.title) {
-    padding-top: 28px !important;
+    padding-top: 32px !important;
   }
 
   .aux-chart {

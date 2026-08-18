@@ -1,7 +1,7 @@
 .TransientsUI {
   display: grid;
   grid-template-rows: 120px 1fr;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: 1fr 1.5fr;
   align-items: stretch;
 
   > .history {
@@ -40,7 +40,14 @@
       display: flex;
       justify-content: space-evenly;
       align-items: center;
-      gap: var(--gap);
+    }
+
+    > .upper {
+      gap: 48px;
+
+      > .sustain {
+        margin-top: -24px;
+      }
     }
 
     > .lower {
@@ -48,18 +55,18 @@
 
       > .attack,
       > .release {
-        top: -32px;
+        top: -40px;
       }
 
       > .look {
-        top: 16px;
+        top: 12px;
       }
 
       > .clip {
-        margin-right: 64px;
+        margin-right: 48px;
       }
       > .sensitivity {
-        margin-left: 64px;
+        margin-left: 48px;
       }
     }
   }
