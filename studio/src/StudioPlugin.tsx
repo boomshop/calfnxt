@@ -19,6 +19,7 @@ import {
   CrusherUI,
   PhaserUI,
   FlangerUI,
+  ChorusUI,
   createBoundCompressorHost,
   createBoundExpanderHost,
   createBoundDeesserHost,
@@ -38,6 +39,7 @@ import {
   createBoundCrusherHost,
   createBoundPhaserHost,
   createBoundFlangerHost,
+  createBoundChorusHost,
   showWidgetInfo$,
   type PluginId,
 } from '@calfnxt/ui';
@@ -101,6 +103,10 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
     params: (await import('../fixtures/flanger/params.json')).default,
     viz: (await import('../fixtures/flanger/viz.json')).default,
   }),
+  chorus: async () => ({
+    params: (await import('../fixtures/chorus/params.json')).default,
+    viz: (await import('../fixtures/chorus/viz.json')).default,
+  }),
   limiter: async () => ({
     params: (await import('../fixtures/limiter/params.json')).default,
     viz: (await import('../fixtures/limiter/viz.json')).default,
@@ -161,6 +167,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundPhaserHost();
       case 'flanger':
         return createBoundFlangerHost();
+      case 'chorus':
+        return createBoundChorusHost();
       case 'limiter':
         return createBoundLimiterHost();
       case 'mbcomp':
@@ -253,6 +261,10 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
     case 'flanger':
       return (
         <FlangerUI host={host as ReturnType<typeof createBoundFlangerHost>} />
+      );
+    case 'chorus':
+      return (
+        <ChorusUI host={host as ReturnType<typeof createBoundChorusHost>} />
       );
     case 'limiter':
       return <LimiterUI host={host as ReturnType<typeof createBoundLimiterHost>} />;

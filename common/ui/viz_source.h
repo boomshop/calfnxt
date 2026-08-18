@@ -230,7 +230,22 @@ public:
   virtual const char* vizPulsatorId() const { return nullptr; }
 
   /**
-   * Modulation frequency response (Phaser / Chorus).
+   * Chorus multi-LFO display: [phaseL, 0, phaseR, 0] (phases in turns 0…1).
+   * UI derives voice dots/curves from phase + bound params.
+   * Flushed as {t:"viz", id, kind:"lfo", v:[…]}.
+   */
+  virtual int takeChorusLfo(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for chorus LFO display (nullptr = do not flush). */
+  virtual const char* vizChorusId() const { return nullptr; }
+
+  /**
+   * Modulation frequency response (Phaser).
    * Layout: [bins, L×N, R×N] as dB (20·log10(|H|)). Returns 1+2·bins, or 0.
    * Flushed as {t:"viz", id, kind:"response", v:[…]}.
    * Bin count follows configureVizBins(id, bins) when supported.

@@ -19,7 +19,8 @@ export type PluginId =
   | "pulsator"
   | "crusher"
   | "phaser"
-  | "flanger";
+  | "flanger"
+  | "chorus";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
 
@@ -44,6 +45,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   crusher: () => import("./CrusherUI/BoundCrusherUI"),
   phaser: () => import("./PhaserUI/BoundPhaserUI"),
   flanger: () => import("./FlangerUI/BoundFlangerUI"),
+  chorus: () => import("./ChorusUI/BoundChorusUI"),
 };
 
 export function isPluginId(id: string): id is PluginId {

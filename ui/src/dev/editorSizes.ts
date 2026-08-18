@@ -18,6 +18,7 @@ import { pluginMeta as pulsatorMeta } from "../generated/pulsatorModel";
 import { pluginMeta as crusherMeta } from "../generated/crusherModel";
 import { pluginMeta as phaserMeta } from "../generated/phaserModel";
 import { pluginMeta as flangerMeta } from "../generated/flangerModel";
+import { pluginMeta as chorusMeta } from "../generated/chorusModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
 export const editorSizes: Record<PluginId, { width: number; height: number }> = {
@@ -40,4 +41,5 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   crusher: crusherMeta.editor,
   phaser: phaserMeta.editor,
   flanger: flangerMeta.editor,
+  chorus: chorusMeta.editor,
 };

@@ -1147,6 +1147,25 @@ void WebEditor::flushViz()
       flushVizArray(pulId, "lfo", lfo, 4);
     }
   }
+
+  if (const char* chorId = vizSource_->vizChorusId())
+  {
+    float lfo[4] {};
+    const int n = vizSource_->takeChorusLfo(lfo, 4);
+    if (n >= 4)
+    {
+      for (int i = 0; i < 4; ++i)
+      {
+        if (!std::isfinite(lfo[i]))
+          lfo[i] = 0.f;
+      }
+      lfo[0] = std::clamp(lfo[0], 0.f, 1.f);
+      lfo[2] = std::clamp(lfo[2], 0.f, 1.f);
+      lfo[1] = 0.f;
+      lfo[3] = 0.f;
+      flushVizArray(chorId, "lfo", lfo, 4);
+    }
+  }
 }
 
 void WebEditor::pushAllParams()

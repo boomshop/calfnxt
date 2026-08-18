@@ -40,6 +40,7 @@ const ALL = [
   'crusher',
   'phaser',
   'flanger',
+  'chorus',
 ];
 
 function parsePlugins(argv) {

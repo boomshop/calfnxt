@@ -1,0 +1,43 @@
+.ChorusUI {
+  display: grid;
+  grid-template-areas:
+    'modulation chart voices'
+    'modulation post voices';
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: 1fr auto;
+  gap: var(--gap);
+  align-items: stretch;
+
+  > .modulation {
+    grid-area: modulation;
+
+    > .lfo {
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+    }
+  }
+
+  > .voices {
+    grid-area: voices;
+  }
+
+  > .modulation,
+  > .voices {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+
+    > .WithInfo:has(.aux-preset-large) {
+      grid-column: span 2;
+    }
+  }
+
+  > .chart {
+    grid-area: chart;
+    min-height: 0;
+  }
+
+  > .post {
+    grid-area: post;
+  }
+}

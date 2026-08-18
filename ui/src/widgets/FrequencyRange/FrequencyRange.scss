@@ -1,9 +1,67 @@
 .FrequencyRange {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: center;
-  position: relative;
+  &.vertical {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 16px;
+
+    > .EQChart {
+      grid-column: span 2;
+    }
+
+    > .left {
+      justify-self: end;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    > .right {
+      justify-self: start;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+  }
+
+  &.horizontal {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    position: relative;
+
+    > .left {
+      order: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+
+      > .WithInfo:has(.Select) {
+        order: 2;
+      }
+    }
+
+    > .right {
+      order: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    > .EQChart {
+      order: 2;
+    }
+
+    > .listen,
+    > .WithInfo:has(> .listen) {
+      left: 76px;
+    }
+  }
+
+  > .EQChart {
+    flex: 1;
+    min-height: 100px;
+    background: var(--background);
+  }
 
   > .listen,
   > .WithInfo:has(> .listen) {
@@ -15,17 +73,5 @@
     > .Toggle {
       background: transparent;
     }
-  }
-
-  > .EQChart {
-    flex: 1;
-    min-height: 100px;
-    background: var(--background);
-  }
-
-  .filter {
-    display: flex;
-    gap: 16px;
-    align-items: center;
   }
 }

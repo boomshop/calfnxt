@@ -43,6 +43,7 @@ declare -A PLUGIN_TARGET=(
   [crusher]=calfnxt-crusher
   [phaser]=calfnxt-phaser
   [flanger]=calfnxt-flanger
+  [chorus]=calfnxt-chorus
 )
 declare -A PLUGIN_VST3=(
   [equalizer]=calfNXTEqualizer
@@ -64,6 +65,7 @@ declare -A PLUGIN_VST3=(
   [crusher]=calfNXTCrusher
   [phaser]=calfNXTPhaser
   [flanger]=calfNXTFlanger
+  [chorus]=calfNXTChorus
 )
 
 usage() {

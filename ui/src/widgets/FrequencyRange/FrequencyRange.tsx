@@ -71,6 +71,7 @@ export interface FrequencyRangeProps {
   hipassEdit?: FrequencyRangeEdit;
   lopassEdit?: FrequencyRangeEdit;
   title?: string;
+  layout?: 'horizontal' | 'vertical';
 }
 
 /**
@@ -91,6 +92,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
     lopassDefault = 5000,
     hipassEdit,
     lopassEdit,
+    layout = 'vertical',
   } = props;
 
   const filterBands = useMemo<IEqualizerBand[]>(() => {
@@ -172,7 +174,9 @@ export function FrequencyRange(props: FrequencyRangeProps) {
     [filterBands],
   );
 
-  const cls = ['FrequencyRange', className ?? ''].filter(Boolean).join(' ');
+  const cls = ['FrequencyRange', layout, className ?? '']
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div className={cls}>
@@ -188,7 +192,8 @@ export function FrequencyRange(props: FrequencyRangeProps) {
         yRange={{ min: -60, max: 6 }}
         dbGrid={12}
       />
-      <div className="filter">
+
+      <div className="left">
         <WithInfo title={frequencyRangeInfo.hpMode}>
           <Select value$={hpMode$} entries={modeEntries} />
         </WithInfo>
@@ -206,6 +211,9 @@ export function FrequencyRange(props: FrequencyRangeProps) {
             {...hipassEdit}
           />
         </WithInfo>
+      </div>
+
+      <div className="right">
         <WithInfo title={frequencyRangeInfo.lopass}>
           <Knob
             label="LP Hz"

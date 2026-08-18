@@ -19,6 +19,7 @@ import type {
   ICrusherHost,
   IPhaserHost,
   IFlangerHost,
+  IChorusHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -45,6 +46,8 @@ export type VizFixture = {
   response?: number[];
   /** Flanger comb teeth: [nL, nR, (f,dB)×nL, (f,dB)×nR]. */
   comb?: number[];
+  /** Chorus / Pulsator LFO: [phaseL, valL, phaseR, valR]. */
+  lfo?: number[];
 };
 
 function setNum(dv: DynamicValue<number> | undefined, v: unknown) {
@@ -408,6 +411,41 @@ export function applyFlangerDemo(
   const hold = window.setInterval(() => {
     applySharedViz(viz);
     applyComb();
+  }, 50);
+  return () => window.clearInterval(hold);
+}
+
+export function applyChorusDemo(
+  host: IChorusHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.active$, params.active);
+  setNum(host.minDelay$, params.min_delay);
+  setNum(host.modDepth$, params.mod_depth);
+  setNum(host.modRate$, params.mod_rate);
+  setNum(host.stereo$, params.stereo);
+  setNum(host.voices$, params.voices);
+  setNum(host.vphase$, params.vphase);
+  setNum(host.overlap$, params.overlap);
+  setNum(host.amount$, params.amount);
+  setNum(host.dry$, params.dry);
+  setBool(host.lfo$, params.lfo);
+  setNum(host.hipass$, params.hipass);
+  setNum(host.lopass$, params.lopass);
+  setNum(host.hpMode$, params.hp_mode);
+  setNum(host.lpMode$, params.lp_mode);
+  setBool(host.listen$, params.listen);
+  applySharedViz(viz);
+  const applyLfo = () => {
+    const lfo = viz.lfo ?? [0.18, 0, 0.68, 0];
+    host.chorusLfo$.set(lfo);
+    pushViz('chorus', 'lfo', lfo);
+  };
+  applyLfo();
+  const hold = window.setInterval(() => {
+    applySharedViz(viz);
+    applyLfo();
   }, 50);
   return () => window.clearInterval(hold);
 }
@@ -786,4 +824,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   crusher: applyCrusherDemo as DemoApplier,
   phaser: applyPhaserDemo as DemoApplier,
   flanger: applyFlangerDemo as DemoApplier,
+  chorus: applyChorusDemo as DemoApplier,
 };
