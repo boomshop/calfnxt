@@ -117,42 +117,17 @@ function barsPath(
 type AuxGraph = {
   set: (k: string, v: unknown) => void;
   element?: SVGElement;
-  destroy?: () => void;
 };
 
 type AuxChartInstance = {
   isDestructed?: () => boolean;
   set: (k: string, v: unknown) => void;
   addGraph: (opts: unknown) => AuxGraph;
-  removeGraph: (g: AuxGraph) => void;
-  getGraphs: () => AuxGraph[];
+  empty?: () => void;
   range_x: AuxRange;
   range_y: AuxRange;
   element?: HTMLElement;
-  _graphs?: SVGGElement;
 };
-
-function disposeGraph(chart: AuxChartInstance, g: AuxGraph | null) {
-  if (!g)
-    return;
-  try {
-    g.element?.remove();
-    chart.removeGraph(g);
-    g.destroy?.();
-  } catch {
-    /* already gone */
-  }
-}
-
-function disposeAllGraphs(chart: AuxChartInstance) {
-  for (const g of chart.getGraphs().slice())
-    disposeGraph(chart, g);
-  const group = chart._graphs;
-  if (group) {
-    while (group.firstChild)
-      group.firstChild.remove();
-  }
-}
 
 const ChartBindings = {};
 const ChartOptions = {
@@ -209,6 +184,10 @@ function echoParamsFrom(p: EchoParams) {
   };
 }
 
+/**
+ * One pane: create L/R contribution graphs once, then only update dots/axes.
+ * (Recreating graphs every knob tick leaked ChildWidgets + set-subscriptions.)
+ */
 function useEchoPane(
   side: 'L' | 'R',
   paramsRef: MutableRefObject<EchoParams>,
@@ -218,12 +197,18 @@ function useEchoPane(
   const ghostRef = useRef<AuxGraph | null>(null);
   const rebuildRef = useRef<() => void>(() => {});
   const resizeRoRef = useRef<ResizeObserver | null>(null);
+  const resizeRafRef = useRef(0);
+  const lastSpanRef = useRef(-1);
+  const lastGridKeyRef = useRef('');
   const labelBeats = side === 'R';
 
   const rebuild = useCallback(() => {
     const chart = chartRef.current;
-    if (!chart || chart.isDestructed?.())
+    const primary = primaryRef.current;
+    const ghost = ghostRef.current;
+    if (!chart || chart.isDestructed?.() || !primary || !ghost)
       return;
+
     const p = paramsRef.current;
     const model = echoParamsFrom(p);
     const { spanMs: span, generations } = planDelayEchoView(model);
@@ -231,76 +216,120 @@ function useEchoPane(
       { ...model, generations },
       { maxMs: span },
     );
-    chart.set('range_x', { min: 0, max: span });
-    chart.set(
-      'grid_x',
-      buildMusicalGridX(model.bpm, model.subdiv, span, { labelBeats }),
-    );
 
-    // Per-pane: only what that output hears (DSP tmpL / tmpR).
-    // outL = lerp(wetL, wetR, cm), outR = lerp(wetR, wetL, cm)
-    // → top shows L*keep + R*cm; bottom shows R*keep + L*cm.
+    if (span !== lastSpanRef.current) {
+      lastSpanRef.current = span;
+      chart.set('range_x', { min: 0, max: span });
+    }
+
+    const gridKey = `${model.bpm}|${model.subdiv}|${span}|${labelBeats ? 1 : 0}`;
+    if (gridKey !== lastGridKeyRef.current) {
+      lastGridKeyRef.current = gridKey;
+      chart.set(
+        'grid_x',
+        buildMusicalGridX(model.bpm, model.subdiv, span, { labelBeats }),
+      );
+    }
+
     const cm = widthToCrossMix(p.width);
     const keep = 1 - cm;
-
-    // Wet-L / wet-R contributions into this output (not the other bus).
     const contribL =
-      side === 'L' ? (t: DelayEchoTap) => t.levelL * keep : (t: DelayEchoTap) => t.levelL * cm;
+      side === 'L'
+        ? (t: DelayEchoTap) => t.levelL * keep
+        : (t: DelayEchoTap) => t.levelL * cm;
     const contribR =
-      side === 'L' ? (t: DelayEchoTap) => t.levelR * cm : (t: DelayEchoTap) => t.levelR * keep;
+      side === 'L'
+        ? (t: DelayEchoTap) => t.levelR * cm
+        : (t: DelayEchoTap) => t.levelR * keep;
 
-    const dotsL = () =>
-      barsPath(taps, contribL, chart.range_x, chart.range_y);
-    const dotsR = () =>
-      barsPath(taps, contribR, chart.range_x, chart.range_y);
+    // Path strings (not functions): Graph must not re-call into a stale closure.
+    const pathL = barsPath(taps, contribL, chart.range_x, chart.range_y);
+    const pathR = barsPath(taps, contribR, chart.range_x, chart.range_y);
 
-    const add = (cls: string, dots: () => string) => {
-      const g = chart.addGraph({
-        dots,
-        type: 'L',
-        mode: 'fill',
-        class: cls,
-      });
-      g.element?.classList.add(cls);
-      return g;
-    };
-
-    // Home wet on top: L pane → echo-l last; R pane → echo-r last.
-    disposeAllGraphs(chart);
     if (side === 'L') {
-      ghostRef.current = add('echo-r', dotsR);
-      primaryRef.current = add('echo-l', dotsL);
+      ghost.set('dots', pathR);
+      primary.set('dots', pathL);
     } else {
-      ghostRef.current = add('echo-l', dotsL);
-      primaryRef.current = add('echo-r', dotsR);
+      ghost.set('dots', pathL);
+      primary.set('dots', pathR);
     }
   }, [labelBeats, paramsRef, side]);
 
   rebuildRef.current = rebuild;
 
-  const widgetRef = useCallback((chart: AuxChartInstance | null) => {
-    resizeRoRef.current?.disconnect();
-    resizeRoRef.current = null;
-    if (!chart) {
-      if (chartRef.current) {
-        disposeGraph(chartRef.current, primaryRef.current);
-        disposeGraph(chartRef.current, ghostRef.current);
+  const ensureGraphs = useCallback(
+    (chart: AuxChartInstance) => {
+      if (primaryRef.current && ghostRef.current)
+        return;
+      try {
+        chart.empty?.();
+      } catch {
+        /* ignore */
       }
+      const ghostCls = side === 'L' ? 'echo-r' : 'echo-l';
+      const primaryCls = side === 'L' ? 'echo-l' : 'echo-r';
+      const ghost = chart.addGraph({
+        dots: '',
+        type: 'L',
+        mode: 'fill',
+        class: ghostCls,
+      });
+      const primary = chart.addGraph({
+        dots: '',
+        type: 'L',
+        mode: 'fill',
+        class: primaryCls,
+      });
+      ghost.element?.classList.add(ghostCls);
+      primary.element?.classList.add(primaryCls);
+      ghostRef.current = ghost;
+      primaryRef.current = primary;
+      lastSpanRef.current = -1;
+      lastGridKeyRef.current = '';
+    },
+    [side],
+  );
+
+  const widgetRef = useCallback(
+    (chart: AuxChartInstance | null) => {
+      resizeRoRef.current?.disconnect();
+      resizeRoRef.current = null;
+      if (resizeRafRef.current) {
+        cancelAnimationFrame(resizeRafRef.current);
+        resizeRafRef.current = 0;
+      }
+      if (!chart) {
+        chartRef.current = null;
+        primaryRef.current = null;
+        ghostRef.current = null;
+        lastSpanRef.current = -1;
+        lastGridKeyRef.current = '';
+        return;
+      }
+      if (chartRef.current === chart) {
+        rebuildRef.current();
+        return;
+      }
+      chartRef.current = chart;
       primaryRef.current = null;
       ghostRef.current = null;
-      chartRef.current = null;
-      return;
-    }
-    chartRef.current = chart;
-    primaryRef.current = null;
-    ghostRef.current = null;
-    rebuildRef.current();
-    if (chart.element && typeof ResizeObserver !== 'undefined') {
-      const ro = new ResizeObserver(() => rebuildRef.current());
-      ro.observe(chart.element);
-      resizeRoRef.current = ro;
-    }
-  }, []);
+      ensureGraphs(chart);
+      rebuildRef.current();
+      if (chart.element && typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(() => {
+          if (resizeRafRef.current)
+            cancelAnimationFrame(resizeRafRef.current);
+          resizeRafRef.current = requestAnimationFrame(() => {
+            resizeRafRef.current = 0;
+            rebuildRef.current();
+          });
+        });
+        ro.observe(chart.element);
+        resizeRoRef.current = ro;
+      }
+    },
+    [ensureGraphs],
+  );
 
   return { widgetRef, rebuild };
 }
