@@ -20,11 +20,12 @@ reused where it fits, substantially reworked for this stack.
 
 ### Scope
 
-A **personal studio project** — the set of processors I use myself; not a
-product org or feature bazaar. Bug reports and packaging help are welcome.
-Feature requests or PRs outside this VST3/Linux focus (or that I simply don’t
-need) may be declined; forking is encouraged. Classic Calf’s “take every
-request” culture is one of the things this project is trying not to repeat.
+This project is a curated set of audio processors for my personal studio workflow. To avoid
+the maintenance overhead common in larger plugin suites (like the classic Calf ecosystem),
+this project remains strictly focused on VST3 and Linux. Bug reports and packaging support are
+welcome. However, to keep the project manageable, feature requests or PRs outside my personal
+scope might be declined without going into lengthy discussions. Forking is highly encouraged
+if you want to take the code in a new direction!
 
 DSP heritage from Calf (LGPL-2.1) is used under the GPL as permitted by the LGPL.
 UI building blocks include GPL-licensed `@deutschesoft/aux-widgets` / AWML.
