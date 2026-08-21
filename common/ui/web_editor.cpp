@@ -1225,7 +1225,7 @@ void PLUGIN_API WebEditor::update(FUnknown* changedUnknown, int32 message)
   pushParamPlain(param->getInfo().id, param->toPlain(param->getNormalized()));
 }
 
-int WebEditor::queryIoChannelCount() const
+int WebEditor::queryBusChannelCount(BusDirection dir, int busIndex) const
 {
   constexpr int kDefault = 2;
   constexpr int kMax = 8;
@@ -1237,7 +1237,7 @@ int WebEditor::queryIoChannelCount() const
     return kDefault;
 
   SpeakerArrangement arr = 0;
-  const tresult r = proc->getBusArrangement(kOutput, 0, arr);
+  const tresult r = proc->getBusArrangement(dir, busIndex, arr);
   proc->release();
   if (r != kResultOk)
     return kDefault;
@@ -1248,14 +1248,21 @@ int WebEditor::queryIoChannelCount() const
   return ch > kMax ? kMax : ch;
 }
 
+int WebEditor::queryIoChannelCount() const
+{
+  return queryBusChannelCount(kOutput, 0);
+}
+
 void WebEditor::pushIoChannels()
 {
   if (sock_ < 0)
     return;
-  const int ch = queryIoChannelCount();
-  char js[128];
+  const int inCh = queryBusChannelCount(kInput, 0);
+  const int outCh = queryBusChannelCount(kOutput, 0);
+  char js[160];
   std::snprintf(js, sizeof js,
-                "window.__calfnxtOnHost && window.__calfnxtOnHost({t:\"io\",ch:%d});", ch);
+                "window.__calfnxtOnHost && window.__calfnxtOnHost({t:\"io\",ch:%d,in:%d,out:%d});",
+                outCh, inCh, outCh);
   evalJs(js);
 }
 

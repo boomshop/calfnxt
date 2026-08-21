@@ -49,8 +49,10 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
   useEffect(() => () => ownedIo?.dispose(), [ownedIo]);
 
   const io = external ?? ownedIo!;
-  const channelCount = useDynamicNumber(io.channelCount$);
-  const labels = labelsForChannelCount(channelCount);
+  const inputChannelCount = useDynamicNumber(io.inputChannelCount$);
+  const outputChannelCount = useDynamicNumber(io.outputChannelCount$);
+  const inLabels = labelsForChannelCount(inputChannelCount);
+  const outLabels = labelsForChannelCount(outputChannelCount);
   const themeMode = useDynamicValue<ThemeMode>(themeMode$);
   const themeAccent = useDynamicValue<ThemeAccent>(themeAccent$);
 
@@ -77,8 +79,8 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
         />
         <MultiMeter
           value$={io.levelIn$}
-          count$={io.channelCount$}
-          labels={labels}
+          count$={io.inputChannelCount$}
+          labels={inLabels}
           layout="top"
         />
       </div>
@@ -88,8 +90,8 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
       <div className="out io" data-io="out">
         <MultiMeter
           value$={io.levelOut$}
-          count$={io.channelCount$}
-          labels={labels}
+          count$={io.outputChannelCount$}
+          labels={outLabels}
           layout="top"
         />
         <Knob

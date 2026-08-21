@@ -20,7 +20,8 @@ export type PluginId =
   | "crusher"
   | "phaser"
   | "flanger"
-  | "chorus";
+  | "chorus"
+  | "split";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
 
@@ -46,6 +47,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   phaser: () => import("./PhaserUI/BoundPhaserUI"),
   flanger: () => import("./FlangerUI/BoundFlangerUI"),
   chorus: () => import("./ChorusUI/BoundChorusUI"),
+  split: () => import("./SplitUI/BoundSplitUI"),
 };
 
 export function isPluginId(id: string): id is PluginId {

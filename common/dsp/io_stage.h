@@ -31,6 +31,58 @@ public:
   int takeInputLevelsDb(float* out, int maxOut) { return peakIn_.takeDb(out, maxOut); }
   int takeOutputLevelsDb(float* out, int maxOut) { return peakOut_.takeDb(out, maxOut); }
 
+  void setInputMeterChannels(int ch) { peakIn_.setChannels(ch); }
+  void setOutputMeterChannels(int ch) { peakOut_.setChannels(ch); }
+
+  /** Mono input → duplicate to stereo outputs with in_gain + input metering. */
+  bool beginMonoToStereo(Steinberg::Vst::ProcessData& data)
+  {
+    using namespace Steinberg;
+    using namespace Steinberg::Vst;
+
+    if (data.numInputs < 1 || data.numOutputs < 1 || !data.inputs || !data.outputs)
+      return false;
+    if (data.outputs[0].numChannels < 2)
+      return false;
+    if (data.inputs[0].silenceFlags != 0)
+    {
+      data.outputs[0].silenceFlags = data.inputs[0].silenceFlags;
+      return false;
+    }
+    data.outputs[0].silenceFlags = 0;
+
+    const float gIn = bypassGains_ ? 1.f : dbToLin(inGainDb_);
+    const int32 nFrames = data.numSamples;
+
+    if (data.symbolicSampleSize == kSample32)
+    {
+      auto** in = data.inputs[0].channelBuffers32;
+      auto** out = data.outputs[0].channelBuffers32;
+      for (int32 i = 0; i < nFrames; ++i)
+      {
+        const float y = in[0][i] * gIn;
+        out[0][i] = y;
+        out[1][i] = y;
+        peakIn_.accumulate(0, y);
+      }
+    }
+    else
+    {
+      auto** in = data.inputs[0].channelBuffers64;
+      auto** out = data.outputs[0].channelBuffers64;
+      const double g = static_cast<double>(gIn);
+      for (int32 i = 0; i < nFrames; ++i)
+      {
+        const double y = in[0][i] * g;
+        const float yf = static_cast<float>(y);
+        out[0][i] = y;
+        out[1][i] = y;
+        peakIn_.accumulate(0, yf);
+      }
+    }
+    return true;
+  }
+
   /** Prepare outputs with in_gain + input metering. false = silence / no audio. */
   bool begin(Steinberg::Vst::ProcessData& data)
   {

@@ -1,0 +1,101 @@
+{
+  "id": "split",
+  "name": "calfNXT Split",
+  "vendor": "calfNXT",
+  "vendor_url": "https://calfnxt.org",
+  "vendor_email": "mailto:schmidt@boomshop.net",
+  "version": "1.0.1",
+  "category": "Fx|Utility",
+  "vst3_uid": [
+    "0x53504C54",
+    "0x43414C46",
+    "0x4E585430",
+    "0x00000001"
+  ],
+  "editor": {
+    "width": 1024,
+    "height": 320
+  },
+  "buses": {
+    "audio_inputs": [
+      {
+        "name": "Mono In",
+        "channels": 1
+      }
+    ],
+    "audio_outputs": [
+      {
+        "name": "Stereo Out",
+        "channels": 2
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "id": "volume_l",
+      "name": "Volume L",
+      "type": "float",
+      "unit": "dB",
+      "min": -60.0,
+      "max": 12.0,
+      "default": 0.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "volume_r",
+      "name": "Volume R",
+      "type": "float",
+      "unit": "dB",
+      "min": -60.0,
+      "max": 12.0,
+      "default": 0.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "mute_l",
+      "name": "Mute L",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "mute_r",
+      "name": "Mute R",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "phase_l",
+      "name": "Phase L",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "phase_r",
+      "name": "Phase R",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    }
+  ]
+}

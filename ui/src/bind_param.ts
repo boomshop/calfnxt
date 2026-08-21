@@ -4,6 +4,7 @@ import { onHostMessage, plainFromMsg, postToHost, type calfNXTMsg } from "./brid
 type HostApply = (v: number) => void;
 type VizLevelsApply = (v: number[]) => void;
 type ChannelCountApply = (ch: number) => void;
+type IoChannelCountsApply = (inputCh: number, outputCh: number) => void;
 
 const hostApplies = new Map<number, HostApply>();
 const pendingHostParams = new Map<number, number>();
@@ -25,6 +26,7 @@ const vizHzApplies = new Map<string, HostApply>();
 const vizCtrlApplies = new Map<string, VizLevelsApply>();
 const vizLfoApplies = new Map<string, VizLevelsApply>();
 const channelCountApplies = new Set<ChannelCountApply>();
+const ioChannelCountsApplies = new Set<IoChannelCountsApply>();
 let hostWired = false;
 
 function nearlyEqual(a: number, b: number): boolean {
@@ -44,8 +46,14 @@ function dispatchHost(msg: calfNXTMsg): void {
     return;
   }
   if (msg.t === "io" && typeof msg.ch === "number" && Number.isFinite(msg.ch)) {
-    const ch = Math.max(1, Math.min(8, Math.round(msg.ch)));
-    channelCountApplies.forEach((apply) => apply(ch));
+    const outCh = Math.max(1, Math.min(8, Math.round(
+      typeof msg.out === "number" && Number.isFinite(msg.out) ? msg.out : msg.ch,
+    )));
+    const inCh = Math.max(1, Math.min(8, Math.round(
+      typeof msg.in === "number" && Number.isFinite(msg.in) ? msg.in : msg.ch,
+    )));
+    ioChannelCountsApplies.forEach((apply) => apply(inCh, outCh));
+    channelCountApplies.forEach((apply) => apply(outCh));
     return;
   }
   if (msg.t === "viz" && msg.kind === "levels" && Array.isArray(msg.v))
@@ -462,6 +470,24 @@ export function bindChannelCount(dv: DynamicValue<number>): () => void {
   channelCountApplies.add(apply);
   return () => {
     channelCountApplies.delete(apply);
+  };
+}
+
+/** Wire separate input/output meter counts from `{t:"io", in, out, ch}`. */
+export function bindIoChannelCounts(
+  input$: DynamicValue<number>,
+  output$: DynamicValue<number>,
+): () => void {
+  ensureHostWire();
+  const apply: IoChannelCountsApply = (inCh, outCh) => {
+    if (input$.value !== inCh)
+      input$.set(inCh);
+    if (output$.value !== outCh)
+      output$.set(outCh);
+  };
+  ioChannelCountsApplies.add(apply);
+  return () => {
+    ioChannelCountsApplies.delete(apply);
   };
 }
 

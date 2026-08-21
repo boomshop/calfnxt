@@ -40,6 +40,7 @@ const ALL_PLUGINS = [
   'phaser',
   'flanger',
   'chorus',
+  'split',
 ];
 
 const rawArgs = process.argv.slice(2);

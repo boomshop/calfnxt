@@ -25,7 +25,8 @@ export type PluginId =
   | 'crusher'
   | 'phaser'
   | 'flanger'
-  | 'chorus';
+  | 'chorus'
+  | 'split';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -48,6 +49,7 @@ const PLUGIN_IDS: PluginId[] = [
   'phaser',
   'flanger',
   'chorus',
+  'split',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -180,6 +182,12 @@ export {
   createBoundChorusHost,
   type IChorusHost,
 } from './host/chorusHost';
+
+export { SplitUI } from './plugins/SplitUI/SplitUI';
+export {
+  createBoundSplitHost,
+  type ISplitHost,
+} from './host/splitHost';
 
 export { createHeaderIo, type IHeaderIo } from './host/headerMeters';
 

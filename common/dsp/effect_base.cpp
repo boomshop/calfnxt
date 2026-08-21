@@ -29,9 +29,13 @@ tresult PLUGIN_API EffectBase::canProcessSampleSize(int32 symbolicSampleSize)
 tresult PLUGIN_API EffectBase::setBusArrangements(SpeakerArrangement* inputs, int32 numIns,
                                                   SpeakerArrangement* outputs, int32 numOuts)
 {
-  if (numIns == 1 && numOuts == 1 && inputs && outputs && inputs[0] == SpeakerArr::kStereo &&
-      outputs[0] == SpeakerArr::kStereo)
-    return SingleComponentEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
+  if (numIns == 1 && numOuts == 1 && inputs && outputs)
+  {
+    if (inputs[0] == SpeakerArr::kStereo && outputs[0] == SpeakerArr::kStereo)
+      return SingleComponentEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
+    if (inputs[0] == SpeakerArr::kMono && outputs[0] == SpeakerArr::kStereo)
+      return SingleComponentEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
+  }
   return kResultFalse;
 }
 
@@ -49,6 +53,12 @@ IPlugView* PLUGIN_API EffectBase::createView(FIDString name)
 void EffectBase::addStereoIO(const TChar* inName, const TChar* outName)
 {
   addAudioInput(inName ? inName : STR16("Stereo In"), SpeakerArr::kStereo);
+  addAudioOutput(outName ? outName : STR16("Stereo Out"), SpeakerArr::kStereo);
+}
+
+void EffectBase::addMonoInStereoOut(const TChar* inName, const TChar* outName)
+{
+  addAudioInput(inName ? inName : STR16("Mono In"), SpeakerArr::kMono);
   addAudioOutput(outName ? outName : STR16("Stereo Out"), SpeakerArr::kStereo);
 }
 

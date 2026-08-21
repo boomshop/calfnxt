@@ -20,6 +20,7 @@ import type {
   IPhaserHost,
   IFlangerHost,
   IChorusHost,
+  ISplitHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -798,6 +799,22 @@ export function applyMbcompDemo(
   return () => window.clearInterval(hold);
 }
 
+export function applySplitDemo(
+  host: ISplitHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setNum(host.volumeL$, params.volume_l);
+  setNum(host.volumeR$, params.volume_r);
+  setBool(host.muteL$, params.mute_l);
+  setBool(host.muteR$, params.mute_r);
+  setBool(host.phaseL$, params.phase_l);
+  setBool(host.phaseR$, params.phase_r);
+  applySharedViz(viz);
+  const hold = window.setInterval(() => applySharedViz(viz), 50);
+  return () => window.clearInterval(hold);
+}
+
 export type DemoApplier = (
   host: unknown,
   params: Record<string, unknown>,
@@ -825,4 +842,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   phaser: applyPhaserDemo as DemoApplier,
   flanger: applyFlangerDemo as DemoApplier,
   chorus: applyChorusDemo as DemoApplier,
+  split: applySplitDemo as DemoApplier,
 };

@@ -76,6 +76,7 @@ private:
   void flushViz();
   void flushVizLevels(const char* streamId, float* levels, int n);
   void flushVizArray(const char* streamId, const char* kind, float* values, int n);
+  int queryBusChannelCount(Steinberg::Vst::BusDirection dir, int busIndex) const;
   int queryIoChannelCount() const;
 
   void requestHostSize();

@@ -41,6 +41,8 @@ public:
 protected:
   void addStereoIO(const Steinberg::Vst::TChar* inName = nullptr,
                    const Steinberg::Vst::TChar* outName = nullptr);
+  void addMonoInStereoOut(const Steinberg::Vst::TChar* inName = nullptr,
+                          const Steinberg::Vst::TChar* outName = nullptr);
 
   /** Last point from inputParameterChanges → plain value. */
   bool applyLastParamPlain(Steinberg::Vst::ProcessData& data, Steinberg::Vst::ParamID id,

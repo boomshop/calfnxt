@@ -58,6 +58,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 | **Phaser** | `calfNXTPhaser.vst3` | Allpass phaser; LFO freeze/Reset; live L/R response chart |
 | **Flanger** | `calfNXTFlanger.vst3` | Delay comb + feedback; LFO freeze/Reset; comb peak/notch chart |
 | **Chorus** | `calfNXTChorus.vst3` | Multi-tap (≤8 voices); LFO position charts; post FrequencyRange |
+| **Split** | `calfNXTSplit.vst3` | Mono in → stereo out; per-channel volume, mute, phase invert |
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo/Ping-Pong/L-R); tempo sync; echo charts |
 | **Reverb** | `calfNXTReverb.vst3` | Algorithmic ER + late (no IR); duck/gate/freeze; room presets |
 
@@ -192,7 +193,7 @@ A Vite build **alone** does not update the VST editor — Resources must be
 re-embedded (the install script does that). Plugin ids for the script / Vite:
 `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay`
 `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter`
-`ringmod` `pulsator` `crusher` `phaser` `flanger` `chorus`.
+`ringmod` `pulsator` `crusher` `phaser` `flanger` `chorus` `split`.
 
 Codegen is part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++
 params + `ui/src/generated/`).

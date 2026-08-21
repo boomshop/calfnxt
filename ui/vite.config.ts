@@ -38,6 +38,7 @@ const knownPlugins = [
   "phaser",
   "flanger",
   "chorus",
+  "split",
 ] as const;
 
 export default defineConfig(({ command }) => {

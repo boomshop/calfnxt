@@ -8,8 +8,8 @@ export type calfNXTMsg =
   | { t: "viewport"; w: number; h: number }
   /** UI→host: diagnostic only (logged by WebEditor, not a param). */
   | { t: "_diag"; msg?: string; w?: number; h?: number }
-  /** Host→UI: active audio channel count (from bus arrangement). */
-  | { t: "io"; ch: number }
+  /** Host→UI: bus channel counts (`ch` = out, legacy; `in`/`out` when they differ). */
+  | { t: "io"; ch: number; in?: number; out?: number }
   /** DSP→UI telemetry (meters now; spectrum arrays later). */
   | { t: "viz"; id: string; kind: "levels" | "spectrum" | "gains" | "corr" | "gonio" | "envelope" | "gr" | "bandio" | "point" | "tempo" | "shape" | "hz" | "ctrl" | "lfo"; v: number[] }
   /** UI→host viz config (e.g. FFT bin count from pixel width). */

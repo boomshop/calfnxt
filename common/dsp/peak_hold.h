@@ -61,6 +61,12 @@ public:
     return n;
   }
 
+  void setChannels(int channels)
+  {
+    channels_ = channels < 1 ? 1 : (channels > kMaxChannels ? kMaxChannels : channels);
+    reset();
+  }
+
   static float linToDb(float lin)
   {
     if (!std::isfinite(lin) || !(lin > 1.0e-9f))

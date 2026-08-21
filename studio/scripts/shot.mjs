@@ -41,6 +41,7 @@ const ALL = [
   'phaser',
   'flanger',
   'chorus',
+  'split',
 ];
 
 function parsePlugins(argv) {

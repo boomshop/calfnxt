@@ -1,0 +1,16 @@
+/* Layout TBD — widgets only for now. */
+.SplitUI {
+  align-items: stretch;
+
+  > .block {
+    flex: 1;
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+
+    .Toggle {
+      width: 64px;
+      height: 64px;
+    }
+  }
+}
