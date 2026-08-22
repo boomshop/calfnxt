@@ -214,7 +214,42 @@ for name in "${VST3_NAMES[@]}"; do
   cp -a "$src"/. "$dst"/
 done
 
-echo "==> done (reload plugins in host)"
+# Ardour compares the plugin .so mtime to its cache (~/.cache/ardour*/vst/*.v3i).
+# After every rebuild the binary is newer → existing session instances look
+# "missing" until the cache is refreshed. Run the host scanner here so dev
+# installs do not require a manual Plugin Manager rescan.
+refresh_ardour_vst3_cache() {
+  local scanner=""
+  local ver
+  for ver in 9 8 7; do
+    if [[ -x "/usr/lib/ardour${ver}/ardour-vst3-scanner" ]]; then
+      scanner="/usr/lib/ardour${ver}/ardour-vst3-scanner"
+      break
+    fi
+  done
+  if [[ -z "$scanner" ]]; then
+    echo "==> Ardour VST3 scanner not found — rescan in Plugin Manager if plugins show missing"
+    return 0
+  fi
+
+  local libdir
+  libdir="$(dirname "$scanner")"
+  echo "==> refresh Ardour VST3 cache ($scanner)"
+  local failed=0
+  for name in "${VST3_NAMES[@]}"; do
+    if ! LD_LIBRARY_PATH="${libdir}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+      "$scanner" -f -q "$SHOW_DEST/${name}.vst3"; then
+      echo "warning: Ardour scan failed for ${name}.vst3" >&2
+      failed=1
+    fi
+  done
+  if [[ "$failed" -eq 0 ]]; then
+    echo "==> Ardour cache updated (reload the session if Ardour was already open)"
+  fi
+}
+refresh_ardour_vst3_cache
+
+echo "==> done"
 for name in "${VST3_NAMES[@]}"; do
   ls -la "$SHOW_DEST/${name}.vst3/Contents/Resources/assets/"*.{js,css} 2>/dev/null | head -5 || true
 done
