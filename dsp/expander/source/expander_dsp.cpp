@@ -370,11 +370,19 @@ tresult PLUGIN_API ExpanderPlugin::setState(IBStream* state)
     return kResultFalse;
   if (!streamer.readInt32u(version) || version != kStateVersion)
     return kResultFalse;
-  if (!streamer.readInt32(count) || count != kParamCount)
+  // Append-only params (e.g. rel_thresh_active): older saves may have fewer plains.
+  if (!streamer.readInt32(count) || count <= 0 || count > kParamCount)
     return kResultFalse;
 
   float plains[kParamCount];
   for (int i = 0; i < kParamCount; ++i)
+  {
+    if (auto* p = getParameterObject(static_cast<ParamID>(i)))
+      plains[i] = static_cast<float>(p->toPlain(p->getNormalized()));
+    else
+      plains[i] = 0.f;
+  }
+  for (int i = 0; i < count; ++i)
   {
     if (!streamer.readFloat(plains[i]))
       return kResultFalse;
