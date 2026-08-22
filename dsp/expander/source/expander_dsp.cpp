@@ -283,7 +283,8 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
     Dsp::filterModeToStages(params_[kParamLpMode]));
 
   const float openThresh = params_[kParamThreshold];
-  const float relThresh = std::min(params_[kParamReleaseThreshold], openThresh);
+  const bool relThreshActive = params_[kParamRelThreshActive] >= 0.5f;
+  const float relThresh = std::min(relThreshActive ? params_[kParamReleaseThreshold] : params_[kParamThreshold], openThresh);
 
   gx_.setSampleRate(static_cast<float>(sampleRate_));
   gx_.setParams(

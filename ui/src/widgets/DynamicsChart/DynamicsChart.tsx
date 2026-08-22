@@ -88,6 +88,7 @@ export interface DynamicsChartProps {
   type?: 'compressor' | 'expander';
   threshold$?: DynamicValue<number>;
   releaseThreshold$?: DynamicValue<number>;
+  relThreshActive$?: DynamicValue<boolean>;
   ratio$?: DynamicValue<number>;
   makeup$?: DynamicValue<number>;
   knee$?: DynamicValue<number>;
@@ -114,6 +115,7 @@ export function DynamicsChart(props: DynamicsChartProps) {
     onSet,
     point$,
     releaseThreshold$,
+    relThreshActive$,
     threshold$,
     ratio$,
     knee$,
@@ -122,6 +124,8 @@ export function DynamicsChart(props: DynamicsChartProps) {
   } = props;
 
   const composedOnSet = composeInteractingOnSet({ beginEdit, endEdit }, onSet);
+  const relThreshActiveRef = useRef(false);
+
   const chartInstRef = useRef<AuxDynamicsInstance | null>(null);
   const pointHandleRef = useRef<AuxHandle | null>(null);
   const relHandleRef = useRef<AuxHandle | null>(null);
@@ -151,74 +155,20 @@ export function DynamicsChart(props: DynamicsChartProps) {
   const reassertRef = useRef(reassertGradStroke);
   reassertRef.current = reassertGradStroke;
 
-  const detachPoint = useCallback(() => {
-    pointUnsubRef.current?.();
-    pointUnsubRef.current = null;
-
-    const w = chartInstRef.current;
-    const alive = w && !w.isDestructed();
-    // Must removeHandle — otherwise band switches / widgetRef rebinds leave
-    // orphaned operating-point dots on the transfer curve.
-    if (alive) {
-      if (pointHandleRef.current)
-        try {
-          w.removeHandle?.(pointHandleRef.current);
-        } catch {
-          /* destroyed */
-        }
-      if (relHandleRef.current)
-        try {
-          w.removeHandle?.(relHandleRef.current);
-        } catch {
-          /* destroyed */
-        }
-      if (releaseCurveRef.current)
-        try {
-          w.removeGraph?.(releaseCurveRef.current);
-        } catch {
-          /* destroyed */
-        }
-      if (bandRef.current)
-        try {
-          w.removeGraph?.(bandRef.current);
-        } catch {
-          /* destroyed */
-        }
-    }
-
-    pointHandleRef.current = null;
-    relHandleRef.current = null;
-    relOrigSetRef.current = null;
-    bandRef.current = null;
-    releaseCurveRef.current = null;
-  }, []);
-
-  const syncExpanderCurve = useCallback(
-    (w: AuxDynamicsInstance) => {
-      if (type !== 'expander' || !w.response?.set) return;
-      const th = threshold$?.value ?? -32;
-      const rel = Math.min(releaseThreshold$?.value ?? th, th);
-      const ratio = ratio$?.value ?? 4;
-      const knee = knee$?.value ?? 6;
-      const range = range$?.value ?? -60;
-      // Open curve (attack / open threshold).
-      w.response.set(
-        'dots',
-        expanderResponseDots(-60, 24, th, ratio, knee, range),
-      );
-      // Release curve: same shape, keyed at release threshold.
-      releaseCurveRef.current?.set?.(
-        'dots',
-        expanderResponseDots(-60, 24, rel, ratio, knee, range),
-      );
-      reassertRef.current();
-    },
-    [type, threshold$, releaseThreshold$, ratio$, knee$, range$],
+  const isRelThreshActive = useCallback(
+    () => relThreshActive$?.value ?? relThreshActiveRef.current,
+    [relThreshActive$],
   );
 
   const syncHysteresisBand = useCallback(
     (open: number, rel: number) => {
-      bandRef.current?.set?.('dots', [
+      const active = isRelThreshActive();
+      const band = bandRef.current;
+      if (!band?.set) return;
+      // Fill graphs keep the last path when dots are cleared — use AUX visible.
+      band.set('visible', active);
+      if (!active) return;
+      band.set('dots', [
         { x: rel, y: -60 },
         { x: open, y: -60 },
         { x: open, y: 24 },
@@ -226,44 +176,190 @@ export function DynamicsChart(props: DynamicsChartProps) {
         { x: rel, y: -60 },
       ]);
     },
-    [],
+    [isRelThreshActive],
   );
+
+  const syncExpanderCurve = useCallback(
+    (w: AuxDynamicsInstance) => {
+      if (type !== 'expander' || !w.response?.set) return;
+      const active = isRelThreshActive();
+      const th = threshold$?.value ?? -32;
+      const rel = Math.min(releaseThreshold$?.value ?? th, th);
+      const ratio = ratio$?.value ?? 4;
+      const knee = knee$?.value ?? 6;
+      const range = range$?.value ?? -60;
+      w.response.set(
+        'dots',
+        expanderResponseDots(-60, 24, th, ratio, knee, range),
+      );
+      const release = releaseCurveRef.current;
+      if (release?.set) {
+        release.set('visible', active);
+        if (active) {
+          release.set(
+            'dots',
+            expanderResponseDots(-60, 24, rel, ratio, knee, range),
+          );
+        }
+      }
+      reassertRef.current();
+    },
+    [
+      type,
+      threshold$,
+      releaseThreshold$,
+      ratio$,
+      knee$,
+      range$,
+      isRelThreshActive,
+    ],
+  );
+
+  const syncRelHandle = useCallback((rel: number, active: boolean) => {
+    const set = relOrigSetRef.current;
+    if (!set) return;
+    set('x', rel);
+    set('y', rel);
+    set('visible', active);
+  }, []);
 
   const syncHysteresis = useCallback(
     (_w: AuxDynamicsInstance) => {
       if (type !== 'expander') return;
+      const active = isRelThreshActive();
       const open = threshold$?.value ?? -32;
       const rel = Math.min(releaseThreshold$?.value ?? open, open);
-      const set = relOrigSetRef.current;
-      set?.('x', rel);
-      set?.('y', rel);
+      syncRelHandle(rel, active);
       syncHysteresisBand(open, rel);
     },
-    [type, threshold$, releaseThreshold$, syncHysteresisBand],
+    [
+      type,
+      threshold$,
+      releaseThreshold$,
+      isRelThreshActive,
+      syncHysteresisBand,
+      syncRelHandle,
+    ],
   );
 
-  const widgetRef = useCallback(
-    (w: AuxDynamicsInstance | null) => {
-      detachPoint();
-      chartInstRef.current = null;
+  const syncExpanderCurveRef = useRef(syncExpanderCurve);
+  syncExpanderCurveRef.current = syncExpanderCurve;
+  const syncHysteresisRef = useRef(syncHysteresis);
+  syncHysteresisRef.current = syncHysteresis;
+  const syncHysteresisBandRef = useRef(syncHysteresisBand);
+  syncHysteresisBandRef.current = syncHysteresisBand;
+  const syncRelHandleRef = useRef(syncRelHandle);
+  syncRelHandleRef.current = syncRelHandle;
 
-      if (!w || w.isDestructed()) {
-        setChart(null);
-        return;
+  const detachOverlays = useCallback(() => {
+    pointUnsubRef.current?.();
+    pointUnsubRef.current = null;
+
+    const w = chartInstRef.current;
+    const alive = w && !w.isDestructed();
+    if (alive) {
+      if (pointHandleRef.current) {
+        try {
+          w.removeHandle?.(pointHandleRef.current);
+        } catch {
+          /* destroyed */
+        }
+      }
+      if (relHandleRef.current) {
+        try {
+          w.removeHandle?.(relHandleRef.current);
+        } catch {
+          /* destroyed */
+        }
+      }
+      if (releaseCurveRef.current) {
+        try {
+          w.removeGraph?.(releaseCurveRef.current);
+        } catch {
+          /* destroyed */
+        }
+      }
+      if (bandRef.current) {
+        try {
+          w.removeGraph?.(bandRef.current);
+        } catch {
+          /* destroyed */
+        }
+      }
+    }
+
+    pointHandleRef.current = null;
+    relHandleRef.current = null;
+    relOrigSetRef.current = null;
+    bandRef.current = null;
+    releaseCurveRef.current = null;
+    chartInstRef.current = null;
+  }, []);
+
+  const ensureExpanderOverlays = useCallback(
+    (w: AuxDynamicsInstance) => {
+      if (type !== 'expander') return;
+
+      if (!releaseCurveRef.current && typeof w.addGraph === 'function') {
+        releaseCurveRef.current = w.addGraph({
+          class: 'aux-response-release',
+          mode: 'line',
+          dots: [],
+          visible: isRelThreshActive(),
+        });
+      }
+      if (!bandRef.current && typeof w.addGraph === 'function') {
+        bandRef.current = w.addGraph({
+          class: 'aux-hysteresis-band',
+          mode: 'fill',
+          dots: [],
+          visible: isRelThreshActive(),
+        });
       }
 
-      chartInstRef.current = w;
-      setChart(w);
-
-      // AUX Expander.drawGraph() ignores knee and overwrites response dots.
-      // Always redraw with our soft-knee / range-floor path instead.
-      if (type === 'expander') {
-        w.drawGraph = () => {
-          syncExpanderCurve(w);
+      if (!relHandleRef.current && releaseThreshold$ && typeof w.addHandle === 'function') {
+        relHandleRef.current = w.addHandle({
+          class: 'aux-release-thresh',
+          mode: 'circular',
+          x: releaseThreshold$.value,
+          y: releaseThreshold$.value,
+          z: 1,
+          min_size: 18,
+          max_size: 18,
+          format_label: false,
+          label: '',
+          show_handle: true,
+          visible: isRelThreshActive(),
+        });
+        const h = relHandleRef.current;
+        const origSet = h.set.bind(h);
+        relOrigSetRef.current = origSet;
+        h.set = (k: string, v: unknown) => {
+          if (!relThreshActiveRef.current) return;
+          if (k === 'x' || k === 'y') {
+            const open = threshold$?.value ?? 0;
+            const x = Math.min(Number(v), open);
+            if (releaseThreshold$.value !== x) releaseThreshold$.set(x);
+            origSet('x', x);
+            origSet('y', x);
+            syncHysteresisBandRef.current(open, x);
+            syncRelHandleRef.current(x, true);
+            return;
+          }
+          origSet(k, v);
         };
       }
+    },
+    [type, releaseThreshold$, threshold$, isRelThreshActive],
+  );
 
-      if (typeof w.addHandle === 'function') {
+  const bindOperatingPoint = useCallback(
+    (w: AuxDynamicsInstance) => {
+      if (!point$) return;
+      pointUnsubRef.current?.();
+      pointUnsubRef.current = null;
+
+      if (!pointHandleRef.current && typeof w.addHandle === 'function') {
         pointHandleRef.current = w.addHandle({
           class: 'aux-operating',
           mode: 'circular',
@@ -275,86 +371,58 @@ export function DynamicsChart(props: DynamicsChartProps) {
           format_label: false,
           label: '',
           show_handle: true,
-          active: true,
         });
         pointHandleRef.current.toBack?.();
-
-        if (type === 'expander' && releaseThreshold$) {
-          relHandleRef.current = w.addHandle({
-            class: 'aux-release-thresh',
-            mode: 'circular',
-            x: releaseThreshold$.value,
-            y: releaseThreshold$.value,
-            z: 1,
-            min_size: 18,
-            max_size: 18,
-            format_label: false,
-            label: '',
-            show_handle: true,
-            active: true,
-            // Lock to unity diagonal via userset below.
-          });
-          // Drag → release threshold (x), clamp ≤ open threshold.
-          const h = relHandleRef.current;
-          const origSet = h.set.bind(h);
-          relOrigSetRef.current = origSet;
-          h.set = (k: string, v: unknown) => {
-            if (k === 'x' || k === 'y') {
-              const open = threshold$?.value ?? 0;
-              const x = Math.min(Number(v), open);
-              if (releaseThreshold$.value !== x) releaseThreshold$.set(x);
-              origSet('x', x);
-              origSet('y', x);
-              syncHysteresisBand(open, x);
-              return;
-            }
-            origSet(k, v);
-          };
-        }
       }
 
-      if (type === 'expander' && typeof w.addGraph === 'function') {
-        // Release transfer (same shape as open, keyed at release threshold).
-        releaseCurveRef.current = w.addGraph({
-          class: 'aux-response-release',
-          mode: 'line',
-          dots: [],
-        });
-        bandRef.current = w.addGraph({
-          class: 'aux-hysteresis-band',
-          mode: 'fill',
-          dots: [],
-        });
-      }
+      const h = pointHandleRef.current;
+      if (!h) return;
 
-      if (point$ && pointHandleRef.current) {
-        const h = pointHandleRef.current;
-        const apply = (v: number[]) => {
-          if (!Array.isArray(v) || v.length < 2) return;
-          h.set('x', v[0]);
-          h.set('y', v[1]);
-          reassertRef.current();
-        };
-        apply(point$.value);
-        pointUnsubRef.current = point$.subscribe(apply, false);
-      }
-
-      syncExpanderCurve(w);
-      syncHysteresis(w);
+      const apply = (v: number[]) => {
+        if (!Array.isArray(v) || v.length < 2) return;
+        h.set('x', v[0]);
+        h.set('y', v[1]);
+        reassertRef.current();
+      };
+      apply(point$.value);
+      pointUnsubRef.current = point$.subscribe(apply, false);
     },
-    [
-      detachPoint,
-      point$,
-      type,
-      releaseThreshold$,
-      threshold$,
-      syncExpanderCurve,
-      syncHysteresis,
-      syncHysteresisBand,
-    ],
+    [point$],
   );
 
-  useEffect(() => () => detachPoint(), [detachPoint]);
+  /** Stable — must not depend on relThreshActive or sync callbacks (avoids overlay leaks). */
+  const widgetRef = useCallback(
+    (w: AuxDynamicsInstance | null) => {
+      if (!w) {
+        setChart(null);
+        return;
+      }
+      if (w.isDestructed()) {
+        detachOverlays();
+        setChart(null);
+        return;
+      }
+      if (chartInstRef.current === w) return;
+
+      chartInstRef.current = w;
+      setChart(w);
+
+      if (type === 'expander') {
+        w.drawGraph = () => {
+          syncExpanderCurveRef.current(w);
+        };
+      }
+
+      bindOperatingPoint(w);
+      ensureExpanderOverlays(w);
+
+      syncExpanderCurveRef.current(w);
+      syncHysteresisRef.current(w);
+    },
+    [bindOperatingPoint, detachOverlays, ensureExpanderOverlays, type],
+  );
+
+  useEffect(() => () => detachOverlays(), [detachOverlays]);
 
   useEffect(() => {
     pointHandleRef.current?.toBack?.();
@@ -364,10 +432,18 @@ export function DynamicsChart(props: DynamicsChartProps) {
     if (!chart || chart.isDestructed()) return;
     const unsubs: (() => void)[] = [];
     const bump = () => {
-      syncExpanderCurve(chart);
-      syncHysteresis(chart);
+      relThreshActiveRef.current = relThreshActive$?.value ?? false;
+      syncExpanderCurveRef.current(chart);
+      syncHysteresisRef.current(chart);
     };
-    for (const dv of [threshold$, ratio$, knee$, range$, releaseThreshold$]) {
+    for (const dv of [
+      threshold$,
+      ratio$,
+      knee$,
+      range$,
+      releaseThreshold$,
+      relThreshActive$,
+    ]) {
       if (dv) unsubs.push(dv.subscribe(bump, false));
     }
     bump();
@@ -379,8 +455,7 @@ export function DynamicsChart(props: DynamicsChartProps) {
     knee$,
     range$,
     releaseThreshold$,
-    syncExpanderCurve,
-    syncHysteresis,
+    relThreshActive$,
   ]);
 
   const cls = ['DynamicsChart', type, className ?? '']

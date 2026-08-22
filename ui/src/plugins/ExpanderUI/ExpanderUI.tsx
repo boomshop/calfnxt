@@ -265,6 +265,13 @@ export function ExpanderUI(props: ExpanderUIProps) {
               size="small"
             />
           </WithInfo>
+          <WithInfo title={expanderInfo.relThreshActive}>
+            <Toggle
+              state$={host.relThreshActive$}
+              icon="power"
+              {...edit(paramIds.rel_thresh_active)}
+            />
+          </WithInfo>
           <WithInfo title={expanderInfo.releaseThreshold}>
             <Knob
               label="Rel Thresh"
@@ -273,9 +280,7 @@ export function ExpanderUI(props: ExpanderUIProps) {
               max={openThresh}
               reset={expanderParamDefault('release_threshold')}
               base={0}
-              dots={
-                openThresh > -59.5 ? [-60, openThresh] : [-60]
-              }
+              dots={openThresh > -59.5 ? [-60, openThresh] : [-60]}
               labels={
                 openThresh > -59.5
                   ? [
@@ -294,6 +299,7 @@ export function ExpanderUI(props: ExpanderUIProps) {
               scale="decibel"
               log_factor={3}
               {...edit(paramIds.release_threshold)}
+              enabled$={host.relThreshActive$}
             />
           </WithInfo>
           <WithInfo title={expanderInfo.range}>
@@ -338,6 +344,7 @@ export function ExpanderUI(props: ExpanderUIProps) {
           type="expander"
           threshold$={host.threshold$}
           releaseThreshold$={host.releaseThreshold$}
+          relThreshActive$={host.relThreshActive$}
           ratio$={host.ratio$}
           range$={host.range$}
           knee$={host.knee$}

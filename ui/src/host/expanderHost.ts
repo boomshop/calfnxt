@@ -22,6 +22,7 @@ export type IExpanderHost = {
   bypass$: DynamicValue<boolean>;
   threshold$: DynamicValue<number>;
   releaseThreshold$: DynamicValue<number>;
+  relThreshActive$: DynamicValue<boolean>;
   ratio$: DynamicValue<number>;
   knee$: DynamicValue<number>;
   attack$: DynamicValue<number>;
@@ -54,7 +55,10 @@ export function expanderParamDefault(
   return paramDefault(name, fallback);
 }
 
-function bindNum(name: keyof typeof paramIds, fallback = 0): DynamicValue<number> {
+function bindNum(
+  name: keyof typeof paramIds,
+  fallback = 0,
+): DynamicValue<number> {
   const dv = DynamicValue.fromConstant(paramDefault(name, fallback));
   bindParamToHost(dv, paramIds[name]);
   return dv;
@@ -87,6 +91,7 @@ export function createBoundExpanderHost(): IExpanderHost {
     bypass$: bindBool('bypass'),
     threshold$,
     releaseThreshold$,
+    relThreshActive$: bindBool('rel_thresh_active'),
     ratio$: bindNum('ratio', 4),
     knee$: bindNum('knee', 6),
     attack$: bindNum('attack', 5),
