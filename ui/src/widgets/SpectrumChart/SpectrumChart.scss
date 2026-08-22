@@ -28,12 +28,8 @@
     z-index: 3;
     pointer-events: none;
     box-sizing: border-box;
-    background: linear-gradient(
-      to bottom,
-      color-mix(in srgb, var(--color) 8%, transparent),
-      color-mix(in srgb, var(--color) 25%, transparent),
-      color-mix(in srgb, var(--color) 8%, transparent)
-    );
+    background: var(--color);
+    opacity: 0.08;
   }
 
   > .SpectrumChart-waterfall {
