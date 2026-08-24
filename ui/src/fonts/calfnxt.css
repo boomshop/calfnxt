@@ -1,0 +1,9 @@
+@charset "utf-8";
+@font-face {
+  font-family: "calfnxt";
+  font-style: normal;
+  font-weight: normal;
+  src: url("calfnxt.ttf") format("truetype");
+}
+
+.aux-icon.sidechain::before { font-family: 'calfnxt'; content: '񗍄'; }

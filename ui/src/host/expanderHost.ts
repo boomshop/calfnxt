@@ -20,6 +20,7 @@ export const EXPANDER_LINK_ENTRIES = COMPRESSOR_LINK_ENTRIES;
 export type IExpanderHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  sidechainActive$: DynamicValue<boolean>;
   threshold$: DynamicValue<number>;
   releaseThreshold$: DynamicValue<number>;
   relThreshActive$: DynamicValue<boolean>;
@@ -89,6 +90,7 @@ export function createBoundExpanderHost(): IExpanderHost {
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    sidechainActive$: bindBool('sidechain_active'),
     threshold$,
     releaseThreshold$,
     relThreshActive$: bindBool('rel_thresh_active'),

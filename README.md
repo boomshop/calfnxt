@@ -38,29 +38,56 @@ Install paths are always `~/.vst3/<Bundle>` (or `$CALFNXT_VST3_DIR` /
 `cmake --install` — see [Build and install](#build-and-install)). Every effect
 shares **In/Out gain + peak meters** in the header (not repeated below).
 
+### Dynamics
+
 | Plugin | Bundle | Highlights |
 |--------|--------|------------|
-| **Equalizer** | `calfNXTEqualizer.vst3` | 16-band parametric / dyn EQ; Listen; Mono; interactive response |
-| **Stereo** | `calfNXTStereo.vst3` | Width, M/S, decorrelator, imaging; gonio + correlation |
-| **Transients** | `calfNXTTransients.vst3` | Attack/release shaper; sensitivity; lookahead; HP/LP; envelope history |
-| **Compressor** | `calfNXTCompressor.vst3` | Feed-forward GR; Peak/RMS/Opto; sidechain HP/LP; history |
-| **Expander** | `calfNXTExpander.vst3` | Downward expander/gate; hysteresis + hold; dual transfer curves |
-| **DeEsser** | `calfNXTDeesser.vst3` | Ess/Rumble; Wide/Split; detector HP/LP + peaking; history |
+| **Compressor** | `calfNXTCompressor.vst3` | Feed-forward GR; Peak/RMS/Opto; stereo sidechain bus; HP/LP + listen; history |
+| **Expander** | `calfNXTExpander.vst3` | Downward expander/gate; stereo sidechain bus; hysteresis + hold; dual transfer curves |
 | **Multiband Compressor** | `calfNXTMbcomp.vst3` | 2–6 LR bands; per-band dynamics; Mono; response + history |
 | **Limiter** | `calfNXTLimiter.vst3` | Lookahead brickwall; ASC; OS 1–4×; True Peak; Diff Listen |
 | **Multiband Limiter** | `calfNXTMblimiter.vst3` | Weighted multi-band brickwall + final limiter; Mono |
-| **Harmonics** | `calfNXTHarmonics.vst3` | Saturator / Exciter / Bass; Feed→shape→Post; Drive/Blend/Asym/Tone/OS |
-| **Analyzer** | `calfNXTAnalyzer.vst3` | Spectrum + spectralizer + gonio/correlation (passthrough) |
+| **DeEsser** | `calfNXTDeesser.vst3` | Ess/Rumble; Wide/Split; detector HP/LP + peaking; history |
+| **Transients** | `calfNXTTransients.vst3` | Attack/release shaper; sensitivity; lookahead; HP/LP; envelope history |
+
+### EQ & filter
+
+| Plugin | Bundle | Highlights |
+|--------|--------|------------|
+| **Equalizer** | `calfNXTEqualizer.vst3` | 16-band parametric / dyn EQ; Listen; Mono; interactive response |
 | **Filter** | `calfNXTFilter.vst3` | Multimode LP/HP/BP/BR/AP; optional envelope; Mono; spectrum overlay |
+
+### Harmonics
+
+| Plugin | Bundle | Highlights |
+|--------|--------|------------|
+| **Harmonics** | `calfNXTHarmonics.vst3` | Saturator / Exciter / Bass; Feed→shape→Post; Drive/Blend/Asym/Tone/OS |
+| **Crusher** | `calfNXTCrusher.vst3` | Bit crusher; response heat chart |
+
+### Delay & reverb
+
+| Plugin | Bundle | Highlights |
+|--------|--------|------------|
+| **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo/Ping-Pong/L-R); tempo sync; echo charts |
+| **Reverb** | `calfNXTReverb.vst3` | Algorithmic ER + late (no IR); duck/gate/freeze; room presets |
+
+### Modulators
+
+| Plugin | Bundle | Highlights |
+|--------|--------|------------|
 | **Ring Modulator** | `calfNXTRingmodulator.vst3` | Stereo ring mod; dual LFOs; live effective knobs |
 | **Pulsator** | `calfNXTPulsator.vst3` | Tremolo / autopanner; tempo sync; dual-phase LFO chart |
-| **Crusher** | `calfNXTCrusher.vst3` | Bit crusher; response heat chart |
 | **Phaser** | `calfNXTPhaser.vst3` | Allpass phaser; LFO freeze/Reset; live L/R response chart |
 | **Flanger** | `calfNXTFlanger.vst3` | Delay comb + feedback; LFO freeze/Reset; comb peak/notch chart |
 | **Chorus** | `calfNXTChorus.vst3` | Multi-tap (≤8 voices); LFO position charts; post FrequencyRange |
+
+### Tools
+
+| Plugin | Bundle | Highlights |
+|--------|--------|------------|
+| **Analyzer** | `calfNXTAnalyzer.vst3` | Spectrum + spectralizer + gonio/correlation (passthrough) |
+| **Stereo** | `calfNXTStereo.vst3` | Width, M/S, decorrelator, imaging; gonio + correlation |
 | **Split** | `calfNXTSplit.vst3` | Mono in → stereo out; per-channel volume, mute, phase invert |
-| **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo/Ping-Pong/L-R); tempo sync; echo charts |
-| **Reverb** | `calfNXTReverb.vst3` | Algorithmic ER + late (no IR); duck/gate/freeze; room presets |
 
 Site and per-plugin descriptors: [calfnxt.org](https://calfnxt.org/),
 `dsp/<id>/<id>.plugin.json`.

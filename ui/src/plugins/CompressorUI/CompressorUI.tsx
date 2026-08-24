@@ -109,6 +109,9 @@ export function CompressorUI(props: CompressorUIProps) {
   return (
     <div className="CompressorUI PluginUI">
       <Header title="Compressor">
+        <WithInfo title={compressorInfo.sidechainActive}>
+          <Toggle state$={host.sidechainActive$} icon="sidechain" className="warn" />
+        </WithInfo>
         <WithInfo title={compressorInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>

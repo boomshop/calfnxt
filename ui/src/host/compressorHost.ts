@@ -25,6 +25,7 @@ export const COMPRESSOR_LINK_ENTRIES = [
 export type ICompressorHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  sidechainActive$: DynamicValue<boolean>;
   threshold$: DynamicValue<number>;
   ratio$: DynamicValue<number>;
   knee$: DynamicValue<number>;
@@ -86,6 +87,7 @@ export function createBoundCompressorHost(): ICompressorHost {
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    sidechainActive$: bindBool('sidechain_active'),
     threshold$: bindNum('threshold', -20),
     ratio$: bindNum('ratio', 4),
     knee$: bindNum('knee', 6),

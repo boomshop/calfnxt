@@ -65,11 +65,12 @@ private:
     float makeupDb = 0.f;
     bool bypass = false;
     bool listen = false;
+    bool sidechainActive = false;
     Dsp::StereoLink link = Dsp::StereoLink::Max;
   };
 
   BlockState makeBlockState() const;
-  void processSample(const BlockState& state, float& L, float& R);
+  void processSample(const BlockState& state, float& L, float& R, float scL, float scR);
   void resetProcessing();
   void histFeedSample(float audioPeakLin, float detPeakLin, float grLin);
   void publishHistSnapshot();

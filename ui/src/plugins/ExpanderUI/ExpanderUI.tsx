@@ -101,6 +101,9 @@ export function ExpanderUI(props: ExpanderUIProps) {
   return (
     <div className="ExpanderUI PluginUI">
       <Header title="Expander">
+        <WithInfo title={expanderInfo.sidechainActive}>
+          <Toggle state$={host.sidechainActive$} icon="sidechain" className="warn" />
+        </WithInfo>
         <WithInfo title={expanderInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>

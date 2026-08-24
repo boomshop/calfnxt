@@ -4,6 +4,9 @@ export const compressorInfo = {
   bypass:
     'Turns compression off so you hear the dry path (In/Out gains still apply). Use this to A/B whether the compressor is helping glue and control, or just squashing life out of the track.',
 
+  sidechainActive:
+    'Uses the external Sidechain input for the level detector (Mode, Link, HP/LP filters) instead of the main program bus. Route a kick, bass, or keyed track into the host’s sidechain port, then enable this toggle — compression follows that source while the audio path stays on the main input. If nothing is routed or the bus is inactive, detection falls back to the main signal.',
+
   mode:
     'How the detector “hears” level. Peak = reacts to sharp spikes (drums, plosives) — punchy but can pump. RMS = follows average loudness — smoother leveling on vocals/buses. Opto = softer, program-dependent feel — often more musical and less abrupt on complex material.',
 

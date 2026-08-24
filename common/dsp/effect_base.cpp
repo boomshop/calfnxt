@@ -29,6 +29,14 @@ tresult PLUGIN_API EffectBase::canProcessSampleSize(int32 symbolicSampleSize)
 tresult PLUGIN_API EffectBase::setBusArrangements(SpeakerArrangement* inputs, int32 numIns,
                                                   SpeakerArrangement* outputs, int32 numOuts)
 {
+  if (sidechainInput_ && numIns == 2 && numOuts == 1 && inputs && outputs)
+  {
+    if (SpeakerArr::getChannelCount(inputs[0]) == 2 &&
+        SpeakerArr::getChannelCount(inputs[1]) == 2 &&
+        SpeakerArr::getChannelCount(outputs[0]) == 2)
+      return SingleComponentEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
+    return kResultFalse;
+  }
   if (numIns == 1 && numOuts == 1 && inputs && outputs)
   {
     if (inputs[0] == SpeakerArr::kStereo && outputs[0] == SpeakerArr::kStereo)
@@ -54,6 +62,24 @@ void EffectBase::addStereoIO(const TChar* inName, const TChar* outName)
 {
   addAudioInput(inName ? inName : STR16("Stereo In"), SpeakerArr::kStereo);
   addAudioOutput(outName ? outName : STR16("Stereo Out"), SpeakerArr::kStereo);
+}
+
+void EffectBase::addStereoWithSidechainIO(const TChar* inName, const TChar* outName,
+                                          const TChar* sidechainName)
+{
+  addStereoIO(inName, outName);
+  addAudioInput(sidechainName ? sidechainName : STR16("Sidechain"), SpeakerArr::kStereo, kAux, 0);
+  sidechainInput_ = true;
+}
+
+bool EffectBase::isAudioInputActive(int32 index)
+{
+  BusList* list = getBusList(kAudio, kInput);
+  if (!list || index < 0 || index >= static_cast<int32>(list->size()))
+    return false;
+  if (Bus* bus = list->at(index))
+    return bus->isActive();
+  return false;
 }
 
 void EffectBase::addMonoInStereoOut(const TChar* inName, const TChar* outName)

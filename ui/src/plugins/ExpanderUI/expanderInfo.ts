@@ -1,6 +1,8 @@
 export const expanderInfo = {
   bypass:
     'Turns expansion/gating off so you hear the dry path (In/Out gains still apply). A/B whether the expander is cleaning space or eating body.',
+  sidechainActive:
+    'Uses the external Sidechain input for the envelope detector (Mode, Link, HP/LP filters) instead of the main program bus. Route a reference track into the host’s sidechain port and enable this — expansion/gating follows that source while audio still passes through the main input. With no sidechain routed, detection falls back to the main signal.',
   mode: 'How the detector measures level. Peak = snappy, follows hits. RMS = smoother average — less chatter. Opto = photocell-like ballistics that soften attack/release as reduction deepens.',
   link: 'How L/R feed the detector. Max = louder channel wins. Avg = mean of both. Mid = Mid/sum only — useful when you want expansion driven by the phantom center.',
   threshold:

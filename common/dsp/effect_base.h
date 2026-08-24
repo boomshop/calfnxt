@@ -41,6 +41,10 @@ public:
 protected:
   void addStereoIO(const Steinberg::Vst::TChar* inName = nullptr,
                    const Steinberg::Vst::TChar* outName = nullptr);
+  /** Stereo main I/O plus stereo kAux sidechain input (inactive until host routes). */
+  void addStereoWithSidechainIO(const Steinberg::Vst::TChar* inName = nullptr,
+                                const Steinberg::Vst::TChar* outName = nullptr,
+                                const Steinberg::Vst::TChar* sidechainName = nullptr);
   void addMonoInStereoOut(const Steinberg::Vst::TChar* inName = nullptr,
                           const Steinberg::Vst::TChar* outName = nullptr);
 
@@ -74,7 +78,11 @@ protected:
   /** Optional meter/analyzer telemetry for the WebEditor (nullptr = none). */
   virtual Ui::IVizSource* vizSource() { return nullptr; }
 
+  /** True when the audio input bus at index is active (host routed / activated). */
+  bool isAudioInputActive(Steinberg::int32 index);
+
   Steinberg::ViewRect editorSize_;
+  bool sidechainInput_ = false;
 
 private:
   /** Plains captured at the end of setState; re-applied while suppress > 0. */

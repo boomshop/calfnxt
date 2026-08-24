@@ -1,4 +1,5 @@
 @import '@deutschesoft/aux-widgets/styles/blank.css';
+@import './fonts/calfnxt.css';
 
 :root {
   --background: #000000;

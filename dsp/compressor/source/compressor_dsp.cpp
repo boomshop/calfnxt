@@ -15,7 +15,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5843u; // 'CNXC'
-constexpr uint32 kStateVersion = 5;
+constexpr uint32 kStateVersion = 6;
 
 /** Fixed history plot window (ms) — keep in sync with CompressorHistoryChart. */
 constexpr float kHistoryDisplayMs = 10000.f;
@@ -65,7 +65,7 @@ tresult PLUGIN_API CompressorPlugin::initialize(FUnknown* context)
   if (result != kResultOk)
     return result;
 
-  addStereoIO();
+  addStereoWithSidechainIO();
   registerParameters(parameters);
   readParamPlains(params_, kParamCount);
   return kResultOk;
@@ -122,6 +122,7 @@ CompressorPlugin::BlockState CompressorPlugin::makeBlockState() const
   state.makeupLin = Dsp::dbToLin(state.makeupDb);
   state.bypass = params_[kParamBypass] >= 0.5f;
   state.listen = params_[kParamListen] >= 0.5f;
+  state.sidechainActive = params_[kParamSidechainActive] >= 0.5f;
   state.link = stereoLinkFromPlain(params_[kParamLink]);
   return state;
 }
@@ -157,24 +158,25 @@ void CompressorPlugin::publishHistSnapshot()
   histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
 }
 
-void CompressorPlugin::processSample(const BlockState& state, float& L, float& R)
+void CompressorPlugin::processSample(const BlockState& state, float& L, float& R, float scL,
+                                     float scR)
 {
   const float dryL = L;
   const float dryR = R;
   const float audioPeak = std::max(std::fabs(dryL), std::fabs(dryR));
 
-  float detL = dryL;
-  float detR = dryR;
+  float detL = scL;
+  float detR = scR;
   if (state.link == Dsp::StereoLink::Mid)
   {
-    const float mid = sc_.processMono(0.5f * (dryL + dryR));
+    const float mid = sc_.processMono(0.5f * (scL + scR));
     detL = mid;
     detR = mid;
   }
   else
   {
-    detL = sc_.processChannel(0, dryL);
-    detR = sc_.processChannel(1, dryR);
+    detL = sc_.processChannel(0, scL);
+    detR = sc_.processChannel(1, scR);
   }
 
   if (state.listen && !state.bypass)
@@ -315,13 +317,34 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
+  const bool wantExtSc = state.sidechainActive && data.numInputs >= 2;
+  const bool scBusActive = wantExtSc && isAudioInputActive(1);
+
+  auto sidechainAt = [&](int32 i, float mainL, float mainR) {
+    if (!scBusActive)
+      return std::pair<float, float>(mainL, mainR);
+    if (data.symbolicSampleSize == kSample32)
+    {
+      const auto& in = data.inputs[1];
+      const float scL = in.channelBuffers32[0][i];
+      const float scR = in.numChannels > 1 ? in.channelBuffers32[1][i] : scL;
+      return std::pair<float, float>(scL, scR);
+    }
+    const auto& in = data.inputs[1];
+    const float scL = static_cast<float>(in.channelBuffers64[0][i]);
+    const float scR =
+      in.numChannels > 1 ? static_cast<float>(in.channelBuffers64[1][i]) : scL;
+    return std::pair<float, float>(scL, scR);
+  };
+
   if (!io_.begin(data))
   {
     for (int32 i = 0; i < data.numSamples; ++i)
     {
       float zL = 0.f;
       float zR = 0.f;
-      processSample(state, zL, zR);
+      const auto [scL, scR] = sidechainAt(i, zL, zR);
+      processSample(state, zL, zR, scL, scR);
     }
     publishHistSnapshot();
     return kResultOk;
@@ -336,7 +359,8 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
     {
       float L = nCh > 0 ? out[0][i] : 0.f;
       float R = nCh > 1 ? out[1][i] : L;
-      processSample(state, L, R);
+      const auto [scL, scR] = sidechainAt(i, L, R);
+      processSample(state, L, R, scL, scR);
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)
@@ -351,7 +375,8 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
     {
       float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
       float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
-      processSample(state, L, R);
+      const auto [scL, scR] = sidechainAt(i, L, R);
+      processSample(state, L, R, scL, scR);
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)
@@ -375,13 +400,20 @@ tresult PLUGIN_API CompressorPlugin::setState(IBStream* state)
   int32 count = 0;
   if (!streamer.readInt32u(magic) || magic != kStateMagic)
     return kResultFalse;
-  if (!streamer.readInt32u(version) || version != kStateVersion)
+  if (!streamer.readInt32u(version) || version > kStateVersion)
     return kResultFalse;
-  if (!streamer.readInt32(count) || count != kParamCount)
+  if (!streamer.readInt32(count) || count <= 0 || count > kParamCount)
     return kResultFalse;
 
   float plains[kParamCount];
   for (int i = 0; i < kParamCount; ++i)
+  {
+    if (auto* p = getParameterObject(static_cast<ParamID>(i)))
+      plains[i] = static_cast<float>(p->toPlain(p->getNormalized()));
+    else
+      plains[i] = 0.f;
+  }
+  for (int i = 0; i < count; ++i)
   {
     if (!streamer.readFloat(plains[i]))
       return kResultFalse;
