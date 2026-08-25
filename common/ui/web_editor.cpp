@@ -1,4 +1,5 @@
 #include "web_editor.h"
+#include "ui_file_log.h"
 
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/vstspeaker.h"
@@ -38,13 +39,7 @@ void dlAnchor() {}
 /** Always-visible diagnostics: stderr may be swallowed by bridged hosts. */
 void logMsgFile(const char* line)
 {
-  if (!line || !line[0])
-    return;
-  const int fd = ::open("/tmp/calfnxt-ui.log", O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
-  if (fd < 0)
-    return;
-  (void)::write(fd, line, std::strlen(line));
-  ::close(fd);
+  appendUiLog(line);
 }
 
 void logBoth(const char* fmt, ...)

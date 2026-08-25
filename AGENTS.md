@@ -153,7 +153,7 @@ Do **not** call `restartComponent` / begin/perform/end from `setComponentHandler
 `CALFNXT_WEB_NO_GPU=1` if the embed paints blank/transparent. Opt-in XWayland
 Configure nudge: `CALFNXT_XWAYLAND_NUDGE=1` (4× start burst + 33 ms loop;
 off by default). Diagnostics always
-append to `/tmp/calfnxt-ui.log` (URI misses, JS errors). Env reference: `README.md`.
+append to `/tmp/calfnxt-ui.log` (URI misses, JS errors; 512 KiB cap then truncate). Env reference: `README.md`.
 GtkPlug size sync, `web-process-terminated` → reload + `{t:"_ready"}`.
 Verify Ardour-safe link: `ldd …/*.so` must not list `libgtk-3` / `libwebkit`.
 

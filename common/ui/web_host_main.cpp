@@ -15,11 +15,15 @@
 #include <jsc/jsc.h>
 #include <webkit2/webkit2.h>
 
+#include "ui_file_log.h"
+
 #include <cerrno>
+#include <cstdint>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <fcntl.h>
 #include <string>
 #include <unistd.h>
@@ -78,12 +82,36 @@ void hostLog(const char* fmt, ...)
     return;
   std::fputs(buf, stderr);
   std::fflush(stderr);
-  const int fd = ::open("/tmp/calfnxt-ui.log", O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
-  if (fd >= 0)
+  calfNXT::Ui::appendUiLog(buf);
+}
+
+/** evalJs can fail on every param/viz line (~30–60 Hz); do not fill the log. */
+void logEvalJsError(const char* message)
+{
+  static int64_t lastNs = 0;
+  static int dropped = 0;
+  timespec ts {};
+  if (::clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
   {
-    (void)::write(fd, buf, static_cast<size_t>(std::strlen(buf)));
-    ::close(fd);
+    hostLog("[calfnxt-web-host] evalJs: %s\n", message ? message : "?");
+    return;
   }
+  const int64_t now =
+    static_cast<int64_t>(ts.tv_sec) * 1000000000LL + static_cast<int64_t>(ts.tv_nsec);
+  if (lastNs != 0 && (now - lastNs) < 1000000000LL)
+  {
+    ++dropped;
+    return;
+  }
+  lastNs = now;
+  if (dropped > 0)
+  {
+    hostLog("[calfnxt-web-host] evalJs: %s (%d similar omitted)\n", message ? message : "?",
+            dropped);
+    dropped = 0;
+    return;
+  }
+  hostLog("[calfnxt-web-host] evalJs: %s\n", message ? message : "?");
 }
 
 bool sendLine(const char* line)
@@ -620,7 +648,7 @@ void evalJs(const char* js)
         webkit_web_view_evaluate_javascript_finish(WEBKIT_WEB_VIEW(object), result, &error);
       if (error)
       {
-        hostLog("[calfnxt-web-host] evalJs: %s\n", error->message);
+        logEvalJsError(error->message);
         g_error_free(error);
       }
       if (value)

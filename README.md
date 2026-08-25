@@ -256,7 +256,7 @@ inherits via `posix_spawn`). Example: `CALFNXT_WEB_DEBUG=1 carla …`.
 | Variable | Values | Effect |
 |----------|--------|--------|
 | `CALFNXT_UI_SCALE` | float ≈ `0.05`…`8` | Force editor scale (HiDPI) instead of measuring CSS vs host pixels. Invalid → ignored. |
-| `CALFNXT_WEB_DEBUG` | non-empty | Extra stderr logging; WebKit developer extras + console→stdout. Always also logs to `/tmp/calfnxt-ui.log`. |
+| `CALFNXT_WEB_DEBUG` | non-empty | Extra stderr logging; WebKit developer extras + console→stdout. File log is always `/tmp/calfnxt-ui.log` (capped at 512 KiB, then truncated). |
 | `CALFNXT_WEB_INSPECTOR` | non-empty | Open WebKit Inspector on editor load. |
 | `CALFNXT_WEB_NO_GPU` | non-empty | Hardware accel **off** (`NEVER`). Default is **on** (`ALWAYS`). Use if the embed paints blank. |
 | `CALFNXT_XWAYLAND_NUDGE` | non-empty | Opt-in GNOME/Mutter + Ardour on Wayland workaround. **Off by default.** See [Editor black or frozen on GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland). |
