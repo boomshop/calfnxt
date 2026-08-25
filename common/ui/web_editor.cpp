@@ -137,6 +137,43 @@ int clampPx(int v, int lo, int hi)
   return std::max(lo, std::min(hi, v));
 }
 
+/**
+ * Child environ for calfnxt-web-host: omit LD_LIBRARY_PATH.
+ *
+ * Mixbus/Ardour launchers prepend $INSTALL_DIR/lib (older glib). The helper is
+ * a system WebKitGTK binary; inheriting that path → symbol lookup failure
+ * (exit 127, black editor). Clearing LD_LIBRARY_PATH is enough — the helper
+ * does not need host JACK/custom paths. Opt out: CALFNXT_KEEP_HOST_LDPATH.
+ *
+ * Returns true if `ptrs` is a replacement environ (storage must stay alive
+ * until posix_spawn returns). False → use the process `environ`.
+ */
+bool buildWebHostEnviron(std::vector<std::string>& storage, std::vector<char*>& ptrs)
+{
+  storage.clear();
+  ptrs.clear();
+  if (envFlag("CALFNXT_KEEP_HOST_LDPATH"))
+  {
+    logBoth("[calfnxt] helper env: LD_LIBRARY_PATH kept (CALFNXT_KEEP_HOST_LDPATH)\n");
+    return false;
+  }
+  if (!std::getenv("LD_LIBRARY_PATH"))
+    return false;
+
+  for (char** e = environ; e && *e; ++e)
+  {
+    if (std::strncmp(*e, "LD_LIBRARY_PATH=", 16) == 0)
+      continue;
+    storage.emplace_back(*e);
+  }
+  ptrs.reserve(storage.size() + 1);
+  for (auto& s : storage)
+    ptrs.push_back(s.data());
+  ptrs.push_back(nullptr);
+  logBoth("[calfnxt] helper env: LD_LIBRARY_PATH cleared for web-host\n");
+  return true;
+}
+
 void logMsg(const char* fmt, ...)
 {
   char buf[512];
@@ -425,8 +462,13 @@ bool WebEditor::openHelper(void* x11Parent)
     nullptr,
   };
 
+  std::vector<std::string> childEnvStorage;
+  std::vector<char*> childEnv;
+  const bool sanitized = buildWebHostEnviron(childEnvStorage, childEnv);
+  char** envp = sanitized ? childEnv.data() : environ;
+
   pid_t pid = -1;
-  const int rc = posix_spawn(&pid, helperPath, &actions, nullptr, argv, environ);
+  const int rc = posix_spawn(&pid, helperPath, &actions, nullptr, argv, envp);
   posix_spawn_file_actions_destroy(&actions);
   ::close(sp[1]);
 
@@ -459,7 +501,8 @@ bool WebEditor::openHelper(void* x11Parent)
       if (WIFEXITED(status))
       {
         logBoth("[calfnxt] web-host exited immediately (code=%d) — check deps "
-                "(webkit2gtk-4.1, gtk-3) and DISPLAY/X11; try: %s --help\n",
+                "(webkit2gtk-4.1, gtk-3), DISPLAY/X11, and host LD_LIBRARY_PATH "
+                "(Mixbus/Ardour bundled glib); try: %s --help\n",
                 WEXITSTATUS(status), helperPath);
       }
       else if (WIFSIGNALED(status))

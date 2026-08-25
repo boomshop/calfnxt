@@ -249,7 +249,9 @@ See [`studio/README.md`](studio/README.md).
 
 Boolean-style flags are **on** when set to any non-empty value (e.g. `1`).
 Editor / WebKit vars must be in the **plugin host** environment (`calfnxt-web-host`
-inherits via `posix_spawn`). Example: `CALFNXT_WEB_DEBUG=1 carla …`.
+inherits via `posix_spawn`, except `LD_LIBRARY_PATH` is cleared for the helper —
+see [Editor black in Mixbus](#editor-black-in-mixbus-helper-exit-127)).
+Example: `CALFNXT_WEB_DEBUG=1 carla …`.
 
 ### Editor / WebKit (`calfnxt-web-host`)
 
@@ -260,6 +262,7 @@ inherits via `posix_spawn`). Example: `CALFNXT_WEB_DEBUG=1 carla …`.
 | `CALFNXT_WEB_INSPECTOR` | non-empty | Open WebKit Inspector on editor load. |
 | `CALFNXT_WEB_NO_GPU` | non-empty | Hardware accel **off** (`NEVER`). Default is **on** (`ALWAYS`). Use if the embed paints blank. |
 | `CALFNXT_XWAYLAND_NUDGE` | non-empty | Opt-in GNOME/Mutter + Ardour on Wayland workaround. **Off by default.** See [Editor black or frozen on GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland). |
+| `CALFNXT_KEEP_HOST_LDPATH` | non-empty | Keep the host `LD_LIBRARY_PATH` for `calfnxt-web-host`. Default: clear it (Mixbus/Ardour bundled glib). |
 
 Related (not calfNXT-owned):
 
@@ -364,3 +367,29 @@ CALFNXT_XWAYLAND_NUDGE=1
 
 Then **log out and back in**. Confirm in `/tmp/calfnxt-ui.log`: `xwayland_nudge=1`
 and `nudge cfg-*` / `live-cfg`. Optional: `GDK_BACKEND=x11`, `CALFNXT_WEB_DEBUG=1`.
+
+---
+
+## Editor black in Mixbus (helper exit 127)
+
+Harrison Mixbus (and some Ardour packages) prepend `$INSTALL_DIR/lib` to
+`LD_LIBRARY_PATH` so the DAW uses its bundled glib/GTK. `calfnxt-web-host` is a
+**system** WebKitGTK binary. If it inherits that path, the dynamic linker loads
+Mixbus’s older `libglib-2.0.so` first; system `libatspi` (pulled in by WebKit)
+then fails with `undefined symbol: g_once_init_leave_pointer` → helper **exit 127**,
+black editor, audio still runs.
+
+Vanilla Ardour often works on the same machine because it bundles a newer glib
+or does not override `LD_LIBRARY_PATH` the same way. `ldd` on the helper looks
+fine; the clash only happens at runtime under Mixbus.
+
+`WebEditor` clears `LD_LIBRARY_PATH` for the helper only (system library search
+path). Confirm in `/tmp/calfnxt-ui.log`:
+
+```text
+[calfnxt] helper env: LD_LIBRARY_PATH cleared for web-host
+[calfnxt] spawned web-host pid=…
+```
+
+without a following `exited immediately (code=127)`. Opt out:
+`CALFNXT_KEEP_HOST_LDPATH=1`.

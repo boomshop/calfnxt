@@ -18,7 +18,10 @@ Shared React SPA UI embedded into each bundle’s `Resources/`. Branding: **calf
 internalized toolkit collides with system GTK3 — `GdkDisplay` GType abort).
 `WebEditor` in the host process is a thin proxy: it spawns `calfnxt-web-host`
 (GtkPlug + WebKit, XEmbed into the host XID) and forwards the JSON bridge over a
-Unix socketpair. Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
+Unix socketpair. The helper is spawned without the host’s `LD_LIBRARY_PATH`
+(Mixbus/Ardour bundled glib breaks system WebKit); opt out with
+`CALFNXT_KEEP_HOST_LDPATH`. Each bundle ships `Contents/<arch>/calfnxt-web-host`
+next to the `.so`.
 
 Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`).
 Suite focus is this set — no near-term new plugins unless explicitly requested.
@@ -42,7 +45,7 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | URI scheme             | `calfnxt://bundle/...`                                                                                                                                                                                                                                                                                              |
 | JS bridge              | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ`                                                                                                                                                                                                                                                    |
 | Script message handler | `webkit.messageHandlers.calfnxt`                                                                                                                                                                                                                                                                                    |
-| Env flags              | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_XWAYLAND_NUDGE` (full list in `README.md`)                                                                                                                                                                           |
+| Env flags              | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_XWAYLAND_NUDGE`, `CALFNXT_KEEP_HOST_LDPATH` (full list in `README.md`)                                                                                                                                               |
 | Install (packaging)    | `cmake --install` → `${prefix}/${CALFNXT_VST3_INSTALL_DIR}` (default `lib/vst3`); user copy via `./tools/install-user-vst3.sh` `[plugin…]` / `[--dest dir]`                                                                                                                                                         |
 | Msg type (TS)          | `calfNXTMsg`                                                                                                                                                                                                                                                                                                        |
 
