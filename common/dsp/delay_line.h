@@ -46,13 +46,26 @@ public:
     delay = std::clamp(delay, 1.f, float(N - 2));
     const int i0 = static_cast<int>(delay);
     const float frac = delay - float(i0);
-    const float a = read(i0);
-    const float b = read(i0 + 1);
+    const float a = buf_[(w_ - i0) & kMask];
+    const float b = buf_[(w_ - (i0 + 1)) & kMask];
     return a + (b - a) * frac;
   }
 
   /**
-   * Comb allpass: write feedback comb, return allpass output.
+   * Integer-delay comb allpass (no denormal scrub — scrub tank/feedback state
+   * at a coarser rate; avoids 2× isnormal per stage in reverb/diffuse).
+   */
+  float processAllpassComb(float in, int delaySamples, float fb)
+  {
+    const int d0 = std::clamp(delaySamples, 1, N - 2);
+    const float old = buf_[(w_ - d0) & kMask];
+    const float cur = in + fb * old;
+    write(cur);
+    return old - fb * cur;
+  }
+
+  /**
+   * Comb allpass with fix16 fractional delay (lerp). No per-call sanitize.
    * `delayFix16` = delay_samples << 16 (fractional in low 16 bits).
    */
   float processAllpassCombFix16(float in, uint32_t delayFix16, float fb)
@@ -60,13 +73,12 @@ public:
     const int di = int(delayFix16 >> 16);
     const float frac = float(delayFix16 & 0xffffu) * (1.f / 65536.f);
     const int d0 = std::clamp(di, 1, N - 2);
-    const float old = read(d0) + (read(d0 + 1) - read(d0)) * frac;
-    float cur = in + fb * old;
-    sanitizeDenormal(cur);
+    const float a = buf_[(w_ - d0) & kMask];
+    const float b = buf_[(w_ - (d0 + 1)) & kMask];
+    const float old = a + (b - a) * frac;
+    const float cur = in + fb * old;
     write(cur);
-    float out = old - fb * cur;
-    sanitizeDenormal(out);
-    return out;
+    return old - fb * cur;
   }
 
 private:

@@ -4,6 +4,10 @@
 #include <cmath>
 #include <cstring>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace calfNXT {
 namespace Dsp {
 
@@ -53,6 +57,27 @@ inline void sanitizeDenormal(double& value)
 {
   if (!std::isnormal(value))
     value = 0.0;
+}
+
+/**
+ * Fast sine for LFO / modulation (turns 0…1 → −1…1).
+ * 256-point table + linear interp — enough for chorus/flanger/reverb mod.
+ */
+inline float sineTurns(float turns)
+{
+  static float table[257];
+  static bool ready = false;
+  if (!ready)
+  {
+    for (int i = 0; i <= 256; ++i)
+      table[i] = std::sin(float(i) * (2.f * float(M_PI) / 256.f));
+    ready = true;
+  }
+  turns -= std::floor(turns);
+  const float x = turns * 256.f;
+  const int i0 = int(x);
+  const float frac = x - float(i0);
+  return table[i0] + (table[i0 + 1] - table[i0]) * frac;
 }
 
 /**

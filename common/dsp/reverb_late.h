@@ -32,7 +32,6 @@ public:
   float process(float in)
   {
     z_ = b_ * in + a_ * z_;
-    sanitizeDenormal(z_);
     return z_;
   }
 
@@ -64,7 +63,6 @@ public:
     const float y = a_ * (y1_ + in - x1_);
     x1_ = in;
     y1_ = y;
-    sanitizeDenormal(y1_);
     return y;
   }
 
@@ -215,6 +213,11 @@ public:
 
   void process(float& left, float& right)
   {
+    // Per-stage LFO polarity (same as the historic 6-stage unroll).
+    static constexpr float kMod[6] = { -45.f, +47.f, +54.f, -69.f, +69.f, -46.f };
+
+    // Keep fractional base delays even with mod off (Fix16 + 0 mod) — integer
+    // rounding would shift the tank vs the previous behaviour.
     float lfo = 0.f;
     float depthSamp = 0.f;
     if (modDepth_ > 1.0e-4f)
@@ -222,12 +225,9 @@ public:
       phase_ += dphase_;
       if (phase_ >= 1.f)
         phase_ -= 1.f;
-      lfo = std::sin(phase_ * 2.f * float(M_PI));
-      depthSamp = modDepth_ * (sr_ / kRefSr) * 12.f; // ~12 samples @ depth=1, 44.1k
+      lfo = sineTurns(phase_);
+      depthSamp = modDepth_ * (sr_ / kRefSr) * 12.f;
     }
-
-    // Per-stage LFO polarity (same as the historic 6-stage unroll).
-    static constexpr float kMod[6] = { -45.f, +47.f, +54.f, -69.f, +69.f, -46.f };
 
     const float fb = feedback();
     const int n = stages_;
@@ -432,17 +432,28 @@ public:
     amount = std::clamp(amount, 0.f, 1.f);
     if (amount < 1.0e-4f || stages_ <= 0)
       return;
-    // Stretch delays with amount so PreDiff can soften onset (~3 ms → ~50 ms).
-    const float scale = 1.f + amount * 15.f;
-    const float fb = 0.45f + 0.4f * amount;
+
+    // Cache scaled Fix16 delays when amount is stable (same fractional taps as before).
+    if (std::fabs(amount - cachedAmt_) > 1.0e-4f)
+    {
+      cachedAmt_ = amount;
+      const float scale = 1.f + amount * 15.f;
+      cachedFb_ = 0.45f + 0.4f * amount;
+      for (int i = 0; i < kMaxStages; ++i)
+      {
+        const float dL = std::min(float(kSize - 4), float(dL_[i]) * scale);
+        const float dR = std::min(float(kSize - 4), float(dR_[i]) * scale);
+        dLFix_[i] = uint32_t(dL * 65536.f);
+        dRFix_[i] = uint32_t(dR * 65536.f);
+      }
+    }
+
     float xl = l;
     float xr = r;
     for (int i = 0; i < stages_; ++i)
     {
-      const float dL = std::min(float(kSize - 4), float(dL_[i]) * scale);
-      const float dR = std::min(float(kSize - 4), float(dR_[i]) * scale);
-      xl = apL_[i].processAllpassCombFix16(xl, uint32_t(dL * 65536.f), fb);
-      xr = apR_[i].processAllpassCombFix16(xr, uint32_t(dR * 65536.f), fb);
+      xl = apL_[i].processAllpassCombFix16(xl, dLFix_[i], cachedFb_);
+      xr = apR_[i].processAllpassCombFix16(xr, dRFix_[i], cachedFb_);
     }
     l = l + (xl - l) * amount;
     r = r + (xr - r) * amount;
@@ -458,7 +469,11 @@ private:
   DelayLine<kSize> apR_[kMaxStages];
   int dL_[kMaxStages] {};
   int dR_[kMaxStages] {};
+  uint32_t dLFix_[kMaxStages] {};
+  uint32_t dRFix_[kMaxStages] {};
   int stages_ = 4;
+  float cachedAmt_ = -1.f;
+  float cachedFb_ = 0.45f;
   float sr_ = 44100.f;
 };
 

@@ -115,7 +115,7 @@ public:
       phase_ += dphase_ * static_cast<double>(nSamples);
       phase_ -= std::floor(phase_);
     }
-    const float lfo = std::sin(static_cast<float>(2.0 * M_PI * phase_));
+    const float lfo = sineTurns(static_cast<float>(phase_));
     float delayTgt = minDelaySamp_ + 2.f + modDepthSamp_ * (0.5f + 0.5f * lfo);
     delayTgt = std::clamp(delayTgt, 1.f, float(kMaxDelay - 2));
     const float a = 1.f - std::pow(1.f - delaySlew_, static_cast<float>(nSamples));
@@ -142,12 +142,11 @@ public:
       phase_ -= std::floor(phase_);
     }
 
-    const float lfo = std::sin(static_cast<float>(2.0 * M_PI * phase_));
-    // Sweep min … min+depth (same span as Calf fix16 flanger).
+    // Same topology as before: per-sample LFO → target → slew (LUT replaces std::sin).
+    const float lfo = sineTurns(static_cast<float>(phase_));
     float delayTgt = minDelaySamp_ + 2.f + modDepthSamp_ * (0.5f + 0.5f * lfo);
     delayTgt = std::clamp(delayTgt, 1.f, float(kMaxDelay - 2));
 
-    // Smooth tap length (Calf ramps over ~1024 samples on target changes).
     delayCur_ += (delayTgt - delayCur_) * delaySlew_;
     delayCur_ = std::clamp(delayCur_, 1.f, float(kMaxDelay - 2));
     lastDelay_ = delayCur_;
@@ -164,8 +163,7 @@ public:
       return in * dry;
     }
 
-    float fd = delay_.readLerp(delayCur_);
-    sanitizeDenormal(fd);
+    const float fd = delay_.readLerp(delayCur_);
     lastFd_ = fd;
 
     const float dry = advanceGain(dryCur_, dryTgt_, dryDelta_);
@@ -173,10 +171,8 @@ public:
     float out = in * dry;
     if (active)
       out += fd * wet;
-    sanitizeDenormal(out);
 
-    float put = in + fb_ * fd;
-    sanitizeDenormal(put);
+    const float put = in + fb_ * fd;
     delay_.write(put);
     return out;
   }
@@ -211,7 +207,6 @@ private:
       cur -= delta;
     else
       cur = tgt;
-    sanitizeDenormal(cur);
     return cur;
   }
 

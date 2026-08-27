@@ -110,14 +110,19 @@ public:
     const int n = tapCount_;
     for (int i = 0; i < n; ++i)
     {
-      sumL += line_.read(tapL_[i]) * ampL_[i];
-      sumR += line_.read(tapR_[i]) * ampR_[i];
+      const float aL = ampL_[i];
+      const float aR = ampR_[i];
+      // Skip taps culled to silence (Quality caps leave trailing zeros unused).
+      if (aL == 0.f && aR == 0.f)
+        continue;
+      if (aL != 0.f)
+        sumL += line_.read(tapL_[i]) * aL;
+      if (aR != 0.f)
+        sumR += line_.read(tapR_[i]) * aR;
     }
 
     outL = float(hpL_.process(sumL));
     outR = float(hpR_.process(sumR));
-    sanitizeDenormal(outL);
-    sanitizeDenormal(outR);
   }
 
 private:

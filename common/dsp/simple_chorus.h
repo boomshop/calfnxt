@@ -95,7 +95,7 @@ public:
     voice = std::clamp(voice, 0, voices_ - 1);
     float vp = phase_ + vphase_ * static_cast<float>(voice);
     vp -= std::floor(vp);
-    const float sine = std::sin(vp * static_cast<float>(2.0 * M_PI)); // −1…1
+    const float sine = sineTurns(vp); // −1…1
     // Calf: −1 + voice·offset + (1+sine)/range  (full span ≈ −1…+1 across voices).
     return -1.f + static_cast<float>(voice) * voiceOffset_ + voiceDepth_ * (sine + 1.f);
   }
@@ -184,15 +184,16 @@ public:
 
   /**
    * Process one sample → wet (× √1/N). Caller applies amount / dry / active / post.
+   * Topology unchanged vs heritage: per-sample LFO taps; `sineTurns` replaces `std::sin`.
    */
   float processWet(float in)
   {
     const float absIn = std::fabs(in);
     lastEnergy_ = std::max(absIn, lastEnergy_ * 0.999f);
-    sanitizeDenormal(lastEnergy_);
 
     if (absIn < 1.0e-10f && lastEnergy_ < 1.0e-8f)
     {
+      lastEnergy_ = 0.f;
       delay_.write(0.f);
       lfo_.step();
       return 0.f;
@@ -204,18 +205,14 @@ public:
     const int nV = lfo_.voices();
     for (int v = 0; v < nV; ++v)
     {
-      // Calf: delay = min + 2 + depth·(0.5 + 0.5·lfo_norm), lfo_norm ≈ −1…1.
       const float lfoVal = lfo_.getValue(v);
       float d = minDelaySamp_ + 2.f + modDepthSamp_ * (0.5f + 0.5f * lfoVal);
       d = std::clamp(d, 1.f, float(kMaxDelay - 2));
-      float fd = delay_.readLerp(d);
-      sanitizeDenormal(fd);
-      out += fd;
+      out += delay_.readLerp(d);
     }
 
     lfo_.step();
     out *= lfo_.scale();
-    sanitizeDenormal(out);
     return out;
   }
 
