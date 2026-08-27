@@ -143,6 +143,28 @@ void ReverbPlugin::updateFromParams()
   diffuseAmt_ = std::clamp(params_[kParamDiffuse], 0.f, 1.f);
   airAmt_ = std::clamp(params_[kParamAir], 0.f, 1.f);
 
+  // Quality: Lo / Mid / Hi (CPU vs density). Appended ParamID — see setState.
+  const int quality = std::clamp(int(params_[kParamQuality] + 0.5f), 0, 2);
+  if (quality == 0)
+  {
+    late_.setActiveStages(4);
+    er_.setTapLimits(12, 24);
+    diffuse_.setStages(0);
+    diffuseAmt_ = 0.f; // Pre Diff inactive on Lo
+  }
+  else if (quality == 1)
+  {
+    late_.setActiveStages(6);
+    er_.setTapLimits(Dsp::ReverbEr::kMaxMulti, Dsp::ReverbEr::kMaxVelvet);
+    diffuse_.setStages(4);
+  }
+  else
+  {
+    late_.setActiveStages(6);
+    er_.setTapLimits(Dsp::ReverbEr::kMaxMulti, Dsp::ReverbEr::kMaxVelvet);
+    diffuse_.setStages(6);
+  }
+
   const float room = params_[kParamRoomSize];
   const float distance = params_[kParamDistance];
 
@@ -458,13 +480,14 @@ tresult PLUGIN_API ReverbPlugin::setState(IBStream* state)
   int32 count = 0;
   if (!streamer.readInt32u(magic) || magic != kStateMagic)
     return kResultFalse;
-  if (!streamer.readInt32u(version) || version != kStateVersion)
+  if (!streamer.readInt32u(version) || version < 1)
     return kResultFalse;
-  if (!streamer.readInt32(count) || count != kParamCount)
+  if (!streamer.readInt32(count) || count < 1 || count > kParamCount)
     return kResultFalse;
 
-  float plains[kParamCount];
-  for (int i = 0; i < kParamCount; ++i)
+  float plains[kParamCount] {};
+  readParamPlains(plains, kParamCount); // defaults for any newly added params
+  for (int i = 0; i < count; ++i)
   {
     if (!streamer.readFloat(plains[i]))
       return kResultFalse;

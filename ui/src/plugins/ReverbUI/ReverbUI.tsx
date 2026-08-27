@@ -15,6 +15,7 @@ import {
   REVERB_ER_MODE_ENTRIES,
   REVERB_PATH_MODE_ENTRIES,
   REVERB_PRESET_ENTRIES,
+  REVERB_QUALITY_ENTRIES,
   REVERB_WIDTH_MODE_ENTRIES,
   reverbParamDefault,
   type IReverbHost,
@@ -119,18 +120,29 @@ function useEffectivePredelayBridge(
   return chart$;
 }
 
-/** Chart attack (ms) mirrors PreDiff; AUX clamps attack ≤ predelay when drawing. */
+/** Chart attack (ms) mirrors PreDiff; AUX clamps attack ≤ predelay when drawing.
+ * Quality Lo forces attack to 0 (Pre Diff inactive) without clearing the stored param.
+ */
 function useDiffuseAttackBridge(
   diffuse$: DynamicValue<number>,
+  quality$: DynamicValue<number>,
 ): DynamicValue<number> {
   const attack$ = useMemo(() => DynamicValue.fromConstant(0), []);
   useEffect(() => {
-    return diffuse$.subscribe((d) => {
-      const ms = Math.min(80, Math.max(0, d * 80));
+    const sync = () => {
+      const q = Math.round(quality$.value);
+      const ms =
+        q === 0 ? 0 : Math.min(80, Math.max(0, diffuse$.value * 80));
       if (Math.abs(attack$.value - ms) < 0.25) return;
       attack$.set(ms);
-    }, true);
-  }, [diffuse$, attack$]);
+    };
+    const u1 = diffuse$.subscribe(sync, true);
+    const u2 = quality$.subscribe(sync, false);
+    return () => {
+      u1();
+      u2();
+    };
+  }, [diffuse$, quality$, attack$]);
   return attack$;
 }
 
@@ -245,12 +257,25 @@ export function ReverbUI({ host }: ReverbUIProps) {
     host.widthMode$,
     reverbParamDefault('width_mode'),
   );
+  const quality = useDynamicValueReadonly(
+    host.quality$,
+    reverbParamDefault('quality'),
+  );
+  const preDiffEnabled$ = useMemo(
+    () => DynamicValue.fromConstant(Math.round(quality) !== 0),
+    [],
+  );
+  useEffect(() => {
+    return host.quality$.subscribe((q) => {
+      preDiffEnabled$.set(Math.round(q) !== 0);
+    }, true);
+  }, [host.quality$, preDiffEnabled$]);
   const rtime$ = useDecayMsBridge(host.decay$);
   const chartPredelay$ = useEffectivePredelayBridge(
     host.predelay$,
     host.distance$,
   );
-  const chartAttack$ = useDiffuseAttackBridge(host.diffuse$);
+  const chartAttack$ = useDiffuseAttackBridge(host.diffuse$, host.quality$);
   const [panel, setPanel] = useState<ReverbPanelId>('filter');
 
   const setMode = (dv: typeof host.erMode$, id: number, value: number) => {
@@ -268,6 +293,13 @@ export function ReverbUI({ host }: ReverbUIProps) {
         <WithInfo title={reverbInfo.freeze}>
           <Toggle state$={host.freeze$} label="Freeze" />
         </WithInfo>
+        <WithInfo title={reverbInfo.quality} className="info-block quality">
+          <Buttons
+            entries={REVERB_QUALITY_ENTRIES}
+            value={quality}
+            onChange={(v) => setMode(host.quality$, paramIds.quality, v)}
+          />
+        </WithInfo>
       </Header>
 
       <ReverbChart
@@ -279,6 +311,7 @@ export function ReverbUI({ host }: ReverbUIProps) {
         roomSize={roomSize}
         distance={distance}
         erMode={erMode}
+        quality={quality}
         decaySec={decay}
         beginEdit={() => {
           host.beginEdit(paramIds.predelay);
@@ -366,6 +399,7 @@ export function ReverbUI({ host }: ReverbUIProps) {
             reset={reverbParamDefault('diffuse')}
             dots={UNIT_DOTS}
             labels={UNIT_LABELS}
+            enabled$={preDiffEnabled$}
             {...edit(paramIds.diffuse)}
             className="prediff"
           />

@@ -75,6 +75,21 @@ public:
     rebuild();
   }
 
+  /**
+   * Cap how many image taps Multi-Tap / Velvet may keep (Quality Lo reduces both;
+   * Velvet stays available — only the cloud density drops).
+   */
+  void setTapLimits(int multiMax, int velvetMax)
+  {
+    multiMax = std::clamp(multiMax, 1, kMaxMulti);
+    velvetMax = std::clamp(velvetMax, 1, kMaxVelvet);
+    if (multiMax == multiMax_ && velvetMax == velvetMax_)
+      return;
+    multiMax_ = multiMax;
+    velvetMax_ = velvetMax;
+    rebuild();
+  }
+
   /** Latest relative ER arrival in ms (for UI / diagnostics). */
   float windowMs() const { return windowMs_; }
 
@@ -228,18 +243,18 @@ private:
       std::sort(low, low + nLow, byScore);
       std::sort(hi, hi + nHi, byScore);
 
-      for (int i = 0; i < nLow && useN < kMaxMulti; ++i)
+      for (int i = 0; i < nLow && useN < multiMax_; ++i)
         selected[useN++] = low[i];
-      for (int i = 0; i < nHi && useN < kMaxMulti; ++i)
+      for (int i = 0; i < nHi && useN < multiMax_; ++i)
         selected[useN++] = hi[i];
     }
     else
     {
-      // Velvet: densest practical ≤3 cloud, loudest first.
+      // Velvet: densest practical ≤3 cloud, loudest first (capped by Quality).
       std::sort(cands, cands + nCand, [](const Cand& a, const Cand& b) {
         return a.score > b.score;
       });
-      useN = std::min(nCand, kMaxVelvet);
+      useN = std::min(nCand, velvetMax_);
       for (int i = 0; i < useN; ++i)
         selected[i] = cands[i];
     }
@@ -300,6 +315,8 @@ private:
   float roomM_ = 12.f;
   float distance_ = 0.45f;
   float windowMs_ = 40.f;
+  int multiMax_ = kMaxMulti;
+  int velvetMax_ = kMaxVelvet;
 
   int tapCount_ = 0;
   int tapL_[kMaxTaps] {};

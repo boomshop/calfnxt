@@ -371,6 +371,17 @@
       "default": -12.0,
       "scale": "dB",
       "precision": 1
+    },
+    {
+      "id": "quality",
+      "name": "Quality",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
     }
   ]
 }

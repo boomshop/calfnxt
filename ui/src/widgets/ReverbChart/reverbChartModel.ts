@@ -6,8 +6,8 @@ const SOUND_MS = 343; // m/s
 const EAR_SEP = 0.0875; // half interaural distance (m)
 const WALL_REFL = 0.82;
 const MAX_MULTI = 32;
-/** All manhattan order ≤3 images (~62); no extra amplitude cull. */
-const MAX_VELVET = 64;
+/** All manhattan order ≤3 images (~62); matches DSP `kMaxVelvet`. */
+const MAX_VELVET = 62;
 
 type Vec3 = { x: number; y: number; z: number };
 
@@ -102,7 +102,12 @@ function buildRoomCandidates(
   return { cands, dDirect };
 }
 
-function selectTaps(cands: Cand[], velvet: boolean): Cand[] {
+function selectTaps(
+  cands: Cand[],
+  velvet: boolean,
+  multiMax: number,
+  velvetMax: number,
+): Cand[] {
   let selected: Cand[];
   if (!velvet) {
     const low = cands
@@ -111,15 +116,19 @@ function selectTaps(cands: Cand[], velvet: boolean): Cand[] {
     const hi = cands
       .filter((c) => c.order > 2)
       .sort((a, b) => b.score - a.score);
-    selected = [...low];
+    selected = [];
+    for (const c of low) {
+      if (selected.length >= multiMax) break;
+      selected.push(c);
+    }
     for (const c of hi) {
-      if (selected.length >= MAX_MULTI) break;
+      if (selected.length >= multiMax) break;
       selected.push(c);
     }
   } else {
     selected = [...cands]
       .sort((a, b) => b.score - a.score)
-      .slice(0, MAX_VELVET);
+      .slice(0, velvetMax);
   }
 
   return selected.sort((a, b) =>
@@ -135,10 +144,32 @@ export function normalizeErMode(erMode: number): 0 | 1 | 2 {
   return 1;
 }
 
+/** 0 = Lo, 1 = Mid, 2 = Hi — tap caps match DSP `setTapLimits`. */
+export function normalizeQuality(quality: number): 0 | 1 | 2 {
+  const q = Math.round(Number(quality));
+  if (q <= 0) return 0;
+  if (q >= 2) return 2;
+  return 1;
+}
+
+export function erTapLimits(quality: number): {
+  multiMax: number;
+  velvetMax: number;
+} {
+  switch (normalizeQuality(quality)) {
+    case 0:
+      return { multiMax: 12, velvetMax: 24 };
+    case 1:
+    case 2:
+    default:
+      return { multiMax: MAX_MULTI, velvetMax: MAX_VELVET };
+  }
+}
+
 /** Latest relative ER arrival in ms (matches DSP windowMs). */
 export function erWindowMs(roomSize: number, distance: number): number {
   const { cands, dDirect } = buildRoomCandidates(roomSize, distance);
-  const used = selectTaps(cands, true);
+  const used = selectTaps(cands, true, MAX_MULTI, MAX_VELVET);
   let maxRelMs = 8;
   for (const c of used) {
     const relL = Math.max(1e-4, c.dL - dDirect) / SOUND_MS;
@@ -156,13 +187,15 @@ export function buildErReflections(
   roomSize: number,
   distance: number,
   erMode: number,
+  quality = 1,
 ): ErReflection[] {
   const mode = normalizeErMode(erMode);
   if (mode === 0) return [];
 
   const velvet = mode === 2;
+  const { multiMax, velvetMax } = erTapLimits(quality);
   const { cands, dDirect } = buildRoomCandidates(roomSize, distance);
-  const used = selectTaps(cands, velvet);
+  const used = selectTaps(cands, velvet, multiMax, velvetMax);
   if (used.length === 0) return [];
 
   let peakAmp = 1e-6;

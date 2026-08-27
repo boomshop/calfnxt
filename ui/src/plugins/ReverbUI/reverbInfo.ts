@@ -4,6 +4,12 @@ export const reverbInfo = {
   active:
     'Turns the reverb wet path on or off. Off = silent wet (Dry level still applies) — instant mute of the space without killing your dry balance. On = early + late at the Wet level.',
 
+  quality:
+    'CPU vs density for the whole engine — pick by track count and how critical this space is.\n\n' +
+    'Lo — lean path for many instances or weak CPUs: late tank uses 4 allpass stages (instead of 6), early reflections keep fewer image taps (Multi-Tap ≤12, Velvet ≤24 — Velvet stays available, just thinner), and Pre Diff is forced off (knob disabled). Expect a bit more “grain” / metallic edge on long decays and a sharper late onset.\n\n' +
+    'Mid — default / balanced: full 6-stage late network, full Multi-Tap / Velvet tap budgets, Pre Diff with 4 allpass stages. Same character as the classic calfNXT room when you leave Quality alone.\n\n' +
+    'Hi — densest late onset: same late tank and ER budgets as Mid, but Pre Diff runs 6 allpass stages so the bloom into the wash is smoother when Pre Diff is up. Use on featured vocals/leads when CPU allows; little difference if Pre Diff is near zero.',
+
   room:
     'Longest wall of the virtual room (meters). Bigger = longer early paths and a larger-feeling late network — more “hall,” less “box.” Small rooms can get metallic if late delays get too short; the engine lifts small sizes so the wash stays dense. 40 m ≈ a long hall side — not a radius. Listen for size vs. muddiness.',
 
@@ -17,13 +23,13 @@ export const reverbInfo = {
     'How smooth and blended the late reverb sounds. Higher = denser, more even cloud (less “echoey”). Lower = clearer with a hint of discrete repeats — more character, less polish. Controls how strongly the late network smears successive reflections.',
 
   preDiff:
-    'Softens how the late reverb starts after predelay. Higher = gentler bloom into the wash (allpass smear on the late feed, up to ~50 ms) — less abrupt “hall on.” Lower = more immediate late onset. Early reflections stay sharp. Chart shows the late attack slope (limited by predelay length).',
+    'Softens how the late reverb starts after predelay. Higher = gentler bloom into the wash (allpass smear on the late feed, up to ~50 ms) — less abrupt “hall on.” Lower = more immediate late onset. Early reflections stay sharp. Chart shows the late attack slope (limited by predelay length). Inactive on Quality Lo (forced off / knob disabled); Hi uses a denser 6-stage smear than Mid’s 4.',
 
   predelay:
     'Silence before the late wash arrives (early reflections stay immediate). More predelay keeps vocals/drums clear in front of the hall; less = more glued, “in the room.” Distance adds up to +40 ms on top — the chart shows that effective late start.',
 
   erMode:
-    'Flavor of the first wall-bounce reflections (image-source taps). Off = none (only late wash). Multi-Tap = clearer early hits and room geometry. Velvet = denser early cloud (CPU-capped) — softer, less discrete slap. Early energy is what makes a space feel real before the tail blooms.',
+    'Flavor of the first wall-bounce reflections (image-source taps). Off = none (only late wash). Multi-Tap = clearer early hits and room geometry. Velvet = denser early cloud — softer, less discrete slap. Early energy is what makes a space feel real before the tail blooms. Quality Lo does not disable Velvet — it only caps tap count (Multi ≤12 / Velvet ≤24) so the cloud stays thinner and cheaper; Mid/Hi use the full budgets.',
 
   path:
     'How early and late are wired. Parallel = both side by side (classic mix of slap + wash). Serial = early feeds into late for a rounder join — often smoother, less “two layers.” ER/Late levels still set how much of each you hear.',

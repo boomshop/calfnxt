@@ -101,6 +101,8 @@ export interface ReverbChartProps {
   distance: number;
   /** 0 = Off, 1 = Multi-Tap, 2 = Velvet */
   erMode: number;
+  /** 0 = Lo, 1 = Mid, 2 = Hi — ER tap density */
+  quality?: number;
   decaySec: number;
   beginEdit?: () => void;
   endEdit?: () => void;
@@ -185,6 +187,7 @@ export function ReverbChart(props: ReverbChartProps) {
     roomSize,
     distance,
     erMode,
+    quality = 1,
     decaySec,
     ...rest
   } = props;
@@ -198,8 +201,8 @@ export function ReverbChart(props: ReverbChartProps) {
   );
 
   const reflections = useMemo(
-    () => buildErReflections(roomSize, distance, mode),
-    [roomSize, distance, mode],
+    () => buildErReflections(roomSize, distance, mode, quality),
+    [roomSize, distance, mode, quality],
   );
 
   const timeframe = useMemo(() => reverbTimeframeMs(decaySec), [decaySec]);

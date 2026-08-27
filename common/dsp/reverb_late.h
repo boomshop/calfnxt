@@ -182,6 +182,29 @@ public:
 
   void setFreeze(bool on) { freeze_ = on; }
 
+  /**
+   * How many allpass stages per channel (4 = Lo quality, 6 = Mid/Hi).
+   * Newly activated lines are cleared so Lo→Mid/Hi does not dump stale buffer.
+   */
+  void setActiveStages(int stages)
+  {
+    stages = (stages <= 4) ? 4 : 6;
+    if (stages == stages_)
+      return;
+    if (stages > stages_)
+    {
+      for (int i = stages_; i < stages; ++i)
+      {
+        apL_[i].reset();
+        apR_[i].reset();
+      }
+    }
+    stages_ = stages;
+    updateFeedback();
+  }
+
+  int activeStages() const { return stages_; }
+
   float feedback() const { return freeze_ ? 0.995f : fb_; }
 
   /** Peak of recirculating tank state (for idle / silence fast-path). */
@@ -203,16 +226,22 @@ public:
       depthSamp = modDepth_ * (sr_ / kRefSr) * 12.f; // ~12 samples @ depth=1, 44.1k
     }
 
+    // Per-stage LFO polarity (same as the historic 6-stage unroll).
+    static constexpr float kMod[6] = { -45.f, +47.f, +54.f, -69.f, +69.f, -46.f };
+
     const float fb = feedback();
+    const int n = stages_;
 
     left += oldR_;
-    left = apL_[0].processAllpassCombFix16(left, delayFix(tl_[0], -45.f * lfo * depthSamp), ldec_[0]);
-    left = apL_[1].processAllpassCombFix16(left, delayFix(tl_[1], +47.f * lfo * depthSamp), ldec_[1]);
+    left = apL_[0].processAllpassCombFix16(
+      left, delayFix(tl_[0], kMod[0] * lfo * depthSamp), ldec_[0]);
+    left = apL_[1].processAllpassCombFix16(
+      left, delayFix(tl_[1], kMod[1] * lfo * depthSamp), ldec_[1]);
+    // Historic Calf tap: listen after the first two APs; remaining stages feed only.
     const float outL = left;
-    left = apL_[2].processAllpassCombFix16(left, delayFix(tl_[2], +54.f * lfo * depthSamp), ldec_[2]);
-    left = apL_[3].processAllpassCombFix16(left, delayFix(tl_[3], -69.f * lfo * depthSamp), ldec_[3]);
-    left = apL_[4].processAllpassCombFix16(left, delayFix(tl_[4], +69.f * lfo * depthSamp), ldec_[4]);
-    left = apL_[5].processAllpassCombFix16(left, delayFix(tl_[5], -46.f * lfo * depthSamp), ldec_[5]);
+    for (int i = 2; i < n; ++i)
+      left = apL_[i].processAllpassCombFix16(
+        left, delayFix(tl_[i], kMod[i] * lfo * depthSamp), ldec_[i]);
     float fbL = left * fb;
     if (lfDamp_ > 1.0e-4f)
     {
@@ -223,13 +252,14 @@ public:
     sanitizeDenormal(oldL_);
 
     right += oldL_;
-    right = apR_[0].processAllpassCombFix16(right, delayFix(tr_[0], -45.f * lfo * depthSamp), rdec_[0]);
-    right = apR_[1].processAllpassCombFix16(right, delayFix(tr_[1], +47.f * lfo * depthSamp), rdec_[1]);
+    right = apR_[0].processAllpassCombFix16(
+      right, delayFix(tr_[0], kMod[0] * lfo * depthSamp), rdec_[0]);
+    right = apR_[1].processAllpassCombFix16(
+      right, delayFix(tr_[1], kMod[1] * lfo * depthSamp), rdec_[1]);
     const float outR = right;
-    right = apR_[2].processAllpassCombFix16(right, delayFix(tr_[2], +54.f * lfo * depthSamp), rdec_[2]);
-    right = apR_[3].processAllpassCombFix16(right, delayFix(tr_[3], -69.f * lfo * depthSamp), rdec_[3]);
-    right = apR_[4].processAllpassCombFix16(right, delayFix(tr_[4], +69.f * lfo * depthSamp), rdec_[4]);
-    right = apR_[5].processAllpassCombFix16(right, delayFix(tr_[5], -46.f * lfo * depthSamp), rdec_[5]);
+    for (int i = 2; i < n; ++i)
+      right = apR_[i].processAllpassCombFix16(
+        right, delayFix(tr_[i], kMod[i] * lfo * depthSamp), rdec_[i]);
     float fbR = right * fb;
     if (lfDamp_ > 1.0e-4f)
     {
@@ -294,7 +324,7 @@ private:
 
   /**
    * Map Decay (RT60) → tank feedback.
-   * One outer `fb` multiply happens after a channel has traversed its six
+   * One outer `fb` multiply happens after a channel has traversed its active
    * allpass delays; loop time ≈ mean of L/R delay sums. Schroeder allpasses
    * are treated as energy-neutral; HF/LF damp still shorten the perceived tail.
    */
@@ -302,7 +332,7 @@ private:
   {
     float sumL = 0.f;
     float sumR = 0.f;
-    for (int i = 0; i < 6; ++i)
+    for (int i = 0; i < stages_; ++i)
     {
       sumL += tl_[i];
       sumR += tr_[i];
@@ -343,6 +373,7 @@ private:
   float modDepth_ = 0.35f;
   float phase_ = 0.f;
   float dphase_ = 0.f;
+  int stages_ = 6;
   bool freeze_ = false;
 };
 
@@ -351,41 +382,62 @@ class ReverbDiffuse
 {
 public:
   static constexpr int kSize = 16384; // enough for ~50–80 ms smear @ 96 kHz
+  static constexpr int kMaxStages = 6;
 
   void setup(float sr)
   {
     sr_ = sr > 1.f ? sr : 44100.f;
-    // Base taps ~1.2 / 1.7 / 2.3 / 3.1 ms (scaled up with amount in process).
-    dL_[0] = msToSamp(1.19f);
-    dL_[1] = msToSamp(1.73f);
-    dL_[2] = msToSamp(2.31f);
-    dL_[3] = msToSamp(3.11f);
-    dR_[0] = msToSamp(1.31f);
-    dR_[1] = msToSamp(1.61f);
-    dR_[2] = msToSamp(2.47f);
-    dR_[3] = msToSamp(2.93f);
+    // Base taps in ms (first four = Mid; 5–6 = Hi denser smear).
+    static constexpr float kBaseLMs[kMaxStages] = {
+      1.19f, 1.73f, 2.31f, 3.11f, 3.73f, 4.41f,
+    };
+    static constexpr float kBaseRMs[kMaxStages] = {
+      1.31f, 1.61f, 2.47f, 2.93f, 3.53f, 4.19f,
+    };
+    for (int i = 0; i < kMaxStages; ++i)
+    {
+      dL_[i] = msToSamp(kBaseLMs[i]);
+      dR_[i] = msToSamp(kBaseRMs[i]);
+    }
   }
 
   void reset()
   {
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < kMaxStages; ++i)
     {
       apL_[i].reset();
       apR_[i].reset();
     }
   }
 
+  /** 0 = bypass (Lo), 4 = Mid, 6 = Hi. */
+  void setStages(int stages)
+  {
+    stages = std::clamp(stages, 0, kMaxStages);
+    if (stages == stages_)
+      return;
+    if (stages > stages_)
+    {
+      for (int i = stages_; i < stages; ++i)
+      {
+        apL_[i].reset();
+        apR_[i].reset();
+      }
+    }
+    stages_ = stages;
+  }
+
   void process(float& l, float& r, float amount)
   {
     amount = std::clamp(amount, 0.f, 1.f);
-    if (amount < 1.0e-4f)
+    if (amount < 1.0e-4f || stages_ <= 0)
       return;
     // Stretch delays with amount so PreDiff can soften onset (~3 ms → ~50 ms).
     const float scale = 1.f + amount * 15.f;
     const float fb = 0.45f + 0.4f * amount;
     float xl = l;
     float xr = r;
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < stages_; ++i)
     {
       const float dL = std::min(float(kSize - 4), float(dL_[i]) * scale);
       const float dR = std::min(float(kSize - 4), float(dR_[i]) * scale);
@@ -402,10 +454,11 @@ private:
     return std::clamp(int(ms * 0.001f * sr_ + 0.5f), 2, kSize - 4);
   }
 
-  DelayLine<kSize> apL_[4];
-  DelayLine<kSize> apR_[4];
-  int dL_[4] {};
-  int dR_[4] {};
+  DelayLine<kSize> apL_[kMaxStages];
+  DelayLine<kSize> apR_[kMaxStages];
+  int dL_[kMaxStages] {};
+  int dR_[kMaxStages] {};
+  int stages_ = 4;
   float sr_ = 44100.f;
 };
 

@@ -18,6 +18,12 @@ export const REVERB_ER_MODE_ENTRIES = [
   { label: 'Velvet', value: 2 },
 ];
 
+export const REVERB_QUALITY_ENTRIES = [
+  { label: 'Lo', value: 0 },
+  { label: 'Mid', value: 1 },
+  { label: 'Hi', value: 2 },
+];
+
 export const REVERB_PATH_MODE_ENTRIES = [
   { label: 'Parallel', value: 0 },
   { label: 'Serial', value: 1 },
@@ -68,6 +74,7 @@ export type IReverbHost = {
   freeze$: DynamicValue<boolean>;
   dry$: DynamicValue<number>;
   amount$: DynamicValue<number>;
+  quality$: DynamicValue<number>;
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
   applyPreset: (id: ReverbPresetId) => void;
@@ -151,6 +158,7 @@ export function createBoundReverbHost(): IReverbHost {
   const freeze$ = bindBool('freeze');
   const dry$ = bindNum('dry');
   const amount$ = bindNum('amount');
+  const quality$ = bindNum('quality');
 
   const applyValues = (v: ReverbPresetValues) => {
     setPlain('room_size', roomSize$, v.room_size);
@@ -218,6 +226,7 @@ export function createBoundReverbHost(): IReverbHost {
     freeze$,
     dry$,
     amount$,
+    quality$,
     beginEdit: postBegin,
     endEdit: postEnd,
     applyPreset: (id) => {

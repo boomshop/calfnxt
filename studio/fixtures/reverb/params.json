@@ -29,5 +29,6 @@
   "gate_release": 120,
   "freeze": false,
   "dry": 0,
-  "amount": -12
+  "amount": -12,
+  "quality": 1
 }

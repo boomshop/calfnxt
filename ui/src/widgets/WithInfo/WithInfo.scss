@@ -102,7 +102,7 @@
 .WithInfo-flyout {
   position: fixed;
   z-index: 1000;
-  max-width: min(480px, calc(100vw - 16px));
+  max-width: min(520px, calc(100vw - 16px));
   padding: 8px 12px;
   pointer-events: none;
   visibility: hidden;
@@ -112,6 +112,6 @@
   color: var(--color);
   border: 1px solid var(--background-lesser);
   font-family: PragatiNarrow, sans-serif;
-  white-space: normal;
+  white-space: pre-line;
   overflow-wrap: anywhere;
 }
