@@ -35,3 +35,6 @@ dsp/*/web/
 
 # Website
 /website/
+
+# Local deploy (host/user paths; keep out of git)
+/tools/publish-website.sh
