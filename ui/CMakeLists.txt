@@ -22,6 +22,8 @@ list(APPEND CALFNXT_UI_SRC_DEPS
   "${CMAKE_SOURCE_DIR}/ui/index.html"
   "${CMAKE_SOURCE_DIR}/ui/tsconfig.json"
 )
+# Visible from calfnxt_copy_plugin_ui() when called in plugin subdirs.
+set_property(GLOBAL PROPERTY CALFNXT_UI_SRC_DEPS "${CALFNXT_UI_SRC_DEPS}")
 
 if(CALFNXT_USE_PREBUILT_UI)
   if(NOT EXISTS "${CALFNXT_UI_DIST_STAMP}")
@@ -62,6 +64,12 @@ elseif(NPM_EXECUTABLE)
   )
   add_custom_target(calfnxt_web_ui DEPENDS "${CALFNXT_UI_DIST_STAMP}")
 else()
+  if(NOT EXISTS "${CALFNXT_UI_DIST_STAMP}" OR NOT EXISTS "${CALFNXT_UI_DIST}/plugins")
+    message(FATAL_ERROR
+      "npm not found and ${CALFNXT_UI_DIST}/.stamp is missing.\n"
+      "  Install Node.js/npm, or unpack calfnxt-*-ui-dist.tar.xz at the source\n"
+      "  tree root and reconfigure with -DCALFNXT_USE_PREBUILT_UI=ON.")
+  endif()
   add_custom_target(calfnxt_web_ui)
   message(STATUS "npm not found — using existing ui/dist assets")
 endif()
@@ -77,7 +85,14 @@ function(calfnxt_copy_plugin_ui target plugin_id vst3_dirname)
 
   set(res_stamp "${CMAKE_BINARY_DIR}/${target}.resources.stamp")
   set(plugin_dist "${CALFNXT_UI_DIST}/plugins/${plugin_id}")
+  get_property(_ui_src_deps GLOBAL PROPERTY CALFNXT_UI_SRC_DEPS)
   # Refresh SPA assets only — keep moduleinfo.json from moduleinfotool.
+  #
+  # Do NOT DEPENDS on ${CALFNXT_UI_DIST_STAMP}: that OUTPUT rule lives in ui/
+  # only. Unix Makefiles then fail on a fresh clone with
+  # "No rule to make target ui/dist/.stamp" because the file is not in git.
+  # Order comes from target calfnxt_web_ui; UI-source files (in git) invalidate
+  # the embed after a SPA-only edit.
   add_custom_command(
     OUTPUT "${res_stamp}"
     COMMAND ${CMAKE_COMMAND} -E rm -rf
@@ -93,12 +108,13 @@ function(calfnxt_copy_plugin_ui target plugin_id vst3_dirname)
     COMMAND ${CMAKE_COMMAND} -E touch "${res_stamp}"
     DEPENDS
       calfnxt_web_ui
-      "${CALFNXT_UI_DIST_STAMP}"
       ${target}
+      ${_ui_src_deps}
     COMMENT "Embed ${plugin_id} UI into ${target} Resources"
     VERBATIM
   )
   add_custom_target(${target}-resources ALL DEPENDS "${res_stamp}")
+  add_dependencies(${target}-resources calfnxt_web_ui)
 
   set_property(GLOBAL APPEND PROPERTY CALFNXT_INSTALL_TARGETS "${target}")
   set_property(GLOBAL APPEND PROPERTY CALFNXT_INSTALL_VST3_NAMES "${vst3_dirname}")
