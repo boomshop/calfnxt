@@ -283,6 +283,7 @@ tresult PLUGIN_API ChorusPlugin::process(ProcessData& data)
     run(data.outputs[0].channelBuffers64);
 
   publishLfoViz();
+  post_.sanitize();
   io_.end(data);
   return kResultOk;
 }

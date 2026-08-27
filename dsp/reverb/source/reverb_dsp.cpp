@@ -461,6 +461,7 @@ tresult PLUGIN_API ReverbPlugin::process(ProcessData& data)
 
   endTailPeakBlock();
   io_.end(data);
+  tone_.sanitize();
   if (airOn_)
   {
     airL_.sanitize();

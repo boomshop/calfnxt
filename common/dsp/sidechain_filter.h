@@ -117,20 +117,27 @@ public:
     const int hpN = hpStages();
     const int lpN = lpStages();
     for (int i = 0; i < hpN; ++i)
-    {
       s = static_cast<float>(hp_[ch][i].process(s));
-      hp_[ch][i].sanitize();
-    }
     for (int i = 0; i < lpN; ++i)
-    {
       s = static_cast<float>(lp_[ch][i].process(s));
-      lp_[ch][i].sanitize();
-    }
     return s;
   }
 
   /** Mono path (uses channel 0 state) — Transients Mid detector. */
   float processMono(float s) { return processChannel(0, s); }
+
+  /** Call once per audio block (not per sample). */
+  void sanitize()
+  {
+    for (int ch = 0; ch < 2; ++ch)
+    {
+      for (int i = 0; i < kMaxStages; ++i)
+      {
+        hp_[ch][i].sanitize();
+        lp_[ch][i].sanitize();
+      }
+    }
+  }
 
 private:
   float sampleRate_ = 44100.f;

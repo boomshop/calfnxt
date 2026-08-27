@@ -323,6 +323,9 @@ tresult PLUGIN_API HarmonicsPlugin::process(ProcessData& data)
 
   distL_.sanitize();
   distR_.sanitize();
+  pre_.sanitize();
+  postHot_.sanitize();
+  postClean_.sanitize();
 
   io_.end(data);
   return kResultOk;

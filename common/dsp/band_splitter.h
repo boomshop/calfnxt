@@ -177,13 +177,26 @@ public:
       {
         lo = lp_[i][s].process(lo);
         hi = hp_[i][s].process(hi);
-        lp_[i][s].sanitize();
-        hp_[i][s].sanitize();
       }
       bandsOut[i] = static_cast<float>(lo);
       remaining = static_cast<float>(hi);
     }
     bandsOut[bands_ - 1] = remaining;
+  }
+
+  /** Call once per audio block (not per sample). */
+  void sanitize()
+  {
+    const int stages = stageCount();
+    const int nSplit = splits();
+    for (int i = 0; i < nSplit; ++i)
+    {
+      for (int s = 0; s < stages; ++s)
+      {
+        lp_[i][s].sanitize();
+        hp_[i][s].sanitize();
+      }
+    }
   }
 
   void process2(float x, float& low, float& high)

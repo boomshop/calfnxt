@@ -1097,6 +1097,8 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
   }
 
   publishHistSnapshot();
+  splitL_.sanitize();
+  splitR_.sanitize();
   io_.end(data);
   return kResultOk;
 }

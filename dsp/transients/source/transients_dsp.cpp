@@ -444,6 +444,7 @@ tresult PLUGIN_API TransientsPlugin::process(ProcessData& data)
   }
 
   publishEnvSnapshot();
+  sc_.sanitize();
   io_.end(data);
   return kResultOk;
 }

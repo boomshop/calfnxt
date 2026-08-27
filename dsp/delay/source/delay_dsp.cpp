@@ -381,6 +381,7 @@ tresult PLUGIN_API DelayPlugin::process(ProcessData& data)
   }
 
   lastTailPeak_ = blockTailPeak_;
+  fbFilter_.sanitize();
   io_.end(data);
   return kResultOk;
 }

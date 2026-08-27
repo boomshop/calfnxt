@@ -155,15 +155,9 @@ public:
     const int hpN = hpStages();
     const int lpN = lpStages();
     for (int i = 0; i < hpN; ++i)
-    {
       s = static_cast<float>(wetHp_[ch][i].process(s));
-      wetHp_[ch][i].sanitize();
-    }
     for (int i = 0; i < lpN; ++i)
-    {
       s = static_cast<float>(wetLp_[ch][i].process(s));
-      wetLp_[ch][i].sanitize();
-    }
     return s;
   }
 
@@ -185,20 +179,14 @@ public:
     {
       float x = s;
       for (int i = 0; i < hpN; ++i)
-      {
         x = static_cast<float>(dryLp_[ch][i].process(x));
-        dryLp_[ch][i].sanitize();
-      }
       lo = x;
     }
     if (lpN > 0)
     {
       float x = s;
       for (int i = 0; i < lpN; ++i)
-      {
         x = static_cast<float>(dryHp_[ch][i].process(x));
-        dryHp_[ch][i].sanitize();
-      }
       hi = x;
     }
 
@@ -207,6 +195,21 @@ public:
     if (hpN > 0)
       return lo;
     return hi;
+  }
+
+  /** Call once per audio block (not per sample). */
+  void sanitize()
+  {
+    for (int ch = 0; ch < 2; ++ch)
+    {
+      for (int i = 0; i < kMaxStages; ++i)
+      {
+        wetHp_[ch][i].sanitize();
+        wetLp_[ch][i].sanitize();
+        dryLp_[ch][i].sanitize();
+        dryHp_[ch][i].sanitize();
+      }
+    }
   }
 
 private:

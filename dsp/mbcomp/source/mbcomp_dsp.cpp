@@ -592,6 +592,8 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
   publishHistSnapshot();
   if (quietIn && allGrIdle)
     quietDrained_ = true;
+  splitL_.sanitize();
+  splitR_.sanitize();
   io_.end(data);
   return kResultOk;
 }

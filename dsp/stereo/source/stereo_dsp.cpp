@@ -395,6 +395,7 @@ tresult PLUGIN_API StereoPlugin::process(ProcessData& data)
     fieldTap_.publish();
   else
     fieldTap_.clearDisplay();
+  sideSplit_.sanitize();
   io_.end(data);
   return kResultOk;
 }

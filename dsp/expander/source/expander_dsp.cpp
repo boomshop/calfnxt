@@ -405,6 +405,7 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
   }
 
   publishHistSnapshot();
+  sc_.sanitize();
   io_.end(data);
   return kResultOk;
 }

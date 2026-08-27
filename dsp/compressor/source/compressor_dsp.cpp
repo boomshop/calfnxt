@@ -415,6 +415,7 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
   }
 
   publishHistSnapshot();
+  sc_.sanitize();
   io_.end(data);
   return kResultOk;
 }

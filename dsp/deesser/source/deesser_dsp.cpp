@@ -364,6 +364,8 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
   }
 
   publishHistSnapshot();
+  splitL_.sanitize();
+  splitR_.sanitize();
   io_.end(data);
   return kResultOk;
 }
