@@ -212,12 +212,33 @@ int FlangerPlugin::takeCombExtrema(float* out, int maxOut)
 {
   if (!out || maxOut < 2)
     return 0;
+  combDemand_.store(true, std::memory_order_relaxed);
   if (!combReady_.load(std::memory_order_acquire))
     return 0;
   if (combOutN_ < 2 || maxOut < combOutN_)
     return 0;
   std::memcpy(out, combOut_, static_cast<size_t>(combOutN_) * sizeof(float));
+  combReady_.store(false, std::memory_order_release);
   return combOutN_;
+}
+
+void FlangerPlugin::idleAdvance(int nSamples, bool wantComb)
+{
+  if (left_.isIdle() && right_.isIdle())
+  {
+    left_.advanceSilence(nSamples);
+    right_.advanceSilence(nSamples);
+  }
+  else
+  {
+    for (int i = 0; i < nSamples; ++i)
+    {
+      left_.process(0.f, false);
+      right_.process(0.f, false);
+    }
+  }
+  if (wantComb && combDemand_.load(std::memory_order_relaxed))
+    publishComb();
 }
 
 tresult PLUGIN_API FlangerPlugin::process(ProcessData& data)
@@ -242,22 +263,52 @@ tresult PLUGIN_API FlangerPlugin::process(ProcessData& data)
   if (wantComb)
     combCountdown_ = combInterval;
 
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
+  const bool drained = left_.isIdle() && right_.isIdle();
+  const bool wetOn = state.active;
+
+  if (quietIn && drained)
   {
+    idleAdvance(data.numSamples, wantComb);
+    if (hasHostAudio)
+      io_.end(data);
+    return kResultOk;
+  }
+
+  if (!hasHostAudio)
+  {
+    data.outputs[0].silenceFlags = 0;
     const int32 n = data.numSamples;
-    for (int32 i = 0; i < n; ++i)
+    auto** out32 = data.outputs[0].channelBuffers32;
+    auto** out64 = data.outputs[0].channelBuffers64;
+    if (data.symbolicSampleSize == kSample32 && out32 && out32[0] && out32[1])
     {
-      left_.process(0.f, false);
-      right_.process(0.f, false);
+      for (int32 i = 0; i < n; ++i)
+      {
+        out32[0][i] = left_.process(0.f, wetOn);
+        out32[1][i] = right_.process(0.f, wetOn);
+      }
+      io_.end(data);
     }
-    if (wantComb)
+    else if (data.symbolicSampleSize != kSample32 && out64 && out64[0] && out64[1])
+    {
+      for (int32 i = 0; i < n; ++i)
+      {
+        out64[0][i] = left_.process(0.f, wetOn);
+        out64[1][i] = right_.process(0.f, wetOn);
+      }
+      io_.end(data);
+    }
+    else
+      idleAdvance(n, false);
+    if (wantComb && combDemand_.load(std::memory_order_relaxed))
       publishComb();
     return kResultOk;
   }
 
   const int32 nFrames = data.numSamples;
   const int32 nCh = data.outputs[0].numChannels;
-  const bool wetOn = state.active;
 
   auto run = [&](auto** out) {
     for (int32 i = 0; i < nFrames; ++i)
@@ -278,7 +329,7 @@ tresult PLUGIN_API FlangerPlugin::process(ProcessData& data)
   else
     run(data.outputs[0].channelBuffers64);
 
-  if (wantComb)
+  if (wantComb && combDemand_.load(std::memory_order_relaxed))
     publishComb();
   io_.end(data);
   return kResultOk;

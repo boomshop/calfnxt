@@ -277,15 +277,15 @@ tresult PLUGIN_API HarmonicsPlugin::process(ProcessData& data)
   io_.setBypassGains(bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
+  // No long tail — skip OS shaper on quiet; scrub denormals once.
+  if (quietIn)
   {
-    for (int i = 0; i < data.numSamples; ++i)
-    {
-      float z = 0.f;
-      processSample(z, z, false, false, false, 0.f, 0.f);
-    }
     distL_.sanitize();
     distR_.sanitize();
+    if (hasHostAudio)
+      io_.end(data);
     return kResultOk;
   }
 

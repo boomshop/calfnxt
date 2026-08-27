@@ -61,9 +61,9 @@ private:
   };
 
   BlockState makeBlockState() const;
-  /** `forcePhase` re-anchors L/R LFO like Calf activate() / Reset. */
   void applyParams(const BlockState& s, bool forcePhase);
   void publishComb();
+  void idleAdvance(int nSamples, bool wantComb);
 
   float params_[kParamCount] {};
   double sampleRate_ = 44100.0;
@@ -82,6 +82,7 @@ private:
   float vizDelayR_ = 0.f;
   bool vizDelayInit_ = false;
   std::atomic<bool> combReady_{false};
+  std::atomic<bool> combDemand_{false};
 };
 
 } // namespace Flanger

@@ -101,6 +101,8 @@ private:
   bool bypassOld_ = false;
   uint32_t bypassXfadePos_ = 0;
   uint32_t bypassXfadeLen_ = 0;
+  /** Peak of last processed block — used so sleeping skip never cuts delay residual. */
+  float lastOutPeak_ = 0.f;
 
   std::atomic<float> ascLed_ {0.f};
 

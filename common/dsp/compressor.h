@@ -74,6 +74,12 @@ public:
     lastTargetGr_ = 1.f;
   }
 
+  /** True when envelopes are settled at unity GR (safe to skip silence DSP). */
+  bool isIdle() const
+  {
+    return lastGr_ >= 0.9999f && linSlope_ < 1.0e-8f && rmsSq_ < 1.0e-16f;
+  }
+
   /**
    * thresholdDb → linear amplitude; ratio 1…20 (or kRatioInfinity).
    * kneeDb = AUX-style soft-knee width (0 = hard).

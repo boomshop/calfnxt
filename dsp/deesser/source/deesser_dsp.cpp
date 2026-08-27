@@ -292,19 +292,46 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
+
+  // Idle only when input is quiet AND de-esser GR is settled.
+  if (quietIn && gr_.isIdle())
   {
-    for (int32 i = 0; i < data.numSamples; ++i)
-    {
-      float zL = 0.f;
-      float zR = 0.f;
-      processSample(state, zL, zR);
-    }
     publishHistSnapshot();
+    if (hasHostAudio)
+      io_.end(data);
     return kResultOk;
   }
 
   const int32 nFrames = data.numSamples;
+
+  if (!hasHostAudio)
+  {
+    data.outputs[0].silenceFlags = 0;
+    auto drain = [&](auto** out, int32 nCh) {
+      const bool canWrite = out && (nCh <= 0 || out[0]) && (nCh <= 1 || out[1]);
+      for (int32 i = 0; i < nFrames; ++i)
+      {
+        float L = 0.f;
+        float R = 0.f;
+        processSample(state, L, R);
+        if (canWrite && nCh > 0)
+          out[0][i] = L;
+        if (canWrite && nCh > 1)
+          out[1][i] = R;
+      }
+    };
+    if (data.symbolicSampleSize == kSample32)
+      drain(data.outputs[0].channelBuffers32, data.outputs[0].numChannels);
+    else
+      drain(data.outputs[0].channelBuffers64, data.outputs[0].numChannels);
+    publishHistSnapshot();
+    if (data.outputs[0].channelBuffers32 || data.outputs[0].channelBuffers64)
+      io_.end(data);
+    return kResultOk;
+  }
+
   if (data.symbolicSampleSize == kSample32)
   {
     auto** out = data.outputs[0].channelBuffers32;

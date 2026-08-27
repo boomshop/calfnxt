@@ -49,14 +49,18 @@ protected:
 
 private:
   static constexpr int kPredelaySize = 131072;
+  /** Below this |wet/tank| peak the engine may sleep (never cut audible tails). */
   static constexpr float kIdleResidual = 1.0e-5f;
 
   void resetProcessing();
   void updateFromParams();
   void processSample(float inL, float inR, float& outL, float& outR);
   void processDryOnly(float inL, float inR, float& outL, float& outR);
+  /** True while freeze/gate or any ER/predelay/late/wet residual remains. */
   bool engineHasTail() const;
   void applyDryGainBlock(Steinberg::Vst::ProcessData& data);
+  void beginTailPeakBlock();
+  void endTailPeakBlock();
 
   float params_[kParamCount] {};
   Dsp::IoStage io_;
@@ -102,6 +106,10 @@ private:
   bool gateOpen_ = false;
 
   float airAmt_ = 0.25f;
+
+  /** Peak |ER/late/predelay/wet| from the previous processed block (tail gate). */
+  float lastTailPeak_ = 0.f;
+  float blockTailPeak_ = 0.f;
 };
 
 } // namespace Reverb

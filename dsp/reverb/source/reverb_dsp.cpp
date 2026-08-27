@@ -98,13 +98,36 @@ tresult PLUGIN_API ReverbPlugin::setupProcessing(ProcessSetup& newSetup)
 
 bool ReverbPlugin::engineHasTail() const
 {
+  // Never sleep while frozen or gate still open — both imply ongoing wet.
   if (freeze_)
-    return true;
-  if (late_.residualEnergy() > kIdleResidual)
     return true;
   if (gateOn_ && gateOpen_)
     return true;
+  // Duck / gate envelopes must settle before idle (otherwise return clicks).
+  if (envDuck_ > kIdleResidual)
+    return true;
+  if (gateOn_ && envGate_ > kIdleResidual)
+    return true;
+  if (late_.residualEnergy() > kIdleResidual)
+    return true;
+  // Covers ER taps, predelay, diffuse — previous block's internal peak.
+  if (lastTailPeak_ > kIdleResidual)
+    return true;
+  // Amount / dry / duck / levels still slewing — keep SmoothGain advancing.
+  if (!dryGain_.isSettled() || !wetGain_.isSettled() || !erGain_.isSettled()
+      || !lateGain_.isSettled() || !duckGain_.isSettled() || !gateGain_.isSettled())
+    return true;
   return false;
+}
+
+void ReverbPlugin::beginTailPeakBlock()
+{
+  blockTailPeak_ = 0.f;
+}
+
+void ReverbPlugin::endTailPeakBlock()
+{
+  lastTailPeak_ = blockTailPeak_;
 }
 
 void ReverbPlugin::updateFromParams()
@@ -309,6 +332,16 @@ void ReverbPlugin::processSample(float inL, float inR, float& outL, float& outR)
   if (widthOn_)
     width_.process(wetL, wetR);
 
+  // Tail peak from internals (not wet gain) so Amount=0 still drains the tank.
+  // Also keep duck/gate envelopes visible to engineHasTail().
+  const float tailPeak = std::max(
+    std::max(std::fabs(erL), std::fabs(erR)),
+    std::max(
+      std::max(std::fabs(lateL), std::fabs(lateR)),
+      std::max(std::fabs(pdL), std::fabs(pdR))));
+  if (tailPeak > blockTailPeak_)
+    blockTailPeak_ = tailPeak;
+
   // Keep gain smoothers advancing even while listening.
   const float dyn = duckGain_.get() * gateGain_.get();
   const float wetG = wetGain_.get() * dyn;
@@ -337,51 +370,42 @@ tresult PLUGIN_API ReverbPlugin::process(ProcessData& data)
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
   const bool wetNeeded = active_ || listen_;
-  const bool hasAudio = io_.begin(data);
+  const bool hasHostAudio = io_.begin(data);
+  // Content quiet (zeros without silenceFlags) still needs tail/envelope drain.
+  const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
 
   // Wet off: dry gain only (or true silence).
   if (!wetNeeded)
   {
-    if (!hasAudio)
+    if (!hasHostAudio)
       return kResultOk;
     applyDryGainBlock(data);
     io_.end(data);
     return kResultOk;
   }
 
-  // Silent input and no useful tail/freeze: skip the whole engine.
-  if (!hasAudio && !engineHasTail())
-    return kResultOk;
-
-  // Silent input but still ringing / frozen: write decay into output buffers.
-  if (!hasAudio)
+  // Idle only when input is quiet AND tank/ER/predelay/envelopes are drained.
+  // Never cut hall tails or duck/gate release.
+  if (quietIn && !engineHasTail())
   {
-    data.outputs[0].silenceFlags = 0;
+    if (hasHostAudio)
+      io_.end(data);
+    return kResultOk;
+  }
+
+  beginTailPeakBlock();
+
+  // Host silenceFlags: outs may be unusable — drain tank state only.
+  // Content-quiet (Ardour) still writes tails via the hasHostAudio path below.
+  if (!hasHostAudio)
+  {
     const int n = data.numSamples;
-    if (data.symbolicSampleSize == kSample32)
+    for (int i = 0; i < n; ++i)
     {
-      float* outL = data.outputs[0].channelBuffers32[0];
-      float* outR = data.outputs[0].channelBuffers32[1];
-      if (!outL || !outR)
-        return kResultOk;
-      for (int i = 0; i < n; ++i)
-        processSample(0.f, 0.f, outL[i], outR[i]);
+      float oL = 0.f, oR = 0.f;
+      processSample(0.f, 0.f, oL, oR);
     }
-    else
-    {
-      double* outL = data.outputs[0].channelBuffers64[0];
-      double* outR = data.outputs[0].channelBuffers64[1];
-      if (!outL || !outR)
-        return kResultOk;
-      for (int i = 0; i < n; ++i)
-      {
-        float oL = 0.f, oR = 0.f;
-        processSample(0.f, 0.f, oL, oR);
-        outL[i] = oL;
-        outR[i] = oR;
-      }
-    }
-    io_.end(data);
+    endTailPeakBlock();
     if (airOn_)
     {
       airL_.sanitize();
@@ -390,6 +414,8 @@ tresult PLUGIN_API ReverbPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
+  // hasHostAudio: outs already hold in_gain copies (zeros when quietIn).
+  // Keep processing so tails/envelopes drain into the output.
   const int n = data.numSamples;
   if (data.symbolicSampleSize == kSample32)
   {
@@ -411,6 +437,7 @@ tresult PLUGIN_API ReverbPlugin::process(ProcessData& data)
     }
   }
 
+  endTailPeakBlock();
   io_.end(data);
   if (airOn_)
   {

@@ -79,6 +79,8 @@ private:
   Dsp::SpectrumTap spectrum_;
   std::atomic<bool> spectrumActive_{false};
   std::atomic<float> effectiveCutoffHz_ { 1000.f };
+  /** After one quiet zero-feed block, resonant state is drained. */
+  bool quietDrained_ = false;
 };
 
 } // namespace Filter

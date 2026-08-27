@@ -63,6 +63,13 @@ tresult PLUGIN_API SplitPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
+  // Quiet: outs already hold zeros after in_gain — skip mute/phase/vol loop.
+  if (io_.inputWasQuiet())
+  {
+    io_.end(data);
+    return kResultOk;
+  }
+
   if (data.symbolicSampleSize == kSample32)
   {
     auto** out = data.outputs[0].channelBuffers32;

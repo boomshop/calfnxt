@@ -337,20 +337,50 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
     return std::pair<float, float>(scL, scR);
   };
 
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
+
+  // Idle only when main (and ext SC if used) is quiet AND GR envelopes settled.
+  // External sidechain can still move GR on a silent main — keep processing then.
+  if (quietIn && gr_.isIdle() && !scBusActive)
   {
-    for (int32 i = 0; i < data.numSamples; ++i)
-    {
-      float zL = 0.f;
-      float zR = 0.f;
-      const auto [scL, scR] = sidechainAt(i, zL, zR);
-      processSample(state, zL, zR, scL, scR);
-    }
     publishHistSnapshot();
+    if (hasHostAudio)
+      io_.end(data);
     return kResultOk;
   }
 
   const int32 nFrames = data.numSamples;
+
+  // Host silenceFlags: outs not filled — keep draining GR (and SC).
+  if (!hasHostAudio)
+  {
+    data.outputs[0].silenceFlags = 0;
+    auto drain = [&](auto** out, int32 nCh) {
+      const bool canWrite = out && (nCh <= 0 || out[0]) && (nCh <= 1 || out[1]);
+      for (int32 i = 0; i < nFrames; ++i)
+      {
+        float L = 0.f;
+        float R = 0.f;
+        const auto [scL, scR] = sidechainAt(i, L, R);
+        processSample(state, L, R, scL, scR);
+        if (canWrite && nCh > 0)
+          out[0][i] = L;
+        if (canWrite && nCh > 1)
+          out[1][i] = R;
+      }
+    };
+    if (data.symbolicSampleSize == kSample32)
+      drain(data.outputs[0].channelBuffers32, data.outputs[0].numChannels);
+    else
+      drain(data.outputs[0].channelBuffers64, data.outputs[0].numChannels);
+    publishHistSnapshot();
+    if (data.outputs[0].channelBuffers32 || data.outputs[0].channelBuffers64)
+      io_.end(data);
+    return kResultOk;
+  }
+
+  // Content quiet with !idle falls through — zeros in outs drain GR.
   if (data.symbolicSampleSize == kSample32)
   {
     auto** out = data.outputs[0].channelBuffers32;

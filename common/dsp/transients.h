@@ -150,6 +150,25 @@ public:
   float attack() const { return attack_; }
   float release() const { return release_; }
 
+  /**
+   * True when envelopes/gain are settled and lookahead has been drained by
+   * prior quiet blocks — safe to skip further silence DSP.
+   */
+  bool isIdle() const
+  {
+    if (!(envelope_ < 1.0e-8f && attack_ < 1.0e-8f && release_ < 1.0e-8f
+          && std::fabs(newReturn_ - 1.f) < 1.0e-4f
+          && std::fabs(oldReturn_ - 1.f) < 1.0e-4f))
+      return false;
+    // Lookahead can still hold audible dry after envelopes settle.
+    for (float v : lookBuf_)
+    {
+      if (std::fabs(v) >= 1.0e-7f)
+        return false;
+    }
+    return true;
+  }
+
 private:
   void calcRelFac()
   {

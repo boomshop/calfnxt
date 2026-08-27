@@ -148,8 +148,15 @@ tresult PLUGIN_API PulsatorPlugin::process(ProcessData& data)
 {
   syncParamPlains(data, params_, kParamCount);
   updateHostTempo(data);
+  handleReset();
+  const BlockState state = makeBlockState();
+  applyLfoParams(state);
 
-  if (!io_.begin(data))
+  io_.setBypassGains(state.bypass);
+  io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
+
+  const bool hasHostAudio = io_.begin(data);
+  if (!hasHostAudio)
     return kResultOk;
 
   const int32 nFrames = data.numSamples;
@@ -158,11 +165,6 @@ tresult PLUGIN_API PulsatorPlugin::process(ProcessData& data)
     io_.end(data);
     return kResultOk;
   }
-
-  handleReset();
-  const BlockState state = makeBlockState();
-  applyLfoParams(state);
-  io_.setBypassGains(state.bypass);
 
   auto modGain = [](float lfoVal, float amount) {
     // Classic: out = in*((lfo*0.5 + amount/2)) + in*(1-amount)
@@ -173,8 +175,9 @@ tresult PLUGIN_API PulsatorPlugin::process(ProcessData& data)
     return (1.f - amount) + (lfoVal * 0.5f + amount * 0.5f);
   };
 
-  // Fast path: bypass — keep LFOs in phase for clickless return + chart.
-  if (state.bypass)
+  // Quiet / bypass / dry: keep LFOs in phase for clickless return + chart.
+  // Quiet with amount>0: also slew gain smoothers with the LFO (no freeze).
+  if (state.bypass || state.amount <= 1.0e-6f)
   {
     lfoL_.advance(static_cast<uint32_t>(nFrames));
     lfoR_.advance(static_cast<uint32_t>(nFrames));
@@ -185,13 +188,17 @@ tresult PLUGIN_API PulsatorPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
-  // Fast path: fully dry (amount≈0) — still advance LFOs for the chart.
-  if (state.amount <= 1.0e-6f)
+  if (io_.inputWasQuiet())
   {
-    lfoL_.advance(static_cast<uint32_t>(nFrames));
-    lfoR_.advance(static_cast<uint32_t>(nFrames));
-    gainL_.reset(1.f);
-    gainR_.reset(1.f);
+    for (int32 i = 0; i < nFrames; ++i)
+    {
+      const float targetL = modGain(lfoL_.getValue(), state.amount);
+      const float targetR = modGain(lfoR_.getValue(), state.amount);
+      gainL_.process(targetL);
+      gainR_.process(targetR);
+      lfoL_.advance(1);
+      lfoR_.advance(1);
+    }
     publishLfoViz();
     io_.end(data);
     return kResultOk;

@@ -141,15 +141,8 @@ void MblimiterPlugin::ensureMultiBuffer()
 
 void MblimiterPlugin::idleSanitize(int nFrames)
 {
-  applySplitParams();
-  float bandsL[kMaxBands] {};
-  float bandsR[kMaxBands] {};
-  const int n = std::max(0, nFrames);
-  for (int i = 0; i < n; ++i)
-  {
-    splitL_.process(0.f, bandsL);
-    splitR_.process(0.f, bandsR);
-  }
+  // Prefer light scrub when nFrames==0 (content-quiet idle). Full one-sample
+  // poke when the host set silenceFlags (nFrames>0) so limiters stay denormal-safe.
   for (int b = 0; b < kMaxBands; ++b)
   {
     resamplerL_[b].sanitize();
@@ -160,7 +153,10 @@ void MblimiterPlugin::idleSanitize(int nFrames)
   cleanResamplerL_.sanitize();
   cleanResamplerR_.sanitize();
 
-  // One zero frame keeps sleeping limiters from holding denormal state.
+  if (nFrames <= 0)
+    return;
+
+  applySplitParams();
   ensureMultiBuffer();
   float* multiBuf = multiBuf_.empty() ? nullptr : multiBuf_.data();
   const int bands = numBands();
@@ -682,10 +678,39 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
   io_.setBypassGains(bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  if (!hasHostAudio)
   {
+    // Host silenceFlags: outs may be unusable — light scrub only.
     idleSanitize(data.numSamples);
     publishHistSnapshot();
+    return kResultOk;
+  }
+
+  const bool quietIn = io_.inputWasQuiet();
+  bool allSleeping = broadband_.isSleeping();
+  if (allSleeping)
+  {
+    for (int b = 0; b < bands; ++b)
+    {
+      if (!strip_[b].isSleeping())
+      {
+        allSleeping = false;
+        break;
+      }
+    }
+  }
+  const bool xfadeBusy =
+    bypassXfadePos_ < bypassXfadeLen_ || bypass != bypassOld_;
+  const bool drained = allSleeping && !xfadeBusy
+    && lastOutPeak_ < Dsp::IoStage::kQuietPeak;
+
+  if (quietIn && drained)
+  {
+    bypassOld_ = bypass;
+    idleSanitize(0);
+    publishHistSnapshot();
+    io_.end(data);
     return kResultOk;
   }
 
@@ -726,6 +751,7 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
   double cleanOsR[Dsp::ResampleN::kMaxFactor] {};
 
   const int32 nFrames = data.numSamples;
+  float blockPeak = 0.f;
 
   auto processFrame = [&](float& outL, float& outR) {
     if (mono)
@@ -967,6 +993,10 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
     Dsp::sanitizeDenormal(outL);
     Dsp::sanitizeDenormal(outR);
 
+    const float op = std::max(std::fabs(outL), std::fabs(outR));
+    if (op > blockPeak)
+      blockPeak = op;
+
     if (bypass)
     {
       for (int b = 0; b < kMaxBands; ++b)
@@ -1043,6 +1073,8 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
     }
   }
 
+  lastOutPeak_ = blockPeak;
+
   if (ascHold > static_cast<uint32_t>(std::max(0, nFrames)))
     ascHold -= static_cast<uint32_t>(nFrames);
   else
@@ -1051,27 +1083,17 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
 
   if (broadband_.isSleeping())
   {
-    bool allSleeping = true;
+    bool stripsSleeping = true;
     for (int b = 0; b < bands; ++b)
     {
       if (!strip_[b].isSleeping())
       {
-        allSleeping = false;
+        stripsSleeping = false;
         break;
       }
     }
-    if (allSleeping)
-    {
-      for (int b = 0; b < bands; ++b)
-      {
-        resamplerL_[b].sanitize();
-        resamplerR_[b].sanitize();
-      }
-      bbResamplerL_.sanitize();
-      bbResamplerR_.sanitize();
-      cleanResamplerL_.sanitize();
-      cleanResamplerR_.sanitize();
-    }
+    if (stripsSleeping)
+      idleSanitize(0);
   }
 
   publishHistSnapshot();

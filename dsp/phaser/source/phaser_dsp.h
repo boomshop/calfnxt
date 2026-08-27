@@ -66,6 +66,7 @@ private:
   /** `forcePhase` re-anchors L/R LFO like Calf activate() / Reset. */
   void applyParams(const BlockState& s, bool forcePhase);
   void publishResponse();
+  void idleAdvance(int nSamples, bool wantResp);
 
   float params_[kParamCount] {};
   double sampleRate_ = 44100.0;
@@ -81,6 +82,8 @@ private:
   float respL_[kMaxRespBins] {};
   float respR_[kMaxRespBins] {};
   std::atomic<bool> respReady_{false};
+  /** Editor polled takeFreqResponse — only then rebuild the expensive curve. */
+  std::atomic<bool> respDemand_{false};
 };
 
 } // namespace Phaser

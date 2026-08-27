@@ -326,17 +326,33 @@ tresult PLUGIN_API StereoPlugin::process(ProcessData& data)
   io_.setBypassGains(bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
-  if (!io_.begin(data))
-  {
-    fieldTap_.clearDisplay();
-    return kResultOk;
-  }
+  const bool hasHostAudio = io_.begin(data);
+  const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
 
   if (bypass)
   {
     fieldTap_.clearDisplay();
-    io_.end(data);
+    if (hasHostAudio)
+      io_.end(data);
     return kResultOk;
+  }
+
+  // Quiet: skip spatial DSP / field tap. Keep processing while channel delay
+  // still holds energy (delay line can outlive input silence).
+  const bool delayActive =
+    std::fabs(state.delayTargetMs) > 1.0e-5f || std::fabs(delayMsCur_) > 1.0e-5f;
+  if (quietIn && !delayActive)
+  {
+    fieldTap_.clearDisplay();
+    if (hasHostAudio)
+      io_.end(data);
+    return kResultOk;
+  }
+
+  if (!hasHostAudio)
+  {
+    // Delay still draining — write residual into outs.
+    data.outputs[0].silenceFlags = 0;
   }
 
   const int32 nFrames = data.numSamples;
@@ -346,8 +362,10 @@ tresult PLUGIN_API StereoPlugin::process(ProcessData& data)
     const int32 nCh = data.outputs[0].numChannels;
     for (int32 i = 0; i < nFrames; ++i)
     {
-      float L = nCh > 0 ? out[0][i] : 0.f;
-      float R = nCh > 1 ? out[1][i] : L;
+      float L = (!hasHostAudio || nCh <= 0) ? 0.f : out[0][i];
+      float R = (!hasHostAudio || nCh <= 1) ? L : out[1][i];
+      if (!hasHostAudio)
+        R = 0.f;
       processSample(state, L, R);
       if (nCh > 0)
         out[0][i] = L;
@@ -361,8 +379,10 @@ tresult PLUGIN_API StereoPlugin::process(ProcessData& data)
     const int32 nCh = data.outputs[0].numChannels;
     for (int32 i = 0; i < nFrames; ++i)
     {
-      float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
-      float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
+      float L = (!hasHostAudio || nCh <= 0) ? 0.f : static_cast<float>(out[0][i]);
+      float R = (!hasHostAudio || nCh <= 1) ? L : static_cast<float>(out[1][i]);
+      if (!hasHostAudio)
+        R = 0.f;
       processSample(state, L, R);
       if (nCh > 0)
         out[0][i] = L;
@@ -371,7 +391,10 @@ tresult PLUGIN_API StereoPlugin::process(ProcessData& data)
     }
   }
 
-  fieldTap_.publish();
+  if (hasHostAudio && !io_.inputWasQuiet())
+    fieldTap_.publish();
+  else
+    fieldTap_.clearDisplay();
   io_.end(data);
   return kResultOk;
 }

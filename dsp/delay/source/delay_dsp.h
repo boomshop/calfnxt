@@ -61,6 +61,10 @@ private:
   void resetProcessing();
   void updateTimingAndGains();
   void processSample(float inL, float inR, float& outL, float& outR);
+  /** True while delay lines / feedback / gain slews still carry energy. */
+  bool engineHasTail() const;
+
+  static constexpr float kIdleResidual = 1.0e-5f;
 
   float params_[kParamCount] {};
   Dsp::IoStage io_;
@@ -84,6 +88,10 @@ private:
 
   /** Feedback-path tone (HP→LP) applied after buffer write — not LR-complementary. */
   Dsp::SidechainFilter fbFilter_;
+
+  /** Peak |wet/feedback write| from the previous processed block (tail gate). */
+  float lastTailPeak_ = 0.f;
+  float blockTailPeak_ = 0.f;
 
   std::atomic<float> hostTempoBpm_ {120.f};
   std::atomic<int> hostTempoValid_ {0};

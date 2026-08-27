@@ -151,7 +151,8 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  if (!hasHostAudio)
     return kResultOk;
 
   const int32 nFrames = data.numSamples;
@@ -199,14 +200,26 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
     lfo2Activity_.store(unipolar(lfo2_.getValue()), std::memory_order_relaxed);
   };
 
-  // Fast path: bypass — keep oscillators in phase for clickless return.
-  if (state.bypass)
-  {
+  auto advanceOscBlock = [&]() {
     lfo1_.advance(static_cast<uint32_t>(nFrames));
     lfo2_.advance(static_cast<uint32_t>(nFrames));
     modL_.advance(static_cast<uint32_t>(nFrames));
     modR_.advance(static_cast<uint32_t>(nFrames));
     publishLfoViz(state);
+  };
+
+  // Quiet: keep LFO/osc phase continuous, skip sample multiply.
+  if (io_.inputWasQuiet())
+  {
+    advanceOscBlock();
+    io_.end(data);
+    return kResultOk;
+  }
+
+  // Fast path: bypass — keep oscillators in phase for clickless return.
+  if (state.bypass)
+  {
+    advanceOscBlock();
     io_.end(data);
     return kResultOk;
   }
@@ -215,11 +228,7 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
   // Still publish LFO activity / effective when other LFO routes are active.
   if (!state.listen && state.modAmount <= 1.0e-6f && !state.lfo2AmountActive)
   {
-    lfo1_.advance(static_cast<uint32_t>(nFrames));
-    lfo2_.advance(static_cast<uint32_t>(nFrames));
-    modL_.advance(static_cast<uint32_t>(nFrames));
-    modR_.advance(static_cast<uint32_t>(nFrames));
-    publishLfoViz(state);
+    advanceOscBlock();
     io_.end(data);
     return kResultOk;
   }

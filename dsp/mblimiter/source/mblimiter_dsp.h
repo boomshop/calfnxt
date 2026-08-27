@@ -92,7 +92,7 @@ private:
   void histFeedSample(int band, float fullPeak, float bandPeak, float grLin);
   void publishHistSnapshot();
   void ensureMultiBuffer();
-  /** Flush denormals in splitters / resamplers / sleeping limiters (silence). */
+  /** Light denormal scrub for OS filters when all limiters are sleeping. */
   void idleSanitize(int nFrames);
 
   float params_[kParamCount] {};
@@ -148,6 +148,8 @@ private:
   bool bypassOld_ = false;
   uint32_t bypassXfadePos_ = 0;
   uint32_t bypassXfadeLen_ = 0;
+  /** Peak of last processed block — sleeping skip must not cut delay residual. */
+  float lastOutPeak_ = 0.f;
 
   std::atomic<float> ascLed_ {0.f};
 

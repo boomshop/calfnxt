@@ -59,6 +59,8 @@ private:
   Dsp::SpectrumTap spectrum_;
   std::atomic<bool> spectrumActive_{false};
   double sampleRate_ = 44100.0;
+  /** After one quiet block of zero-feed, IIR state is drained — further quiet can skip. */
+  bool quietDrained_ = false;
 };
 
 } // namespace Equalizer

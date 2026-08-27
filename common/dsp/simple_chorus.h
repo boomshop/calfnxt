@@ -78,6 +78,14 @@ public:
     phase_ -= std::floor(phase_);
   }
 
+  void advance(int nSamples)
+  {
+    if (!active_ || nSamples <= 0)
+      return;
+    phase_ += dphase_ * static_cast<float>(nSamples);
+    phase_ -= std::floor(phase_);
+  }
+
   /**
    * Calf get_value: returns roughly −1…+1 positioned in the voice’s overlap band.
    * Used both for delay modulation and for chart Y mapping.
@@ -164,6 +172,15 @@ public:
   void incPhase(float turns) { lfo_.incPhase(turns); }
   float phase() const { return lfo_.phase(); }
   const SineMultiLfo& lfo() const { return lfo_; }
+
+  bool isIdle() const { return lastEnergy_ < 1.0e-8f; }
+
+  /** Block silence: advance multi-LFO in O(1), clear energy tracking. */
+  void advanceSilence(int nSamples)
+  {
+    lfo_.advance(nSamples);
+    lastEnergy_ = 0.f;
+  }
 
   /**
    * Process one sample → wet (× √1/N). Caller applies amount / dry / active / post.

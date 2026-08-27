@@ -184,15 +184,66 @@ tresult PLUGIN_API ChorusPlugin::process(ProcessData& data)
 
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
+  const bool drained = left_.isIdle() && right_.isIdle()
+    && amountGain_.isSettled() && dryGain_.isSettled();
+
+  if (quietIn && drained)
   {
+    left_.advanceSilence(data.numSamples);
+    right_.advanceSilence(data.numSamples);
+    publishLfoViz();
+    if (hasHostAudio)
+      io_.end(data);
+    return kResultOk;
+  }
+
+  if (!hasHostAudio)
+  {
+    // Delay lines / post-filter still draining — emit wet when buffers exist.
+    data.outputs[0].silenceFlags = 0;
     const int32 n = data.numSamples;
-    for (int32 i = 0; i < n; ++i)
-    {
-      left_.processWet(0.f);
-      right_.processWet(0.f);
-      amountGain_.get();
+    const bool listen = state.listen;
+    auto drainOne = [&](float& oL, float& oR) {
+      float wetL = left_.processWet(0.f);
+      float wetR = right_.processWet(0.f);
+      wetL = post_.processWet(0, wetL);
+      wetR = post_.processWet(1, wetR);
+      const float a = amountGain_.get();
       dryGain_.get();
+      oL = a * wetL;
+      oR = a * wetR;
+      (void)listen;
+      Dsp::sanitizeDenormal(oL);
+      Dsp::sanitizeDenormal(oR);
+    };
+    auto** out32 = data.outputs[0].channelBuffers32;
+    auto** out64 = data.outputs[0].channelBuffers64;
+    if (data.symbolicSampleSize == kSample32 && out32 && out32[0] && out32[1])
+    {
+      for (int32 i = 0; i < n; ++i)
+        drainOne(out32[0][i], out32[1][i]);
+      io_.end(data);
+    }
+    else if (data.symbolicSampleSize != kSample32 && out64 && out64[0] && out64[1])
+    {
+      for (int32 i = 0; i < n; ++i)
+      {
+        float oL = 0.f, oR = 0.f;
+        drainOne(oL, oR);
+        out64[0][i] = oL;
+        out64[1][i] = oR;
+      }
+      io_.end(data);
+    }
+    else
+    {
+      for (int32 i = 0; i < n; ++i)
+      {
+        float oL = 0.f, oR = 0.f;
+        drainOne(oL, oR);
+      }
     }
     publishLfoViz();
     return kResultOk;

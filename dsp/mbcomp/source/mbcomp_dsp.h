@@ -107,6 +107,8 @@ private:
   int histSnapshotSampleCount_[kMaxBands] {};
   int histSnapshotSamplesPerSlot_ = 1;
   int histVisibleSlots_ = 160;
+  /** After one quiet zero-feed block, crossover state is drained. */
+  bool quietDrained_ = false;
 };
 
 } // namespace Mbcomp

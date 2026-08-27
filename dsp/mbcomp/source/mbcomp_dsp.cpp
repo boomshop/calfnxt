@@ -334,12 +334,39 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
 
   io_.setBypassGains(globalBypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
-  if (!io_.begin(data))
-    return kResultOk;
+  const bool hasHostAudio = io_.begin(data);
+  const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
+
+  bool allGrIdle = true;
+  for (int b = 0; b < bands; ++b)
+  {
+    if (bandState[b].bypass)
+      continue;
+    if (!gr_[b].isIdle())
+    {
+      allGrIdle = false;
+      break;
+    }
+  }
+
+  if (quietIn && allGrIdle)
+  {
+    if (quietDrained_)
+    {
+      if (hasHostAudio)
+        io_.end(data);
+      return kResultOk;
+    }
+  }
+  else if (!quietIn)
+  {
+    quietDrained_ = false;
+  }
 
   if (!data.outputs || !data.outputs[0].channelBuffers32 || data.outputs[0].numChannels < 2)
   {
-    io_.end(data);
+    if (hasHostAudio)
+      io_.end(data);
     return kResultOk;
   }
 
@@ -347,8 +374,17 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
   float* outR = data.outputs[0].channelBuffers32[1];
   if (!outL || !outR)
   {
-    io_.end(data);
+    if (hasHostAudio)
+      io_.end(data);
     return kResultOk;
+  }
+
+  // Host silenceFlags: outs not filled — drain crossovers / GR into buffers.
+  if (!hasHostAudio)
+  {
+    data.outputs[0].silenceFlags = 0;
+    std::memset(outL, 0, static_cast<size_t>(nSamples) * sizeof(float));
+    std::memset(outR, 0, static_cast<size_t>(nSamples) * sizeof(float));
   }
 
   // Global bypass: dry I/O already in outs. Still run crossovers so history
@@ -554,6 +590,8 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
   }
 
   publishHistSnapshot();
+  if (quietIn && allGrIdle)
+    quietDrained_ = true;
   io_.end(data);
   return kResultOk;
 }

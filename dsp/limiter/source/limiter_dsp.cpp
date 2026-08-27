@@ -333,9 +333,30 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
   io_.setBypassGains(bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  if (!hasHostAudio)
   {
+    // Host silenceFlags: outs may be unusable — do not touch them.
     publishHistSnapshot();
+    return kResultOk;
+  }
+
+  const bool quietIn = io_.inputWasQuiet();
+  const bool xfadeBusy =
+    bypassXfadePos_ < bypassXfadeLen_ || bypass != bypassOld_;
+  const bool drained = limiter_.isSleeping() && !xfadeBusy
+    && lastOutPeak_ < Dsp::IoStage::kQuietPeak;
+
+  // Keep bypassOld_ in sync even on idle so a later wake starts a clean xfade.
+  if (quietIn && drained)
+  {
+    bypassOld_ = bypass;
+    resamplerL_.sanitize();
+    resamplerR_.sanitize();
+    cleanResamplerL_.sanitize();
+    cleanResamplerR_.sanitize();
+    publishHistSnapshot();
+    io_.end(data);
     return kResultOk;
   }
 
@@ -366,6 +387,7 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
   double cleanOsR[Dsp::ResampleN::kMaxFactor] {};
 
   const int32 nFrames = data.numSamples;
+  float blockPeak = 0.f;
   auto processFrame = [&](float& outL, float& outR) {
     const float inL = outL;
     const float inR = outR;
@@ -466,6 +488,10 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
     Dsp::sanitizeDenormal(outL);
     Dsp::sanitizeDenormal(outR);
 
+    const float op = std::max(std::fabs(outL), std::fabs(outR));
+    if (op > blockPeak)
+      blockPeak = op;
+
     if (bypass)
     {
       histFeedSample(inPeak, 1.f);
@@ -480,25 +506,7 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
     grMeter_.process(grLin);
   };
 
-  if (data.symbolicSampleSize == kSample32)
-  {
-    auto** out = data.outputs[0].channelBuffers32;
-    const int32 nCh = data.outputs[0].numChannels;
-    for (int32 i = 0; i < nFrames; ++i)
-    {
-      float L = nCh > 0 ? out[0][i] : 0.f;
-      float R = nCh > 1 ? out[1][i] : L;
-      processFrame(L, R);
-      if (nCh > 0)
-        out[0][i] = L;
-      if (nCh > 1)
-        out[1][i] = R;
-    }
-  }
-  else
-  {
-    auto** out = data.outputs[0].channelBuffers64;
-    const int32 nCh = data.outputs[0].numChannels;
+  auto runBlock = [&](auto** out, int32 nCh) {
     for (int32 i = 0; i < nFrames; ++i)
     {
       float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
@@ -509,7 +517,14 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
       if (nCh > 1)
         out[1][i] = R;
     }
-  }
+  };
+
+  if (data.symbolicSampleSize == kSample32)
+    runBlock(data.outputs[0].channelBuffers32, data.outputs[0].numChannels);
+  else
+    runBlock(data.outputs[0].channelBuffers64, data.outputs[0].numChannels);
+
+  lastOutPeak_ = blockPeak;
 
   if (ascHold > static_cast<uint32_t>(std::max(0, nFrames)))
     ascHold -= static_cast<uint32_t>(nFrames);

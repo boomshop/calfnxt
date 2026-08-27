@@ -100,6 +100,35 @@ public:
   float dryLast() const { return dryCur_; }
   float wetLast() const { return wetCur_; }
   float feedback() const { return fb_; }
+  bool isIdle() const { return std::fabs(lastFd_) < 1.0e-10f; }
+
+  /**
+   * Block silence when already idle: advance LFO + delay tap in O(1).
+   * Dry/wet continue to slew (no snap). Must not be called while lastFd_ holds energy.
+   */
+  void advanceSilence(int nSamples)
+  {
+    if (nSamples <= 0)
+      return;
+    if (lfoActive_)
+    {
+      phase_ += dphase_ * static_cast<double>(nSamples);
+      phase_ -= std::floor(phase_);
+    }
+    const float lfo = std::sin(static_cast<float>(2.0 * M_PI * phase_));
+    float delayTgt = minDelaySamp_ + 2.f + modDepthSamp_ * (0.5f + 0.5f * lfo);
+    delayTgt = std::clamp(delayTgt, 1.f, float(kMaxDelay - 2));
+    const float a = 1.f - std::pow(1.f - delaySlew_, static_cast<float>(nSamples));
+    delayCur_ += (delayTgt - delayCur_) * a;
+    delayCur_ = std::clamp(delayCur_, 1.f, float(kMaxDelay - 2));
+    lastDelay_ = delayCur_;
+    for (int i = 0; i < nSamples; ++i)
+    {
+      advanceGain(dryCur_, dryTgt_, dryDelta_);
+      advanceGain(wetCur_, wetTgt_, wetDelta_);
+    }
+    lastFd_ = 0.f;
+  }
 
   /**
    * Process one sample. `active` gates wet (Calf `on`); dry always mixes.
@@ -123,8 +152,10 @@ public:
     delayCur_ = std::clamp(delayCur_, 1.f, float(kMaxDelay - 2));
     lastDelay_ = delayCur_;
 
+    // Keep reading the delay until its output is drained — do not gate on fb_
+    // (fb≈0 would otherwise cut the remaining dry delay tail).
     const float absIn = std::fabs(in);
-    if (absIn < 1.0e-10f && std::fabs(fb_) * std::fabs(lastFd_) < 1.0e-10f)
+    if (absIn < 1.0e-10f && std::fabs(lastFd_) < 1.0e-10f)
     {
       lastFd_ = 0.f;
       delay_.write(0.f);

@@ -109,13 +109,29 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
-  if (!io_.begin(data))
-    return kResultOk;
+  const bool hasHostAudio = io_.begin(data);
+  const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
+  const bool envIdle = !state.envOn || envelope_.isIdle();
 
   if (state.bypass && !state.spectrumOn)
   {
     effectiveCutoffHz_.store(state.frequency, std::memory_order_relaxed);
-    io_.end(data);
+    if (hasHostAudio)
+      io_.end(data);
+    return kResultOk;
+  }
+
+  // Quiet + (env off, or envelope settled): first quiet block zero-feeds the
+  // filter (drain resonance); further quiet blocks may skip.
+  if (!quietIn)
+    quietDrained_ = false;
+  if (quietIn && envIdle && quietDrained_)
+  {
+    effectiveCutoffHz_.store(
+      state.bypass ? state.frequency : filter_.lastCutoffHz(),
+      std::memory_order_relaxed);
+    if (hasHostAudio)
+      io_.end(data);
     return kResultOk;
   }
 
@@ -138,11 +154,16 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
   const float logCeil = std::log10(ceilHz);
   const bool targetBelow = ceilHz < floorHz;
 
-  auto run = [&](auto** out) {
+  if (!hasHostAudio)
+    data.outputs[0].silenceFlags = 0;
+
+  auto run = [&](auto** out, bool zeros) {
     for (int32 i = 0; i < nFrames; ++i)
     {
-      float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
-      float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
+      float L = zeros || nCh <= 0 ? 0.f : static_cast<float>(out[0][i]);
+      float R = zeros || nCh <= 1 ? L : static_cast<float>(out[1][i]);
+      if (zeros)
+        R = 0.f;
 
       if (!state.bypass)
       {
@@ -198,9 +219,9 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
   };
 
   if (data.symbolicSampleSize == kSample32)
-    run(data.outputs[0].channelBuffers32);
+    run(data.outputs[0].channelBuffers32, !hasHostAudio);
   else
-    run(data.outputs[0].channelBuffers64);
+    run(data.outputs[0].channelBuffers64, !hasHostAudio);
 
   if (state.bypass)
     effectiveCutoffHz_.store(state.frequency, std::memory_order_relaxed);
@@ -209,6 +230,9 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
 
   if (state.spectrumOn)
     spectrum_.publish();
+
+  if (quietIn && envIdle)
+    quietDrained_ = true;
 
   io_.end(data);
   return kResultOk;

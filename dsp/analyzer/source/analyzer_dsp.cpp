@@ -69,9 +69,13 @@ tresult PLUGIN_API AnalyzerPlugin::process(ProcessData& data)
   io_.setBypassGains(bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
+  // Quiet: skip FFT/gonio — keep last display frame.
+  if (quietIn)
   {
-    // Keep last spectrum/gonio snapshot on host silence flags (no RT clear).
+    if (hasHostAudio)
+      io_.end(data);
     return kResultOk;
   }
 

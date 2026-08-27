@@ -35,6 +35,13 @@ public:
     holdSamplesLeft_ = 0;
   }
 
+  /** True when detector/GR settled at unity (safe to skip silence DSP). */
+  bool isIdle() const
+  {
+    return lastGr_ >= 0.9999f && linSlope_ < 1.0e-8f && rmsSq_ < 1.0e-16f
+      && holdSamplesLeft_ <= 0;
+  }
+
   /**
    * thresholdDb = open threshold; releaseThresholdDb ≤ threshold (hysteresis).
    * rangeDb = max GR floor (≤ 0), e.g. −90…0.

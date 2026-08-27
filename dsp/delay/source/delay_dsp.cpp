@@ -275,6 +275,13 @@ void DelayPlugin::processSample(float inL, float inR, float& outL, float& outR)
   if (age_ < kMaxDelay)
     age_ += 1;
 
+  // Track wet + recirculating write energy (Amount=0 still drains the line).
+  const float tailPeak = std::max(
+    std::max(std::fabs(wetL), std::fabs(wetR)),
+    std::max(std::fabs(delL), std::fabs(delR)));
+  if (tailPeak > blockTailPeak_)
+    blockTailPeak_ = tailPeak;
+
   const float cm = chmix_.get();
   const float tmpL = lerp(wetL, wetR, cm);
   const float tmpR = lerp(wetR, wetL, cm);
@@ -315,14 +322,29 @@ tresult PLUGIN_API DelayPlugin::process(ProcessData& data)
   io_.setBypassGains(false);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
+
+  // Idle only when input is quiet AND delay/FB/gain slews are drained.
+  if (quietIn && !engineHasTail())
   {
+    if (hasHostAudio)
+      io_.end(data);
+    return kResultOk;
+  }
+
+  blockTailPeak_ = 0.f;
+
+  if (!hasHostAudio)
+  {
+    // Host silenceFlags: outs may be absent/invalid (VST3 validator).
+    // Drain delay state only — content-quiet path (Ardour) still writes tails.
     for (int32 i = 0; i < data.numSamples; ++i)
     {
-      float zL = 0.f;
-      float zR = 0.f;
+      float zL = 0.f, zR = 0.f;
       processSample(0.f, 0.f, zL, zR);
     }
+    lastTailPeak_ = blockTailPeak_;
     return kResultOk;
   }
 
@@ -358,8 +380,20 @@ tresult PLUGIN_API DelayPlugin::process(ProcessData& data)
     }
   }
 
+  lastTailPeak_ = blockTailPeak_;
   io_.end(data);
   return kResultOk;
+}
+
+bool DelayPlugin::engineHasTail() const
+{
+  if (lastTailPeak_ > kIdleResidual)
+    return true;
+  // Amount / feedback / dry / width still slewing — keep advancing SmoothGain.
+  if (!amtL_.isSettled() || !amtR_.isSettled() || !fbL_.isSettled() || !fbR_.isSettled()
+      || !dry_.isSettled() || !chmix_.isSettled())
+    return true;
+  return false;
 }
 
 tresult PLUGIN_API DelayPlugin::setState(IBStream* state)

@@ -108,7 +108,8 @@ tresult PLUGIN_API CrusherPlugin::process(ProcessData& data)
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  if (!hasHostAudio)
     return kResultOk;
 
   const int32 nFrames = data.numSamples;
@@ -118,7 +119,7 @@ tresult PLUGIN_API CrusherPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
-  if (state.bypass)
+  if (state.bypass || io_.inputWasQuiet())
   {
     shapeZone_ *= std::pow(shapeZoneFall_, static_cast<float>(nFrames));
     io_.end(data);

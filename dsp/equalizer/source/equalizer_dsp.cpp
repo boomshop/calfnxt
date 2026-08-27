@@ -143,8 +143,29 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
 
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
   io_.setBypassGains(bypass);
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  if (!hasHostAudio)
     return kResultOk;
+
+  bool anyListen = false;
+  bool anyDynBusy = false;
+  for (int b = 0; b < kEqBandCount; ++b)
+  {
+    if (bands_[b].isListening())
+      anyListen = true;
+    if (!bands_[b].isDynIdle())
+      anyDynBusy = true;
+  }
+
+  // Quiet + no listen + dyn GR settled: first quiet block still zero-feeds IIR
+  // (drain ring); further quiet blocks may skip.
+  if (!io_.inputWasQuiet())
+    quietDrained_ = false;
+  if (io_.inputWasQuiet() && !anyListen && !anyDynBusy && quietDrained_)
+  {
+    io_.end(data);
+    return kResultOk;
+  }
 
   const bool doEq = !bypass && hasAnyActiveBandsOrListen();
   // Idle fast-path only when there is nothing to do — Mono still folds L→R.
@@ -261,6 +282,10 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
 
   if (spectrumOn)
     spectrum_.publish();
+
+  // This quiet block zero-fed the bands — further quiet blocks may skip.
+  if (io_.inputWasQuiet() && !anyListen && !anyDynBusy)
+    quietDrained_ = true;
 
   io_.end(data);
   return kResultOk;

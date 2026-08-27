@@ -5,6 +5,8 @@
 
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 
+#include <cmath>
+
 namespace calfNXT {
 namespace Dsp {
 
@@ -15,10 +17,17 @@ namespace Dsp {
  *   2. begin() — copy in→out with in_gain, accumulate input peaks (after gain)
  *   3. plugin DSP in-place on outputs
  *   4. end() — apply out_gain, accumulate output peaks
+ *
+ * Silence: begin() returns false only when the host sets silenceFlags.
+ * Many hosts (Ardour) send zero buffers without flags — use inputWasQuiet()
+ * (peak tracked during the copy) for content-based idle fast-paths.
  */
 class IoStage
 {
 public:
+  /** Below this |sample| after in_gain the block counts as quiet (~−140 dBFS). */
+  static constexpr float kQuietPeak = 1.0e-7f;
+
   void setGainsDb(float inDb, float outDb)
   {
     inGainDb_ = inDb;
@@ -34,12 +43,16 @@ public:
   void setInputMeterChannels(int ch) { peakIn_.setChannels(ch); }
   void setOutputMeterChannels(int ch) { peakOut_.setChannels(ch); }
 
+  /** True after begin() when host silenceFlags were set or the copied peak was tiny. */
+  bool inputWasQuiet() const { return quiet_; }
+
   /** Mono input → duplicate to stereo outputs with in_gain + input metering. */
   bool beginMonoToStereo(Steinberg::Vst::ProcessData& data)
   {
     using namespace Steinberg;
     using namespace Steinberg::Vst;
 
+    quiet_ = true;
     if (data.numInputs < 1 || data.numOutputs < 1 || !data.inputs || !data.outputs)
       return false;
     if (data.outputs[0].numChannels < 2)
@@ -53,6 +66,7 @@ public:
 
     const float gIn = bypassGains_ ? 1.f : dbToLin(inGainDb_);
     const int32 nFrames = data.numSamples;
+    float peak = 0.f;
 
     if (data.symbolicSampleSize == kSample32)
     {
@@ -64,6 +78,9 @@ public:
         out[0][i] = y;
         out[1][i] = y;
         peakIn_.accumulate(0, y);
+        const float a = std::fabs(y);
+        if (a > peak)
+          peak = a;
       }
     }
     else
@@ -78,17 +95,22 @@ public:
         out[0][i] = y;
         out[1][i] = y;
         peakIn_.accumulate(0, yf);
+        const float a = std::fabs(yf);
+        if (a > peak)
+          peak = a;
       }
     }
+    quiet_ = peak < kQuietPeak;
     return true;
   }
 
-  /** Prepare outputs with in_gain + input metering. false = silence / no audio. */
+  /** Prepare outputs with in_gain + input metering. false = host silence / no audio. */
   bool begin(Steinberg::Vst::ProcessData& data)
   {
     using namespace Steinberg;
     using namespace Steinberg::Vst;
 
+    quiet_ = true;
     if (data.numInputs < 1 || data.numOutputs < 1 || !data.inputs || !data.outputs)
       return false;
     if (data.inputs[0].silenceFlags != 0)
@@ -101,6 +123,7 @@ public:
     const float gIn = bypassGains_ ? 1.f : dbToLin(inGainDb_);
     const int32 nCh = data.inputs[0].numChannels;
     const int32 nFrames = data.numSamples;
+    float peak = 0.f;
 
     if (data.symbolicSampleSize == kSample32)
     {
@@ -113,6 +136,9 @@ public:
           const float y = in[ch][i] * gIn;
           out[ch][i] = y;
           peakIn_.accumulate(ch, y);
+          const float a = std::fabs(y);
+          if (a > peak)
+            peak = a;
         }
       }
     }
@@ -128,9 +154,13 @@ public:
           const double y = in[ch][i] * g;
           out[ch][i] = y;
           peakIn_.accumulate(ch, static_cast<float>(y));
+          const float a = std::fabs(static_cast<float>(y));
+          if (a > peak)
+            peak = a;
         }
       }
     }
+    quiet_ = peak < kQuietPeak;
     return true;
   }
 
@@ -181,6 +211,7 @@ private:
   float inGainDb_ = 0.f;
   float outGainDb_ = 0.f;
   bool bypassGains_ = false;
+  bool quiet_ = true;
   Viz::LevelPeakHold peakIn_ {2};
   Viz::LevelPeakHold peakOut_ {2};
 };

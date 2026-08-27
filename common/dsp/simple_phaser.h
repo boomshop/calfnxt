@@ -103,6 +103,37 @@ public:
   float feedback() const { return fb_; }
   int stages() const { return stages_; }
   float apCoef() const { return a0_; }
+  bool isIdle() const { return std::fabs(state_) < 1.0e-10f; }
+
+  /**
+   * Block silence when already idle: advance LFO/coeffs in O(1).
+   * Dry/wet continue to slew (no snap) so mix automation in silence stays smooth.
+   * Must not be called while feedback/AP state still holds energy.
+   */
+  void advanceSilence(int nSamples)
+  {
+    if (nSamples <= 0)
+      return;
+    if (lfoActive_)
+    {
+      phase_ += dphase_ * static_cast<double>(nSamples);
+      phase_ -= std::floor(phase_);
+    }
+    cnt_ = 0;
+    refreshCoeffs();
+    for (int i = 0; i < nSamples; ++i)
+    {
+      advanceGain(dryCur_, dryTgt_, dryDelta_);
+      advanceGain(wetCur_, wetTgt_, wetDelta_);
+    }
+    // State already ~0 when isIdle(); keep AP delays cleared.
+    state_ = 0.f;
+    for (int i = 0; i < stages_; ++i)
+    {
+      x1_[i] = 0.f;
+      y1_[i] = 0.f;
+    }
+  }
 
   /**
    * Process one sample. `active` gates wet (Calf `on`); dry always mixes.
@@ -179,9 +210,8 @@ private:
     return out;
   }
 
-  void controlStep()
+  void refreshCoeffs()
   {
-    cnt_ = 0;
     // Triangle wave ∈ [-1, 1] from fractional phase (matches Calf fixed-point fold).
     double p = phase_;
     p -= std::floor(p);
@@ -202,18 +232,23 @@ private:
     const float q = 1.f / (1.f + x);
     a0_ = (x - 1.f) * q;
 
-    if (lfoActive_)
-    {
-      phase_ += dphase_ * static_cast<double>(kControlPeriod);
-      phase_ -= std::floor(phase_);
-    }
-
     for (int i = 0; i < stages_; ++i)
     {
       sanitizeDenormal(x1_[i]);
       sanitizeDenormal(y1_[i]);
     }
     sanitizeDenormal(state_);
+  }
+
+  void controlStep()
+  {
+    cnt_ = 0;
+    refreshCoeffs();
+    if (lfoActive_)
+    {
+      phase_ += dphase_ * static_cast<double>(kControlPeriod);
+      phase_ -= std::floor(phase_);
+    }
   }
 
   float sr_ = 44100.f;

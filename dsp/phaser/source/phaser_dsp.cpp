@@ -156,6 +156,8 @@ int PhaserPlugin::takeFreqResponse(float* out, int maxOut)
 {
   if (!out || maxOut < 1)
     return 0;
+  // Demand next rebuild only while the editor is actively polling.
+  respDemand_.store(true, std::memory_order_relaxed);
   if (!respReady_.load(std::memory_order_acquire))
     return 0;
   const int bins = std::clamp(respBins_.load(std::memory_order_relaxed), 32, kMaxRespBins);
@@ -165,6 +167,7 @@ int PhaserPlugin::takeFreqResponse(float* out, int maxOut)
   out[0] = static_cast<float>(bins);
   std::memcpy(out + 1, respL_, static_cast<size_t>(bins) * sizeof(float));
   std::memcpy(out + 1 + bins, respR_, static_cast<size_t>(bins) * sizeof(float));
+  respReady_.store(false, std::memory_order_release);
   return need;
 }
 
@@ -173,7 +176,30 @@ void PhaserPlugin::configureVizBins(const char* id, int bins)
   if (!id || bins < 1)
     return;
   if (std::strcmp(id, "mod") == 0)
+  {
     respBins_.store(std::clamp(bins, 32, kMaxRespBins), std::memory_order_relaxed);
+    respDemand_.store(true, std::memory_order_relaxed);
+  }
+}
+
+void PhaserPlugin::idleAdvance(int nSamples, bool wantResp)
+{
+  // LFO-only when AP/FB already drained — never clear residual state here.
+  if (left_.isIdle() && right_.isIdle())
+  {
+    left_.advanceSilence(nSamples);
+    right_.advanceSilence(nSamples);
+  }
+  else
+  {
+    for (int i = 0; i < nSamples; ++i)
+    {
+      left_.process(0.f, false);
+      right_.process(0.f, false);
+    }
+  }
+  if (wantResp && respDemand_.load(std::memory_order_relaxed))
+    publishResponse();
 }
 
 tresult PLUGIN_API PhaserPlugin::process(ProcessData& data)
@@ -193,30 +219,60 @@ tresult PLUGIN_API PhaserPlugin::process(ProcessData& data)
 
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
-  // ~30 Hz response rebuild (matches viz flush); avoid per-block complex math.
+  // ~30 Hz response rebuild (matches viz flush); skip when no editor demand.
   const int respInterval = std::max(1, static_cast<int>(sampleRate_ / 30.0));
   respCountdown_ -= data.numSamples;
   const bool wantResp = respCountdown_ <= 0;
   if (wantResp)
     respCountdown_ = respInterval;
 
-  if (!io_.begin(data))
+  const bool hasHostAudio = io_.begin(data);
+  const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
+  const bool drained = left_.isIdle() && right_.isIdle();
+  const bool wetOn = state.active;
+
+  if (quietIn && drained)
   {
-    // Keep LFO/chart moving while silent so the response still breathes.
+    idleAdvance(data.numSamples, wantResp);
+    if (hasHostAudio)
+      io_.end(data);
+    return kResultOk;
+  }
+
+  if (!hasHostAudio)
+  {
+    // FB/AP still ringing — emit wet decay when buffers exist.
+    data.outputs[0].silenceFlags = 0;
     const int32 n = data.numSamples;
-    for (int32 i = 0; i < n; ++i)
+    auto** out32 = data.outputs[0].channelBuffers32;
+    auto** out64 = data.outputs[0].channelBuffers64;
+    if (data.symbolicSampleSize == kSample32 && out32 && out32[0] && out32[1])
     {
-      left_.process(0.f, false);
-      right_.process(0.f, false);
+      for (int32 i = 0; i < n; ++i)
+      {
+        out32[0][i] = left_.process(0.f, wetOn);
+        out32[1][i] = right_.process(0.f, wetOn);
+      }
+      io_.end(data);
     }
-    if (wantResp)
+    else if (data.symbolicSampleSize != kSample32 && out64 && out64[0] && out64[1])
+    {
+      for (int32 i = 0; i < n; ++i)
+      {
+        out64[0][i] = left_.process(0.f, wetOn);
+        out64[1][i] = right_.process(0.f, wetOn);
+      }
+      io_.end(data);
+    }
+    else
+      idleAdvance(n, false);
+    if (wantResp && respDemand_.load(std::memory_order_relaxed))
       publishResponse();
     return kResultOk;
   }
 
   const int32 nFrames = data.numSamples;
   const int32 nCh = data.outputs[0].numChannels;
-  const bool wetOn = state.active;
 
   auto run = [&](auto** out) {
     for (int32 i = 0; i < nFrames; ++i)
@@ -237,7 +293,7 @@ tresult PLUGIN_API PhaserPlugin::process(ProcessData& data)
   else
     run(data.outputs[0].channelBuffers64);
 
-  if (wantResp)
+  if (wantResp && respDemand_.load(std::memory_order_relaxed))
     publishResponse();
   io_.end(data);
   return kResultOk;

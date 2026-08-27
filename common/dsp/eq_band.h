@@ -126,6 +126,12 @@ public:
 
   bool isListening() const { return listen_; }
 
+  /** True when dyn GR is off or settled — safe to skip silence DSP for this band. */
+  bool isDynIdle() const
+  {
+    return !dynEnabled_ || !typeUsesGain(type_) || gr_.isIdle();
+  }
+
   /** Advance freq/Q glide + snap gain; refresh coeffs / detector. Once per block. */
   void prepareBlock()
   {

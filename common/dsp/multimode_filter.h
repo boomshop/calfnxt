@@ -144,6 +144,12 @@ public:
 
   float lastEnvelope() const { return envelope_; }
 
+  /** True when detector/envelope have returned to silence (safe idle skip). */
+  bool isIdle() const
+  {
+    return envelope_ < 1.0e-8f && linSlope_ < 1.0e-8f && rmsSq_ < 1.0e-16f;
+  }
+
 private:
   float sampleRate_ = 44100.f;
   float attackMs_ = -1.f;

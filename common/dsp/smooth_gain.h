@@ -42,6 +42,15 @@ public:
 
   void step() { (void)get(); }
 
+  float current() const { return current_; }
+  float target() const { return target_; }
+
+  /** True when the smoother has reached its target (param ramps finished). */
+  bool isSettled(float eps = 1.0e-6f) const
+  {
+    return std::fabs(target_ - current_) < eps;
+  }
+
 private:
   void recalc()
   {
