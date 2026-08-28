@@ -40,7 +40,13 @@ def to_viz(d: dict, plugin: str = "") -> dict:
     if "out:levels" in d:
         viz["levelsOut"] = d["out:levels"]
 
-    for env_key in ("env:envelope", "comp:envelope", "deess:envelope", "exp:envelope"):
+    for env_key in (
+        "env:envelope",
+        "comp:envelope",
+        "deess:envelope",
+        "exp:envelope",
+        "tuner:pitch",
+    ):
         if env_key in d:
             viz["envelope"] = d[env_key]
             break
@@ -101,8 +107,10 @@ def main() -> int:
         else:
             print(f"  {k}: {v}")
     env = viz.get("envelope")
-    if isinstance(env, list) and args.plugin in ("compressor", "deesser", "expander"):
-        n_ch = 3
+    n_ch = {"compressor": 3, "deesser": 3, "expander": 3, "tuner": 5}.get(
+        args.plugin
+    )
+    if isinstance(env, list) and n_ch:
         rem = len(env) % n_ch
         if rem not in (0, 1):
             print(

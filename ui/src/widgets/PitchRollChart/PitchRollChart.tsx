@@ -113,6 +113,10 @@ export function PitchRollChart(props: PitchRollChartProps) {
     const bg = readCss(wrap, '--background', '#000');
     const fg = readCss(wrap, '--color', '#fff');
     const lesser = readCss(wrap, '--background-lesser', '#1b1b1b');
+    // White keys always lighter than black, in both day and night.
+    const day = document.documentElement.classList.contains('day');
+    const laneWhite = day ? bg : lesser;
+    const laneBlack = day ? lesser : bg;
     const least = readCss(wrap, '--color-least', '#999');
     const accent = readCss(wrap, '--color-accent', '#0066ff');
     const warn = readCss(wrap, '--color-warn', '#ff0066');
@@ -136,13 +140,15 @@ export function PitchRollChart(props: PitchRollChartProps) {
     // Cap height is ~0.7em; size the C labels to sit inside one key with a little pad.
     const keyLabelPx = Math.max(7, rowH * 0.9);
 
-    const yOf = (midi: number) => plotH - ((midi - midiLo) / midiSpan) * plotH;
+    // Integer MIDI sits at the centre of that key (in-tune = middle of the lane).
+    const yOf = (midi: number) =>
+      plotH - ((midi - midiLo + 0.5) / midiSpan) * plotH;
 
     // Note lanes.
     for (let m = midiLo; m < midiHi; ++m) {
       const pc = ((m % 12) + 12) % 12;
-      const y = yOf(m + 1);
-      ctx.fillStyle = isBlack(pc) ? lesser : bg;
+      const y = yOf(m + 0.5);
+      ctx.fillStyle = isBlack(pc) ? laneBlack : laneWhite;
       ctx.fillRect(keyW, y, plotW, rowH);
       if (!notesRef.current[pc]) {
         ctx.fillStyle = 'rgba(0,0,0,0.28)';
@@ -153,7 +159,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
     // Keyboard.
     for (let m = midiLo; m < midiHi; ++m) {
       const pc = ((m % 12) + 12) % 12;
-      const y = yOf(m + 1);
+      const y = yOf(m + 0.5);
       const allowed = notesRef.current[pc];
       if (isBlack(pc)) {
         ctx.fillStyle = allowed ? keyBlackOn : keyBlackOff;
@@ -175,6 +181,20 @@ export function PitchRollChart(props: PitchRollChartProps) {
         ctx.textAlign = 'left';
         ctx.fillText(`C${Math.floor(m / 12) - 1}`, 3, y + rowH * 0.6);
       }
+    }
+
+    // Adjacent white keys (E|F, B|C) need a dark join — the lane fill is the
+    // same colour on both sides, so the usual lesser stroke disappears.
+    ctx.strokeStyle = laneBlack;
+    ctx.lineWidth = 1;
+    for (let m = midiLo; m < midiHi; ++m) {
+      const pc = ((m % 12) + 12) % 12;
+      if (pc !== 4 && pc !== 11) continue;
+      const y = yOf(m + 0.5);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(cssW, y);
+      ctx.stroke();
     }
 
     ctx.strokeStyle = lesser;

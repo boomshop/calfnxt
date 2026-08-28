@@ -14,7 +14,7 @@ export const tunerInfo = {
     'How much of the original spectral envelope is put back after the shift. 100% = body/vowels/corpus stay put while pitch moves (no chipmunk). 0% = formants ride the pitch (toy piano, cartoon, hard-tune “electric”). Voice, strings, and guitar usually want this high. Drop it only when the processed “electric” tell is the point.',
 
   retune:
-    'How fast pitch is pulled toward the target, in milliseconds — what you see is what you get (1 ms = instant snap, 80 ms = typical vocal, 400 ms = lazy glide). Fast = audible Cher, consonants can chirp, slides get ironed. Slow = the note eases in. Voice/Strings/Guitar only write a starting value here; Cher is this knob, not a mode.',
+    'How fast pitch is pulled toward the target, in milliseconds — what you see is what you get (1 ms = instant snap, 80 ms = typical vocal, 400 ms = lazy glide). Fast = audible Cher, consonants can chirp, slides get ironed. Slow = the note eases in, including after a breath or rest: the next syllable should scoop at this speed, not click onto the grid. Voice/Strings/Guitar only write a starting value here; Cher is this knob, not a mode.',
 
   release:
     'How the correction lets go when the sound becomes unvoiced (breath, S, bow noise, pick scrape, room tail) or the note ends. Fast = correction drops immediately — clean for hard-tune, can click. Slow = the last pull eases out so the tail is not yanked onto a dead grid. Match it so S’s, bow noise, and mutes are not pitched.',

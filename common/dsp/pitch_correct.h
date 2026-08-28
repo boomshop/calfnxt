@@ -47,6 +47,7 @@ public:
     bool unvoiced = true;
     bool octaveSuspect = false;
     bool locked = false;
+    bool reattack = false;    // first voiced hop after a real pause
   };
 
   void reset()
@@ -67,6 +68,7 @@ public:
     lastF0_ = 0.f;
     unvoicedHops_ = 0;
     haveSticky_ = false;
+    wasVoiced_ = false;
   }
 
   const Output& last() const { return out_; }
@@ -87,7 +89,7 @@ public:
     // not replace f0 here or the display can sit an octave off the shifter.
     if (voiced && f0Hz > 1.f)
     {
-      if (lastF0_ > 1.f)
+      if (wasVoiced_ && lastF0_ > 1.f)
       {
         const float jump = f0Hz / lastF0_;
         if (jump > 1.8f || jump < (1.f / 1.8f))
@@ -110,6 +112,7 @@ public:
     out_.octaveSuspect = octaveSuspect;
     out_.voiced = voiced && f0Hz > 1.f;
     out_.unvoiced = !out_.voiced;
+    out_.reattack = false;
 
     const float centerHz = sp.source == 1 ? 1.6f : (sp.source == 2 ? 1.3f : 2.4f);
 
@@ -134,8 +137,25 @@ public:
         out_.inMidi = hzToMidi(lastF0_, sp.refHz);
       if (haveSticky_)
         out_.targetMidi = stickyTarget_;
+      wasVoiced_ = false;
       return out_;
     }
+
+    // New syllable after a real pause: drop the previous note's centre / sticky
+    // target / flex slope. Otherwise the onset looks like a gliss (Flex kills
+    // Retune) and the shifter yanks toward the old pitch (clicks).
+    if (!wasVoiced_)
+    {
+      havePitch_ = false;
+      haveSticky_ = false;
+      haveLockTarget_ = false;
+      slopeEma_ = 0.f;
+      corrCents_ = 0.f;
+      holdSec_ = 0.f;
+      lastF0_ = f0Hz;
+      out_.reattack = true;
+    }
+    wasVoiced_ = true;
 
     const float midi = hzToMidi(f0Hz, sp.refHz);
     out_.inMidi = midi;
@@ -309,6 +329,7 @@ private:
   bool havePitch_ = false;
   bool haveLockTarget_ = false;
   bool haveSticky_ = false;
+  bool wasVoiced_ = false;
 };
 
 } // namespace Dsp

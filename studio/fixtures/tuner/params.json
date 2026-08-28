@@ -18,7 +18,7 @@
   "unvoiced": 0.5,
   "detect": 0,
   "fmin": 80,
-  "fmax": 800,
+  "fmax": 400,
   "ref": 440,
   "note_c": true,
   "note_cs": false,

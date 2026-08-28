@@ -34,6 +34,7 @@ public:
     synAcc_ = 0.f;
     nGrains_ = 0;
     periodSm_ = 200.f;
+    mix_ = 0.f;
     for (int i = 0; i < kMaxGrains; ++i)
       grains_[i] = {};
   }
@@ -85,6 +86,15 @@ public:
       default:
         return 0.5f * (L + R);
     }
+  }
+
+  /** Jump the period smoother (new syllable). Delay buffer stays. */
+  void snapPeriod(float period)
+  {
+    periodSm_ = std::clamp(period, 24.f, float(kSize / 8));
+    haveMark_ = false;
+    anaAcc_ = 0.f;
+    synAcc_ = 0.f;
   }
 
   /**
@@ -157,14 +167,13 @@ public:
 
     if (nGrains_ <= 0)
     {
-      outL = dryL;
-      outR = dryR;
+      accL = dryL;
+      accR = dryR;
     }
-    else
-    {
-      outL = accL;
-      outR = accR;
-    }
+    const float want = nGrains_ > 0 ? 1.f : 0.f;
+    mix_ += (want - mix_) * (want > mix_ ? 0.008f : 0.003f);
+    outL = dryL + (accL - dryL) * mix_;
+    outR = dryR + (accR - dryR) * mix_;
     sanitizeDenormal(outL);
     sanitizeDenormal(outR);
   }
@@ -201,6 +210,7 @@ private:
   float periodSm_ = 200.f;
   Grain grains_[kMaxGrains] {};
   int nGrains_ = 0;
+  float mix_ = 0.f;
 };
 
 } // namespace Dsp

@@ -12,6 +12,25 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
+/**
+ * Cursor injects PLAYWRIGHT_BROWSERS_PATH at a fresh /tmp sandbox cache.
+ * Chromium already lives in ~/.cache/ms-playwright — do not re-download.
+ */
+function useInstalledPlaywrightBrowsers() {
+  const envPath = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  if (!envPath) return;
+  let hasBrowser = false;
+  try {
+    hasBrowser = fs.readdirSync(envPath).some(
+      (name) =>
+        name.startsWith('chromium') || name.startsWith('chromium_headless_shell'),
+    );
+  } catch {
+    hasBrowser = false;
+  }
+  if (!hasBrowser) delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STUDIO = path.resolve(__dirname, '..');
 const ROOT = path.resolve(STUDIO, '..');
@@ -182,6 +201,7 @@ async function shotPlugin(browser, id) {
 }
 
 async function main() {
+  useInstalledPlaywrightBrowsers();
   ensureGenerated();
   const plugins = parsePlugins(process.argv.slice(2));
   fs.mkdirSync(OUT_DIR, { recursive: true });

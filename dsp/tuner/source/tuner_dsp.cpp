@@ -321,14 +321,29 @@ tresult PLUGIN_API TunerPlugin::process(ProcessData& data)
         hopRatioFrom_ = hopRatioTo_;
         hopRatioTo_ = corrector_.last().ratio;
         hopPeriodFrom_ = hopPeriodTo_;
-        float period = 0.f;
-        if (f0 > 1.f)
-          period = sr / f0;
-        else if (yin.period > 1.f)
-          period = yin.period * float(detectDecimation());
-        if (!(period > 16.f))
-          period = hopPeriodTo_ > 16.f ? hopPeriodTo_ : sr / std::max(state.fmin, 25.f);
-        hopPeriodTo_ = period;
+        const auto& corHop = corrector_.last();
+        float period = hopPeriodTo_;
+        if (corHop.voiced && f0 > 1.f)
+        {
+          const float pNew = sr / f0;
+          if (corHop.reattack || !(hopPeriodTo_ > 16.f))
+          {
+            // New syllable: lock grains to this period. Do not lerp from the
+            // pause / previous note or the first grain train clicks.
+            hopPeriodFrom_ = pNew;
+            period = pNew;
+            psola_.snapPeriod(pNew);
+          }
+          else
+          {
+            const float rel = pNew / std::max(16.f, hopPeriodTo_);
+            if (rel > 0.89f && rel < 1.12f)
+              period = pNew;
+            else
+              period = hopPeriodTo_ + (pNew - hopPeriodTo_) * 0.25f;
+          }
+        }
+        hopPeriodTo_ = std::max(16.f, period);
       }
 
       const auto& cor = corrector_.last();
