@@ -21,6 +21,7 @@ import {
   FlangerUI,
   ChorusUI,
   SplitUI,
+  TunerUI,
   createBoundCompressorHost,
   createBoundExpanderHost,
   createBoundDeesserHost,
@@ -42,6 +43,7 @@ import {
   createBoundFlangerHost,
   createBoundChorusHost,
   createBoundSplitHost,
+  createBoundTunerHost,
   showWidgetInfo$,
   type PluginId,
 } from '@calfnxt/ui';
@@ -113,6 +115,10 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
     params: (await import('../fixtures/split/params.json')).default,
     viz: (await import('../fixtures/split/viz.json')).default,
   }),
+  tuner: async () => ({
+    params: (await import('../fixtures/tuner/params.json')).default,
+    viz: (await import('../fixtures/tuner/viz.json')).default,
+  }),
   limiter: async () => ({
     params: (await import('../fixtures/limiter/params.json')).default,
     viz: (await import('../fixtures/limiter/viz.json')).default,
@@ -177,6 +183,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundChorusHost();
       case 'split':
         return createBoundSplitHost();
+      case 'tuner':
+        return createBoundTunerHost();
       case 'limiter':
         return createBoundLimiterHost();
       case 'mbcomp':
@@ -277,6 +285,10 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
     case 'split':
       return (
         <SplitUI host={host as ReturnType<typeof createBoundSplitHost>} />
+      );
+    case 'tuner':
+      return (
+        <TunerUI host={host as ReturnType<typeof createBoundTunerHost>} />
       );
     case 'limiter':
       return <LimiterUI host={host as ReturnType<typeof createBoundLimiterHost>} />;

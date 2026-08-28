@@ -78,6 +78,22 @@ inline void fftRadix2(float* re, float* im, int n)
   }
 }
 
+/** Inverse DFT in-place (conjugate → forward FFT → conjugate / n). */
+inline void ifftRadix2(float* re, float* im, int n)
+{
+  if (!isPowerOfTwo(n) || !re || !im)
+    return;
+  for (int i = 0; i < n; ++i)
+    im[i] = -im[i];
+  fftRadix2(re, im, n);
+  const float s = 1.f / static_cast<float>(n);
+  for (int i = 0; i < n; ++i)
+  {
+    re[i] *= s;
+    im[i] = -im[i] * s;
+  }
+}
+
 /** Magnitude in linear amplitude for bin k (0…n/2). */
 inline float fftBinMag(const float* re, const float* im, int k)
 {

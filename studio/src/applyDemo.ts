@@ -21,6 +21,7 @@ import type {
   IFlangerHost,
   IChorusHost,
   ISplitHost,
+  ITunerHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -815,6 +816,59 @@ export function applySplitDemo(
   return () => window.clearInterval(hold);
 }
 
+export function applyTunerDemo(
+  host: ITunerHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.profile$, params.profile);
+  setNum(host.quality$, params.quality);
+  setNum(host.formant$, params.formant);
+  setNum(host.retune$, params.retune);
+  setNum(host.release$, params.release);
+  setNum(host.amount$, params.amount);
+  setNum(host.threshold$, params.threshold);
+  setNum(host.flex$, params.flex);
+  setNum(host.vibrato$, params.vibrato);
+  setNum(host.settle$, params.settle);
+  setBool(host.vibOn$, params.vib_on);
+  setNum(host.vibDelay$, params.vib_delay);
+  setNum(host.vibFade$, params.vib_fade);
+  setNum(host.vibRate$, params.vib_rate);
+  setNum(host.octaveProtect$, params.octave_protect);
+  setNum(host.unvoiced$, params.unvoiced);
+  setNum(host.detect$, params.detect);
+  setNum(host.fmin$, params.fmin);
+  setNum(host.fmax$, params.fmax);
+  setNum(host.ref$, params.ref);
+  const noteKeys = [
+    'note_c',
+    'note_cs',
+    'note_d',
+    'note_ds',
+    'note_e',
+    'note_f',
+    'note_fs',
+    'note_g',
+    'note_gs',
+    'note_a',
+    'note_as',
+    'note_b',
+  ] as const;
+  for (let i = 0; i < noteKeys.length; ++i)
+    setBool(host.notes$[i], params[noteKeys[i]] ?? true);
+  applySharedViz(viz);
+  if (viz.envelope)
+    host.pitchData$.set(new Float32Array(viz.envelope));
+  const hold = window.setInterval(() => {
+    applySharedViz(viz);
+    if (viz.envelope)
+      host.pitchData$.set(new Float32Array(viz.envelope));
+  }, 50);
+  return () => window.clearInterval(hold);
+}
+
 export type DemoApplier = (
   host: unknown,
   params: Record<string, unknown>,
@@ -843,4 +897,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   flanger: applyFlangerDemo as DemoApplier,
   chorus: applyChorusDemo as DemoApplier,
   split: applySplitDemo as DemoApplier,
+  tuner: applyTunerDemo as DemoApplier,
 };

@@ -13,6 +13,7 @@ export * from "./FrequencyRange";
 export * from "./WaveshapeChart";
 export * from "./HarmonicBars";
 export * from "./HistoryChart";
+export * from "./PitchRollChart";
 export * from "./DelayEchoChart";
 export * from "./ReverbChart";
 export * from "./SpectrumChart";

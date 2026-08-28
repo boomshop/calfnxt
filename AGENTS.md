@@ -23,7 +23,7 @@ Unix socketpair. The helper is spawned without the host’s `LD_LIBRARY_PATH`
 `CALFNXT_KEEP_HOST_LDPATH`. Each bundle ships `Contents/<arch>/calfnxt-web-host`
 next to the `.so`.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`), **Tuner** (`#tuner`).
 Suite focus is this set — no near-term new plugins unless explicitly requested.
 
 ---
@@ -39,9 +39,9 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Vendor URL / email     | `https://calfnxt.org`, `mailto:schmidt@boomshop.net`                                                                                                                                                                                                                                                                |
 | C++ namespace          | `calfNXT`                                                                                                                                                                                                                                                                                                           |
 | CMake project / libs   | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui`                                                                                                                                                                                                                                                            |
-| Plugin targets         | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-expander`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics`, `calfnxt-analyzer`, `calfnxt-filter`, `calfnxt-ringmod`, `calfnxt-pulsator`, `calfnxt-crusher`, `calfnxt-phaser`, `calfnxt-flanger`, `calfnxt-chorus`, `calfnxt-split`                 |
-| VST3 package / `.so`   | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTExpander`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics`, `calfNXTAnalyzer`, `calfNXTFilter`, `calfNXTRingmodulator`, `calfNXTPulsator`, `calfNXTCrusher`, `calfNXTPhaser`, `calfNXTFlanger`, `calfNXTChorus`, `calfNXTSplit` (must match; Carla/JUCE) |
-| Install names          | `~/.vst3/calfNXTEqualizer.vst3`, …, `calfNXTFilter.vst3`, `calfNXTRingmodulator.vst3`, `calfNXTPulsator.vst3`                                                                                                                                                                                                                               |
+| Plugin targets         | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-expander`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics`, `calfnxt-analyzer`, `calfnxt-filter`, `calfnxt-ringmod`, `calfnxt-pulsator`, `calfnxt-crusher`, `calfnxt-phaser`, `calfnxt-flanger`, `calfnxt-chorus`, `calfnxt-split`, `calfnxt-tuner`                 |
+| VST3 package / `.so`   | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTExpander`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics`, `calfNXTAnalyzer`, `calfNXTFilter`, `calfNXTRingmodulator`, `calfNXTPulsator`, `calfNXTCrusher`, `calfNXTPhaser`, `calfNXTFlanger`, `calfNXTChorus`, `calfNXTSplit`, `calfNXTTuner` (must match; Carla/JUCE) |
+| Install names          | `~/.vst3/calfNXTEqualizer.vst3`, …, `calfNXTFilter.vst3`, `calfNXTRingmodulator.vst3`, `calfNXTPulsator.vst3`, `calfNXTTuner.vst3`                                                                                                                                                                                                                               |
 | URI scheme             | `calfnxt://bundle/...`                                                                                                                                                                                                                                                                                              |
 | JS bridge              | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ`                                                                                                                                                                                                                                                    |
 | Script message handler | `webkit.messageHandlers.calfnxt`                                                                                                                                                                                                                                                                                    |
@@ -77,8 +77,9 @@ dsp/phaser/    phaser.plugin.json + DSP + codegen
 dsp/flanger/   flanger.plugin.json + DSP + codegen
 dsp/chorus/    chorus.plugin.json + DSP + codegen
 dsp/split/     split.plugin.json + DSP + codegen
+dsp/tuner/     tuner.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
-ui/            React SPA (Vite), hash router #equalizer / … / #split
+ui/            React SPA (Vite), hash router #equalizer / … / #tuner
 external/vst3sdk/
 ```
 
@@ -264,6 +265,21 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 - Viz id `"mblimiter"`: `gr` array (N band combined + 1 master), `gains`, `bandio`,
   `envelope` like mbcomp (`[full, band, grLin]` × slots).
 
+### Tuner
+
+- Realtime pitch correction (no Melodyne editor). Voice / Strings / Guitar write knob
+  defaults and three hidden DSP values (YIN voiced/unvoiced floors, note-centre LP,
+  added-vibrato max cents). Cher snap is Retune / Keep, not a mode.
+- Stereo: F0 on Mid (optional L/R/energy Mix), **one** shift ratio, L+R PSOLA grains in lockstep.
+- DSP: YIN (`yin_detector.h`) + correction law (`pitch_correct.h`) + linked PSOLA (`psola_shifter.h`).
+- Quality maps window/lookahead (PDC). Formant 0…1. Unvoiced (breath/S/bow/pick) is not pitched.
+- Scale templates in the UI only write the 12 note bits. Header Voice/Strings/Guitar writes
+  range/retune/flex/Keep/formant/unvoiced/octave. Bass uses Guitar + Low toward 31 Hz (B0); Low floor is 25 Hz.
+- UI blocks: Notes (scale/key/mask/A4), Detector, Correction, Vibrato. History is full-width.
+- Artificial vibrato (UI block): `vib_on` + Depth (`settle`) + Rate + Delay + Fade after lock. Keep (`vibrato`) is preserve-natural.
+- Viz id `"tuner"` kind `"pitch"`: `[inMidi, targetMidi, conf, flags, corrCents] × slots + phase`
+  (flags: 1 voiced, 2 unvoiced, 4 octave-suspect). Piano-roll widget is display-only.
+
 ---
 
 ## Shelved (not a roadmap)
@@ -305,6 +321,7 @@ Ideas only if explicitly revived — do not start these unprompted:
 | Flanger DSP                 | `dsp/flanger/source/*_dsp.*`, `common/dsp/simple_flanger.h`; UI `ui/src/plugins/FlangerUI/*`                                                                                                          |
 | Chorus DSP                  | `dsp/chorus/source/*_dsp.*`, `common/dsp/simple_chorus.h`; UI `ui/src/plugins/ChorusUI/*`, `widgets/ChorusChart/*` (LFO position panels, not ModulationChart)                                      |
 | Split DSP                   | `dsp/split/source/*_dsp.*`; UI `ui/src/plugins/SplitUI/*`, `host/splitHost.ts`                                                                                                                     |
+| Tuner DSP                   | `dsp/tuner/source/*_dsp.*`, `common/dsp/yin_detector.h`, `pitch_correct.h`, `psola_shifter.h`; UI `ui/src/plugins/TunerUI/*`, `host/tunerHost.ts`, `widgets/PitchRollChart/*`                      |
 | Param bind                  | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts`                                                                                                                                                |
 | Header I/O                  | `ui/src/components/Header/*`, `host/headerMeters.ts`                                                                                                                                                |
 | Meters                      | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*`                                                                                                                                                       |

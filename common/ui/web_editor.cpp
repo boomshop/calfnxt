@@ -890,6 +890,22 @@ void WebEditor::flushViz()
       }
       flushVizArray(vizSource_->vizEnvelopeId(), "envelope", envBuf, nEnv);
     }
+
+    if (const char* pitchId = vizSource_->vizPitchId())
+    {
+      const int nPitch = vizSource_->takePitchHistory(envBuf, kMaxEnvFloats);
+      if (nPitch > 0)
+      {
+        for (int i = 0; i < nPitch; ++i)
+        {
+          float v = envBuf[i];
+          if (!std::isfinite(v))
+            v = 0.f;
+          envBuf[i] = v;
+        }
+        flushVizArray(pitchId, "pitch", envBuf, nPitch);
+      }
+    }
   }
 
   if (lastVizFlush_.time_since_epoch().count() != 0)

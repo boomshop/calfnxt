@@ -20,6 +20,7 @@ import { pluginMeta as phaserMeta } from "../generated/phaserModel";
 import { pluginMeta as flangerMeta } from "../generated/flangerModel";
 import { pluginMeta as chorusMeta } from "../generated/chorusModel";
 import { pluginMeta as splitMeta } from "../generated/splitModel";
+import { pluginMeta as tunerMeta } from "../generated/tunerModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
 export const editorSizes: Record<PluginId, { width: number; height: number }> = {
@@ -44,4 +45,5 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   flanger: flangerMeta.editor,
   chorus: chorusMeta.editor,
   split: splitMeta.editor,
+  tuner: tunerMeta.editor,
 };

@@ -13,6 +13,7 @@ const vizGainsApplies = new Map<string, VizLevelsApply>();
 const vizCorrApplies = new Map<string, HostApply>();
 const vizGonioApplies = new Map<string, VizLevelsApply>();
 const vizEnvelopeApplies = new Map<string, (v: Float32Array) => void>();
+const vizPitchApplies = new Map<string, (v: Float32Array) => void>();
 const vizGrApplies = new Map<string, HostApply>();
 const vizGrArrayApplies = new Map<string, VizLevelsApply>();
 const vizBandIoApplies = new Map<string, VizLevelsApply>();
@@ -66,6 +67,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizGonioApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "envelope" && Array.isArray(msg.v))
     vizEnvelopeApplies.get(msg.id)?.(new Float32Array(msg.v));
+  if (msg.t === "viz" && msg.kind === "pitch" && Array.isArray(msg.v))
+    vizPitchApplies.get(msg.id)?.(new Float32Array(msg.v));
   if (msg.t === "viz" && msg.kind === "gr" && Array.isArray(msg.v) && typeof msg.v[0] === "number") {
     vizGrApplies.get(msg.id)?.(msg.v[0]);
     vizGrArrayApplies.get(msg.id)?.(msg.v);
@@ -226,6 +229,15 @@ export function bindVizEnvelope(dv: DynamicValue<Float32Array | null>, id: strin
   vizEnvelopeApplies.set(id, (v) => dv.set(v));
   return () => {
     vizEnvelopeApplies.delete(id);
+  };
+}
+
+/** Wire pitch-roll history (Float32Array) from DSP viz (id e.g. "tuner"). */
+export function bindVizPitch(dv: DynamicValue<Float32Array | null>, id: string): () => void {
+  ensureHostWire();
+  vizPitchApplies.set(id, (v) => dv.set(v));
+  return () => {
+    vizPitchApplies.delete(id);
   };
 }
 

@@ -1,0 +1,398 @@
+{
+  "id": "tuner",
+  "name": "calfNXT Tuner",
+  "vendor": "calfNXT",
+  "vendor_url": "https://calfnxt.org",
+  "vendor_email": "mailto:schmidt@boomshop.net",
+  "version": "1.3.0",
+  "category": "Fx|Pitch Shift",
+  "vst3_uid": [
+    "0x54554E45",
+    "0x52303131",
+    "0x43414C46",
+    "0x4E585430"
+  ],
+  "editor": {
+    "width": 1024,
+    "height": 680
+  },
+  "buses": {
+    "audio_inputs": [
+      {
+        "name": "Stereo In",
+        "channels": 2
+      }
+    ],
+    "audio_outputs": [
+      {
+        "name": "Stereo Out",
+        "channels": 2
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "id": "bypass",
+      "name": "Bypass",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "profile",
+      "name": "Source",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "quality",
+      "name": "Quality",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.65,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "formant",
+      "name": "Formant",
+      "type": "float",
+      "unit": "%",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.85,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "retune",
+      "name": "Retune",
+      "type": "float",
+      "unit": "ms",
+      "min": 1.0,
+      "max": 400.0,
+      "default": 80.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "release",
+      "name": "Release",
+      "type": "float",
+      "unit": "ms",
+      "min": 10.0,
+      "max": 2000.0,
+      "default": 120.0,
+      "scale": "log",
+      "precision": 0
+    },
+    {
+      "id": "amount",
+      "name": "Amount",
+      "type": "float",
+      "unit": "%",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "threshold",
+      "name": "Threshold",
+      "type": "float",
+      "unit": "ct",
+      "min": 0.0,
+      "max": 50.0,
+      "default": 10.0,
+      "scale": "linear",
+      "precision": 1
+    },
+    {
+      "id": "flex",
+      "name": "Flex",
+      "type": "float",
+      "unit": "ct",
+      "min": 0.0,
+      "max": 400.0,
+      "default": 80.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "vibrato",
+      "name": "Keep",
+      "type": "float",
+      "unit": "%",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.75,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "settle",
+      "name": "Depth",
+      "type": "float",
+      "unit": "%",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.4,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "octave_protect",
+      "name": "Octave",
+      "type": "float",
+      "unit": "%",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.8,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "unvoiced",
+      "name": "Unvoiced",
+      "type": "float",
+      "unit": "%",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "detect",
+      "name": "Detect",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "fmin",
+      "name": "Low",
+      "type": "float",
+      "unit": "Hz",
+      "min": 25.0,
+      "max": 400.0,
+      "default": 80.0,
+      "scale": "log",
+      "precision": 0
+    },
+    {
+      "id": "fmax",
+      "name": "High",
+      "type": "float",
+      "unit": "Hz",
+      "min": 200.0,
+      "max": 2000.0,
+      "default": 800.0,
+      "scale": "log",
+      "precision": 0
+    },
+    {
+      "id": "ref",
+      "name": "A4",
+      "type": "float",
+      "unit": "Hz",
+      "min": 415.0,
+      "max": 466.0,
+      "default": 440.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "note_c",
+      "name": "C",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "note_cs",
+      "name": "C#",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "note_d",
+      "name": "D",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "note_ds",
+      "name": "D#",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "note_e",
+      "name": "E",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "note_f",
+      "name": "F",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "note_fs",
+      "name": "F#",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "note_g",
+      "name": "G",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "note_gs",
+      "name": "G#",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "note_a",
+      "name": "A",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "note_as",
+      "name": "A#",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "note_b",
+      "name": "B",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "vib_on",
+      "name": "Vibrato",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "vib_delay",
+      "name": "Delay",
+      "type": "float",
+      "unit": "ms",
+      "min": 0.0,
+      "max": 2000.0,
+      "default": 100.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "vib_fade",
+      "name": "Fade",
+      "type": "float",
+      "unit": "ms",
+      "min": 0.0,
+      "max": 2000.0,
+      "default": 200.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "vib_rate",
+      "name": "Rate",
+      "type": "float",
+      "unit": "Hz",
+      "min": 2.0,
+      "max": 10.0,
+      "default": 5.0,
+      "scale": "linear",
+      "precision": 1
+    }
+  ]
+}

@@ -39,6 +39,7 @@ const knownPlugins = [
   "flanger",
   "chorus",
   "split",
+  "tuner",
 ] as const;
 
 export default defineConfig(({ command }) => {

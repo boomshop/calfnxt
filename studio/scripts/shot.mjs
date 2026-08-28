@@ -15,7 +15,10 @@ import { chromium } from 'playwright';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STUDIO = path.resolve(__dirname, '..');
 const ROOT = path.resolve(STUDIO, '..');
-const OUT_DIR = path.resolve(ROOT, 'website/images');
+// Override when website/images is not writable (e.g. root-owned local tree).
+const OUT_DIR = path.resolve(
+  process.env.CALFNXT_STUDIO_OUT || path.join(ROOT, 'website/images'),
+);
 const PORT = 5174;
 const BASE = `http://127.0.0.1:${PORT}`;
 const TARGET_WIDTH = 1560;
@@ -42,6 +45,7 @@ const ALL = [
   'flanger',
   'chorus',
   'split',
+  'tuner',
 ];
 
 function parsePlugins(argv) {

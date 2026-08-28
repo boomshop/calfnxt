@@ -1,0 +1,209 @@
+.TunerUI {
+  gap: var(--gap);
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
+
+  > .top {
+    flex: 0 1 auto;
+    display: flex;
+    gap: var(--gap);
+
+    > .range {
+      flex-direction: column;
+      gap: var(--gap);
+      justify-content: space-between;
+    }
+
+    > .history {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+
+      > .roll {
+        height: 360px;
+
+        .PitchRollChart {
+          height: 360px;
+        }
+      }
+    }
+
+    > .notes {
+      gap: var(--gap);
+      display: grid;
+      grid-template-columns: auto auto;
+      grid-template-rows: auto 1fr;
+      align-items: center;
+
+      > .scale {
+        align-self: stretch;
+
+        > .Buttons {
+          > .Button {
+            flex: 1;
+          }
+        }
+      }
+
+      > .keys {
+        align-self: stretch;
+        display: flex;
+        flex-direction: column;
+
+        > .note-row {
+          flex: 1;
+          align-self: stretch;
+          display: flex;
+          gap: 2px;
+          flex-direction: column;
+
+          .Toggle {
+            flex: 1 1 auto;
+            height: auto;
+            min-height: 0;
+            padding: 0;
+
+            &.aux-active {
+              &::after {
+                content: '';
+                width: 8px;
+                height: 8px;
+                background: var(--color-warn);
+                position: absolute;
+                top: 50%;
+                right: 4px;
+                transform: translateY(-50%);
+              }
+            }
+          }
+
+          .Toggle.key-white,
+          .Toggle.key-white .aux-button {
+            background: #999;
+            color: #666;
+
+            &.aux-active {
+              background: #ececec;
+              color: #000;
+            }
+          }
+
+          .Toggle.key-black,
+          .Toggle.key-black .aux-button {
+            background: #666;
+            color: #999;
+
+            &.aux-active {
+              background: #000;
+              color: #fff;
+            }
+          }
+        }
+      }
+
+      .Buttons {
+        flex-direction: column;
+        align-items: stretch;
+
+        > .Button {
+          height: auto;
+          min-height: 0;
+          padding: 0;
+        }
+      }
+    }
+  }
+
+  > .bottom {
+    flex: 1 1 auto;
+    display: flex;
+    gap: var(--gap);
+
+    > .detector {
+      flex: 1 1 27%;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      align-items: center;
+      gap: 0 var(--gap);
+
+      > .detect {
+        grid-column: 1 / 4;
+
+        .Button {
+          flex: 1 1 auto;
+        }
+      }
+    }
+
+    > .correction {
+      flex: 2 1 45%;
+      display: grid;
+      grid-template-columns: auto auto auto auto auto;
+      grid-template-rows: auto auto;
+      grid-template-areas: 'flex flex retune keep keep' 'release threshold retune amount formant';
+      align-items: center;
+      gap: 0 var(--gap);
+
+      > .keep {
+        grid-area: keep;
+      }
+
+      > .retune {
+        grid-area: retune;
+        margin: 0 -20px;
+      }
+
+      > .flex {
+        grid-area: flex;
+      }
+
+      > .release {
+        grid-area: release;
+      }
+
+      > .threshold {
+        grid-area: threshold;
+      }
+
+      > .amount {
+        grid-area: amount;
+      }
+
+      > .formant {
+        grid-area: formant;
+      }
+    }
+
+    > .vibrato {
+      flex: 1 1 27%;
+      display: grid;
+      grid-template-columns: auto auto auto;
+      grid-template-rows: auto auto;
+      grid-template-areas: 'power depth depth' 'delay fade rate';
+      align-items: center;
+      justify-items: center;
+      gap: 0 var(--gap);
+
+      > .power {
+        grid-area: power;
+      }
+
+      > .rate {
+        grid-area: rate;
+      }
+
+      > .delay {
+        grid-area: delay;
+      }
+
+      > .fade {
+        grid-area: fade;
+      }
+
+      > .depth {
+        grid-area: depth;
+      }
+    }
+  }
+}

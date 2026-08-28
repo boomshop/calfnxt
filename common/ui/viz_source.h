@@ -19,6 +19,7 @@ namespace Ui {
    *   {t:"viz", id:"mod", kind:"response", v:[bins,L…,R…]} // Phaser/Chorus |H|
    *   {t:"viz", id:"mod", kind:"comb", v:[nL,nR,(f,dB)…]} // Flanger peak/notch stems
    *   {t:"viz", id:"filt", kind:"hz", v:[fcHz]}       // live filter cutoff
+   *   {t:"viz", id:"tuner", kind:"pitch", v:[…]}      // history: midi, target, conf, flags, corrCents
    *   UI→host {t:"vizcfg", id:"fft"|"mod", bins:N} after measuring pixel width.
    */
 class IVizSource
@@ -274,6 +275,23 @@ public:
 
   /** Stream id for comb extrema (nullptr = do not flush). */
   virtual const char* vizCombExtremaId() const { return nullptr; }
+
+  /**
+   * Pitch-correction history (Tuner).
+   * Layout per slot: [inMidi, targetMidi, confidence, flags, corrCents] × N, plus
+   * trailing scroll phase in [0,1]. flags: 1=voiced, 2=unvoiced, 4=octave-suspect.
+   * corrCents = applied correction. MIDI 0 = no estimate. Returns slots*5+1, or 0.
+   * Flushed as {t:"viz", id, kind:"pitch", v:[…]}.
+   */
+  virtual int takePitchHistory(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for pitch history (nullptr = do not flush). */
+  virtual const char* vizPitchId() const { return nullptr; }
 };
 
 } // namespace Ui
