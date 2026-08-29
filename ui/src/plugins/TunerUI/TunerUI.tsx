@@ -182,7 +182,7 @@ export function TunerUI(props: TunerUIProps) {
             <Toggle state$={showTarg$} label="Targ" className="trace-targ" />
           </WithInfo>
           <WithInfo title={tunerInfo.traceOut}>
-            <Toggle state$={showOut$} label="Out" className="trace-out warn" />
+            <Toggle state$={showOut$} label="Out" className="trace-out" />
           </WithInfo>
         </div>
         <WithInfo title={tunerInfo.bypass}>

@@ -9,6 +9,48 @@
       > .trace {
         display: flex;
         gap: 2px;
+
+        > .trace-in,
+        > .trace-targ,
+        > .trace-out {
+          > .aux-button {
+            background: var(--background-lesser);
+            color: var(--color);
+            box-sizing: border-box;
+
+            &.aux-active {
+              background: var(--background-least);
+              color: var(--color);
+            }
+          }
+        }
+
+        > .trace-in > .aux-button {
+          border: 1.5px solid
+            color-mix(in srgb, var(--color-accent) 30%, transparent);
+
+          &.aux-active {
+            border-color: var(--color-accent);
+          }
+        }
+
+        > .trace-targ > .aux-button {
+          border: 1.5px dashed
+            color-mix(in srgb, var(--color-least) 35%, transparent);
+
+          &.aux-active {
+            border-color: var(--color-least);
+          }
+        }
+
+        > .trace-out > .aux-button {
+          border: 1.5px solid
+            color-mix(in srgb, var(--color-warn) 30%, transparent);
+
+          &.aux-active {
+            border-color: var(--color-warn);
+          }
+        }
       }
     }
   }
