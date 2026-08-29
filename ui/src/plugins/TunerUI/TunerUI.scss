@@ -4,6 +4,15 @@
   align-items: stretch;
   justify-content: stretch;
 
+  > .Header {
+    > .children {
+      > .trace {
+        display: flex;
+        gap: 2px;
+      }
+    }
+  }
+
   > .top {
     flex: 0 1 auto;
     display: flex;

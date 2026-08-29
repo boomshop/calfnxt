@@ -74,5 +74,14 @@ export const tunerInfo = {
     'Root used when applying a scale template (C major vs E♭ major, etc.). Changing Key does nothing until you hit a scale — then the bits rotate. Custom note edits stay until you apply a scale again.',
 
   history:
-    'Scrolling piano roll (~10 s), display only — not a Melodyne editor. Blue line = detected pitch (stereo is one linked trace). White dashed line on top = target note. Warn colour = octave suspicion. The strip under the roll is how hard it is pulling: black = none, accent = a semitone, warn = a whole tone, white = two whole tones (theme colours). Gaps in the line are unvoiced (breath / S / bow / pick), left unpitched.',
+    'Scrolling piano roll (~10 s), display only — not a Melodyne editor. Blue = detected pitch (natural vibrato included). Faint dashed = scale target (the grid, not the audio). Warn colour = processed pitch (Retune scoop + added vibrato). Header In / Targ / Out hide each trace. Octave-suspect dots sit on In. The strip under the roll is pull amount: black = none, accent = a semitone, warn = a whole tone, white = two whole tones. Gaps are unvoiced (breath / S / bow / pick), left unpitched.',
+
+  traceIn:
+    'Shows the detected pitch (blue) — what was sung or played, including natural vibrato. Off when you only want the grid and the processed line. Octave-suspect dots ride this trace.',
+
+  traceTarg:
+    'Shows the scale target (faint dashed) — the note the corrector is aiming at, not the output. A guide only. Off when comparing In vs Out without the grid in the way.',
+
+  traceOut:
+    'Shows the processed pitch (warn colour) — Retune plus added vibrato, i.e. what leaves the plugin. Natural vibrato stays in In; this line is In plus the DSP shift. Solo this to see scoops and the synthetic LFO.',
 } as const;

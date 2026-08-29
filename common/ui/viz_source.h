@@ -280,7 +280,7 @@ public:
    * Pitch-correction history (Tuner).
    * Layout per slot: [inMidi, targetMidi, confidence, flags, corrCents] × N, plus
    * trailing scroll phase in [0,1]. flags: 1=voiced, 2=unvoiced, 4=octave-suspect.
-   * corrCents = applied correction. MIDI 0 = no estimate. Returns slots*5+1, or 0.
+   * corrCents = applied pitch shift in cents (retune + added vibrato). MIDI 0 = no estimate.
    * Flushed as {t:"viz", id, kind:"pitch", v:[…]}.
    */
   virtual int takePitchHistory(float* out, int maxOut)

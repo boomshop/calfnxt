@@ -40,7 +40,7 @@ public:
     float ratio = 1.f;        // outHz / inHz, applied identically to L and R
     float inMidi = 0.f;
     float targetMidi = 0.f;
-    float correctionCents = 0.f;
+    float correctionCents = 0.f; // actual pitch shift (retune + added vibrato)
     float confidence = 0.f;
     float tremolo = 1.f;      // amplitude settle (≈1)
     bool voiced = false;
@@ -269,7 +269,7 @@ public:
       }
     }
 
-    out_.correctionCents = applied;
+    out_.correctionCents = applied + settleCents;
     out_.ratio = centsToRatio(applied + settleCents);
     out_.ratio = std::clamp(out_.ratio, 0.25f, 4.f);
     return out_;

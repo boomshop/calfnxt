@@ -37,6 +37,17 @@ function readCss(el: HTMLElement, name: string, fallback: string): string {
   return v || fallback;
 }
 
+function withAlpha(css: string, a: number): string {
+  const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(css);
+  if (m) return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${a})`;
+  const h = /^#([0-9a-f]{6})$/i.exec(css.trim());
+  if (h) {
+    const n = parseInt(h[1], 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+  }
+  return css;
+}
+
 /** 0 ct = black, 100 = accent, 200 = warn, 400 = white. 1 px = 1 cent. */
 const CORR_LUT_CENTS = 400;
 let corrLutKey = '';
@@ -75,6 +86,12 @@ export interface PitchRollChartProps {
   fmax$: DynamicValue<number>;
   /** Allowed pitch classes 0=C … 11=B. */
   notes$: readonly DynamicValue<boolean>[];
+  /** When false, hide the detected-pitch (blue) trace. Default on. */
+  showIn$?: DynamicValue<boolean>;
+  /** When false, hide the scale-target (dashed) trace. Default on. */
+  showTarg$?: DynamicValue<boolean>;
+  /** When false, hide the processed-pitch (warn) trace. Default on. */
+  showOut$?: DynamicValue<boolean>;
   vizId?: string;
   className?: string;
 }
@@ -82,15 +99,29 @@ export interface PitchRollChartProps {
 /**
  * Scrolling Melodyne-style piano roll (display only). Newest is on the right.
  * Buffer layout matches DSP: [inMidi, targetMidi, conf, flags, corrCents] × slots + phase.
+ * corrCents is the actual pitch shift (retune + added vibrato).
  */
 export function PitchRollChart(props: PitchRollChartProps) {
-  const { data$, fmin$, fmax$, notes$, vizId = 'tuner', className } = props;
+  const {
+    data$,
+    fmin$,
+    fmax$,
+    notes$,
+    vizId = 'tuner',
+    className,
+    showIn$,
+    showTarg$,
+    showOut$,
+  } = props;
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dataRef = useRef(data$.value);
   const fminRef = useRef(fmin$.value);
   const fmaxRef = useRef(fmax$.value);
   const notesRef = useRef<boolean[]>(notes$.map((d) => d.value));
+  const showInRef = useRef(showIn$?.value ?? true);
+  const showTargRef = useRef(showTarg$?.value ?? true);
+  const showOutRef = useRef(showOut$?.value ?? true);
 
   const paint = useCallback(() => {
     const canvas = canvasRef.current;
@@ -235,7 +266,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
     }
 
     const strokePitch = (
-      channel: number,
+      midiOf: (i: number) => number,
       style: string,
       width: number,
       dash: number[],
@@ -246,7 +277,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
       ctx.beginPath();
       let started = false;
       for (let i = 0; i < slots; ++i) {
-        const midi = data[i * HIST_CH + channel] ?? 0;
+        const midi = midiOf(i);
         const flags = data[i * HIST_CH + 3] ?? 0;
         const voiced = (flags & 1) !== 0;
         if (!voiced || !(midi > 12)) {
@@ -264,19 +295,27 @@ export function PitchRollChart(props: PitchRollChartProps) {
       ctx.setLineDash([]);
     };
 
-    strokePitch(0, accent, 1.4, []);
-    for (let i = 0; i < slots; ++i) {
-      const flags = data[i * HIST_CH + 3] ?? 0;
-      if ((flags & 4) === 0 || (flags & 1) === 0) continue;
-      const midi = data[i * HIST_CH + 0] ?? 0;
-      if (!(midi > 12)) continue;
-      ctx.fillStyle = warn;
-      ctx.beginPath();
-      ctx.arc(xOf(i), yOf(midi), 2.2, 0, Math.PI * 2);
-      ctx.fill();
+    const inMidi = (i: number) => data[i * HIST_CH + 0] ?? 0;
+    const tgtMidi = (i: number) => data[i * HIST_CH + 1] ?? 0;
+    const outMidi = (i: number) =>
+      inMidi(i) + (data[i * HIST_CH + 4] ?? 0) / 100;
+
+    if (showTargRef.current)
+      strokePitch(tgtMidi, withAlpha(fg, 0.5), 1.5, [4, 3]);
+    if (showInRef.current) {
+      strokePitch(inMidi, accent, 1.8, []);
+      for (let i = 0; i < slots; ++i) {
+        const flags = data[i * HIST_CH + 3] ?? 0;
+        if ((flags & 4) === 0 || (flags & 1) === 0) continue;
+        const midi = inMidi(i);
+        if (!(midi > 12)) continue;
+        ctx.fillStyle = warn;
+        ctx.beginPath();
+        ctx.arc(xOf(i), yOf(midi), 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
-    strokePitch(1, 'rgba(0,0,0,0.65)', 3.2, []);
-    strokePitch(1, fg, 1.5, [4, 3]);
+    if (showOutRef.current) strokePitch(outMidi, warn, 1.6, []);
 
     ctx.fillStyle = fg;
     ctx.font = '10px sans-serif';
@@ -307,6 +346,30 @@ export function PitchRollChart(props: PitchRollChartProps) {
       uTheme();
     };
   }, [data$, fmin$, fmax$, paint]);
+
+  useEffect(() => {
+    showInRef.current = showIn$?.value ?? true;
+    showTargRef.current = showTarg$?.value ?? true;
+    showOutRef.current = showOut$?.value ?? true;
+    const uIn = showIn$?.subscribe((v) => {
+      showInRef.current = v;
+      paint();
+    });
+    const uTarg = showTarg$?.subscribe((v) => {
+      showTargRef.current = v;
+      paint();
+    });
+    const uOut = showOut$?.subscribe((v) => {
+      showOutRef.current = v;
+      paint();
+    });
+    paint();
+    return () => {
+      uIn?.();
+      uTarg?.();
+      uOut?.();
+    };
+  }, [showIn$, showTarg$, showOut$, paint]);
 
   useEffect(() => {
     const unsubs = notes$.map((dv, i) =>

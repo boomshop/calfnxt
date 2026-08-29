@@ -144,6 +144,9 @@ export function TunerUI(props: TunerUIProps) {
   const src = tunerSourceDefaults(profile);
   const [key, setKey] = useState(0);
   const scale$ = useMemo(() => DynamicValue.fromConstant(0), []);
+  const showIn$ = useMemo(() => DynamicValue.fromConstant(true), []);
+  const showTarg$ = useMemo(() => DynamicValue.fromConstant(true), []);
+  const showOut$ = useMemo(() => DynamicValue.fromConstant(true), []);
 
   useEffect(() => {
     return scale$.subscribe((v) => {
@@ -171,6 +174,17 @@ export function TunerUI(props: TunerUIProps) {
             onChange={(v) => host.applyProfile(v)}
           />
         </WithInfo>
+        <div className="trace">
+          <WithInfo title={tunerInfo.traceIn}>
+            <Toggle state$={showIn$} label="In" className="trace-in" />
+          </WithInfo>
+          <WithInfo title={tunerInfo.traceTarg}>
+            <Toggle state$={showTarg$} label="Targ" className="trace-targ" />
+          </WithInfo>
+          <WithInfo title={tunerInfo.traceOut}>
+            <Toggle state$={showOut$} label="Out" className="trace-out warn" />
+          </WithInfo>
+        </div>
         <WithInfo title={tunerInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>
@@ -217,6 +231,9 @@ export function TunerUI(props: TunerUIProps) {
               fmin$={host.fmin$}
               fmax$={host.fmax$}
               notes$={host.notes$}
+              showIn$={showIn$}
+              showTarg$={showTarg$}
+              showOut$={showOut$}
               vizId={TUNER_VIZ_ID}
             />
           </WithInfo>
