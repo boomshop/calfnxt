@@ -61,24 +61,24 @@ private:
   {
     bool bypass = false;
     int source = 0; // 0=voice, 1=strings, 2=guitar
-    float quality = 0.65f;
+    float quality = 0.75f;
     float formant = 0.85f;
     float retuneMs = 80.f;
     float releaseMs = 120.f;
     float amount = 1.f;
     float thresholdCents = 10.f;
-    float flexCents = 80.f;
+    float flexCents = 100.f;
     float vibrato = 0.75f;
     float settle = 0.4f;
     bool vibOn = false;
     float vibDelayMs = 100.f;
     float vibFadeMs = 200.f;
     float vibHz = 5.f;
-    float octaveProtect = 0.8f;
-    float unvoiced = 0.5f;
+    float octaveProtect = 0.88f;
+    float unvoiced = 0.58f;
     int detect = 0;
     float fmin = 80.f;
-    float fmax = 800.f;
+    float fmax = 700.f;
     float refHz = 440.f;
     uint16_t noteMask = 0x0fff;
   };
@@ -109,6 +109,10 @@ private:
   float hopRatioTo_ = 1.f;
   float hopPeriodFrom_ = 200.f;
   float hopPeriodTo_ = 200.f;
+  float lastGoodPeriod_ = 0.f;
+  int duckHops_ = 0;
+  int leapHold_ = 0;
+  int dryHops_ = 0;
 
   std::mutex histMutex_;
   float histBuf_[kHistBufSize] {};

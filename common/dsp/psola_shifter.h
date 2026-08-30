@@ -3,6 +3,9 @@
 // Stereo-linked TD-PSOLA. Analysis marks every input period; synthesis hops
 // at period/ratio so the same mark can be repeated (pitch up) or skipped
 // (pitch down). One ratio, identical grain positions on L and R.
+//
+// wetGate_ (0…1) crossfades wet↔delayed-dry. Duck to 0 across unvoiced /
+// re-attack / octave leaps so grain rebuilds never hard-cut the output.
 
 #include "dsp_math.h"
 
@@ -35,6 +38,8 @@ public:
     nGrains_ = 0;
     periodSm_ = 200.f;
     mix_ = 0.f;
+    wetGate_ = 0.f;
+    xfLpL_ = xfLpR_ = 0.f;
     for (int i = 0; i < kMaxGrains; ++i)
       grains_[i] = {};
   }
@@ -88,13 +93,19 @@ public:
     }
   }
 
-  /** Jump the period smoother (new syllable). Delay buffer stays. */
+  /** 0 = delayed dry, 1 = allow wet grains. Crossfaded in process(). */
+  void setWetGate(float g) { wetGate_ = std::clamp(g, 0.f, 1.f); }
+
+  /** Jump the period smoother (new syllable / register). Clears live grains
+   *  only when already near dry — otherwise the clear itself plops. */
   void snapPeriod(float period)
   {
     periodSm_ = std::clamp(period, 24.f, float(kSize / 8));
     haveMark_ = false;
     anaAcc_ = 0.f;
     synAcc_ = 0.f;
+    if (mix_ < 0.08f)
+      nGrains_ = 0;
   }
 
   /**
@@ -109,7 +120,8 @@ public:
     ratio = std::clamp(ratio, 0.5f, 2.f);
     formant = std::clamp(formant, 0.f, 1.f);
 
-    // Period only: hop jitter clicks. Ratio is smoothed by the caller.
+    // Slow period only — hop-level updates handle glides. Fast adaptive
+    // coeffs here make extreme leaps click inside the grain train.
     periodSm_ += (period - periodSm_) * 0.0012f;
     const float p = std::max(24.f, periodSm_);
     const float Ha = p;
@@ -125,6 +137,7 @@ public:
       haveMark_ = true;
     }
 
+    // Always keep analysis marks fresh (even while ducked).
     anaAcc_ += 1.f;
     while (anaAcc_ >= Ha)
     {
@@ -132,11 +145,16 @@ public:
       markIndex_ = (w_ - latency) & kMask;
     }
 
-    synAcc_ += 1.f;
-    while (synAcc_ >= Hs)
+    // Spawn only when the gate wants wet — avoids building a wrong-period
+    // train during S / re-attack / octave duck.
+    if (wetGate_ > 0.45f)
     {
-      synAcc_ -= Hs;
-      spawnGrain(grainLen, stretch, gain);
+      synAcc_ += 1.f;
+      while (synAcc_ >= Hs)
+      {
+        synAcc_ -= Hs;
+        spawnGrain(grainLen, stretch, gain);
+      }
     }
 
     dryL = read(0, latency);
@@ -170,10 +188,37 @@ public:
       accL = dryL;
       accR = dryR;
     }
-    const float want = nGrains_ > 0 ? 1.f : 0.f;
-    mix_ += (want - mix_) * (want > mix_ ? 0.008f : 0.003f);
-    outL = dryL + (accL - dryL) * mix_;
-    outR = dryR + (accR - dryR) * mix_;
+
+    // Crossfade wet↔delayed-dry (xf-hp-v3 timing — best plop scores).
+    // Only strip sub/LF from (wet−dry) while slewing: stronger HP (~120 Hz)
+    // was killing plops but briefly phase-smeared like a flanger.
+    const float target = wetGate_;
+    const float rate = target > mix_ ? 0.0010f : 0.0035f;
+    const float before = mix_;
+    mix_ += (target - mix_) * rate;
+    const bool slewing = std::fabs(target - mix_) > 0.0008f || std::fabs(mix_ - before) > 1.0e-6f;
+
+    float diffL = accL - dryL;
+    float diffR = accR - dryR;
+    if (slewing)
+    {
+      // ~30 Hz — thump/plop only, leave mids alone (less phaser artefact).
+      xfLpL_ += 0.004f * (diffL - xfLpL_);
+      xfLpR_ += 0.004f * (diffR - xfLpR_);
+      diffL -= xfLpL_;
+      diffR -= xfLpR_;
+    }
+    else
+    {
+      xfLpL_ *= 0.995f;
+      xfLpR_ *= 0.995f;
+    }
+
+    outL = dryL + diffL * mix_;
+    outR = dryR + diffR * mix_;
+    if (mix_ < 0.02f && wetGate_ < 0.02f)
+      nGrains_ = 0;
+
     sanitizeDenormal(outL);
     sanitizeDenormal(outR);
   }
@@ -211,6 +256,9 @@ private:
   Grain grains_[kMaxGrains] {};
   int nGrains_ = 0;
   float mix_ = 0.f;
+  float wetGate_ = 0.f;
+  float xfLpL_ = 0.f;
+  float xfLpR_ = 0.f;
 };
 
 } // namespace Dsp

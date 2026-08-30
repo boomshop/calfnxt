@@ -38,3 +38,6 @@ dsp/*/web/
 
 # Local deploy (host/user paths; keep out of git)
 /tools/publish-website.sh
+
+# Tuner click-test regression log (local iteration)
+/tools/tuner_click_history.jsonl

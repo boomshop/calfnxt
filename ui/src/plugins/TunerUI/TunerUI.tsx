@@ -148,6 +148,8 @@ export function TunerUI(props: TunerUIProps) {
   const showTarg$ = useMemo(() => DynamicValue.fromConstant(true), []);
   const showOut$ = useMemo(() => DynamicValue.fromConstant(true), []);
 
+  // Scale/Key are UI-only: they write the 12 note bits. Presets restore bits,
+  // not these labels — do not reverse-infer (that fight with note toggles).
   useEffect(() => {
     return scale$.subscribe((v) => {
       const i = Math.max(
@@ -361,7 +363,7 @@ export function TunerUI(props: TunerUIProps) {
               max={400}
               reset={src.retune}
               scale="log2"
-              log_factor={4}
+              log_factor={3}
               dots={RETUNE_DOTS}
               labels={RETUNE_LABELS}
               size="large"

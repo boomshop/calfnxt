@@ -109,6 +109,10 @@ void TunerPlugin::resetProcessing()
   hopCount_ = 0;
   hopRatioFrom_ = hopRatioTo_ = 1.f;
   hopPeriodFrom_ = hopPeriodTo_ = 200.f;
+  lastGoodPeriod_ = 0.f;
+  duckHops_ = 0;
+  leapHold_ = 0;
+  dryHops_ = 0;
   std::memset(yinBuf_, 0, sizeof(yinBuf_));
   std::memset(histBuf_, 0, sizeof(histBuf_));
   histPos_ = 0;
@@ -323,27 +327,74 @@ tresult PLUGIN_API TunerPlugin::process(ProcessData& data)
         hopPeriodFrom_ = hopPeriodTo_;
         const auto& corHop = corrector_.last();
         float period = hopPeriodTo_;
-        if (corHop.voiced && f0 > 1.f)
+        float gate = 0.f;
+        // Gate on raw periodicity + flatness (not corrector's voiced hold).
+        const bool rawVoiced =
+          yin.periodic && yin.confidence >= 0.28f && yin.flatness < 0.42f;
+        if (rawVoiced && corHop.voiced && f0 > 1.f)
         {
           const float pNew = sr / f0;
-          if (corHop.reattack || !(hopPeriodTo_ > 16.f))
+          const bool reentry = dryHops_ >= 2;
+          if (corHop.reattack || !(hopPeriodTo_ > 16.f) || reentry)
           {
-            // New syllable: lock grains to this period. Do not lerp from the
-            // pause / previous note or the first grain train clicks.
             hopPeriodFrom_ = pNew;
             period = pNew;
+            lastGoodPeriod_ = pNew;
+            leapHold_ = 0;
+            duckHops_ = 4;
             psola_.snapPeriod(pNew);
           }
           else
           {
             const float rel = pNew / std::max(16.f, hopPeriodTo_);
-            if (rel > 0.89f && rel < 1.12f)
-              period = pNew;
+            if (rel > 1.7f || rel < (1.f / 1.7f))
+            {
+              period = lastGoodPeriod_ > 16.f ? lastGoodPeriod_ : hopPeriodTo_;
+              ++leapHold_;
+              duckHops_ = std::max(duckHops_, 1);
+              if (leapHold_ >= 5)
+              {
+                hopPeriodFrom_ = pNew;
+                period = pNew;
+                lastGoodPeriod_ = pNew;
+                leapHold_ = 0;
+                duckHops_ = 3;
+                psola_.snapPeriod(pNew);
+              }
+            }
             else
-              period = hopPeriodTo_ + (pNew - hopPeriodTo_) * 0.25f;
+            {
+              leapHold_ = 0;
+              if (rel > 0.82f && rel < 1.22f)
+              {
+                period = pNew;
+                lastGoodPeriod_ = pNew;
+              }
+              else
+              {
+                period = hopPeriodTo_ + (pNew - hopPeriodTo_) * 0.35f;
+                lastGoodPeriod_ = period;
+              }
+            }
           }
+          dryHops_ = 0;
+          if (duckHops_ > 0)
+          {
+            --duckHops_;
+            gate = 0.f;
+          }
+          else
+            gate = 1.f;
+        }
+        else
+        {
+          leapHold_ = 0;
+          duckHops_ = 0;
+          ++dryHops_;
+          gate = 0.f;
         }
         hopPeriodTo_ = std::max(16.f, period);
+        psola_.setWetGate(gate);
       }
 
       const auto& cor = corrector_.last();

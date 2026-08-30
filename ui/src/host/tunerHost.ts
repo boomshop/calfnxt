@@ -96,14 +96,16 @@ export type TunerProfileDefaults = {
 
 export const TUNER_VOICE_DEFAULTS: TunerProfileDefaults = {
   fmin: 80,
-  fmax: 800,
+  // ~F5 — room for belted highs; still below a wide open 1 kHz window.
+  // 550 clipped real tops (~500 Hz) into metallic PSOLA.
+  fmax: 700,
   retune: 80,
   threshold: 10,
-  flex: 80,
+  flex: 100,
   vibrato: 0.75,
   formant: 0.85,
-  unvoiced: 0.5,
-  octave: 0.8,
+  unvoiced: 0.58,
+  octave: 0.88,
 };
 
 export const TUNER_STRINGS_DEFAULTS: TunerProfileDefaults = {
@@ -205,15 +207,15 @@ export function createBoundTunerHost(): ITunerHost {
   const notes$ = TUNER_NOTE_IDS.map((id) => bindBool(id));
   const profile$ = bindNum('profile', 0);
   const fmin$ = bindNum('fmin', 80);
-  const fmax$ = bindNum('fmax', 800);
+  const fmax$ = bindNum('fmax', 700);
   const retune$ = bindNum('retune', 80);
   const release$ = bindNum('release', 120);
   const threshold$ = bindNum('threshold', 10);
-  const flex$ = bindNum('flex', 80);
+  const flex$ = bindNum('flex', 100);
   const vibrato$ = bindNum('vibrato', 0.75);
   const formant$ = bindNum('formant', 0.85);
-  const unvoiced$ = bindNum('unvoiced', 0.5);
-  const octaveProtect$ = bindNum('octave_protect', 0.8);
+  const unvoiced$ = bindNum('unvoiced', 0.58);
+  const octaveProtect$ = bindNum('octave_protect', 0.88);
   const settle$ = bindNum('settle', 0.4);
   const vibOn$ = bindBool('vib_on');
   const vibDelay$ = bindNum('vib_delay', 100);

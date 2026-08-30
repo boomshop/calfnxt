@@ -31,6 +31,9 @@ public:
     bool sibilant = false;
     bool breath = false;
     bool octaveSuspect = false;
+    // True only when this hop itself looks pitched — not the short unvoiced
+    // hold used to bridge flicker for the corrector / UI.
+    bool periodic = false;
   };
 
   void reset()
@@ -246,6 +249,7 @@ public:
     result_.sibilant = !result_.breath && result_.flatness > sibFlat && result_.hfRatio > sibHf;
     result_.voiced = !result_.breath && !result_.sibilant && result_.confidence >= confFloor &&
                      peak > rmsFloor * 3.f;
+    result_.periodic = result_.voiced;
 
     if (result_.voiced && prevF0_ > 1.f)
     {
@@ -261,8 +265,10 @@ public:
         lastJumpUp_ = up;
         result_.octaveSuspect = true;
         // Chatter C2↔C4 flips direction every hop and never crosses 5.
-        // A real leap that YIN repeats for ~40 ms is accepted.
-        if (octaveHold_ < 5)
+        // A real leap that YIN repeats for ~40 ms is accepted — except a
+        // High-wall hug after a mid-range lock (classic harmonic false lock).
+        const bool wallHug = result_.f0Hz > fMax * 0.90f && prevF0_ < fMax * 0.50f;
+        if (octaveHold_ < 5 || wallHug)
         {
           result_.f0Hz = prevF0_;
           result_.period = prevPeriod_ > 1.f ? prevPeriod_ : result_.period;

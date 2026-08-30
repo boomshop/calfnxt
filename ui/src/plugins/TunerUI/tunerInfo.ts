@@ -8,7 +8,7 @@ export const tunerInfo = {
     'Starting points, like Reverb rooms — not a hidden extra law. Voice / Strings / Guitar write range, retune, threshold, flex, Keep, formant, unvoiced, and octave protection, and also pick hidden detector constants (voiced/unvoiced floors, note-centre smoothing, added-vibrato width). After the click, the knobs are the truth. Click again to reset that source’s defaults. Cher snap is Retune / Keep, not a fourth source. Bass lives under Guitar: drop Low to ~31 Hz (B0) for a 5-string; 4-string E can sit near 40 Hz.',
 
   quality:
-    'Lookahead / analysis window / shifter smoothness, traded for latency. Left = live-ish (short window, more octave mistakes on low notes). Right = mix/HiQ (C2-safe F0, smoother grains, tens of ms PDC). Park it right for studio vocals, bowed strings, and guitar; left only if you must monitor through it.',
+    'Lookahead / analysis window / shifter smoothness, traded for latency. Left = live-ish (short window, more octave mistakes on low notes). Default sits a bit right of centre for studio vocals. Far right = mix/HiQ (C2-safe F0, smoother grains, tens of ms PDC). Park it right for vocals, bowed strings, and guitar; left only if you must monitor through it.',
 
   formant:
     'How much of the original spectral envelope is put back after the shift. 100% = body/vowels/corpus stay put while pitch moves (no chipmunk). 0% = formants ride the pitch (toy piano, cartoon, hard-tune “electric”). Voice, strings, and guitar usually want this high. Drop it only when the processed “electric” tell is the point.',
@@ -47,7 +47,7 @@ export const tunerInfo = {
     'Speed of the added vibrato in Hz. ~5 Hz is typical sung / bowed / guitar vibrato. Lower = wide, lazy. Higher = nervous or electric. Independent of Keep — this only clocks the synthetic LFO.',
 
   octaveProtect:
-    'How hard the detector refuses sudden octave jumps. High = stay in the current register unless confidence and continuity really say otherwise (cello C2 vs first harmonic, vocal fry, guitar 12th-fret harmonic). Low = nearest MIDI octave wins — faster, more “got the wrong octave” on low notes. Keep this high on a multi-mic string bus or a bass DI.',
+    'How hard the detector refuses sudden octave jumps. High = stay in the current register unless confidence and continuity really say otherwise (cello C2 vs first harmonic, vocal fry, guitar 12th-fret harmonic). Low = nearest MIDI octave wins — faster, more “got the wrong octave” on low notes. Keep this high on a multi-mic string bus or a bass DI. Red dots on the roll are that hunt: the shifter passes dry until F0 agrees, so a wrong-octave grain train does not click.',
 
   unvoiced:
     'How easily breath, S, bow scratch, pick scrape, and mutes are classified as unvoiced and left unpitched. Higher = more of the noisy stuff bypasses the shifter (safer S’s and tails). Lower = more of the take is treated as pitched — can pull sibilants and scratch onto a note. If S’s chirp, raise this; if quiet hummed notes or ghosted guitar notes are skipped, lower it.',
@@ -59,7 +59,7 @@ export const tunerInfo = {
     'Lowest frequency the detector is allowed to call a fundamental. Voice ≈ 70–90 Hz. Strings (cello/viola/violin) down toward C2 (~65 Hz, sometimes 55 for open C). Guitar often ~70 Hz. Bass: 4-string E1 ≈ 41 Hz; 5-string B0 ≈ 31 Hz — drop Low to ~31 (floor is 25 Hz). Too high = low notes get heard as the octave above. Too low = more octave hunting and extra latency (Quality + Low both feed PDC). Six-string F♯0 (~23 Hz) sits under the window the detector can resolve.',
 
   fmax:
-    'Highest fundamental considered. Voice often ~800–1000 Hz. Strings rarely need the top. Guitar solos: 24th-fret E6 ≈ 1.3 kHz — the Guitar source writes High ≈ 1.4 kHz; the knob goes to 2 kHz. Soprano C6 is ~1 kHz. Too high lets the detector lock onto harmonics and whistle; too low clips the tessitura (a lead guitar with High at 800 Hz will octave-drop the top of the neck). Keep the window as tight as the part allows.',
+    'Highest fundamental considered. Voice default ≈ 700 Hz (~F5) — covers belted pop highs without leaving a 1 kHz-wide trap for harmonics. Soprano C6 ≈ 1 kHz: raise High. Guitar solos: 24th-fret E6 ≈ 1.3 kHz — the Guitar source writes High ≈ 1.4 kHz; the knob goes to 2 kHz. Too high invites harmonics and whistle; too low clips the top and the shifter goes metallic. Keep the window as tight as the part allows.',
 
   ref:
     'Concert A in Hz (the “zero cents” of the scale). 440 = pop/studio. 442–444 = typical orchestra house pitch. 415 ≈ Baroque (about a semitone down). 432 = the alternate “natural” camp. 466 ≈ high historical Chorton (about a semitone up). This is not a transpose — it slides every target together. If the section is at 442 and you leave 440, everything sits a few cents “corrected” the wrong way.',
@@ -68,10 +68,10 @@ export const tunerInfo = {
     'Which pitch classes are legal targets. Scales in this UI only set these twelve bits; the engine never sees “major”, only the mask. Toggle notes for custom sets (e.g. pentatonic, drone + fifths). All off is treated as chromatic so the plugin cannot freeze with nowhere to go.',
 
   scale:
-    'Convenience only: writes the note toggles from a template, rotated by Key. Does not live on the DSP — automation/presets store the twelve notes. After you tweak individual keys, the scale name is just a starting point, not a lock.',
+    'Convenience only: writes the note toggles from a template, rotated by Key. Does not live on the DSP — automation/presets store the twelve notes. After reload the select may show Chromatic while the keys stay correct; pick the scale again if you want the label to match. Custom note edits stay until you apply a scale again.',
 
   key:
-    'Root used when applying a scale template (C major vs E♭ major, etc.). Changing Key does nothing until you hit a scale — then the bits rotate. Custom note edits stay until you apply a scale again.',
+    'Root used when applying a scale template (C major vs E♭ major, etc.). Changing Key rewrites the twelve bits from the current scale template. Custom note edits stay until you apply a scale (or Key) again.',
 
   history:
     'Scrolling piano roll (~10 s), display only — not a Melodyne editor. Blue = detected pitch (natural vibrato included). Faint dashed = scale target (the grid, not the audio). Warn colour = processed pitch (Retune scoop + added vibrato). Header In / Targ / Out hide each trace. Octave-suspect dots sit on In. The strip under the roll is pull amount: black = none, accent = a semitone, warn = a whole tone, white = two whole tones. Gaps are unvoiced (breath / S / bow / pick), left unpitched.',
