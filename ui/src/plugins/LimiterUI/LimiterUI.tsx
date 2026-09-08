@@ -275,7 +275,7 @@ export function LimiterUI(props: LimiterUIProps) {
               label="GR"
               show_scale
               falling={0}
-              auto_hold={800}
+              show_hold={false}
               scale="log2"
               log_factor={5}
               levels={[1, 3, 6, 12]}

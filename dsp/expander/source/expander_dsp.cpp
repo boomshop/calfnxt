@@ -336,6 +336,7 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
   // Idle only when main is quiet AND expansion settled; ext SC keeps us awake.
   if (quietIn && gx_.isIdle() && !scBusActive)
   {
+    grMeter_.forceZero();
     publishHistSnapshot();
     if (hasHostAudio)
       io_.end(data);

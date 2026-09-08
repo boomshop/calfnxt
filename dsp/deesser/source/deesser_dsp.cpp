@@ -298,6 +298,7 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
   // Idle only when input is quiet AND de-esser GR is settled.
   if (quietIn && gr_.isIdle())
   {
+    grMeter_.forceZero();
     publishHistSnapshot();
     if (hasHostAudio)
       io_.end(data);

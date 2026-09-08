@@ -708,6 +708,10 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
   if (quietIn && drained)
   {
     bypassOld_ = bypass;
+    for (int b = 0; b < kMaxBands; ++b)
+      stripMeter_[b].forceZero();
+    bbMeter_.forceZero();
+    overallMeter_.forceZero();
     idleSanitize(0);
     publishHistSnapshot();
     io_.end(data);

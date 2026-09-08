@@ -351,6 +351,7 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
   if (quietIn && drained)
   {
     bypassOld_ = bypass;
+    grMeter_.forceZero();
     resamplerL_.sanitize();
     resamplerR_.sanitize();
     cleanResamplerL_.sanitize();

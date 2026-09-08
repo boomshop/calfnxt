@@ -353,6 +353,8 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
   {
     if (quietDrained_)
     {
+      for (int b = 0; b < kMaxBands; ++b)
+        grMeter_[b].forceZero();
       if (hasHostAudio)
         io_.end(data);
       return kResultOk;

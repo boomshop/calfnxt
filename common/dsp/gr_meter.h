@@ -2,8 +2,8 @@
 
 // Gain-reduction snapshot for viz (Compressor, Expander, DeEsser, Limiter,
 // Mbcomp, Mblimiter).
-// Audio thread: process() peak-holds the deepest GR since the last take.
-// UI thread: takeDb() returns ≤0 dB and clears the hold.
+// Audio thread: process() stores the current GR.
+// UI thread: takeDb() returns ≤0 dB and clears the slot.
 // No falling ballistics — the meter follows the real GR.
 
 #include <atomic>
@@ -20,7 +20,9 @@ public:
     holdAmt_.store(0.f, std::memory_order_relaxed);
   }
 
-  /** Feed linear GR (1 = none, →0 = more reduction). Audio thread only. */
+  /** Feed linear GR (1 = none, →0 = more reduction). Audio thread only.
+   *  Overwrites the hold with the current GR so release/open tracks the
+   *  real envelope (peak-hold-only would stick at the last closed depth). */
   void process(float grLin)
   {
     float amt = -linToDbSafe(grLin);
@@ -28,12 +30,7 @@ public:
       amt = 0.f;
     else if (amt > 60.f)
       amt = 60.f;
-
-    float cur = holdAmt_.load(std::memory_order_relaxed);
-    while (amt > cur
-           && !holdAmt_.compare_exchange_weak(cur, amt, std::memory_order_relaxed))
-    {
-    }
+    holdAmt_.store(amt, std::memory_order_relaxed);
   }
 
   /** Instant clear (bypass). Audio thread only. */
@@ -42,7 +39,7 @@ public:
     holdAmt_.store(0.f, std::memory_order_relaxed);
   }
 
-  /** ≤0 dB for viz; resets the hold so the next window starts fresh. */
+  /** ≤0 dB for viz; clears the slot so idle polls read 0. */
   float takeDb()
   {
     return -holdAmt_.exchange(0.f, std::memory_order_acq_rel);

@@ -343,6 +343,7 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
   // External sidechain can still move GR on a silent main — keep processing then.
   if (quietIn && gr_.isIdle() && !scBusActive)
   {
+    grMeter_.forceZero();
     publishHistSnapshot();
     if (hasHostAudio)
       io_.end(data);

@@ -219,7 +219,7 @@ function BandStrip(props: {
             reverse
             show_scale={false}
             falling={0}
-            auto_hold={800}
+            show_hold={false}
             scale="log2"
             log_factor={3}
           />
@@ -500,7 +500,7 @@ function BandDetail(props: {
             label="GR"
             show_scale
             falling={0}
-            auto_hold={800}
+            show_hold={false}
             scale="log2"
             log_factor={5}
             levels={[1, 3, 6, 12]}
