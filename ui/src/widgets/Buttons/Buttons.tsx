@@ -1,5 +1,7 @@
+import { DynamicValue } from '@deutschesoft/awml/src/index.pure.js';
 import { Button } from '../Button';
 import './Buttons.scss';
+import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 
 export type ButtonsEntry<T = unknown> = {
   label?: string;
@@ -15,6 +17,7 @@ export interface ButtonsProps<T = unknown> {
   onChange: (value: T) => void;
   layout?: ButtonsLayout;
   className?: string;
+  enabled$?: DynamicValue<boolean>;
 }
 
 function valuesEqual(a: unknown, b: unknown): boolean {
@@ -25,10 +28,18 @@ function valuesEqual(a: unknown, b: unknown): boolean {
 }
 
 export function Buttons<T = unknown>(props: ButtonsProps<T>) {
-  const { entries, value, onChange, layout = 'horizontal', className } = props;
+  const {
+    entries,
+    value,
+    onChange,
+    layout = 'horizontal',
+    className,
+    enabled$,
+  } = props;
   const cls = ['Buttons', `layout-${layout}`, className ?? '']
     .filter(Boolean)
     .join(' ');
+  const enabled = useDynamicValueReadonly(enabled$, true);
 
   return (
     <div className={cls} role="group">
@@ -40,6 +51,7 @@ export function Buttons<T = unknown>(props: ButtonsProps<T>) {
             label={entry.label ?? false}
             icon={entry.icon ?? false}
             state={active}
+            disabled={!enabled}
             onClick={() => onChange(entry.value)}
           />
         );
