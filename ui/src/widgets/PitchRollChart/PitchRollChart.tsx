@@ -80,6 +80,14 @@ function corrFill(cents: number, accent: string, warn: string): string {
   return `rgb(${corrLut[o]},${corrLut[o + 1]},${corrLut[o + 2]})`;
 }
 
+/** Midpoint of accent→warn (same stop as the correction strip at 150 ct). */
+function midAccentWarn(accent: string, warn: string): string {
+  return corrFill(150, accent, warn);
+}
+
+/** Shared dashed style for dry (Octaver) and target (Tuner). */
+const PITCH_DASH_TIGHT: number[] = [2, 2];
+
 export interface PitchRollChartProps {
   data$: DynamicValue<Float32Array | null>;
   fmin$: DynamicValue<number>;
@@ -319,36 +327,37 @@ export function PitchRollChart(props: PitchRollChartProps) {
     if (modeRef.current === 'octaver') {
       const inMidi = (i: number) => data[i * HIST_CH + 0] ?? 0;
       const bitsOf = (i: number) => Math.round(data[i * HIST_CH + 1] ?? 0);
-      // Dry dashed --color; −1 accent; −2 warn; +1 --color; sub least.
+      const mid = midAccentWarn(accent, warn);
+      // Dry dashed --color; −1 mid(accent,warn); −2 warn; +1 --color; sub accent.
       strokePitch(
         (i) => ((bitsOf(i) & 1) ? inMidi(i) : 0),
         withAlpha(fg, 0.85),
-        1.5,
-        [5, 4],
+        1.75,
+        PITCH_DASH_TIGHT,
       );
       strokePitch(
         (i) => ((bitsOf(i) & 2) ? inMidi(i) - 12 : 0),
-        accent,
-        1.8,
+        mid,
+        1.75,
         [],
       );
       strokePitch(
         (i) => ((bitsOf(i) & 4) ? inMidi(i) - 24 : 0),
         warn,
-        1.6,
+        1.75,
         [],
       );
       strokePitch(
         (i) => ((bitsOf(i) & 8) ? inMidi(i) + 12 : 0),
         fg,
-        1.5,
+        1.75,
         [],
       );
       strokePitch(
         (i) => ((bitsOf(i) & 16) ? inMidi(i) - 12 : 0),
-        least,
-        1.4,
-        [2, 3],
+        accent,
+        1.75,
+        [],
       );
       for (let i = 0; i < slots; ++i) {
         const flags = data[i * HIST_CH + 3] ?? 0;
@@ -367,9 +376,9 @@ export function PitchRollChart(props: PitchRollChartProps) {
         inMidi(i) + (data[i * HIST_CH + 4] ?? 0) / 100;
 
       if (showTargRef.current)
-        strokePitch(tgtMidi, withAlpha(fg, 0.5), 1.5, [4, 3]);
+        strokePitch(tgtMidi, withAlpha(fg, 0.5), 1.75, PITCH_DASH_TIGHT);
       if (showInRef.current) {
-        strokePitch(inMidi, accent, 1.8, []);
+        strokePitch(inMidi, accent, 1.75, []);
         for (let i = 0; i < slots; ++i) {
           const flags = data[i * HIST_CH + 3] ?? 0;
           if ((flags & 4) === 0 || (flags & 1) === 0) continue;
@@ -381,7 +390,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
           ctx.fill();
         }
       }
-      if (showOutRef.current) strokePitch(outMidi, warn, 1.6, []);
+      if (showOutRef.current) strokePitch(outMidi, warn, 1.75, []);
     }
 
     ctx.fillStyle = fg;

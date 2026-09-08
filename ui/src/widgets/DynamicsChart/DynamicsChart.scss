@@ -6,12 +6,12 @@
     > .aux-graphs {
       > .aux-response {
         stroke: var(--chart-level-stroke, var(--color-accent));
-        stroke-width: 2px;
+        stroke-width: 1.75px;
       }
 
       > .aux-response-release {
         stroke: var(--chart-level-stroke, var(--color-warn));
-        stroke-width: 2px;
+        stroke-width: 1.75px;
         fill: none;
       }
 

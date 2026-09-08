@@ -36,7 +36,7 @@
     fill: var(--chart-level-stroke);
     fill-opacity: 0.18;
     stroke: var(--chart-level-stroke, var(--color-accent));
-    stroke-width: 2;
+    stroke-width: 1.75;
     stroke-linejoin: round;
     stroke-linecap: round;
   }
@@ -44,7 +44,7 @@
   .zone {
     fill: none;
     stroke: var(--chart-level-stroke, var(--color-accent));
-    stroke-width: 4.5;
+    stroke-width: 1.75;
     stroke-linejoin: round;
     stroke-linecap: round;
     opacity: 0.95;

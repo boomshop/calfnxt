@@ -230,7 +230,7 @@ export function CrusherChart(props: CrusherChartProps) {
             className="heat"
             d={s.d}
             style={{
-              strokeWidth: 2 + s.dens * 18,
+              strokeWidth: 1.75 + s.dens * 18,
               opacity: 0.08 + s.dens * 0.36,
             }}
           />
