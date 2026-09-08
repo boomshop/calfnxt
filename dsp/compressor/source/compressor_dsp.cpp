@@ -77,7 +77,6 @@ void CompressorPlugin::resetProcessing()
   gr_.reset();
   sc_.setSampleRate(static_cast<float>(sampleRate_));
   sc_.reset();
-  // ~20 dB/s fall — same idea as AUX LevelMeter falling=20 / 1000 ms.
   grMeter_.reset(static_cast<float>(sampleRate_));
   {
     std::lock_guard<std::mutex> lock(vizMutex_);

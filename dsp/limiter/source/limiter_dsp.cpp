@@ -500,7 +500,6 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
       return;
     }
 
-    // Per host sample — GrMeter ballistics are sample-rate based.
     const float grLin = limiter_.attenuation();
     histFeedSample(inPeak, grLin);
     grMeter_.process(grLin);
