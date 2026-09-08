@@ -102,6 +102,10 @@ private:
   void appendTreeUiFieldsLocked(std::string& json);
   void ensureAncestorsOpenLocked();
   void setStatus(const std::string& msg);
+  void publishPendingConv(std::shared_ptr<Dsp::PartitionedStereoConvolver> eng);
+  void takePendingConv(bool bypass);
+  void enterBypass();
+  void ensureScratch(int n);
   static std::string lastLibraryPath();
   static void saveLastLibraryPath(const std::string& root);
 
@@ -119,8 +123,16 @@ private:
   std::shared_ptr<Dsp::PartitionedStereoConvolver> conv_;
   std::shared_ptr<Dsp::PartitionedStereoConvolver> convPrev_;
   std::shared_ptr<Dsp::PartitionedStereoConvolver> convPending_;
+  std::atomic<bool> convReady_ {false};
   int xfadeLeft_ = 0;
   int xfadeLen_ = 0;
+  bool bypassLatched_ = false;
+  int dryFlushLeft_ = 0;
+
+  std::vector<float> scratchWetL_;
+  std::vector<float> scratchWetR_;
+  std::vector<float> scratchPrevL_;
+  std::vector<float> scratchPrevR_;
 
   std::mutex dataMutex_;
   Dsp::IrBuffer rawIr_;

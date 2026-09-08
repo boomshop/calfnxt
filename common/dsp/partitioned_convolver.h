@@ -3,6 +3,7 @@
 // Uniform partitioned overlap-save convolution (stereo / true-stereo).
 // Hop = 512, FFT = 1024. IR partitions live in the frequency domain.
 // setIr() is not realtime-safe — call from a worker, then swap instances.
+// Silent hops skip the FFT once the partition ring has drained (canIdle()).
 
 #include "dsp_math.h"
 #include "fft_r2.h"
@@ -40,6 +41,7 @@ public:
     std::fill(overlapR_.begin(), overlapR_.end(), 0.f);
     fill_ = 0;
     specWrite_ = 0;
+    drainHops_ = 0;
     if (nParts_ > 0)
     {
       const int specN = nParts_ * kBins;
@@ -54,6 +56,9 @@ public:
   int latency() const { return empty() ? 0 : kHop; }
   Layout layout() const { return layout_; }
   int irFrames() const { return irFrames_; }
+  int parts() const { return nParts_; }
+  /** True when input spectra and the current hop are drained — skip FFT. */
+  bool canIdle() const { return drainHops_ <= 0 && fill_ == 0; }
 
   /**
    * Interleaved IR: frames × channels.
@@ -170,13 +175,61 @@ private:
     }
   }
 
+  bool hopNearSilent() const
+  {
+    constexpr float kEps = 1.0e-8f;
+    for (int i = 0; i < kHop; ++i)
+    {
+      if (std::fabs(inL_[static_cast<size_t>(i)]) > kEps
+          || std::fabs(inR_[static_cast<size_t>(i)]) > kEps)
+        return false;
+    }
+    return true;
+  }
+
+  void writeZeroSpec(int slot)
+  {
+    const int off = slot * kBins;
+    std::fill(inSpecLRe_.begin() + off, inSpecLRe_.begin() + off + kBins, 0.f);
+    std::fill(inSpecLIm_.begin() + off, inSpecLIm_.begin() + off + kBins, 0.f);
+    std::fill(inSpecRRe_.begin() + off, inSpecRRe_.begin() + off + kBins, 0.f);
+    std::fill(inSpecRIm_.begin() + off, inSpecRIm_.begin() + off + kBins, 0.f);
+  }
+
   void processHop()
   {
+    const bool silent = hopNearSilent();
+    if (silent)
+    {
+      if (drainHops_ <= 0)
+      {
+        writeZeroSpec(specWrite_);
+        std::fill(outL_.begin(), outL_.end(), 0.f);
+        std::fill(outR_.begin(), outR_.end(), 0.f);
+        std::memcpy(overlapL_.data(), inL_.data(), sizeof(float) * static_cast<size_t>(kHop));
+        std::memcpy(overlapR_.data(), inR_.data(), sizeof(float) * static_cast<size_t>(kHop));
+        specWrite_ = (specWrite_ + 1) % nParts_;
+        return;
+      }
+      --drainHops_;
+    }
+    else
+    {
+      drainHops_ = nParts_ + 2;
+    }
+
     const int slot = specWrite_;
-    fftRealBlock(overlapL_.data(), inL_.data(), inSpecLRe_.data() + slot * kBins,
-                 inSpecLIm_.data() + slot * kBins);
-    fftRealBlock(overlapR_.data(), inR_.data(), inSpecRRe_.data() + slot * kBins,
-                 inSpecRIm_.data() + slot * kBins);
+    if (silent)
+    {
+      writeZeroSpec(slot);
+    }
+    else
+    {
+      fftRealBlock(overlapL_.data(), inL_.data(), inSpecLRe_.data() + slot * kBins,
+                   inSpecLIm_.data() + slot * kBins);
+      fftRealBlock(overlapR_.data(), inR_.data(), inSpecRRe_.data() + slot * kBins,
+                   inSpecRIm_.data() + slot * kBins);
+    }
 
     std::fill(accRe_.begin(), accRe_.end(), 0.f);
     std::fill(accIm_.begin(), accIm_.end(), 0.f);
@@ -260,6 +313,7 @@ private:
   int irFrames_ = 0;
   int fill_ = 0;
   int specWrite_ = 0;
+  int drainHops_ = 0;
 
   std::vector<float> hRe_;
   std::vector<float> hIm_;

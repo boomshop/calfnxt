@@ -238,6 +238,64 @@ void ImpulsePlugin::setStatus(const std::string& msg)
   status_ = msg;
 }
 
+void ImpulsePlugin::publishPendingConv(std::shared_ptr<Dsp::PartitionedStereoConvolver> eng)
+{
+  std::lock_guard<std::mutex> lock(dataMutex_);
+  convPending_ = std::move(eng);
+  convReady_.store(true, std::memory_order_release);
+}
+
+void ImpulsePlugin::takePendingConv(bool bypass)
+{
+  if (!convReady_.load(std::memory_order_acquire))
+    return;
+  std::shared_ptr<Dsp::PartitionedStereoConvolver> pend;
+  {
+    std::lock_guard<std::mutex> lock(dataMutex_);
+    pend.swap(convPending_);
+    convReady_.store(false, std::memory_order_relaxed);
+  }
+  if (!pend)
+    return;
+  if (bypass)
+  {
+    convPrev_.reset();
+    conv_ = std::move(pend);
+    xfadeLeft_ = 0;
+  }
+  else
+  {
+    convPrev_ = conv_;
+    conv_ = std::move(pend);
+    const float sr = static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0);
+    xfadeLen_ = std::max(64, static_cast<int>(sr * (kXfadeMs * 0.001f)));
+    xfadeLeft_ = convPrev_ ? xfadeLen_ : 0;
+  }
+  updateLatency();
+}
+
+void ImpulsePlugin::enterBypass()
+{
+  if (conv_)
+    conv_->reset();
+  convPrev_.reset();
+  xfadeLeft_ = 0;
+  tone_.reset();
+  wetPredelay_.reset();
+}
+
+void ImpulsePlugin::ensureScratch(int n)
+{
+  const size_t s = static_cast<size_t>(std::max(0, n));
+  if (scratchWetL_.size() < s)
+  {
+    scratchWetL_.resize(s);
+    scratchWetR_.resize(s);
+    scratchPrevL_.resize(s);
+    scratchPrevR_.resize(s);
+  }
+}
+
 std::string ImpulsePlugin::lastLibraryPath()
 {
   const std::string p = configDir() + "/impulse-library";
@@ -302,6 +360,8 @@ void ImpulsePlugin::resetProcessing()
   if (convPrev_)
     convPrev_->reset();
   xfadeLeft_ = 0;
+  bypassLatched_ = params_[kParamBypass] >= 0.5f;
+  dryFlushLeft_ = 0;
   updateLatency();
 }
 
@@ -502,9 +562,9 @@ void ImpulsePlugin::runLoad(const std::string& relOrAbs)
   eng->setIr(prep.interleaved.data(), prep.frames, prep.channels);
   {
     std::lock_guard<std::mutex> lock(dataMutex_);
-    convPending_ = std::move(eng);
     status_ = rawIr_.name;
   }
+  publishPendingConv(std::move(eng));
   std::string json = "{\"t\":\"ir\",\"cmd\":\"sel\",\"path\":";
   jsonEscapeAppend(json, relOrAbs);
   json += ",\"status\":";
@@ -528,10 +588,7 @@ void ImpulsePlugin::runRebuild()
   }
   auto eng = std::make_shared<Dsp::PartitionedStereoConvolver>();
   eng->setIr(prep.interleaved.data(), prep.frames, prep.channels);
-  {
-    std::lock_guard<std::mutex> lock(dataMutex_);
-    convPending_ = std::move(eng);
-  }
+  publishPendingConv(std::move(eng));
 }
 
 bool ImpulsePlugin::handleIrCommand(const char* json)
@@ -661,21 +718,13 @@ tresult PLUGIN_API ImpulsePlugin::process(ProcessData& data)
   reverseFlag_.store(state.reverse ? 1 : 0, std::memory_order_relaxed);
   shapePlain_.store(state.shape, std::memory_order_relaxed);
 
+  takePendingConv(state.bypass);
+
+  if (state.bypass != bypassLatched_)
   {
-    std::shared_ptr<Dsp::PartitionedStereoConvolver> pend;
-    {
-      std::lock_guard<std::mutex> lock(dataMutex_);
-      pend.swap(convPending_);
-    }
-    if (pend)
-    {
-      convPrev_ = conv_;
-      conv_ = std::move(pend);
-      const float sr = static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0);
-      xfadeLen_ = std::max(64, static_cast<int>(sr * (kXfadeMs * 0.001f)));
-      xfadeLeft_ = convPrev_ ? xfadeLen_ : 0;
-      updateLatency();
-    }
+    bypassLatched_ = state.bypass;
+    if (state.bypass)
+      enterBypass();
   }
 
   if (std::fabs(state.decay - lastDecay_) > 0.0005f || state.reverse != lastReverse_
@@ -693,7 +742,8 @@ tresult PLUGIN_API ImpulsePlugin::process(ProcessData& data)
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
   dryGain_.set(Dsp::dbToLin(state.dryDb));
   wetGain_.set(Dsp::dbToLin(state.wetDb));
-  tone_.setParams(state.hipass, state.lopass, state.hpStages, state.lpStages);
+  if (!state.bypass)
+    tone_.setParams(state.hipass, state.lopass, state.hpStages, state.lpStages);
 
   const bool hasHostAudio = io_.begin(data);
   if (!hasHostAudio)
@@ -704,69 +754,109 @@ tresult PLUGIN_API ImpulsePlugin::process(ProcessData& data)
   const float sr = static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0);
   const int drySamps = conv_ && !conv_->empty() ? conv_->latency() : 0;
   const int preSamps = std::max(0, static_cast<int>(std::lround(state.predelayMs * 0.001f * sr)));
+  const bool quietIn = io_.inputWasQuiet();
+  if (!quietIn)
+    dryFlushLeft_ = drySamps + Dsp::PartitionedStereoConvolver::kHop;
+  else
+    dryFlushLeft_ = std::max(0, dryFlushLeft_ - nFrames);
 
-  auto run = [&](auto** out) {
+  // Bypass: latency-matched dry only — never run the partitioned FFT.
+  if (state.bypass && quietIn && dryFlushLeft_ <= 0)
+  {
+    io_.end(data);
+    return kResultOk;
+  }
+
+  auto delayDry = [&](auto** out) {
     for (int32 i = 0; i < nFrames; ++i)
     {
       float inL = nCh <= 0 ? 0.f : static_cast<float>(out[0][i]);
       float inR = nCh <= 1 ? inL : static_cast<float>(out[1][i]);
-      float wetL = inL, wetR = inR;
-      mapWetSource(inL, inR, state.source, wetL, wetR);
-
       float dryL = 0.f, dryR = 0.f;
       dryDelay_.process(inL, inR, drySamps, dryL, dryR);
+      out[0][i] = dryL;
+      if (nCh > 1)
+        out[1][i] = dryR;
+    }
+  };
 
-      if (state.bypass)
-      {
-        if (conv_ && !conv_->empty())
-        {
-          float ignL = wetL, ignR = wetR;
-          conv_->process(&ignL, &ignR, 1);
-        }
-        if (convPrev_ && xfadeLeft_ > 0)
-        {
-          float pL = wetL, pR = wetR;
-          convPrev_->process(&pL, &pR, 1);
-          if (--xfadeLeft_ <= 0)
-            convPrev_.reset();
-        }
-        out[0][i] = dryL;
-        if (nCh > 1)
-          out[1][i] = dryR;
-        continue;
-      }
+  if (state.bypass)
+  {
+    if (data.symbolicSampleSize == kSample32)
+      delayDry(data.outputs[0].channelBuffers32);
+    else
+      delayDry(data.outputs[0].channelBuffers64);
+    io_.end(data);
+    return kResultOk;
+  }
 
-      float wL = wetL, wR = wetR;
-      float pL = wetL, pR = wetR;
-      if (conv_ && !conv_->empty())
-        conv_->process(&wL, &wR, 1);
-      else
+  const bool convIdle = !conv_ || conv_->empty() || conv_->canIdle();
+  const bool prevIdle = !convPrev_ || xfadeLeft_ <= 0;
+  if (quietIn && convIdle && prevIdle && dryFlushLeft_ <= 0 && preSamps <= 0)
+  {
+    io_.end(data);
+    return kResultOk;
+  }
+
+  auto runWet = [&](auto** out) {
+    ensureScratch(nFrames);
+    float* wetL = scratchWetL_.data();
+    float* wetR = scratchWetR_.data();
+    for (int32 i = 0; i < nFrames; ++i)
+    {
+      float inL = nCh <= 0 ? 0.f : static_cast<float>(out[0][i]);
+      float inR = nCh <= 1 ? inL : static_cast<float>(out[1][i]);
+      mapWetSource(inL, inR, state.source, wetL[i], wetR[i]);
+      float dL = 0.f, dR = 0.f;
+      dryDelay_.process(inL, inR, drySamps, dL, dR);
+      out[0][i] = dL;
+      if (nCh > 1)
+        out[1][i] = dR;
+    }
+
+    const bool doPrev = convPrev_ && xfadeLeft_ > 0;
+    if (doPrev)
+    {
+      std::memcpy(scratchPrevL_.data(), wetL, sizeof(float) * static_cast<size_t>(nFrames));
+      std::memcpy(scratchPrevR_.data(), wetR, sizeof(float) * static_cast<size_t>(nFrames));
+      convPrev_->process(scratchPrevL_.data(), scratchPrevR_.data(), nFrames);
+    }
+
+    if (conv_ && !conv_->empty())
+      conv_->process(wetL, wetR, nFrames);
+    else
+    {
+      std::memset(wetL, 0, sizeof(float) * static_cast<size_t>(nFrames));
+      std::memset(wetR, 0, sizeof(float) * static_cast<size_t>(nFrames));
+    }
+
+    if (doPrev)
+    {
+      const float* pL = scratchPrevL_.data();
+      const float* pR = scratchPrevR_.data();
+      for (int32 i = 0; i < nFrames && xfadeLeft_ > 0; ++i)
       {
-        wL = 0.f;
-        wR = 0.f;
-      }
-      if (convPrev_ && xfadeLeft_ > 0)
-      {
-        convPrev_->process(&pL, &pR, 1);
         const float t =
           1.f - static_cast<float>(xfadeLeft_) / static_cast<float>(std::max(1, xfadeLen_));
         const float a = std::sin(t * 1.5707963267948966f);
         const float b = std::cos(t * 1.5707963267948966f);
-        wL = pL * b + wL * a;
-        wR = pR * b + wR * a;
+        wetL[i] = pL[i] * b + wetL[i] * a;
+        wetR[i] = pR[i] * b + wetR[i] * a;
         if (--xfadeLeft_ <= 0)
           convPrev_.reset();
       }
+    }
 
+    for (int32 i = 0; i < nFrames; ++i)
+    {
       float pdL = 0.f, pdR = 0.f;
-      wetPredelay_.process(wL, wR, preSamps, pdL, pdR);
+      wetPredelay_.process(wetL[i], wetR[i], preSamps, pdL, pdR);
       pdL = tone_.processWet(0, pdL);
       pdR = tone_.processWet(1, pdR);
-
       const float gD = dryGain_.get();
       const float gW = wetGain_.get();
-      float yL = dryL * gD + pdL * gW;
-      float yR = dryR * gD + pdR * gW;
+      float yL = static_cast<float>(out[0][i]) * gD + pdL * gW;
+      float yR = (nCh > 1 ? static_cast<float>(out[1][i]) : yL) * gD + pdR * gW;
       Dsp::sanitizeDenormal(yL);
       Dsp::sanitizeDenormal(yR);
       out[0][i] = yL;
@@ -776,9 +866,9 @@ tresult PLUGIN_API ImpulsePlugin::process(ProcessData& data)
   };
 
   if (data.symbolicSampleSize == kSample32)
-    run(data.outputs[0].channelBuffers32);
+    runWet(data.outputs[0].channelBuffers32);
   else
-    run(data.outputs[0].channelBuffers64);
+    runWet(data.outputs[0].channelBuffers64);
 
   io_.end(data);
   return kResultOk;
@@ -896,6 +986,7 @@ tresult PLUGIN_API ImpulsePlugin::setState(IBStream* state)
       origLengthMs_ = 0.f;
       waveDirty_.store(true);
       convPending_ = std::make_shared<Dsp::PartitionedStereoConvolver>();
+      convReady_.store(true, std::memory_order_release);
     }
   }
   if (!root.empty())
