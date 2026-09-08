@@ -92,6 +92,14 @@ export interface PitchRollChartProps {
   showTarg$?: DynamicValue<boolean>;
   /** When false, hide the processed-pitch (warn) trace. Default on. */
   showOut$?: DynamicValue<boolean>;
+  /**
+   * `tuner` (default): [in, target, conf, flags, corrCents].
+   * `octaver`: [inMidi, layerBits, conf, flags, _] with layerBits
+   * dry=1, −1=2, −2=4, +1=8, sub=16.
+   */
+  mode?: 'tuner' | 'octaver';
+  /** Bottom pull/confidence strip (tuner only by default). */
+  showConfidenceStrip?: boolean;
   vizId?: string;
   className?: string;
 }
@@ -112,6 +120,8 @@ export function PitchRollChart(props: PitchRollChartProps) {
     showIn$,
     showTarg$,
     showOut$,
+    mode = 'tuner',
+    showConfidenceStrip = true,
   } = props;
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -122,6 +132,10 @@ export function PitchRollChart(props: PitchRollChartProps) {
   const showInRef = useRef(showIn$?.value ?? true);
   const showTargRef = useRef(showTarg$?.value ?? true);
   const showOutRef = useRef(showOut$?.value ?? true);
+  const modeRef = useRef(mode);
+  const showStripRef = useRef(showConfidenceStrip);
+  modeRef.current = mode;
+  showStripRef.current = showConfidenceStrip;
 
   const paint = useCallback(() => {
     const canvas = canvasRef.current;
@@ -160,7 +174,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
     ctx.fillRect(0, 0, cssW, cssH);
 
     const keyW = 28;
-    const stripH = 8;
+    const stripH = showStripRef.current ? 8 : 0;
     const plotW = Math.max(1, cssW - keyW);
     const plotH = Math.max(1, cssH - stripH);
     const midiLo = Math.max(12, Math.floor(midiFromHz(fminRef.current)) - 2);
@@ -229,10 +243,12 @@ export function PitchRollChart(props: PitchRollChartProps) {
     }
 
     ctx.strokeStyle = lesser;
-    ctx.beginPath();
-    ctx.moveTo(keyW, plotH);
-    ctx.lineTo(cssW, plotH);
-    ctx.stroke();
+    if (stripH > 0) {
+      ctx.beginPath();
+      ctx.moveTo(keyW, plotH);
+      ctx.lineTo(cssW, plotH);
+      ctx.stroke();
+    }
 
     const buf = dataRef.current;
     if (!buf || buf.length < HIST_CH + 1) {
@@ -255,14 +271,19 @@ export function PitchRollChart(props: PitchRollChartProps) {
       return keyW + plotW * (1 - age / PITCH_ROLL_MS);
     };
 
-    // Pull amount: black (0) → accent (100 ct) → warn (200 ct) → white (400 ct).
-    for (let i = 0; i < slots; ++i) {
-      const corr = Math.abs(data[i * HIST_CH + 4] ?? 0);
-      const x0 = xOf(i);
-      const x1 = i + 1 < slots ? xOf(i + 1) : x0 + 1;
-      const wSlot = Math.max(1, Math.abs(x1 - x0) + 0.5);
-      ctx.fillStyle = corrFill(corr, accent, warn);
-      ctx.fillRect(Math.min(x0, x1), plotH + 1, wSlot, stripH - 1);
+    // Pull amount / confidence strip (tuner).
+    if (stripH > 0) {
+      for (let i = 0; i < slots; ++i) {
+        const corr =
+          modeRef.current === 'octaver'
+            ? (data[i * HIST_CH + 2] ?? 0) * 200
+            : Math.abs(data[i * HIST_CH + 4] ?? 0);
+        const x0 = xOf(i);
+        const x1 = i + 1 < slots ? xOf(i + 1) : x0 + 1;
+        const wSlot = Math.max(1, Math.abs(x1 - x0) + 0.5);
+        ctx.fillStyle = corrFill(corr, accent, warn);
+        ctx.fillRect(Math.min(x0, x1), plotH + 1, wSlot, stripH - 1);
+      }
     }
 
     const strokePitch = (
@@ -270,6 +291,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
       style: string,
       width: number,
       dash: number[],
+      voicedCheck: (flags: number) => boolean = (f) => (f & 1) !== 0,
     ) => {
       ctx.lineWidth = width;
       ctx.strokeStyle = style;
@@ -279,8 +301,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
       for (let i = 0; i < slots; ++i) {
         const midi = midiOf(i);
         const flags = data[i * HIST_CH + 3] ?? 0;
-        const voiced = (flags & 1) !== 0;
-        if (!voiced || !(midi > 12)) {
+        if (!voicedCheck(flags) || !(midi > 12)) {
           started = false;
           continue;
         }
@@ -295,15 +316,40 @@ export function PitchRollChart(props: PitchRollChartProps) {
       ctx.setLineDash([]);
     };
 
-    const inMidi = (i: number) => data[i * HIST_CH + 0] ?? 0;
-    const tgtMidi = (i: number) => data[i * HIST_CH + 1] ?? 0;
-    const outMidi = (i: number) =>
-      inMidi(i) + (data[i * HIST_CH + 4] ?? 0) / 100;
-
-    if (showTargRef.current)
-      strokePitch(tgtMidi, withAlpha(fg, 0.5), 1.5, [4, 3]);
-    if (showInRef.current) {
-      strokePitch(inMidi, accent, 1.8, []);
+    if (modeRef.current === 'octaver') {
+      const inMidi = (i: number) => data[i * HIST_CH + 0] ?? 0;
+      const bitsOf = (i: number) => Math.round(data[i * HIST_CH + 1] ?? 0);
+      // Dry dashed --color; −1 accent; −2 warn; +1 --color; sub least.
+      strokePitch(
+        (i) => ((bitsOf(i) & 1) ? inMidi(i) : 0),
+        withAlpha(fg, 0.85),
+        1.5,
+        [5, 4],
+      );
+      strokePitch(
+        (i) => ((bitsOf(i) & 2) ? inMidi(i) - 12 : 0),
+        accent,
+        1.8,
+        [],
+      );
+      strokePitch(
+        (i) => ((bitsOf(i) & 4) ? inMidi(i) - 24 : 0),
+        warn,
+        1.6,
+        [],
+      );
+      strokePitch(
+        (i) => ((bitsOf(i) & 8) ? inMidi(i) + 12 : 0),
+        fg,
+        1.5,
+        [],
+      );
+      strokePitch(
+        (i) => ((bitsOf(i) & 16) ? inMidi(i) - 12 : 0),
+        least,
+        1.4,
+        [2, 3],
+      );
       for (let i = 0; i < slots; ++i) {
         const flags = data[i * HIST_CH + 3] ?? 0;
         if ((flags & 4) === 0 || (flags & 1) === 0) continue;
@@ -314,13 +360,34 @@ export function PitchRollChart(props: PitchRollChartProps) {
         ctx.arc(xOf(i), yOf(midi), 2.2, 0, Math.PI * 2);
         ctx.fill();
       }
+    } else {
+      const inMidi = (i: number) => data[i * HIST_CH + 0] ?? 0;
+      const tgtMidi = (i: number) => data[i * HIST_CH + 1] ?? 0;
+      const outMidi = (i: number) =>
+        inMidi(i) + (data[i * HIST_CH + 4] ?? 0) / 100;
+
+      if (showTargRef.current)
+        strokePitch(tgtMidi, withAlpha(fg, 0.5), 1.5, [4, 3]);
+      if (showInRef.current) {
+        strokePitch(inMidi, accent, 1.8, []);
+        for (let i = 0; i < slots; ++i) {
+          const flags = data[i * HIST_CH + 3] ?? 0;
+          if ((flags & 4) === 0 || (flags & 1) === 0) continue;
+          const midi = inMidi(i);
+          if (!(midi > 12)) continue;
+          ctx.fillStyle = warn;
+          ctx.beginPath();
+          ctx.arc(xOf(i), yOf(midi), 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      if (showOutRef.current) strokePitch(outMidi, warn, 1.6, []);
     }
-    if (showOutRef.current) strokePitch(outMidi, warn, 1.6, []);
 
     ctx.fillStyle = fg;
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText('10s', cssW - 6, 12);
+    ctx.fillText(`${Math.round(PITCH_ROLL_MS / 1000)}s`, cssW - 6, 12);
     ctx.textAlign = 'left';
   }, []);
 

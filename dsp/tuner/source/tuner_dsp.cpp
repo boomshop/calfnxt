@@ -126,8 +126,11 @@ void TunerPlugin::resetProcessing()
   const BlockState st = makeBlockState();
   const float sr = static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0);
   hopSize_ = std::max(64, static_cast<int>(sr * 0.008));
-  histSamplesPerSlot_ =
-    std::max(1, static_cast<int>(sr * (kHistoryDisplayMs * 0.001f) / float(kHistSlots)));
+  {
+    const int slots = std::max(kHistMinSlots, std::min(kHistSlots, histVisibleSlots_));
+    histSamplesPerSlot_ =
+      std::max(1, static_cast<int>(sr * (kHistoryDisplayMs * 0.001f) / float(slots)));
+  }
   updateLatency(st, false);
 }
 
@@ -279,8 +282,13 @@ tresult PLUGIN_API TunerPlugin::process(ProcessData& data)
   const int latency = static_cast<int>(std::max(1u, latencySamples_));
   const float sr = static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0);
   hopSize_ = std::max(64, static_cast<int>(sr * 0.008));
-  histSamplesPerSlot_ =
-    std::max(1, static_cast<int>(sr * (kHistoryDisplayMs * 0.001f) / float(kHistSlots)));
+  // Pace slots by the *visible* count (vizcfg ≈ chart width), not kHistSlots —
+  // otherwise a ~256-slot roll shows ~5 s while the label still says 10 s.
+  {
+    const int slots = std::max(kHistMinSlots, std::min(kHistSlots, histVisibleSlots_));
+    histSamplesPerSlot_ =
+      std::max(1, static_cast<int>(sr * (kHistoryDisplayMs * 0.001f) / float(slots)));
+  }
 
   const float detectSr = sr / float(detectDecimation());
   const int win = yinWindow(state);
