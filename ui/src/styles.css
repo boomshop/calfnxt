@@ -144,6 +144,13 @@ body,
   overflow: hidden;
 }
 
+::selection,
+input::selection,
+textarea::selection {
+  background: var(--color-accent);
+  color: var(--contrast-accent);
+}
+
 .inactive,
 .aux-inactive {
   opacity: 0.5;
