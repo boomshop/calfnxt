@@ -11,6 +11,12 @@ import {
 import { postToHost } from '../bridge';
 import type { IrNode } from '../irTypes';
 
+export const IMPULSE_QUALITY_ENTRIES = [
+  { label: 'Lo', value: 0 },
+  { label: 'Mid', value: 1 },
+  { label: 'Hi', value: 2 },
+];
+
 export type IImpulseHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
@@ -25,6 +31,7 @@ export type IImpulseHost = {
   amount$: DynamicValue<number>;
   source$: DynamicValue<number>;
   shape$: DynamicValue<number>;
+  quality$: DynamicValue<number>;
   wave$: DynamicValue<number[]>;
   tree$: DynamicValue<IrNode[]>;
   root$: DynamicValue<string>;
@@ -125,6 +132,7 @@ export function createBoundImpulseHost(): IImpulseHost {
     amount$: bindNum('amount', -12),
     source$: bindNum('source', 0),
     shape$: bindNum('shape', 4),
+    quality$: bindNum('quality', 2),
     wave$,
     tree$,
     root$,

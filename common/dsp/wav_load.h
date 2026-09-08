@@ -491,6 +491,56 @@ inline void reverseIr(IrBuffer& ir)
   }
 }
 
+/** Quality 0=Lo mono, 1=Mid stereo L/R, 2=Hi true-stereo when the file has it. */
+inline int irQualityMaxChannels(int quality)
+{
+  const int q = std::clamp(quality, 0, 2);
+  return q <= 0 ? 1 : (q == 1 ? 2 : 4);
+}
+
+/**
+ * Drop extra IR paths for Quality. 4ch→2 keeps LL/RR (no crossfeed).
+ * 4ch/2ch→1 is (LL+RR)/2 or (L+R)/2. No-op when already at or below maxCh.
+ */
+inline void collapseIrChannels(IrBuffer& ir, int maxCh)
+{
+  maxCh = std::clamp(maxCh, 1, 4);
+  if (maxCh == 3)
+    maxCh = 2;
+  if (ir.frames < 1 || ir.channels < 1 || ir.channels <= maxCh)
+    return;
+  const int srcCh = ir.channels;
+  const int dstCh = maxCh;
+  std::vector<float> dst(static_cast<size_t>(ir.frames) * static_cast<size_t>(dstCh), 0.f);
+  for (int i = 0; i < ir.frames; ++i)
+  {
+    const float* s = ir.interleaved.data() + static_cast<size_t>(i * srcCh);
+    float* d = dst.data() + static_cast<size_t>(i * dstCh);
+    if (dstCh == 1)
+    {
+      if (srcCh >= 4)
+        d[0] = 0.5f * (s[0] + s[3]);
+      else
+        d[0] = 0.5f * (s[0] + s[1]);
+    }
+    else
+    {
+      if (srcCh >= 4)
+      {
+        d[0] = s[0];
+        d[1] = s[3];
+      }
+      else
+      {
+        d[0] = s[0];
+        d[1] = s[1];
+      }
+    }
+  }
+  ir.interleaved.swap(dst);
+  ir.channels = dstCh;
+}
+
 /** ~-90 dB as ln(amplitude). Chart overlay uses the same floor as dB. */
 constexpr float kIrDecayLnFloor = -10.3616f;
 constexpr float kIrShapeMin = 1.f;

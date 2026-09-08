@@ -971,6 +971,7 @@ export function applyImpulseDemo(
   setNum(host.amount$, params.amount);
   setNum(host.source$, params.source);
   setNum(host.shape$, params.shape);
+  setNum(host.quality$, params.quality);
   host.root$.set('Halls');
   host.openDirs$.set(['Halls']);
   host.treeScroll$.set(0);

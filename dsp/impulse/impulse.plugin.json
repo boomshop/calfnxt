@@ -162,6 +162,17 @@
       "default": 4.0,
       "scale": "log",
       "precision": 2
+    },
+    {
+      "id": "quality",
+      "name": "Quality",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 2.0,
+      "scale": "linear",
+      "precision": 0
     }
   ]
 }

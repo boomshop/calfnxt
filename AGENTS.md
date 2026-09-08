@@ -310,6 +310,8 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
   on load (~−6 dBFS).
 - Source (wet only; dry stays stereo): Stereo / L / R / L+R. Mono feed into a
   4-ch true-stereo IR uses both virtual inputs so LL+RL / LR+RR still image.
+- Quality Lo/Mid/Hi (default Hi): collapse the IR to mono / stereo L+R /
+  true-stereo before the convolver. No extra PDC. Rebuilds like Decay.
 - Stereo IR: mono→both; stereo L/R; 4-ch true stereo (L→L, L→R, R→L, R→R).
 - Session chunk embeds the raw IR + library root + relative path + open folder
   paths and tree scroll. Last root in `~/.config/calfnxt/impulse-library`.

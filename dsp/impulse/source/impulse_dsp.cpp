@@ -355,6 +355,9 @@ void ImpulsePlugin::resetProcessing()
   reverseFlag_.store(params_[kParamReverse] >= 0.5f ? 1 : 0, std::memory_order_relaxed);
   shapePlain_.store(std::clamp(params_[kParamShape], Dsp::kIrShapeMin, Dsp::kIrShapeMax),
                     std::memory_order_relaxed);
+  qualityPlain_.store(std::clamp(static_cast<int>(std::lround(params_[kParamQuality])), 0, 2),
+                      std::memory_order_relaxed);
+  lastQuality_ = qualityPlain_.load(std::memory_order_relaxed);
   if (conv_)
     conv_->reset();
   if (convPrev_)
@@ -417,6 +420,7 @@ ImpulsePlugin::BlockState ImpulsePlugin::makeBlockState() const
   s.wetDb = params_[kParamAmount];
   s.source = std::clamp(static_cast<int>(std::lround(params_[kParamSource])), 0, 3);
   s.shape = std::clamp(params_[kParamShape], Dsp::kIrShapeMin, Dsp::kIrShapeMax);
+  s.quality = std::clamp(static_cast<int>(std::lround(params_[kParamQuality])), 0, 2);
   return s;
 }
 
@@ -439,6 +443,8 @@ void ImpulsePlugin::rebuildPreparedLocked()
                   shapePlain_.load(std::memory_order_relaxed));
   if (rev)
     Dsp::reverseIr(preparedIr_);
+  Dsp::collapseIrChannels(preparedIr_,
+                          Dsp::irQualityMaxChannels(qualityPlain_.load(std::memory_order_relaxed)));
   waveDirty_.store(true);
 }
 
@@ -717,6 +723,7 @@ tresult PLUGIN_API ImpulsePlugin::process(ProcessData& data)
   decayPlain_.store(state.decay, std::memory_order_relaxed);
   reverseFlag_.store(state.reverse ? 1 : 0, std::memory_order_relaxed);
   shapePlain_.store(state.shape, std::memory_order_relaxed);
+  qualityPlain_.store(state.quality, std::memory_order_relaxed);
 
   takePendingConv(state.bypass);
 
@@ -728,11 +735,12 @@ tresult PLUGIN_API ImpulsePlugin::process(ProcessData& data)
   }
 
   if (std::fabs(state.decay - lastDecay_) > 0.0005f || state.reverse != lastReverse_
-      || std::fabs(state.shape - lastShape_) > 0.01f)
+      || std::fabs(state.shape - lastShape_) > 0.01f || state.quality != lastQuality_)
   {
     lastDecay_ = state.decay;
     lastReverse_ = state.reverse;
     lastShape_ = state.shape;
+    lastQuality_ = state.quality;
     rebuildHold_ = 6;
   }
   if (rebuildHold_ > 0 && --rebuildHold_ == 0)
@@ -802,11 +810,19 @@ tresult PLUGIN_API ImpulsePlugin::process(ProcessData& data)
     ensureScratch(nFrames);
     float* wetL = scratchWetL_.data();
     float* wetR = scratchWetR_.data();
+    const bool foldMono =
+      conv_ && conv_->layout() == Dsp::PartitionedStereoConvolver::Layout::Mono;
     for (int32 i = 0; i < nFrames; ++i)
     {
       float inL = nCh <= 0 ? 0.f : static_cast<float>(out[0][i]);
       float inR = nCh <= 1 ? inL : static_cast<float>(out[1][i]);
       mapWetSource(inL, inR, state.source, wetL[i], wetR[i]);
+      if (foldMono)
+      {
+        const float m = 0.5f * (wetL[i] + wetR[i]);
+        wetL[i] = m;
+        wetR[i] = m;
+      }
       float dL = 0.f, dR = 0.f;
       dryDelay_.process(inL, inR, drySamps, dL, dR);
       out[0][i] = dL;
@@ -915,6 +931,9 @@ tresult PLUGIN_API ImpulsePlugin::setState(IBStream* state)
   lastDecay_ = decayPlain_.load(std::memory_order_relaxed);
   lastReverse_ = reverseFlag_.load(std::memory_order_relaxed) != 0;
   lastShape_ = shapePlain_.load(std::memory_order_relaxed);
+  qualityPlain_.store(std::clamp(static_cast<int>(std::lround(params_[kParamQuality])), 0, 2),
+                      std::memory_order_relaxed);
+  lastQuality_ = qualityPlain_.load(std::memory_order_relaxed);
 
   std::string root, sel;
   if (!readStr(streamer, root) || !readStr(streamer, sel))

@@ -12,7 +12,11 @@ import {
   WithInfo,
 } from '../../widgets';
 import { paramIds } from '../../generated/impulseModel';
-import { impulseParamDefault, type IImpulseHost } from '../../host/impulseHost';
+import {
+  IMPULSE_QUALITY_ENTRIES,
+  impulseParamDefault,
+  type IImpulseHost,
+} from '../../host/impulseHost';
 import type { IrNode } from '../../irTypes';
 import { impulseInfo } from './impulseInfo';
 import '../PluginUI.scss';
@@ -153,6 +157,7 @@ export function ImpulseUI(props: ImpulseUIProps) {
   const status = useDynamicValueReadonly(host.status$, '');
   const root = useDynamicValueReadonly(host.root$, '');
   const source = useDynamicValueReadonly(host.source$, 0);
+  const quality = useDynamicValueReadonly(host.quality$, 2);
   const openList = useDynamicValueReadonly(host.openDirs$, []);
   const scrollFromHost = useDynamicValueReadonly(host.treeScroll$, 0);
   const [query, setQuery] = useState('');
@@ -210,6 +215,17 @@ export function ImpulseUI(props: ImpulseUIProps) {
               host.beginEdit(paramIds.source);
               host.source$.set(v);
               host.endEdit(paramIds.source);
+            }}
+          />
+        </WithInfo>
+        <WithInfo title={impulseInfo.quality} className="info-block">
+          <Buttons
+            entries={IMPULSE_QUALITY_ENTRIES}
+            value={Math.round(quality)}
+            onChange={(v) => {
+              host.beginEdit(paramIds.quality);
+              host.quality$.set(v);
+              host.endEdit(paramIds.quality);
             }}
           />
         </WithInfo>

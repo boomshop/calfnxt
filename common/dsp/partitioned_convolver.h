@@ -13,6 +13,11 @@
 #include <cstring>
 #include <vector>
 
+#if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64)
+#include <xmmintrin.h>
+#define CALFNXT_CONV_SSE 1
+#endif
+
 namespace calfNXT {
 namespace Dsp {
 
@@ -250,10 +255,26 @@ private:
   {
     const float* hRe = hRe_.data() + (ir * nParts_ + part) * kBins;
     const float* hIm = hIm_.data() + (ir * nParts_ + part) * kBins;
-    for (int k = 0; k < kBins; ++k)
+    float* accRe = accRe_.data();
+    float* accIm = accIm_.data();
+    int k = 0;
+#if defined(CALFNXT_CONV_SSE)
+    for (; k + 4 <= kBins; k += 4)
     {
-      accRe_[static_cast<size_t>(k)] += xRe[k] * hRe[k] - xIm[k] * hIm[k];
-      accIm_[static_cast<size_t>(k)] += xRe[k] * hIm[k] + xIm[k] * hRe[k];
+      const __m128 xr = _mm_loadu_ps(xRe + k);
+      const __m128 xi = _mm_loadu_ps(xIm + k);
+      const __m128 hr = _mm_loadu_ps(hRe + k);
+      const __m128 hi = _mm_loadu_ps(hIm + k);
+      const __m128 ar = _mm_loadu_ps(accRe + k);
+      const __m128 ai = _mm_loadu_ps(accIm + k);
+      _mm_storeu_ps(accRe + k, _mm_add_ps(ar, _mm_sub_ps(_mm_mul_ps(xr, hr), _mm_mul_ps(xi, hi))));
+      _mm_storeu_ps(accIm + k, _mm_add_ps(ai, _mm_add_ps(_mm_mul_ps(xr, hi), _mm_mul_ps(xi, hr))));
+    }
+#endif
+    for (; k < kBins; ++k)
+    {
+      accRe[k] += xRe[k] * hRe[k] - xIm[k] * hIm[k];
+      accIm[k] += xRe[k] * hIm[k] + xIm[k] * hRe[k];
     }
   }
 

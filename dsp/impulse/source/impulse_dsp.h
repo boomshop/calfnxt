@@ -75,6 +75,7 @@ private:
     float wetDb = -12.f;
     int source = 0;
     float shape = 4.f;
+    int quality = 2;
   };
 
   enum class JobKind
@@ -167,10 +168,12 @@ private:
   float lastDecay_ = 1.f;
   bool lastReverse_ = false;
   float lastShape_ = 4.f;
+  int lastQuality_ = 2;
   int rebuildHold_ = 0;
   std::atomic<float> decayPlain_ {1.f};
   std::atomic<int> reverseFlag_ {0};
   std::atomic<float> shapePlain_ {4.f};
+  std::atomic<int> qualityPlain_ {2};
   std::atomic<double> workerSr_ {44100.0};
 };
 

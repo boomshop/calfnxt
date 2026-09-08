@@ -5,6 +5,12 @@ export const impulseInfo = {
   source:
     'What feeds the IR — dry stays the original stereo so an insert does not collapse the source. Stereo = L and R independently (true-stereo files use all four paths). L or R = that channel into both convolver inputs: a mono send from one side, or a true-stereo hall “from the left/right speaker.” L+R = (L+R)/2 into both — the usual vocal/bus mono-into-the-room without a 6 dB bump when the sides agree. On a send you will often want L+R even on a stereo track so the image of the dry is not baked into the wet twice. Stereo IRs still come back as stereo from a mono feed; they just share one source.',
 
+  quality:
+    'CPU vs how much of the IR’s spatial wiring actually runs. Rebuilds the engine like Decay, so it is not a click-free live stutter — flip it while stopped if the host is picky. Hop latency stays 512 samples either way.\n\n' +
+    'Lo — one mono impulse: stereo files become (L+R)/2, true-stereo files (LL+RR)/2. About 2× cheaper than Mid and 4× cheaper than Hi on a 4-channel hall. The wet image is the same in both speakers; use it for stacks of instances, mono sends, or a weak CPU. A mono WAV does not get cheaper.\n\n' +
+    'Mid — stereo L/R only. True-stereo files keep LL and RR and drop the wrap-around (L→R / R→L). Half the work of Hi, still a left/right room. Typical stereo IRs already are this.\n\n' +
+    'Hi — default / as captured. Four-channel true-stereo IRs use all paths (L→L, L→R, R→L, R→R). Leave it here when the file is the featured space and CPU allows.',
+
   decay:
     'Shortens the captured tail without inventing extra reverb. 100% = the IR as recorded — no extra fade, and the overlay on the waveform disappears. Lower values apply a fade and truncate: the hall dies earlier, denser, less wash. Shape is how that extra envelope falls; the handle on the waveform is this same length control. Loading another file snaps Decay back to 100% (and turns Reverse off) so you hear the new capture as it is. Dragging past the original length does nothing: a measured IR cannot honestly get longer. If the room vanished, you went too short; if it still clouds the source, go further down and check Mix.',
 
