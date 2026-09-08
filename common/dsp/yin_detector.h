@@ -94,6 +94,23 @@ public:
     }
     result_.rms = std::sqrt(static_cast<float>(energy / std::max(1, win)));
 
+    // Digital silence / far below any voiced floor (~0.002): skip the 2win
+    // autocorrelation FFT, IFFT, and spectrum FFT. Still run the unvoiced hold
+    // below so a note-off does not drop the lock in a single hop.
+    const bool silent = peak < 1.0e-6f || result_.rms < 1.0e-4f;
+    if (silent)
+    {
+      result_.breath = true;
+      result_.sibilant = false;
+      result_.voiced = false;
+      result_.periodic = false;
+      result_.flatness = 1.f;
+      result_.hfRatio = 0.f;
+      result_.confidence = 0.f;
+      cmndReady_ = false;
+    }
+    else
+    {
     // Prefix sum of squares for the difference function.
     prefixSq_[0] = 0.f;
     for (int i = 0; i < win; ++i)
@@ -297,6 +314,7 @@ public:
       else
         octaveHold_ = 0;
     }
+    } // !silent (autocorrelation + spectrum)
 
     if (!result_.voiced)
     {
@@ -328,7 +346,8 @@ public:
         trackF0_ = result_.f0Hz;
     }
 
-    cmndReady_ = true;
+    if (!silent)
+      cmndReady_ = true;
     return result_;
   }
 
