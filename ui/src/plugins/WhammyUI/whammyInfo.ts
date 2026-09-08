@@ -2,6 +2,9 @@ export const whammyInfo = {
   bypass:
     'Turns the shifter off so you hear the delayed dry path (In/Out gains still apply). Latency stays reported to the host so timing does not jump. A/B whether the throw is adding drama or just making the part sound thin and grainy.',
 
+  mono:
+    'Process the Left channel only and copy the result to both outs. Halves the Hermite delay reads — free CPU on mono guitar/bass DI or a single vocal. Right-channel content is ignored while on. Leave off for real stereo that should keep its image through the throw.',
+
   pitch:
     'The pedal. Centre is unison; up raises pitch (chipmunk / dive-up), down drops it (monster / dive-bomb), ±24 semitones = two octaves either way. This is a blind delay-line shift, not a tuner: chords survive, formants ride along with the pitch, and there is no “wrong note” for the detector to grab. Automate this like an expression pedal. Extreme throws get grainier — that is the vintage character, not a bug.',
 

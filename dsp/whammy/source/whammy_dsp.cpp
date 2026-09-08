@@ -14,7 +14,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5857u; // 'CNXW'
-constexpr uint32 kStateVersion = 1;
+constexpr uint32 kStateVersion = 2; // + mono (trailing)
 
 // Grain length → latency ≈ half of this (Fast ~8 ms at 48 kHz).
 constexpr float kGrainMs[4] = {16.f, 32.f, 64.f, 128.f};
@@ -130,6 +130,7 @@ WhammyPlugin::BlockState WhammyPlugin::makeBlockState() const
 {
   BlockState s;
   s.bypass = params_[kParamBypass] >= 0.5f;
+  s.mono = params_[kParamMono] >= 0.5f;
   s.quality = static_cast<int>(std::lround(std::clamp(params_[kParamQuality], 0.f, 3.f)));
   s.pitch = snapPitchPlain(params_[kParamPitch], params_[kParamSnap]);
   s.mix = std::clamp(params_[kParamMix], 0.f, 1.f);
@@ -149,6 +150,7 @@ tresult PLUGIN_API WhammyPlugin::process(ProcessData& data)
 
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
+  shifter_.setMono(state.mono);
 
   if (!data.outputs || data.numOutputs < 1 || data.numSamples <= 0)
     return kResultOk;

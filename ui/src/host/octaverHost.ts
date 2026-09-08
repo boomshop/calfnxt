@@ -126,6 +126,7 @@ export function octaverSourceDefaults(profile: number): OctaverProfileDefaults {
 export type IOctaverHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  mono$: DynamicValue<boolean>;
   profile$: DynamicValue<number>;
   quality$: DynamicValue<number>;
   octaveProtect$: DynamicValue<number>;
@@ -182,7 +183,8 @@ export function octaverParamDefault(
   if (
     id.endsWith('_on') ||
     id.endsWith('_listen') ||
-    id === 'bypass'
+    id === 'bypass' ||
+    id === 'mono'
   )
     return p.default >= 0.5;
   return p.default;
@@ -190,6 +192,7 @@ export function octaverParamDefault(
 
 export function createBoundOctaverHost(): IOctaverHost {
   const bypass$ = DynamicValue.fromConstant(false);
+  const mono$ = DynamicValue.fromConstant(false);
   const profile$ = DynamicValue.fromConstant(0);
   const quality$ = DynamicValue.fromConstant(0.75);
   const octaveProtect$ = DynamicValue.fromConstant(0.9);
@@ -240,6 +243,7 @@ export function createBoundOctaverHost(): IOctaverHost {
   );
 
   bindBoolParamToHost(bypass$, paramIds.bypass);
+  bindBoolParamToHost(mono$, paramIds.mono);
   bindParamToHost(profile$, paramIds.profile);
   bindParamToHost(quality$, paramIds.quality);
   bindParamToHost(octaveProtect$, paramIds.octave_protect);
@@ -349,6 +353,7 @@ export function createBoundOctaverHost(): IOctaverHost {
   return {
     meta: pluginMeta,
     bypass$,
+    mono$,
     profile$,
     quality$,
     octaveProtect$,

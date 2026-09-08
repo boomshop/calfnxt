@@ -60,6 +60,7 @@ private:
   struct BlockState
   {
     bool bypass = false;
+    bool mono = false;
     int source = 0; // 0=voice, 1=strings, 2=guitar
     float quality = 0.75f;
     float formant = 0.85f;

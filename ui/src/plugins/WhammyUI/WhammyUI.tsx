@@ -118,6 +118,9 @@ export function WhammyUI(props: WhammyUIProps) {
   return (
     <div className="WhammyUI PluginUI">
       <Header title="Whammy">
+        <WithInfo title={whammyInfo.mono}>
+          <Toggle state$={host.mono$} icon="stereo" icon_active="mono" />
+        </WithInfo>
         <WithInfo title={whammyInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>

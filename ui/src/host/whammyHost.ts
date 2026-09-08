@@ -18,6 +18,7 @@ export const WHAMMY_QUALITY_ENTRIES = [
 export type IWhammyHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  mono$: DynamicValue<boolean>;
   pitch$: DynamicValue<number>;
   snap$: DynamicValue<number>;
   quality$: DynamicValue<number>;
@@ -69,6 +70,7 @@ export function createBoundWhammyHost(): IWhammyHost {
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    mono$: bindBool('mono'),
     pitch$: bindNum('pitch', 0, (v) => snapWhammyPitch(v, snap$.value)),
     snap$,
     quality$: bindNum('quality', 2),

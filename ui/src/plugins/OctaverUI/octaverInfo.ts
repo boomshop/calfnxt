@@ -2,6 +2,9 @@ export const octaverInfo = {
   bypass:
     'Turns the octaver off so you hear the delayed dry path (In/Out gains still apply). Latency stays reported to the host so timing does not jump. A/B whether the layers are fattening the part or muddying it.',
 
+  mono:
+    'Process the Left channel only and copy the result to both outs. Roughly halves PSOLA grain work across −1/−2/+1 — ideal on mono bass DI, cello, or a single vocal. Right-channel content is ignored while on; Detect still follows Left when set to Mid/Mix. Balance on each voice still pans the mono result.',
+
   profile:
     'Starting points for bass, cello, voice, and guitar — writes Low/High, Unvoiced, Octave protect, Quality, and which voices are on with sensible levels. After the click the knobs are the truth. Click again to reset that source’s defaults. Bass is the default home: Dry + Sub.',
 

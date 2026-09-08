@@ -44,6 +44,7 @@ private:
   struct BlockState
   {
     bool bypass = false;
+    bool mono = false;
     int quality = 2;
     float pitch = 0.f;
     float mix = 1.f;

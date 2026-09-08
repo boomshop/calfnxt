@@ -66,6 +66,7 @@ private:
   struct BlockState
   {
     bool bypass = false;
+    bool mono = false;
     int profile = 0; // 0=bass, 1=cello, 2=voice, 3=guitar
     float quality = 0.75f;
     float octaveProtect = 0.9f;

@@ -142,6 +142,9 @@ export function OctaverUI(props: OctaverUIProps) {
   return (
     <div className="OctaverUI PluginUI">
       <Header title="Octaver" io={headerIo}>
+        <WithInfo title={octaverInfo.mono}>
+          <Toggle state$={host.mono$} icon="stereo" icon_active="mono" />
+        </WithInfo>
         <WithInfo title={octaverInfo.bypass} className="bypass">
           <Toggle state$={host.bypass$} icon="bypass" />
         </WithInfo>

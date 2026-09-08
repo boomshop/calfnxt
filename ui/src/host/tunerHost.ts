@@ -157,6 +157,7 @@ export function tunerSourceDefaults(profile: number): TunerProfileDefaults {
 export type ITunerHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  mono$: DynamicValue<boolean>;
   profile$: DynamicValue<number>;
   quality$: DynamicValue<number>;
   formant$: DynamicValue<number>;
@@ -275,6 +276,7 @@ export function createBoundTunerHost(): ITunerHost {
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    mono$: bindBool('mono'),
     profile$,
     quality$: bindNum('quality', 0.65),
     formant$,

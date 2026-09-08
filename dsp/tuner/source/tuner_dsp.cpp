@@ -15,7 +15,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x54554e52u; // 'TUNR'
-constexpr uint32 kStateVersion = 1;
+constexpr uint32 kStateVersion = 2; // + mono (trailing)
 
 int nextPow2(int v)
 {
@@ -154,6 +154,7 @@ TunerPlugin::BlockState TunerPlugin::makeBlockState() const
 {
   BlockState s;
   s.bypass = params_[kParamBypass] >= 0.5f;
+  s.mono = params_[kParamMono] >= 0.5f;
   s.source = std::clamp(static_cast<int>(std::lround(params_[kParamProfile])), 0, 2);
   s.quality = std::clamp(params_[kParamQuality], 0.f, 1.f);
   s.formant = std::clamp(params_[kParamFormant], 0.f, 1.f);
@@ -209,18 +210,29 @@ void TunerPlugin::histFeed(float inMidi, float tgtMidi, float conf, float flags,
   if (histSampleCount_ >= histSamplesPerSlot_)
   {
     histSampleCount_ = 0;
+    {
+      std::lock_guard<std::mutex> lock(histMutex_);
+      histSnapshot_[pos + 0] = inMidi;
+      histSnapshot_[pos + 1] = tgtMidi;
+      histSnapshot_[pos + 2] = conf;
+      histSnapshot_[pos + 3] = flags;
+      histSnapshot_[pos + 4] = corrCents;
+      histSnapshotPos_ = pos;
+      histSnapshotSampleCount_ = 0;
+      histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
+    }
     histPos_ = (histPos_ + kHistChannels) % kHistBufSize;
     histBuf_[histPos_ + 0] = inMidi;
     histBuf_[histPos_ + 1] = tgtMidi;
     histBuf_[histPos_ + 2] = conf;
     histBuf_[histPos_ + 3] = flags;
     histBuf_[histPos_ + 4] = corrCents;
-    publishHistSnapshot();
   }
 }
 
 void TunerPlugin::publishHistSnapshot()
 {
+  // Kept for reset / full sync — UI path uses per-slot publish in histFeed.
   std::lock_guard<std::mutex> lock(histMutex_);
   std::memcpy(histSnapshot_, histBuf_, sizeof(histBuf_));
   histSnapshotPos_ = histPos_;
@@ -272,6 +284,7 @@ tresult PLUGIN_API TunerPlugin::process(ProcessData& data)
 
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
+  psola_.setMono(state.mono);
 
   if (!data.outputs || data.numOutputs < 1 || data.numSamples <= 0)
     return kResultOk;
@@ -402,7 +415,8 @@ tresult PLUGIN_API TunerPlugin::process(ProcessData& data)
           gate = 0.f;
         }
         hopPeriodTo_ = std::max(16.f, period);
-        psola_.setWetGate(gate);
+        // Bypass ducks wet via the same crossfade as unvoiced (automation-safe).
+        psola_.setWetGate(state.bypass ? 0.f : gate);
       }
 
       const auto& cor = corrector_.last();
@@ -410,12 +424,15 @@ tresult PLUGIN_API TunerPlugin::process(ProcessData& data)
       const float ratio = hopRatioFrom_ + (hopRatioTo_ - hopRatioFrom_) * hopT;
       const float period = hopPeriodFrom_ + (hopPeriodTo_ - hopPeriodFrom_) * hopT;
 
+      if (state.bypass)
+        psola_.setWetGate(0.f);
+
       float wetL = 0.f, wetR = 0.f, dryL = 0.f, dryR = 0.f;
       psola_.process(period, ratio, state.formant, latency, wetL, wetR, dryL, dryR);
 
-      // Always run PSOLA (identity at ratio=1). Bypass is delayed dry so PDC stays valid.
-      float oL = state.bypass ? dryL : wetL * cor.tremolo;
-      float oR = state.bypass ? dryR : wetR * cor.tremolo;
+      // Always run PSOLA (identity at ratio=1). Bypass uses wet (→ delayed dry).
+      float oL = state.bypass ? wetL : wetL * cor.tremolo;
+      float oR = state.bypass ? wetR : wetR * cor.tremolo;
 
       float flags = 0.f;
       if (cor.voiced)

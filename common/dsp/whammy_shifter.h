@@ -34,6 +34,9 @@ public:
     parked_ = true;
   }
 
+  /** Process Left only and copy to Right (halves Hermite reads). */
+  void setMono(bool m) { mono_ = m; }
+
   /** Grain length in samples (Fast/Normal/Smooth/Studio). Parks the read at centre. */
   void setGrain(int samples)
   {
@@ -82,10 +85,10 @@ public:
                float& outL, float& outR)
   {
     l_[w_] = inL;
-    r_[w_] = inR;
+    r_[w_] = mono_ ? inL : inR;
 
     const float dryL = l_[(w_ - lat_) & mask_];
-    const float dryR = r_[(w_ - lat_) & mask_];
+    const float dryR = mono_ ? dryL : r_[(w_ - lat_) & mask_];
 
     // Park at a single tap around unison so Mix / return-to-zero is not a comb.
     const float shifterAmt =
@@ -111,19 +114,29 @@ public:
           d1 -= span_;
 
         float aL = 0.f, aR = 0.f, bL = 0.f, bR = 0.f;
-        readHermite(delay_, aL, aR);
-        readHermite(d1, bL, bR);
+        if (mono_)
+        {
+          readHermiteL(delay_, aL);
+          readHermiteL(d1, bL);
+          aR = aL;
+          bR = bL;
+        }
+        else
+        {
+          readHermite(delay_, aL, aR);
+          readHermite(d1, bL, bR);
+        }
 
         const float c = sineTurns((delay_ - dMin_) * invSpan_ + 0.25f);
         const float w0 = 0.5f * (1.f - c);
         const float w1 = 0.5f * (1.f + c);
         wetL = aL * w0 + bL * w1;
-        wetR = aR * w0 + bR * w1;
+        wetR = mono_ ? wetL : (aR * w0 + bR * w1);
 
         if (shifterAmt < 1.f)
         {
           wetL = dryL + (wetL - dryL) * shifterAmt;
-          wetR = dryR + (wetR - dryR) * shifterAmt;
+          wetR = mono_ ? wetL : (dryR + (wetR - dryR) * shifterAmt);
         }
       }
     }
@@ -143,7 +156,13 @@ public:
     }
 
     wetL = toneLp(wetL, toneL_);
-    wetR = toneLp(wetR, toneR_);
+    if (mono_)
+    {
+      toneR_ = toneL_;
+      wetR = wetL;
+    }
+    else
+      wetR = toneLp(wetR, toneR_);
 
     if (mix >= 1.f)
     {
@@ -153,7 +172,7 @@ public:
     }
     const float dryAmt = 1.f - mix;
     outL = wetL * mix + dryL * dryAmt;
-    outR = wetR * mix + dryR * dryAmt;
+    outR = mono_ ? outL : (wetR * mix + dryR * dryAmt);
   }
 
 private:
@@ -175,6 +194,17 @@ private:
     const int i3 = (w_ - (i - 2)) & mask_;
     oL = hermite4(l_[i0], l_[i1], l_[i2], l_[i3], frac);
     oR = hermite4(r_[i0], r_[i1], r_[i2], r_[i3], frac);
+  }
+
+  void readHermiteL(float delay, float& oL) const
+  {
+    const int i = static_cast<int>(delay);
+    const float frac = delay - float(i);
+    const int i0 = (w_ - (i + 1)) & mask_;
+    const int i1 = (w_ - i) & mask_;
+    const int i2 = (w_ - (i - 1)) & mask_;
+    const int i3 = (w_ - (i - 2)) & mask_;
+    oL = hermite4(l_[i0], l_[i1], l_[i2], l_[i3], frac);
   }
 
   float toneLp(float x, float& y) const
@@ -201,6 +231,7 @@ private:
   float toneL_ = 0.f;
   float toneR_ = 0.f;
   bool parked_ = true;
+  bool mono_ = false;
 };
 
 } // namespace Dsp

@@ -824,6 +824,7 @@ export function applyTunerDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setBool(host.mono$, params.mono);
   setNum(host.profile$, params.profile);
   setNum(host.quality$, params.quality);
   setNum(host.formant$, params.formant);
@@ -877,6 +878,7 @@ export function applyOctaverDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setBool(host.mono$, params.mono);
   setNum(host.profile$, params.profile);
   setNum(host.quality$, params.quality);
   setNum(host.octaveProtect$, params.octave_protect);
@@ -939,6 +941,7 @@ export function applyWhammyDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setBool(host.mono$, params.mono);
   setNum(host.pitch$, params.pitch);
   setNum(host.snap$, params.snap);
   setNum(host.quality$, params.quality);

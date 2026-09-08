@@ -16,7 +16,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x4f435456u; // 'OCTV'
-constexpr uint32 kStateVersion = 1;
+constexpr uint32 kStateVersion = 2; // + mono (trailing)
 
 int nextPow2(int v)
 {
@@ -191,6 +191,7 @@ OctaverPlugin::BlockState OctaverPlugin::makeBlockState() const
 {
   BlockState s;
   s.bypass = params_[kParamBypass] >= 0.5f;
+  s.mono = params_[kParamMono] >= 0.5f;
   s.profile = std::clamp(static_cast<int>(std::lround(params_[kParamProfile])), 0, 3);
   s.quality = std::clamp(params_[kParamQuality], 0.f, 1.f);
   s.octaveProtect = std::clamp(params_[kParamOctaveProtect], 0.f, 1.f);
@@ -276,13 +277,23 @@ void OctaverPlugin::histFeed(float inMidi, float layerBits, float conf, float fl
   if (histSampleCount_ >= histSamplesPerSlot_)
   {
     histSampleCount_ = 0;
+    {
+      std::lock_guard<std::mutex> lock(histMutex_);
+      histSnapshot_[pos + 0] = inMidi;
+      histSnapshot_[pos + 1] = layerBits;
+      histSnapshot_[pos + 2] = conf;
+      histSnapshot_[pos + 3] = flags;
+      histSnapshot_[pos + 4] = 0.f;
+      histSnapshotPos_ = pos;
+      histSnapshotSampleCount_ = 0;
+      histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
+    }
     histPos_ = (histPos_ + kHistChannels) % kHistBufSize;
     histBuf_[histPos_ + 0] = inMidi;
     histBuf_[histPos_ + 1] = layerBits;
     histBuf_[histPos_ + 2] = conf;
     histBuf_[histPos_ + 3] = flags;
     histBuf_[histPos_ + 4] = 0.f;
-    publishHistSnapshot();
   }
 }
 
@@ -363,6 +374,9 @@ tresult PLUGIN_API OctaverPlugin::process(ProcessData& data)
 
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
+  psolaM1_.setMono(state.mono);
+  psolaM2_.setMono(state.mono);
+  psolaP1_.setMono(state.mono);
 
   if (!data.outputs || data.numOutputs < 1 || data.numSamples <= 0)
     return kResultOk;
@@ -582,10 +596,12 @@ tresult PLUGIN_API OctaverPlugin::process(ProcessData& data)
       const float hopT = hopSize_ > 1 ? float(hopCount_) / float(hopSize_) : 1.f;
       float period = Dsp::octaverPsolaPeriod(pitch_, hopT);
 
-      if (pitch_.wetGate > 0.5f)
+      // Bypass ducks layers via the same wetGate crossfade (automation-safe).
+      const float gateTarget = state.bypass ? 0.f : pitch_.wetGate;
+      if (gateTarget > 0.5f)
         wetGateSm_ = 1.f;
       else
-        wetGateSm_ += (pitch_.wetGate - wetGateSm_) * attackCoeff;
+        wetGateSm_ += (gateTarget - wetGateSm_) * attackCoeff;
       Dsp::sanitizeDenormal(wetGateSm_);
 
       // Wet grains on m1 track the pitch whenever the detector gate is open.
@@ -644,6 +660,7 @@ tresult PLUGIN_API OctaverPlugin::process(ProcessData& data)
       float oR = 0.f;
       if (state.bypass)
       {
+        // Delayed dry (PDC). wetGateSm_→0 keeps PSOLA on the dry fastpath.
         oL = dryL;
         oR = dryR;
       }

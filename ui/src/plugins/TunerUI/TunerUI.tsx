@@ -191,6 +191,9 @@ export function TunerUI(props: TunerUIProps) {
             <Toggle state$={showOut$} label="Out" className="trace-out" />
           </WithInfo>
         </div>
+        <WithInfo title={tunerInfo.mono}>
+          <Toggle state$={host.mono$} icon="stereo" icon_active="mono" />
+        </WithInfo>
         <WithInfo title={tunerInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>

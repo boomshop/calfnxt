@@ -46,10 +46,13 @@ public:
       grains_[i] = {};
   }
 
+  /** Process Left only and copy to Right (halves grain reads). */
+  void setMono(bool m) { mono_ = m; }
+
   void write(float inL, float inR)
   {
     l_[w_] = inL;
-    r_[w_] = inR;
+    r_[w_] = mono_ ? inL : inR;
     w_ = (w_ + 1) & kMask;
   }
 
@@ -201,6 +204,22 @@ public:
       markIndex_ = (w_ - latency) & kMask;
     }
 
+    dryL = read(0, latency);
+    dryR = mono_ ? dryL : read(1, latency);
+
+    // Bypass / unvoiced: keep delay + marks, skip grain spawn/sum once dry.
+    if (mix_ < 0.02f && wetGate_ < 0.02f && nGrains_ <= 0)
+    {
+      const float target = wetGate_;
+      const float rate = target > mix_ ? mixAttackRate_ : mixReleaseRate_;
+      mix_ += (target - mix_) * rate;
+      outL = dryL;
+      outR = dryR;
+      sanitizeDenormal(outL);
+      sanitizeDenormal(outR);
+      return;
+    }
+
     // Spawn when mostly wet — lower threshold avoids grain train gaps that click.
     if (wetGate_ > 0.25f)
     {
@@ -211,9 +230,6 @@ public:
         spawnGrain(grainLen, stretch, gain);
       }
     }
-
-    dryL = read(0, latency);
-    dryR = read(1, latency);
 
     float accL = 0.f;
     float accR = 0.f;
@@ -233,7 +249,8 @@ public:
       const float delay = float(dist) - (t - g.length * 0.5f) * g.stretch;
       const float w = hann * g.gain;
       accL += w * readLerp(0, delay);
-      accR += w * readLerp(1, delay);
+      if (!mono_)
+        accR += w * readLerp(1, delay);
       ++g.pos;
       ++i;
     }
@@ -243,6 +260,8 @@ public:
       accL = dryL;
       accR = dryR;
     }
+    else if (mono_)
+      accR = accL;
 
     // Crossfade wet↔delayed-dry (xf-hp-v3 timing — best plop scores).
     // Only strip sub/LF from (wet−dry) while slewing: stronger HP (~120 Hz)
@@ -254,23 +273,31 @@ public:
     const bool slewing = std::fabs(target - mix_) > 0.0008f || std::fabs(mix_ - before) > 1.0e-6f;
 
     float diffL = accL - dryL;
-    float diffR = accR - dryR;
+    float diffR = mono_ ? diffL : (accR - dryR);
     if (slewing)
     {
       // ~30 Hz — thump/plop only, leave mids alone (less phaser artefact).
       xfLpL_ += 0.004f * (diffL - xfLpL_);
-      xfLpR_ += 0.004f * (diffR - xfLpR_);
       diffL -= xfLpL_;
-      diffR -= xfLpR_;
+      if (mono_)
+      {
+        xfLpR_ = xfLpL_;
+        diffR = diffL;
+      }
+      else
+      {
+        xfLpR_ += 0.004f * (diffR - xfLpR_);
+        diffR -= xfLpR_;
+      }
     }
     else
     {
       xfLpL_ *= 0.995f;
-      xfLpR_ *= 0.995f;
+      xfLpR_ = mono_ ? xfLpL_ : xfLpR_ * 0.995f;
     }
 
     outL = dryL + diffL * mix_;
-    outR = dryR + diffR * mix_;
+    outR = mono_ ? outL : (dryR + diffR * mix_);
     if (mix_ < 0.02f && wetGate_ < 0.02f)
       nGrains_ = 0;
 
@@ -316,6 +343,7 @@ private:
   float mixReleaseRate_ = 0.0035f;
   float xfLpL_ = 0.f;
   float xfLpR_ = 0.f;
+  bool mono_ = false;
 };
 
 } // namespace Dsp

@@ -4,6 +4,9 @@ export const tunerInfo = {
   bypass:
     'Turns pitch correction off so you hear the delayed dry path (In/Out gains still apply). Latency stays reported to the host so timing does not jump. A/B whether the correction is saving the take or flattening life out of it.',
 
+  mono:
+    'Process the Left channel only and copy the result to both outs. Roughly halves PSOLA grain reads — ideal on mono vocals, DI bass, or single-mic strings. Right-channel content is ignored while on; Detect still follows Left when set to Mid/Mix.',
+
   profile:
     'Starting points, like Reverb rooms — not a hidden extra law. Voice / Strings / Guitar write range, retune, threshold, flex, Keep, formant, unvoiced, and octave protection, and also pick hidden detector constants (voiced/unvoiced floors, note-centre smoothing, added-vibrato width). After the click, the knobs are the truth. Click again to reset that source’s defaults. Cher snap is Retune / Keep, not a fourth source. Bass lives under Guitar: drop Low to ~31 Hz (B0) for a 5-string; 4-string E can sit near 40 Hz.',
 
