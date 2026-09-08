@@ -156,8 +156,13 @@ tresult PLUGIN_API WhammyPlugin::process(ProcessData& data)
   const bool hasHostAudio = io_.begin(data);
 
   const float sr = static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0);
+  shifter_.setTone(state.tone, sr);
   const float tau = std::max(0.0005f, state.glideMs * 0.001f);
   const float coeff = 1.f - std::exp(-1.f / (sr * tau));
+  const bool gliding = std::fabs(state.pitch - pitchSm_) > 1e-4f;
+  if (!gliding)
+    pitchSm_ = state.pitch;
+  float ratio = std::exp2(pitchSm_ / 12.f);
 
   const int32 nFrames = data.numSamples;
   const int32 nCh = data.outputs[0].numChannels;
@@ -173,12 +178,15 @@ tresult PLUGIN_API WhammyPlugin::process(ProcessData& data)
       if (zeros)
         R = 0.f;
 
-      pitchSm_ += (state.pitch - pitchSm_) * coeff;
-      const float ratio = std::exp2(pitchSm_ / 12.f);
+      if (gliding)
+      {
+        pitchSm_ += (state.pitch - pitchSm_) * coeff;
+        ratio = std::exp2(pitchSm_ / 12.f);
+      }
 
       float oL = 0.f;
       float oR = 0.f;
-      shifter_.process(L, R, ratio, state.tone, state.mix, state.bypass, sr, oL, oR);
+      shifter_.process(L, R, ratio, std::fabs(pitchSm_), state.mix, state.bypass, oL, oR);
       if (nCh > 0)
         out[0][i] = oL;
       if (nCh > 1)
