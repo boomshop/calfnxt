@@ -14,9 +14,12 @@ import { paramIds, pluginMeta } from '../../generated/tunerModel';
 import {
   TUNER_DETECT_ENTRIES,
   TUNER_KEY_ENTRIES,
+  TUNER_KEY_NONE,
   TUNER_NOTE_LABELS,
   TUNER_PROFILE_ENTRIES,
   TUNER_REF_ENTRIES,
+  TUNER_SCALE_CUSTOM,
+  TUNER_SCALE_ENTRIES,
   TUNER_SCALE_TEMPLATES,
   TUNER_VIZ_ID,
   tunerParamDefault,
@@ -142,28 +145,29 @@ export function TunerUI(props: TunerUIProps) {
   const profile = useDynamicValueReadonly(host.profile$, 0);
   const detect = useDynamicValueReadonly(host.detect$, 0);
   const src = tunerSourceDefaults(profile);
-  const [key, setKey] = useState(0);
+  // Scale / Key are session UI only (DSP stores the 12 note bits). No reverse
+  // match from bits — after reload labels reset; edits stay consistent in-session.
+  const [key, setKey] = useState(TUNER_KEY_NONE);
   const scale$ = useMemo(() => DynamicValue.fromConstant(0), []);
   const showIn$ = useMemo(() => DynamicValue.fromConstant(true), []);
   const showTarg$ = useMemo(() => DynamicValue.fromConstant(true), []);
   const showOut$ = useMemo(() => DynamicValue.fromConstant(true), []);
 
-  // Scale/Key are UI-only: they write the 12 note bits. Presets restore bits,
-  // not these labels — do not reverse-infer (that fight with note toggles).
   useEffect(() => {
     return scale$.subscribe((v) => {
-      const i = Math.max(
-        0,
-        Math.min(TUNER_SCALE_TEMPLATES.length - 1, Math.round(Number(v))),
-      );
+      const i = Math.round(Number(v));
+      if (i === TUNER_SCALE_CUSTOM) return;
+      if (i < 0 || i >= TUNER_SCALE_TEMPLATES.length) return;
       host.applyScale(i, key);
     }, false);
   }, [host, key, scale$]);
 
-  const scaleEntries = useMemo(
-    () => TUNER_SCALE_TEMPLATES.map((s, i) => ({ label: s.label, value: i })),
-    [],
-  );
+  const markNotesCustom = () => {
+    if (Math.round(Number(scale$.value)) !== TUNER_SCALE_CUSTOM) {
+      scale$.set(TUNER_SCALE_CUSTOM);
+    }
+    setKey(TUNER_KEY_NONE);
+  };
 
   return (
     <div className="TunerUI PluginUI">
@@ -247,7 +251,7 @@ export function TunerUI(props: TunerUIProps) {
             <Select value$={host.ref$} entries={TUNER_REF_ENTRIES} />
           </WithInfo>
           <WithInfo title={tunerInfo.scale} className="info-block">
-            <Select value$={scale$} entries={scaleEntries} />
+            <Select value$={scale$} entries={TUNER_SCALE_ENTRIES} />
           </WithInfo>
           <WithInfo title={tunerInfo.key} className="info-block scale">
             <Buttons
@@ -257,6 +261,7 @@ export function TunerUI(props: TunerUIProps) {
               onChange={(v) => {
                 setKey(v);
                 const i = Math.round(Number(scale$.value));
+                if (i === TUNER_SCALE_CUSTOM) return;
                 host.applyScale(i, v);
               }}
             />
@@ -264,16 +269,21 @@ export function TunerUI(props: TunerUIProps) {
           <WithInfo title={tunerInfo.notes} className="info-block keys">
             <div className="note-row">
               {host.notes$.map((dv, i) => (
-                <Toggle
+                <span
                   key={TUNER_NOTE_LABELS[i]}
-                  state$={dv}
-                  label={TUNER_NOTE_LABELS[i]}
-                  className={
-                    i === 1 || i === 3 || i === 6 || i === 8 || i === 10
-                      ? 'key-black'
-                      : 'key-white'
-                  }
-                />
+                  className="note-key"
+                  onPointerDown={markNotesCustom}
+                >
+                  <Toggle
+                    state$={dv}
+                    label={TUNER_NOTE_LABELS[i]}
+                    className={
+                      i === 1 || i === 3 || i === 6 || i === 8 || i === 10
+                        ? 'key-black'
+                        : 'key-white'
+                    }
+                  />
+                </span>
               ))}
             </div>
           </WithInfo>

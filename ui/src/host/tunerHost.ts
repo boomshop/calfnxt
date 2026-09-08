@@ -82,6 +82,17 @@ export const TUNER_SCALE_TEMPLATES: { label: string; bits: readonly number[] }[]
   { label: 'Whole', bits: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0] },
 ];
 
+/** Select-only: does not rewrite note bits. Not a DSP/preset value. */
+export const TUNER_SCALE_CUSTOM = TUNER_SCALE_TEMPLATES.length;
+
+export const TUNER_SCALE_ENTRIES = [
+  ...TUNER_SCALE_TEMPLATES.map((s, i) => ({ label: s.label, value: i })),
+  { label: 'Custom', value: TUNER_SCALE_CUSTOM },
+];
+
+/** No key button highlighted until the user picks one. */
+export const TUNER_KEY_NONE = -1;
+
 export type TunerProfileDefaults = {
   fmin: number;
   fmax: number;
@@ -245,9 +256,11 @@ export function createBoundTunerHost(): ITunerHost {
   };
 
   const applyScale = (templateIndex: number, key: number) => {
+    if (templateIndex === TUNER_SCALE_CUSTOM) return;
     const tmpl = TUNER_SCALE_TEMPLATES[templateIndex];
     if (!tmpl) return;
-    const bits = rotateScaleBits(tmpl.bits, key);
+    const root = key < 0 ? 0 : key;
+    const bits = rotateScaleBits(tmpl.bits, root);
     for (let i = 0; i < 12; ++i) {
       const id = paramIds[TUNER_NOTE_IDS[i]];
       postBegin(id);

@@ -68,10 +68,10 @@ export const tunerInfo = {
     'Which pitch classes are legal targets. Scales in this UI only set these twelve bits; the engine never sees “major”, only the mask. Toggle notes for custom sets (e.g. pentatonic, drone + fifths). All off is treated as chromatic so the plugin cannot freeze with nowhere to go.',
 
   scale:
-    'Convenience only: writes the note toggles from a template, rotated by Key. Does not live on the DSP — automation/presets store the twelve notes. After reload the select may show Chromatic while the keys stay correct; pick the scale again if you want the label to match. Custom note edits stay until you apply a scale again.',
+    'Convenience only: writes the note toggles from a template, rotated by Key when one is selected (otherwise from C). Does not live on the DSP — automation/presets store the twelve notes. Custom means “I edited the keys myself” and does not rewrite anything. After reload the select resets to Chromatic even if the bits are still a saved mask — pick the scale again if you want the label to match.',
 
   key:
-    'Root used when applying a scale template (C major vs E♭ major, etc.). Changing Key rewrites the twelve bits from the current scale template. Custom note edits stay until you apply a scale (or Key) again.',
+    'Root for the current scale template (C major vs E♭ major, etc.). Nothing is highlighted until you pick one; then that root stays lit while Scale is not Custom. Changing Key rewrites the twelve bits from the current template. Editing any note key jumps Scale to Custom and clears this highlight.',
 
   history:
     'Scrolling piano roll (~10 s), display only — not a Melodyne editor. Blue = detected pitch (natural vibrato included). Faint dashed = scale target (the grid, not the audio). Warn colour = processed pitch (Retune scoop + added vibrato). Header In / Targ / Out hide each trace. Octave-suspect dots sit on In. The strip under the roll is pull amount: black = none, accent = a semitone, warn = a whole tone, white = two whole tones. Gaps are unvoiced (breath / S / bow / pick), left unpitched.',

@@ -274,7 +274,10 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 - Stereo: F0 on Mid (optional L/R/energy Mix), **one** shift ratio, L+R PSOLA grains in lockstep.
 - DSP: YIN (`yin_detector.h`) + correction law (`pitch_correct.h`) + linked PSOLA (`psola_shifter.h`).
 - Quality maps window/lookahead (PDC). Formant 0…1. Unvoiced (breath/S/bow/pick) is not pitched.
-- Scale templates in the UI only write the 12 note bits. Header Voice/Strings/Guitar writes
+- Scale templates in the UI only write the 12 note bits. Select has a session-only
+  **Custom** entry (no rewrite); Key stays unhighlighted until picked; editing any
+  note key jumps Scale→Custom and clears Key highlight (no reverse-match from bits).
+  Header Voice/Strings/Guitar writes
   range/retune/flex/Keep/formant/unvoiced/octave. Bass uses Guitar + Low toward 31 Hz (B0); Low floor is 25 Hz.
 - UI blocks: Notes (scale/key/mask/A4), Detector, Correction, Vibrato. History is full-width.
 - Artificial vibrato (UI block): `vib_on` + Depth (`settle`) + Rate + Delay + Fade after lock. Keep (`vibrato`) is preserve-natural.
