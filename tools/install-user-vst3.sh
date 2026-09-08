@@ -46,6 +46,7 @@ declare -A PLUGIN_TARGET=(
   [chorus]=calfnxt-chorus
   [split]=calfnxt-split
   [tuner]=calfnxt-tuner
+  [octaver]=calfnxt-octaver
 )
 declare -A PLUGIN_VST3=(
   [equalizer]=calfNXTEqualizer
@@ -70,6 +71,7 @@ declare -A PLUGIN_VST3=(
   [chorus]=calfNXTChorus
   [split]=calfNXTSplit
   [tuner]=calfNXTTuner
+  [octaver]=calfNXTOctaver
 )
 
 usage() {

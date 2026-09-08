@@ -27,7 +27,8 @@ export type PluginId =
   | 'flanger'
   | 'chorus'
   | 'split'
-  | 'tuner';
+  | 'tuner'
+  | 'octaver';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -52,6 +53,7 @@ const PLUGIN_IDS: PluginId[] = [
   'chorus',
   'split',
   'tuner',
+  'octaver',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -196,6 +198,12 @@ export {
   createBoundTunerHost,
   type ITunerHost,
 } from './host/tunerHost';
+
+export { OctaverUI } from './plugins/OctaverUI/OctaverUI';
+export {
+  createBoundOctaverHost,
+  type IOctaverHost,
+} from './host/octaverHost';
 
 export { createHeaderIo, type IHeaderIo } from './host/headerMeters';
 

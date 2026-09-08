@@ -44,6 +44,8 @@ import {
   createBoundChorusHost,
   createBoundSplitHost,
   createBoundTunerHost,
+  createBoundOctaverHost,
+  OctaverUI,
   showWidgetInfo$,
   type PluginId,
 } from '@calfnxt/ui';
@@ -119,6 +121,10 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
     params: (await import('../fixtures/tuner/params.json')).default,
     viz: (await import('../fixtures/tuner/viz.json')).default,
   }),
+  octaver: async () => ({
+    params: (await import('../fixtures/octaver/params.json')).default,
+    viz: (await import('../fixtures/octaver/viz.json')).default,
+  }),
   limiter: async () => ({
     params: (await import('../fixtures/limiter/params.json')).default,
     viz: (await import('../fixtures/limiter/viz.json')).default,
@@ -185,6 +191,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundSplitHost();
       case 'tuner':
         return createBoundTunerHost();
+      case 'octaver':
+        return createBoundOctaverHost();
       case 'limiter':
         return createBoundLimiterHost();
       case 'mbcomp':
@@ -289,6 +297,10 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
     case 'tuner':
       return (
         <TunerUI host={host as ReturnType<typeof createBoundTunerHost>} />
+      );
+    case 'octaver':
+      return (
+        <OctaverUI host={host as ReturnType<typeof createBoundOctaverHost>} />
       );
     case 'limiter':
       return <LimiterUI host={host as ReturnType<typeof createBoundLimiterHost>} />;

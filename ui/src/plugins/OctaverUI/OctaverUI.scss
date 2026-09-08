@@ -1,0 +1,148 @@
+.OctaverUI {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: var(--gap);
+
+  > .top {
+    display: flex;
+    gap: var(--gap);
+    height: 212px;
+
+    > .detector {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: auto 1fr 1fr;
+      align-items: center;
+      gap: 0 16px;
+
+      > .detect {
+        grid-row: 1 / 3;
+        justify-self: center;
+        align-self: stretch;
+
+        > .Buttons {
+          flex-direction: column;
+
+          > .Button {
+            flex: 1;
+            align-self: stretch;
+          }
+        }
+      }
+
+      > .quality {
+        grid-column: 2 / 4;
+      }
+    }
+
+    > .range {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    > .history {
+      flex: 1 1 auto;
+    }
+
+    > .shifter {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 0 16px;
+
+      > .glide {
+        grid-column: 1 / 3;
+      }
+    }
+  }
+
+  > .main {
+    flex: 1;
+    display: flex;
+    gap: var(--gap);
+    align-items: stretch;
+
+    > .block {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: start;
+      gap: var(--gap);
+    }
+
+    > .voice {
+      display: grid;
+      grid-template-columns: auto auto;
+      align-items: center;
+      align-content: start;
+      justify-content: stretch;
+      gap: 4px var(--gap);
+
+      .listen {
+        justify-self: end;
+      }
+      .power {
+        justify-self: start;
+      }
+
+      > .voice-top {
+        grid-column: 1 / 3;
+        display: flex;
+        gap: var(--gap);
+        align-items: center;
+        justify-content: center;
+      }
+
+      &.m1 > .title {
+        color: color-mix(in srgb, var(--color-accent) 50%, var(--color-warn));
+        border-bottom: 1px solid
+          color-mix(in srgb, var(--color-accent) 50%, var(--color-warn));
+      }
+      &.m2 > .title {
+        color: var(--color-warn);
+        border-bottom: 1px solid var(--color-warn);
+      }
+      &.sub > .title {
+        color: var(--color-accent);
+        border-bottom: 1px solid var(--color-accent);
+      }
+      &.p1 > .title {
+        border-bottom: 1px solid var(--color);
+      }
+      &.dry > .title {
+        border-bottom: 1px dashed var(--color);
+        border-image: none;
+        // Match PitchRoll dry dash density (≈2px on / 2px off).
+        background-image: linear-gradient(
+          to right,
+          var(--color) 0 2px,
+          transparent 2px 4px
+        );
+        background-position: 0 100%;
+        background-size: 4px 1px;
+        background-repeat: repeat-x;
+        border-bottom-color: transparent;
+      }
+
+      .wave {
+        grid-column: 1 / 3;
+        justify-self: stretch;
+
+        > .Buttons {
+          > .Button {
+            flex: 1;
+            padding: 4px;
+
+            > .aux-icon {
+              --aux-icon-size: 16px;
+            }
+          }
+        }
+      }
+    }
+  }
+}

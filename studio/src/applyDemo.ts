@@ -22,6 +22,7 @@ import type {
   IChorusHost,
   ISplitHost,
   ITunerHost,
+  IOctaverHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -869,6 +870,68 @@ export function applyTunerDemo(
   return () => window.clearInterval(hold);
 }
 
+export function applyOctaverDemo(
+  host: IOctaverHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.profile$, params.profile);
+  setNum(host.quality$, params.quality);
+  setNum(host.octaveProtect$, params.octave_protect);
+  setNum(host.unvoiced$, params.unvoiced);
+  setNum(host.detect$, params.detect);
+  setNum(host.fmin$, params.fmin);
+  setNum(host.fmax$, params.fmax);
+  setNum(host.glide$, params.glide);
+  setNum(host.gate$, params.gate);
+  setNum(host.attack$, params.attack);
+
+  setBool(host.dryOn$, params.dry_on);
+  setNum(host.dryLevel$, params.dry_level);
+  setNum(host.dryBal$, params.dry_bal);
+  setBool(host.dryListen$, params.dry_listen);
+
+  setBool(host.m1On$, params.m1_on);
+  setNum(host.m1Level$, params.m1_level);
+  setNum(host.m1Bal$, params.m1_bal);
+  setNum(host.m1Formant$, params.m1_formant);
+  setNum(host.m1Tone$, params.m1_tone);
+  setBool(host.m1Listen$, params.m1_listen);
+
+  setBool(host.m2On$, params.m2_on);
+  setNum(host.m2Level$, params.m2_level);
+  setNum(host.m2Bal$, params.m2_bal);
+  setNum(host.m2Formant$, params.m2_formant);
+  setNum(host.m2Tone$, params.m2_tone);
+  setBool(host.m2Listen$, params.m2_listen);
+
+  setBool(host.p1On$, params.p1_on);
+  setNum(host.p1Level$, params.p1_level);
+  setNum(host.p1Bal$, params.p1_bal);
+  setNum(host.p1Formant$, params.p1_formant);
+  setNum(host.p1Tone$, params.p1_tone);
+  setBool(host.p1Listen$, params.p1_listen);
+
+  setBool(host.subOn$, params.sub_on);
+  setNum(host.subLevel$, params.sub_level);
+  setNum(host.subBal$, params.sub_bal);
+  setNum(host.subWave$, params.sub_wave);
+  setNum(host.subHarm$, params.sub_harm);
+  setNum(host.subTone$, params.sub_tone);
+  setBool(host.subListen$, params.sub_listen);
+
+  applySharedViz(viz);
+  if (viz.envelope)
+    host.pitchData$.set(new Float32Array(viz.envelope));
+  const hold = window.setInterval(() => {
+    applySharedViz(viz);
+    if (viz.envelope)
+      host.pitchData$.set(new Float32Array(viz.envelope));
+  }, 50);
+  return () => window.clearInterval(hold);
+}
+
 export type DemoApplier = (
   host: unknown,
   params: Record<string, unknown>,
@@ -898,4 +961,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   chorus: applyChorusDemo as DemoApplier,
   split: applySplitDemo as DemoApplier,
   tuner: applyTunerDemo as DemoApplier,
+  octaver: applyOctaverDemo as DemoApplier,
 };

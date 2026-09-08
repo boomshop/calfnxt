@@ -39,6 +39,8 @@ public:
     periodSm_ = 200.f;
     mix_ = 0.f;
     wetGate_ = 0.f;
+    mixAttackRate_ = 0.0010f;
+    mixReleaseRate_ = 0.0035f;
     xfLpL_ = xfLpR_ = 0.f;
     for (int i = 0; i < kMaxGrains; ++i)
       grains_[i] = {};
@@ -96,6 +98,20 @@ public:
   /** 0 = delayed dry, 1 = allow wet grains. Crossfaded in process(). */
   void setWetGate(float g) { wetGate_ = std::clamp(g, 0.f, 1.f); }
 
+  /** Wet/dry crossfade slew (seconds). Default ≈ legacy xf-hp-v3 (~21 ms / 6 ms). */
+  void setMixSlew(float attackSec, float releaseSec, float sampleRate)
+  {
+    sampleRate = std::max(sampleRate, 1000.f);
+    attackSec = std::max(0.001f, attackSec);
+    releaseSec = std::max(0.001f, releaseSec);
+    mixAttackRate_ = 1.f - std::exp(-1.f / (attackSec * sampleRate));
+    mixReleaseRate_ = 1.f - std::exp(-1.f / (releaseSec * sampleRate));
+  }
+
+  int grainCount() const { return nGrains_; }
+  float wetMix() const { return mix_; }
+  float trackedPeriod() const { return periodSm_; }
+
   /** Jump the period smoother (new syllable / register). Clears live grains
    *  only when already near dry — otherwise the clear itself plops. */
   void snapPeriod(float period)
@@ -108,6 +124,37 @@ public:
       nGrains_ = 0;
   }
 
+  /** Soft period anchor without clearing grains (note re-attack). */
+  void nudgePeriod(float period)
+  {
+    periodSm_ = std::clamp(period, 24.f, float(kSize / 8));
+    haveMark_ = false;
+    anaAcc_ = 0.f;
+    synAcc_ = 0.f;
+  }
+
+  /** Cold start / re-entry: lock period, open wet mix, prime the grain train. */
+  void relockPeriod(float period, float ratio)
+  {
+    periodSm_ = std::clamp(period, 24.f, float(kSize / 8));
+    haveMark_ = false;
+    anaAcc_ = 0.f;
+    ratio = std::clamp(ratio, 0.25f, 2.f);
+    const float hs = std::max(12.f, periodSm_ / ratio);
+    synAcc_ = std::max(0.f, hs - 1.f);
+    if (mix_ < 0.08f)
+      nGrains_ = 0;
+    mix_ = 1.f;
+    xfLpL_ = xfLpR_ = 0.f;
+  }
+
+  /** Gate back on without a period jump — skip the mix attack ramp. */
+  void bootstrapMix()
+  {
+    mix_ = 1.f;
+    xfLpL_ = xfLpR_ = 0.f;
+  }
+
   /**
    * `period` in full-rate samples, `ratio` = outHz/inHz (already smoothed),
    * `formant` 0…1, `latency` = PDC delay of the analysis centre.
@@ -117,12 +164,21 @@ public:
   {
     latency = std::clamp(latency, 64, kSize / 4);
     period = std::clamp(period, 24.f, float(latency - 16));
-    ratio = std::clamp(ratio, 0.5f, 2.f);
+    // 0.25 = −2 octaves, 0.5 = −1, 2 = +1 (octaver / fixed-interval use).
+    ratio = std::clamp(ratio, 0.25f, 2.f);
     formant = std::clamp(formant, 0.f, 1.f);
 
-    // Slow period only — hop-level updates handle glides. Fast adaptive
-    // coeffs here make extreme leaps click inside the grain train.
-    periodSm_ += (period - periodSm_) * 0.0012f;
+    // Hop-level glides; snap when wet so a stale 200-sample default cannot drag
+    // periodSm_ back toward unshifted output (octaver hop anchors vs lastF0_).
+    const float periodErr = std::fabs(period - periodSm_) / std::max(periodSm_, 24.f);
+    if (wetGate_ > 0.5f && periodErr > 0.08f)
+      periodSm_ = period;
+    else
+    {
+      const float periodK =
+        (wetGate_ > 0.5f && periodErr > 0.10f) ? 0.004f : 0.0012f;
+      periodSm_ += (period - periodSm_) * periodK;
+    }
     const float p = std::max(24.f, periodSm_);
     const float Ha = p;
     const float Hs = std::max(12.f, p / ratio);
@@ -145,9 +201,8 @@ public:
       markIndex_ = (w_ - latency) & kMask;
     }
 
-    // Spawn only when the gate wants wet — avoids building a wrong-period
-    // train during S / re-attack / octave duck.
-    if (wetGate_ > 0.45f)
+    // Spawn when mostly wet — lower threshold avoids grain train gaps that click.
+    if (wetGate_ > 0.25f)
     {
       synAcc_ += 1.f;
       while (synAcc_ >= Hs)
@@ -193,7 +248,7 @@ public:
     // Only strip sub/LF from (wet−dry) while slewing: stronger HP (~120 Hz)
     // was killing plops but briefly phase-smeared like a flanger.
     const float target = wetGate_;
-    const float rate = target > mix_ ? 0.0010f : 0.0035f;
+    const float rate = target > mix_ ? mixAttackRate_ : mixReleaseRate_;
     const float before = mix_;
     mix_ += (target - mix_) * rate;
     const bool slewing = std::fabs(target - mix_) > 0.0008f || std::fabs(mix_ - before) > 1.0e-6f;
@@ -257,6 +312,8 @@ private:
   int nGrains_ = 0;
   float mix_ = 0.f;
   float wetGate_ = 0.f;
+  float mixAttackRate_ = 0.0010f;
+  float mixReleaseRate_ = 0.0035f;
   float xfLpL_ = 0.f;
   float xfLpR_ = 0.f;
 };

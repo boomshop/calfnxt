@@ -65,6 +65,7 @@ const ALL = [
   'chorus',
   'split',
   'tuner',
+  'octaver',
 ];
 
 function parsePlugins(argv) {

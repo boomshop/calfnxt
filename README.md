@@ -94,6 +94,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 | Plugin | Bundle | Highlights |
 |--------|--------|------------|
 | **Tuner** | `calfNXTTuner.vst3` | Realtime pitch correction (Voice / Strings / Guitar); linked stereo PSOLA; scale + piano-roll history. First cut — DSP is expected to keep changing. |
+| **Octaver** | `calfNXTOctaver.vst3` | Polyphonic-friendly octave stack (−2/−1/+1 PSOLA + Sub); Voice / Cello / Bass / Guitar; linked stereo F0; pitch-roll history. |
 
 Site and per-plugin descriptors: [calfnxt.org](https://calfnxt.org/),
 `dsp/<id>/<id>.plugin.json`.
@@ -226,7 +227,8 @@ A Vite build **alone** does not update the VST editor — Resources must be
 re-embedded (the install script does that). Plugin ids for the script / Vite:
 `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay`
 `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter`
-`ringmod` `pulsator` `crusher` `phaser` `flanger` `chorus` `split` `tuner`.
+`ringmod` `pulsator` `crusher` `phaser` `flanger` `chorus` `split` `tuner`
+`octaver`.
 
 Codegen is part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++
 params + `ui/src/generated/`).

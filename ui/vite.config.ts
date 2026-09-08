@@ -40,6 +40,7 @@ const knownPlugins = [
   "chorus",
   "split",
   "tuner",
+  "octaver",
 ] as const;
 
 export default defineConfig(({ command }) => {

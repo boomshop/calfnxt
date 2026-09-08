@@ -22,7 +22,8 @@ export type PluginId =
   | "flanger"
   | "chorus"
   | "split"
-  | "tuner";
+  | "tuner"
+  | "octaver";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
 
@@ -50,6 +51,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   chorus: () => import("./ChorusUI/BoundChorusUI"),
   split: () => import("./SplitUI/BoundSplitUI"),
   tuner: () => import("./TunerUI/BoundTunerUI"),
+  octaver: () => import("./OctaverUI/BoundOctaverUI"),
 };
 
 export function isPluginId(id: string): id is PluginId {

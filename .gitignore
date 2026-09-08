@@ -41,3 +41,5 @@ dsp/*/web/
 
 # Tuner click-test regression log (local iteration)
 /tools/tuner_click_history.jsonl
+
+OCTAVER*.md

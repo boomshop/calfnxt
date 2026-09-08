@@ -46,6 +46,7 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         "deess:envelope",
         "exp:envelope",
         "tuner:pitch",
+        "octaver:pitch",
     ):
         if env_key in d:
             viz["envelope"] = d[env_key]
@@ -107,7 +108,7 @@ def main() -> int:
         else:
             print(f"  {k}: {v}")
     env = viz.get("envelope")
-    n_ch = {"compressor": 3, "deesser": 3, "expander": 3, "tuner": 5}.get(
+    n_ch = {"compressor": 3, "deesser": 3, "expander": 3, "tuner": 5, "octaver": 5}.get(
         args.plugin
     )
     if isinstance(env, list) and n_ch:

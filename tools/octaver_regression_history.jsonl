@@ -1,0 +1,11 @@
+{"label":"coldstart-fix","suite":"cello","cold_start_ok":true,"cold_start_ms":119,"cold_start_wet_db":-22.1303,"gate_off_hops":64,"octave_spike_hops":10537}
+{"label":"coldstart-fix","suite":"cello","cold_start_ok":true,"cold_start_ms":119,"cold_start_wet_db":-22.1303,"gate_off_hops":39,"octave_spike_hops":3744}
+{"label":"coldstart-fix","suite":"cello","cold_start_ok":true,"cold_start_ms":119,"cold_start_wet_db":-22.1303,"gate_off_hops":39,"octave_spike_hops":3744}
+{"label":"period-snap-fix","suite":"cello","cold_start_ok":true,"cold_start_ms":119,"cold_start_wet_db":-22.1303,"gate_off_hops":39,"octave_spike_hops":3744}
+{"label":"wet-bootstrap","suite":"cello","cold_start_ok":true,"cold_start_ms":95,"cold_start_wet_db":-28.7713,"gate_off_hops":4,"octave_spike_hops":4335}
+{"label":"wet-bootstrap2","suite":"cello","cold_start_ok":true,"cold_start_ms":95,"cold_start_wet_db":-28.7713,"gate_off_hops":4,"octave_spike_hops":4335}
+{"label":"wet-bootstrap2","suite":"cello","cold_start_ok":true,"cold_start_ms":95,"cold_start_wet_db":-28.7713,"gate_off_hops":4,"octave_spike_hops":4335}
+{"label":"period-from-f0","suite":"cello","cold_start_ok":true,"cold_start_ms":95,"cold_start_wet_db":-28.7948,"gate_off_hops":4,"octave_spike_hops":4335}
+{"label":"period-from-f0-v2","suite":"cello","cold_start_ok":true,"cold_start_ms":95,"cold_start_wet_db":-28.7708,"gate_off_hops":4,"octave_spike_hops":4335}
+{"label":"period-from-f0-v3","suite":"cello","cold_start_ok":true,"cold_start_ms":95,"cold_start_wet_db":-28.7708,"gate_off_hops":4,"octave_spike_hops":4335}
+{"label":"live-gate-fix","suite":"cello","cold_start_ok":true,"cold_start_ms":95,"cold_start_wet_db":-28.7708,"gate_off_hops":4,"octave_spike_hops":4335}

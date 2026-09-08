@@ -264,7 +264,7 @@ body,
     > .aux-graphs {
       > .aux-baseline {
         fill: none;
-        stroke-width: 2px;
+        stroke-width: 1.75px;
         stroke: var(--color-accent);
       }
     }

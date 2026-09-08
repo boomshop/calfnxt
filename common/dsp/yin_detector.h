@@ -49,10 +49,24 @@ public:
     specSr_ = 0.f;
   }
 
+  /** Drop period tracking after a real gap — next analyze() searches full range. */
+  void clearTrack()
+  {
+    trackF0_ = 0.f;
+    prevPeriod_ = 0.f;
+    prevF0_ = 0.f;
+    octaveHold_ = 0;
+    unvoicedHold_ = 0;
+    lastJumpUp_ = false;
+  }
+
   /** Analyze `n` samples at `sampleRate`. n should be a power of two in [512, 4096].
-   *  `source`: 0=voice, 1=strings (bow), 2=guitar (pick/mute). */
+   *  `source`: 0=voice, 1=strings (bow), 2=guitar (pick/mute).
+   *  `trackSlack`: while tracked, search ±(period×slack) around the last period
+   *  (default 0.25 ≈ ±4 semitones). Octaver uses a wider slack so a subharmonic
+   *  lock can recover when the player moves up an octave. */
   const Result& analyze(const float* x, int n, float sampleRate, float fMin, float fMax,
-                        float unvoicedSens, int source)
+                        float unvoicedSens, int source, float trackSlack = 0.25f)
   {
     result_ = {};
     if (!x || n < 256 || sampleRate < 1000.f)
@@ -102,6 +116,9 @@ public:
 
     const int minT = std::max(2, static_cast<int>(sampleRate / fMax));
     const int maxT = std::min(win / 2 - 2, static_cast<int>(sampleRate / fMin));
+    lastMinT_ = minT;
+    lastMaxT_ = maxT;
+    cmndReady_ = false;
     if (maxT <= minT + 2)
       return result_;
 
@@ -114,7 +131,8 @@ public:
     if (tracked)
     {
       const int t0 = std::clamp(static_cast<int>(std::lround(prevPeriod_)), minT, maxT);
-      const int slack = std::max(8, t0 / 4); // ±25% ≈ ±4 semitones; glissandi stay inside
+      const float slackScale = std::clamp(trackSlack, 0.1f, 1.5f);
+      const int slack = std::max(8, static_cast<int>(t0 * slackScale));
       tMin = std::max(minT, t0 - slack);
       tMax = std::min(maxT, t0 + slack);
       if (tMax <= tMin + 2)
@@ -310,10 +328,81 @@ public:
         trackF0_ = result_.f0Hz;
     }
 
+    cmndReady_ = true;
     return result_;
   }
 
   const Result& last() const { return result_; }
+
+  /** After analyze(), optionally prefer f0×2 (or ×4) when the subharmonic YIN
+   *  minimum is nearly as good — fixes cello/bass locks on the first harmonic.
+   *  Does not mutate internal state. Tuner does not call this. */
+  float preferFundamentalOverSubharmonic(float f0Hz, float sampleRate, float fMax, int source) const
+  {
+    if (!(f0Hz > 1.f) || !cmndReady_ || sampleRate < 1000.f)
+      return f0Hz;
+
+    float f = f0Hz;
+    for (int oct = 0; oct < 2; ++oct)
+    {
+      const float fHi = f * 2.f;
+      if (fHi > fMax * 0.97f)
+        break;
+
+      const int tauLo = std::clamp(static_cast<int>(std::lround(sampleRate / f)), lastMinT_, lastMaxT_);
+      const int tauHi = std::clamp(static_cast<int>(std::lround(sampleRate / fHi)), lastMinT_, lastMaxT_);
+      if (tauHi <= lastMinT_ + 1 || tauLo >= lastMaxT_ - 1)
+        break;
+
+      const float cmLo = cmnd_[tauLo];
+      const float cmHi = cmnd_[tauHi];
+
+      float margin = 0.10f;
+      if (source == 1)
+        margin = 0.05f; // bowed strings: strong 2× preference
+      else if (source == 2)
+        margin = 0.08f;
+
+      if (cmHi <= cmLo + margin)
+        f = fHi;
+      else
+        break;
+    }
+    return f;
+  }
+
+  /** After analyze(), on note re-attack prefer f0÷2 when the lower YIN minimum
+   *  is at least as good — bow transients often lock on the 2× harmonic first.
+   *  Octaver-only; Tuner does not call this. */
+  float preferSubharmonicOnAttack(float f0Hz, float sampleRate, float fMin, int source,
+                                  float marginExtra = 0.f) const
+  {
+    if (!(f0Hz > 1.f) || !cmndReady_ || sampleRate < 1000.f)
+      return f0Hz;
+
+    const float fLo = f0Hz * 0.5f;
+    if (fLo < fMin * 1.03f)
+      return f0Hz;
+
+    const int tauHi = std::clamp(static_cast<int>(std::lround(sampleRate / f0Hz)), lastMinT_, lastMaxT_);
+    const int tauLo = std::clamp(static_cast<int>(std::lround(sampleRate / fLo)), lastMinT_, lastMaxT_);
+    if (tauLo <= lastMinT_ + 1 || tauHi >= lastMaxT_ - 1)
+      return f0Hz;
+
+    const float cmHi = cmnd_[tauHi];
+    const float cmLo = cmnd_[tauLo];
+
+    float margin = 0.08f;
+    if (source == 1)
+      margin = 0.05f;
+    else if (source == 2)
+      margin = 0.10f;
+    margin += marginExtra; // may be negative → half must beat the high period clearly
+
+    if (cmLo <= cmHi + margin)
+      return fLo;
+    return f0Hz;
+  }
 
 private:
   void classifySpectrum(const float* x, int win, float sampleRate)
@@ -381,6 +470,9 @@ private:
   bool lastJumpUp_ = false;
   int specFftN_ = 0;
   float specSr_ = 0.f;
+  int lastMinT_ = 0;
+  int lastMaxT_ = 0;
+  bool cmndReady_ = false;
   float prefixSq_[kMaxWin + 1] {};
   float d_[kMaxWin / 2] {};
   float cmnd_[kMaxWin / 2] {};
