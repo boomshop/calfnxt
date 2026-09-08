@@ -103,8 +103,14 @@ function ensureHostWire(): void {
   postToHost({ t: "sync" });
 }
 
-/** Wire an AWML DynamicValue to the VST3 host (plain values). */
-export function bindParamToHost(dv: DynamicValue<number>, id: number): () => void {
+/** Wire an AWML DynamicValue to the VST3 host (plain values).
+ *  Optional `mapPlain` rewrites UI and host-echo values (e.g. snap-to-grid)
+ *  before they are posted or applied. */
+export function bindParamToHost(
+  dv: DynamicValue<number>,
+  id: number,
+  mapPlain?: (v: number) => number,
+): () => void {
   let fromHost = false;
   let lastSent: number | undefined;
 
@@ -112,6 +118,11 @@ export function bindParamToHost(dv: DynamicValue<number>, id: number): () => voi
   const unsub = dv.subscribe((v) => {
     if (fromHost)
       return;
+    const out = mapPlain ? mapPlain(v) : v;
+    if (mapPlain && !nearlyEqual(out, v)) {
+      dv.set(out);
+      return;
+    }
     if (lastSent !== undefined && nearlyEqual(lastSent, v))
       return;
     lastSent = v;
@@ -119,12 +130,13 @@ export function bindParamToHost(dv: DynamicValue<number>, id: number): () => voi
   }, false);
 
   const apply = (v: number) => {
-    if (lastSent !== undefined && nearlyEqual(lastSent, v))
+    const out = mapPlain ? mapPlain(v) : v;
+    if (lastSent !== undefined && nearlyEqual(lastSent, out))
       return;
     fromHost = true;
-    lastSent = v;
+    lastSent = out;
     try {
-      dv.set(v);
+      dv.set(out);
     } finally {
       fromHost = false;
     }

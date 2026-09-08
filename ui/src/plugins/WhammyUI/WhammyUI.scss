@@ -1,0 +1,15 @@
+.WhammyUI {
+  align-items: stretch;
+
+  > div {
+    flex: 1;
+    align-items: center;
+    justify-content: space-evenly;
+
+    .Buttons {
+      > .Button {
+        padding: 0 24px;
+      }
+    }
+  }
+}

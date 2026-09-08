@@ -95,6 +95,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 |--------|--------|------------|
 | **Tuner** | `calfNXTTuner.vst3` | Realtime pitch correction (Voice / Strings / Guitar); linked stereo PSOLA; scale + piano-roll history. First cut — DSP is expected to keep changing. |
 | **Octaver** | `calfNXTOctaver.vst3` | Polyphonic-friendly octave stack (−2/−1/+1 PSOLA + Sub); Voice / Cello / Bass / Guitar; linked stereo F0; pitch-roll history. |
+| **Whammy** | `calfNXTWhammy.vst3` | Delay-line pitch pedal ±24 st (up and down); Free/ST/WT snap; Fast/Normal/Smooth/Studio grains; Mix/Glide/Tone. |
 
 Site and per-plugin descriptors: [calfnxt.org](https://calfnxt.org/),
 `dsp/<id>/<id>.plugin.json`.
@@ -228,7 +229,7 @@ re-embedded (the install script does that). Plugin ids for the script / Vite:
 `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay`
 `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter`
 `ringmod` `pulsator` `crusher` `phaser` `flanger` `chorus` `split` `tuner`
-`octaver`.
+`octaver` `whammy`.
 
 Codegen is part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++
 params + `ui/src/generated/`).

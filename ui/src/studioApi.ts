@@ -28,7 +28,8 @@ export type PluginId =
   | 'chorus'
   | 'split'
   | 'tuner'
-  | 'octaver';
+  | 'octaver'
+  | 'whammy';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -54,6 +55,7 @@ const PLUGIN_IDS: PluginId[] = [
   'split',
   'tuner',
   'octaver',
+  'whammy',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -204,6 +206,12 @@ export {
   createBoundOctaverHost,
   type IOctaverHost,
 } from './host/octaverHost';
+
+export { WhammyUI } from './plugins/WhammyUI/WhammyUI';
+export {
+  createBoundWhammyHost,
+  type IWhammyHost,
+} from './host/whammyHost';
 
 export { createHeaderIo, type IHeaderIo } from './host/headerMeters';
 

@@ -23,7 +23,7 @@ Unix socketpair. The helper is spawned without the host’s `LD_LIBRARY_PATH`
 `CALFNXT_KEEP_HOST_LDPATH`. Each bundle ships `Contents/<arch>/calfnxt-web-host`
 next to the `.so`.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`), **Tuner** (`#tuner`), **Octaver** (`#octaver`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`), **Tuner** (`#tuner`), **Octaver** (`#octaver`), **Whammy** (`#whammy`).
 Suite focus is this set — no near-term new plugins unless explicitly requested.
 
 ---
@@ -39,9 +39,9 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | Vendor URL / email     | `https://calfnxt.org`, `mailto:schmidt@boomshop.net`                                                                                                                                                                                                                                                                |
 | C++ namespace          | `calfNXT`                                                                                                                                                                                                                                                                                                           |
 | CMake project / libs   | `calfnxt`, `calfnxt_ui`, `calfnxt_dsp`, `calfnxt_web_ui`                                                                                                                                                                                                                                                            |
-| Plugin targets         | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-expander`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics`, `calfnxt-analyzer`, `calfnxt-filter`, `calfnxt-ringmod`, `calfnxt-pulsator`, `calfnxt-crusher`, `calfnxt-phaser`, `calfnxt-flanger`, `calfnxt-chorus`, `calfnxt-split`, `calfnxt-tuner`, `calfnxt-octaver`                 |
-| VST3 package / `.so`   | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTExpander`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics`, `calfNXTAnalyzer`, `calfNXTFilter`, `calfNXTRingmodulator`, `calfNXTPulsator`, `calfNXTCrusher`, `calfNXTPhaser`, `calfNXTFlanger`, `calfNXTChorus`, `calfNXTSplit`, `calfNXTTuner`, `calfNXTOctaver` (must match; Carla/JUCE) |
-| Install names          | `~/.vst3/calfNXTEqualizer.vst3`, …, `calfNXTFilter.vst3`, `calfNXTRingmodulator.vst3`, `calfNXTPulsator.vst3`, `calfNXTTuner.vst3`, `calfNXTOctaver.vst3`                                                                                                                                                                                                                               |
+| Plugin targets         | `calfnxt-equalizer`, `calfnxt-stereo`, `calfnxt-transients`, `calfnxt-compressor`, `calfnxt-expander`, `calfnxt-deesser`, `calfnxt-delay`, `calfnxt-reverb`, `calfnxt-mbcomp`, `calfnxt-limiter`, `calfnxt-mblimiter`, `calfnxt-harmonics`, `calfnxt-analyzer`, `calfnxt-filter`, `calfnxt-ringmod`, `calfnxt-pulsator`, `calfnxt-crusher`, `calfnxt-phaser`, `calfnxt-flanger`, `calfnxt-chorus`, `calfnxt-split`, `calfnxt-tuner`, `calfnxt-octaver`, `calfnxt-whammy`                 |
+| VST3 package / `.so`   | `calfNXTEqualizer`, `calfNXTStereo`, `calfNXTTransients`, `calfNXTCompressor`, `calfNXTExpander`, `calfNXTDeesser`, `calfNXTDelay`, `calfNXTReverb`, `calfNXTMbcomp`, `calfNXTLimiter`, `calfNXTMblimiter`, `calfNXTHarmonics`, `calfNXTAnalyzer`, `calfNXTFilter`, `calfNXTRingmodulator`, `calfNXTPulsator`, `calfNXTCrusher`, `calfNXTPhaser`, `calfNXTFlanger`, `calfNXTChorus`, `calfNXTSplit`, `calfNXTTuner`, `calfNXTOctaver`, `calfNXTWhammy` (must match; Carla/JUCE) |
+| Install names          | `~/.vst3/calfNXTEqualizer.vst3`, …, `calfNXTFilter.vst3`, `calfNXTRingmodulator.vst3`, `calfNXTPulsator.vst3`, `calfNXTTuner.vst3`, `calfNXTOctaver.vst3`, `calfNXTWhammy.vst3`                                                                                                                                                                                                                               |
 | URI scheme             | `calfnxt://bundle/...`                                                                                                                                                                                                                                                                                              |
 | JS bridge              | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ`                                                                                                                                                                                                                                                    |
 | Script message handler | `webkit.messageHandlers.calfnxt`                                                                                                                                                                                                                                                                                    |
@@ -79,8 +79,9 @@ dsp/chorus/    chorus.plugin.json + DSP + codegen
 dsp/split/     split.plugin.json + DSP + codegen
 dsp/tuner/     tuner.plugin.json + DSP + codegen
 dsp/octaver/   octaver.plugin.json + DSP + codegen
+dsp/whammy/    whammy.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
-ui/            React SPA (Vite), hash router #equalizer / … / #octaver
+ui/            React SPA (Vite), hash router #equalizer / … / #whammy
 external/vst3sdk/
 ```
 
@@ -284,6 +285,16 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 - Viz id `"tuner"` kind `"pitch"`: `[inMidi, targetMidi, conf, flags, corrCents] × slots + phase`
   (flags: 1 voiced, 2 unvoiced, 4 octave-suspect). Piano-roll widget is display-only.
 
+### Whammy
+
+- Delay-line pitch pedal (no YIN/PSOLA). Linked stereo dual-head read + raised-cosine
+  crossfade; ±24 st; Mix is latency-matched dry+wet (unison parks on a single tap).
+- UI: huge Pitch knob; Free/ST/WT set snap (0/1/2). DSP quantizes Pitch to that
+  grid (semitone / whole-tone) and writes the Parameter so host→UI echo matches.
+  Quality Fast/Normal/Smooth/Studio → grain 16/32/64/128 ms (PDC ≈ half).
+- Extra: Mix (harmony), Glide (slew), Tone (wet LP). Formant stay-put is *not* the
+  point — chipmunk/monster is the vintage sound.
+
 ---
 
 ## Shelved (not a roadmap)
@@ -327,6 +338,7 @@ Ideas only if explicitly revived — do not start these unprompted:
 | Split DSP                   | `dsp/split/source/*_dsp.*`; UI `ui/src/plugins/SplitUI/*`, `host/splitHost.ts`                                                                                                                     |
 | Tuner DSP                   | `dsp/tuner/source/*_dsp.*`, `common/dsp/yin_detector.h`, `pitch_correct.h`, `psola_shifter.h`; UI `ui/src/plugins/TunerUI/*`, `host/tunerHost.ts`, `widgets/PitchRollChart/*`                      |
 | Octaver DSP                 | `dsp/octaver/source/*_dsp.*`, `common/dsp/octaver_pitch_law.h`, `yin_detector.h`, `psola_shifter.h`, `sub_harmonic.h`; UI `ui/src/plugins/OctaverUI/*`, `host/octaverHost.ts`, `widgets/PitchRollChart/*` |
+| Whammy DSP                  | `dsp/whammy/source/*_dsp.*`, `common/dsp/whammy_shifter.h`; UI `ui/src/plugins/WhammyUI/*`, `host/whammyHost.ts`                                                                                        |
 | Param bind                  | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts`                                                                                                                                                |
 | Header I/O                  | `ui/src/components/Header/*`, `host/headerMeters.ts`                                                                                                                                                |
 | Meters                      | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*`                                                                                                                                                       |

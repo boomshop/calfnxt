@@ -22,6 +22,7 @@ import { pluginMeta as chorusMeta } from "../generated/chorusModel";
 import { pluginMeta as splitMeta } from "../generated/splitModel";
 import { pluginMeta as tunerMeta } from "../generated/tunerModel";
 import { pluginMeta as octaverMeta } from "../generated/octaverModel";
+import { pluginMeta as whammyMeta } from "../generated/whammyModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
 export const editorSizes: Record<PluginId, { width: number; height: number }> = {
@@ -48,4 +49,5 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   split: splitMeta.editor,
   tuner: tunerMeta.editor,
   octaver: octaverMeta.editor,
+  whammy: whammyMeta.editor,
 };

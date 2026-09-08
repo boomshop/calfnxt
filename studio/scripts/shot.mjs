@@ -66,6 +66,7 @@ const ALL = [
   'split',
   'tuner',
   'octaver',
+  'whammy',
 ];
 
 function parsePlugins(argv) {

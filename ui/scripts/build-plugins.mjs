@@ -43,6 +43,7 @@ const ALL_PLUGINS = [
   'split',
   'tuner',
   'octaver',
+  'whammy',
 ];
 
 const rawArgs = process.argv.slice(2);

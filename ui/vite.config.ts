@@ -41,6 +41,7 @@ const knownPlugins = [
   "split",
   "tuner",
   "octaver",
+  "whammy",
 ] as const;
 
 export default defineConfig(({ command }) => {
