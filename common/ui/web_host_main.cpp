@@ -738,6 +738,35 @@ void handlePluginLine(const std::string& line)
     }
     return;
   }
+  if (jsonHasType(line.c_str(), "_folder"))
+  {
+    GtkWindow* parent = g.plug ? GTK_WINDOW(g.plug) : nullptr;
+    GtkFileChooserNative* native = gtk_file_chooser_native_new(
+      "IR Library", parent, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER, "_Open", "_Cancel");
+    if (!native)
+      return;
+    const int res = gtk_native_dialog_run(GTK_NATIVE_DIALOG(native));
+    if (res == GTK_RESPONSE_ACCEPT)
+    {
+      char* folder =
+        gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(native));
+      if (folder && folder[0])
+      {
+        std::string json = "{\"t\":\"_folder\",\"path\":\"";
+        for (const char* p = folder; *p; ++p)
+        {
+          if (*p == '\\' || *p == '"')
+            json.push_back('\\');
+          json.push_back(*p);
+        }
+        json += "\"}";
+        sendLine(json.c_str());
+      }
+      g_free(folder);
+    }
+    g_object_unref(native);
+    return;
+  }
   evalJs(line.c_str());
 }
 
@@ -1012,6 +1041,10 @@ int main(int argc, char** argv)
     "}"
     "if(src.t==='vizcfg'){"
     "if(src.id!=null)o.id=String(src.id);if(src.bins!=null)o.bins=src.bins|0;"
+    "}"
+    "if(src.t==='ir'){"
+    "if(src.cmd!=null)o.cmd=String(src.cmd);"
+    "if(src.path!=null)o.path=String(src.path);"
     "}"
     "window.webkit.messageHandlers.calfnxt.postMessage(JSON.stringify(o));}};"
     ;

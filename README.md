@@ -70,6 +70,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 |--------|--------|------------|
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo/Ping-Pong/L-R); tempo sync; echo charts |
 | **Reverb** | `calfNXTReverb.vst3` | Algorithmic ER + late (no IR); duck/gate/freeze; room presets |
+| **Impulse** | `calfNXTImpulse.vst3` | Convolution reverb; WAV/AIFF library tree; decay on Aux Chart |
 
 ### Modulators
 
@@ -229,7 +230,7 @@ re-embedded (the install script does that). Plugin ids for the script / Vite:
 `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay`
 `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter`
 `ringmod` `pulsator` `crusher` `phaser` `flanger` `chorus` `split` `tuner`
-`octaver` `whammy`.
+`octaver` `whammy` `impulse`.
 
 Codegen is part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++
 params + `ui/src/generated/`).

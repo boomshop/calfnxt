@@ -29,7 +29,8 @@ export type PluginId =
   | 'split'
   | 'tuner'
   | 'octaver'
-  | 'whammy';
+  | 'whammy'
+  | 'impulse';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -56,6 +57,7 @@ const PLUGIN_IDS: PluginId[] = [
   'tuner',
   'octaver',
   'whammy',
+  'impulse',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -212,6 +214,12 @@ export {
   createBoundWhammyHost,
   type IWhammyHost,
 } from './host/whammyHost';
+
+export { ImpulseUI } from './plugins/ImpulseUI/ImpulseUI';
+export {
+  createBoundImpulseHost,
+  type IImpulseHost,
+} from './host/impulseHost';
 
 export { createHeaderIo, type IHeaderIo } from './host/headerMeters';
 

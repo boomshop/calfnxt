@@ -24,6 +24,7 @@ import type {
   ITunerHost,
   IOctaverHost,
   IWhammyHost,
+  IImpulseHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -48,6 +49,8 @@ export type VizFixture = {
   spectrum?: number[];
   /** Modulation L/R response: [bins, L×N, R×N] dB. */
   response?: number[];
+  /** IR envelope: [bins, origMs, usedMs, db…]. */
+  wave?: number[];
   /** Flanger comb teeth: [nL, nR, (f,dB)×nL, (f,dB)×nR]. */
   comb?: number[];
   /** Chorus / Pulsator LFO: [phaseL, valL, phaseR, valR]. */
@@ -951,6 +954,43 @@ export function applyWhammyDemo(
   applySharedViz(viz);
 }
 
+export function applyImpulseDemo(
+  host: IImpulseHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.decay$, params.decay);
+  setNum(host.predelay$, params.predelay);
+  setNum(host.hipass$, params.hipass);
+  setNum(host.lopass$, params.lopass);
+  setNum(host.hpMode$, params.hp_mode);
+  setNum(host.lpMode$, params.lp_mode);
+  setBool(host.reverse$, params.reverse);
+  setNum(host.dry$, params.dry);
+  setNum(host.amount$, params.amount);
+  setNum(host.source$, params.source);
+  setNum(host.shape$, params.shape);
+  host.root$.set('Halls');
+  host.openDirs$.set(['Halls']);
+  host.treeScroll$.set(0);
+  host.selected$.set('Halls/Church.wav');
+  host.status$.set('Church.wav');
+  host.tree$.set([
+    {
+      n: 'Halls',
+      d: 1,
+      c: [
+        { n: 'Church.wav', p: 'Halls/Church.wav' },
+        { n: 'Plate.aif', p: 'Halls/Plate.aif' },
+      ],
+    },
+  ]);
+  if (viz.wave)
+    host.wave$.set(viz.wave);
+  applySharedViz(viz);
+}
+
 export type DemoApplier = (
   host: unknown,
   params: Record<string, unknown>,
@@ -982,4 +1022,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   tuner: applyTunerDemo as DemoApplier,
   octaver: applyOctaverDemo as DemoApplier,
   whammy: applyWhammyDemo as DemoApplier,
+  impulse: applyImpulseDemo as DemoApplier,
 };

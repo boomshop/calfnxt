@@ -42,6 +42,7 @@ const knownPlugins = [
   "tuner",
   "octaver",
   "whammy",
+  "impulse",
 ] as const;
 
 export default defineConfig(({ command }) => {

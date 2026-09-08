@@ -19,6 +19,7 @@ export * from "./ReverbChart";
 export * from "./SpectrumChart";
 export * from "./ModulationChart";
 export * from "./ChorusChart";
+export * from "./ImpulseChart";
 export * from "./Toggle";
 export * from "./State";
 export * from "./PulsatorChart";

@@ -114,6 +114,86 @@ bool jsonStringAfterKey(const char* s, const char* key, char* out, size_t outSiz
   return true;
 }
 
+bool jsonUnescapedStringAfterKey(const char* s, const char* key, std::string& out)
+{
+  out.clear();
+  if (!s || !key)
+    return false;
+  const char* p = std::strstr(s, key);
+  if (!p)
+    return false;
+  p = std::strchr(p, ':');
+  if (!p)
+    return false;
+  ++p;
+  while (*p == ' ' || *p == '\t')
+    ++p;
+  if (*p != '"')
+    return false;
+  ++p;
+  while (*p && *p != '"')
+  {
+    if (*p == '\\' && p[1])
+    {
+      ++p;
+      switch (*p)
+      {
+        case '"':
+        case '\\':
+        case '/':
+          out.push_back(*p);
+          break;
+        case 'n':
+          out.push_back('\n');
+          break;
+        case 'r':
+          out.push_back('\r');
+          break;
+        case 't':
+          out.push_back('\t');
+          break;
+        default:
+          out.push_back(*p);
+          break;
+      }
+      ++p;
+      continue;
+    }
+    out.push_back(*p++);
+  }
+  return *p == '"';
+}
+
+void jsonEscapeAppend(std::string& out, const std::string& in)
+{
+  out.push_back('"');
+  for (unsigned char c : in)
+  {
+    switch (c)
+    {
+      case '"':
+        out += "\\\"";
+        break;
+      case '\\':
+        out += "\\\\";
+        break;
+      case '\n':
+        out += "\\n";
+        break;
+      case '\r':
+        out += "\\r";
+        break;
+      case '\t':
+        out += "\\t";
+        break;
+      default:
+        out.push_back(static_cast<char>(c));
+        break;
+    }
+  }
+  out.push_back('"');
+}
+
 bool envFlag(const char* name)
 {
   const char* s = std::getenv(name);
@@ -337,6 +417,19 @@ void WebEditor::handleHelperLine(const std::string& line)
   if (jsonHasType(line.c_str(), "_jserr") || jsonHasType(line.c_str(), "_diag"))
   {
     logBoth("[calfnxt] UI %s\n", line.c_str());
+    return;
+  }
+  if (jsonHasType(line.c_str(), "_folder"))
+  {
+    std::string path;
+    if (jsonUnescapedStringAfterKey(line.c_str(), "\"path\"", path) && !path.empty()
+        && vizSource_)
+    {
+      std::string cmd = "{\"t\":\"ir\",\"cmd\":\"root\",\"path\":";
+      jsonEscapeAppend(cmd, path);
+      cmd += '}';
+      vizSource_->handleIrCommand(cmd.c_str());
+    }
     return;
   }
   onWebMessage(line.c_str());
@@ -1220,6 +1313,27 @@ void WebEditor::flushViz()
       flushVizArray(chorId, "lfo", lfo, 4);
     }
   }
+
+  if (const char* irId = vizSource_->vizIrWaveId())
+  {
+    float wave[2048];
+    const int n = vizSource_->takeIrWaveform(wave, 2048);
+    if (n >= 3)
+      flushVizArray(irId, "wave", wave, n);
+  }
+
+  {
+    std::string irJson;
+    int n = 0;
+    while (n < 4 && vizSource_->takeIrUiJson(irJson))
+    {
+      std::string js = "try{window.__calfnxtOnHost&&window.__calfnxtOnHost(";
+      js += irJson;
+      js += ");}catch(e){}";
+      evalJs(js.c_str());
+      ++n;
+    }
+  }
 }
 
 void WebEditor::pushAllParams()
@@ -1375,6 +1489,20 @@ bool WebEditor::onWebMessage(const char* json)
         || !jsonNumberAfterKey(json, "\"bins\"", binsf))
       return false;
     vizSource_->configureVizBins(id, static_cast<int>(std::lround(binsf)));
+    return true;
+  }
+
+  if (jsonHasType(json, "ir"))
+  {
+    char cmd[32] {};
+    if (jsonStringAfterKey(json, "\"cmd\"", cmd, sizeof cmd)
+        && std::strcmp(cmd, "browse") == 0)
+    {
+      sendLine("{\"t\":\"_folder\"}");
+      return true;
+    }
+    if (vizSource_)
+      vizSource_->handleIrCommand(json);
     return true;
   }
 

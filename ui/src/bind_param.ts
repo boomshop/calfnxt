@@ -26,6 +26,8 @@ const vizCombApplies = new Map<string, VizLevelsApply>();
 const vizHzApplies = new Map<string, HostApply>();
 const vizCtrlApplies = new Map<string, VizLevelsApply>();
 const vizLfoApplies = new Map<string, VizLevelsApply>();
+const vizWaveApplies = new Map<string, VizLevelsApply>();
+const irApplies = new Set<(msg: Extract<calfNXTMsg, { t: "ir" }>) => void>();
 const channelCountApplies = new Set<ChannelCountApply>();
 const ioChannelCountsApplies = new Set<IoChannelCountsApply>();
 let hostWired = false;
@@ -93,6 +95,10 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizCtrlApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "lfo" && Array.isArray(msg.v))
     vizLfoApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "wave" && Array.isArray(msg.v))
+    vizWaveApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "ir")
+    irApplies.forEach((apply) => apply(msg));
 }
 
 function ensureHostWire(): void {
@@ -565,5 +571,28 @@ export function bindBoolParamToHost(
   return () => {
     unsub();
     hostApplies.delete(id);
+  };
+}
+
+/** Wire IR envelope waveform (`kind:"wave"`) from DSP viz. */
+export function bindVizWave(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizWaveApplies.set(id, (v) => {
+    dv.set(Array.isArray(v) ? v.slice() : []);
+  });
+  return () => {
+    vizWaveApplies.delete(id);
+  };
+}
+
+/** Subscribe to Impulse library JSON (`t:"ir"`). Posts `sync` once wired. */
+export function bindIrMessages(
+  apply: (msg: Extract<calfNXTMsg, { t: "ir" }>) => void,
+): () => void {
+  ensureHostWire();
+  irApplies.add(apply);
+  postToHost({ t: "ir", cmd: "sync" });
+  return () => {
+    irApplies.delete(apply);
   };
 }

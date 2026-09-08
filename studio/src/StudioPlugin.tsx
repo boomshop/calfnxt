@@ -24,6 +24,7 @@ import {
   TunerUI,
   OctaverUI,
   WhammyUI,
+  ImpulseUI,
   createBoundCompressorHost,
   createBoundExpanderHost,
   createBoundDeesserHost,
@@ -48,6 +49,7 @@ import {
   createBoundTunerHost,
   createBoundOctaverHost,
   createBoundWhammyHost,
+  createBoundImpulseHost,
   showWidgetInfo$,
   type PluginId,
 } from '@calfnxt/ui';
@@ -131,6 +133,10 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
     params: (await import('../fixtures/whammy/params.json')).default,
     viz: (await import('../fixtures/whammy/viz.json')).default,
   }),
+  impulse: async () => ({
+    params: (await import('../fixtures/impulse/params.json')).default,
+    viz: (await import('../fixtures/impulse/viz.json')).default,
+  }),
   limiter: async () => ({
     params: (await import('../fixtures/limiter/params.json')).default,
     viz: (await import('../fixtures/limiter/viz.json')).default,
@@ -201,6 +207,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundOctaverHost();
       case 'whammy':
         return createBoundWhammyHost();
+      case 'impulse':
+        return createBoundImpulseHost();
       case 'limiter':
         return createBoundLimiterHost();
       case 'mbcomp':
@@ -313,6 +321,10 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
     case 'whammy':
       return (
         <WhammyUI host={host as ReturnType<typeof createBoundWhammyHost>} />
+      );
+    case 'impulse':
+      return (
+        <ImpulseUI host={host as ReturnType<typeof createBoundImpulseHost>} />
       );
     case 'limiter':
       return <LimiterUI host={host as ReturnType<typeof createBoundLimiterHost>} />;

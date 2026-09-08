@@ -1,3 +1,5 @@
+import type { IrNode } from "./irTypes";
+
 export type calfNXTMsg =
   | { t: "begin"; id: number }
   | { t: "end"; id: number }
@@ -11,9 +13,11 @@ export type calfNXTMsg =
   /** Host→UI: bus channel counts (`ch` = out, legacy; `in`/`out` when they differ). */
   | { t: "io"; ch: number; in?: number; out?: number }
   /** DSP→UI telemetry (meters now; spectrum arrays later). */
-  | { t: "viz"; id: string; kind: "levels" | "spectrum" | "gains" | "corr" | "gonio" | "envelope" | "gr" | "bandio" | "point" | "tempo" | "shape" | "hz" | "ctrl" | "lfo"; v: number[] }
+  | { t: "viz"; id: string; kind: "levels" | "spectrum" | "gains" | "corr" | "gonio" | "envelope" | "pitch" | "gr" | "bandio" | "point" | "tempo" | "shape" | "hz" | "ctrl" | "lfo" | "response" | "comb" | "wave"; v: number[] }
   /** UI→host viz config (e.g. FFT bin count from pixel width). */
-  | { t: "vizcfg"; id: string; bins?: number };
+  | { t: "vizcfg"; id: string; bins?: number }
+  /** Impulse library: browse / select / tree / status. */
+  | { t: "ir"; cmd: string; path?: string; root?: string; sel?: string; status?: string; tree?: IrNode[]; open?: string[]; scroll?: number };
 
 /** Plain float from a host→UI param message (`v`, or legacy q/d). */
 export function plainFromMsg(msg: { v?: number; q?: number; d?: number }): number | undefined {

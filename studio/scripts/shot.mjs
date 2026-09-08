@@ -67,6 +67,7 @@ const ALL = [
   'tuner',
   'octaver',
   'whammy',
+  'impulse',
 ];
 
 function parsePlugins(argv) {

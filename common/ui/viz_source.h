@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 namespace calfNXT {
 namespace Ui {
 
@@ -20,7 +22,8 @@ namespace Ui {
    *   {t:"viz", id:"mod", kind:"comb", v:[nL,nR,(f,dB)…]} // Flanger peak/notch stems
    *   {t:"viz", id:"filt", kind:"hz", v:[fcHz]}       // live filter cutoff
    *   {t:"viz", id:"tuner", kind:"pitch", v:[…]}      // history: midi, target, conf, flags, corrCents
-   *   UI→host {t:"vizcfg", id:"fft"|"mod", bins:N} after measuring pixel width.
+   *   {t:"viz", id:"impulse", kind:"wave", v:[bins,origMs,usedMs,db…]}
+   *   UI→host {t:"vizcfg", id:"fft"|"mod"|"impulse", bins:N} after measuring pixel width.
    */
 class IVizSource
 {
@@ -292,6 +295,39 @@ public:
 
   /** Stream id for pitch history (nullptr = do not flush). */
   virtual const char* vizPitchId() const { return nullptr; }
+
+  /**
+   * IR waveform envelope (Impulse).
+   * Layout: [bins, origLengthMs, usedLengthMs, db0…dbN-1] (dB, typically −90…6).
+   * Returns 3+bins, or 0 if unused.
+   * Flushed as {t:"viz", id, kind:"wave", v:[…]}.
+   */
+  virtual int takeIrWaveform(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for IR waveform (nullptr = do not flush). */
+  virtual const char* vizIrWaveId() const { return nullptr; }
+
+  /**
+   * Library / IR commands from the UI (`{t:"ir", cmd, path?}`).
+   * Returns true if consumed.
+   */
+  virtual bool handleIrCommand(const char* json)
+  {
+    (void)json;
+    return false;
+  }
+
+  /** Pop one pending host→UI JSON object (full `{t:"ir",…}` body). */
+  virtual bool takeIrUiJson(std::string& out)
+  {
+    (void)out;
+    return false;
+  }
 };
 
 } // namespace Ui

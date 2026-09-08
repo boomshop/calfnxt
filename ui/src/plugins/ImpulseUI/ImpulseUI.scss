@@ -1,0 +1,162 @@
+.ImpulseUI {
+  gap: var(--gap);
+  display: grid;
+  align-items: stretch;
+  justify-content: stretch;
+  width: 100%;
+  height: 100%;
+  grid-template-areas:
+    'wave wave'
+    'lib ctrl';
+  grid-template-columns: 1fr auto;
+  grid-template-rows: 180px 1fr;
+
+  > .ImpulseChart {
+    grid-area: wave;
+  }
+
+  > .lib {
+    grid-area: lib;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    > .lib-bar {
+      display: flex;
+      align-items: center;
+      gap: var(--gap);
+      padding: 6px 8px;
+      flex-shrink: 0;
+
+      > .filter-wrap {
+        flex: 1;
+        min-width: 80px;
+      }
+
+      > .root,
+      > .status {
+        color: var(--color-least);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 180px;
+      }
+
+      input.filter {
+        width: 100%;
+        box-sizing: border-box;
+        background: var(--background-lesser);
+        color: var(--color);
+        border: 1px solid transparent;
+        padding: 4px 8px;
+        font: inherit;
+
+        &:focus {
+          outline: none;
+          border-color: var(--color-accent);
+        }
+      }
+    }
+
+    > .lib-tree {
+      flex: 1;
+      overflow: auto;
+      padding: 0 8px 8px;
+      position: relative;
+
+      > .empty {
+        position: absolute;
+        width: 100%;
+        text-align: center;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: var(--color-least);
+        opacity: 0.25;
+      }
+    }
+  }
+
+  .ir-tree {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 8px;
+
+    > li {
+      margin: 0;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: 0;
+      color: var(--color);
+      padding: 3px 6px;
+      cursor: pointer;
+      font: inherit;
+
+      &:hover {
+        background: var(--background-lesser);
+      }
+
+      &.active {
+        background: var(--background-least);
+        color: var(--color-accent);
+      }
+
+      > .twist {
+        width: 12px;
+        flex-shrink: 0;
+        opacity: 0.7;
+      }
+
+      > .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+
+    > li.dir > .ir-tree {
+      border-left: 1px solid
+        color-mix(in srgb, var(--color-least) 25%, transparent);
+    }
+  }
+
+  > .ctrl {
+    grid-area: ctrl;
+    display: grid;
+    grid-template-areas:
+      'left range'
+      'knobs knobs';
+    grid-template-columns: auto auto;
+    grid-template-rows: auto auto;
+    gap: var(--gap) 24px;
+    grid-auto-flow: column;
+    align-items: center;
+
+    > .FrequencyRange {
+      grid-area: range;
+      align-self: stretch;
+    }
+
+    > .left {
+      grid-area: left;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--gap);
+    }
+
+    > .knobs {
+      grid-area: knobs;
+      display: flex;
+      justify-content: space-evenly;
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "bypass": false,
+  "decay": 1,
+  "predelay": 0,
+  "hipass": 60,
+  "lopass": 10000,
+  "hp_mode": 2,
+  "lp_mode": 1,
+  "reverse": false,
+  "dry": 0,
+  "amount": -12,
+  "source": 0,
+  "shape": 4
+}

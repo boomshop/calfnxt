@@ -23,6 +23,7 @@ import { pluginMeta as splitMeta } from "../generated/splitModel";
 import { pluginMeta as tunerMeta } from "../generated/tunerModel";
 import { pluginMeta as octaverMeta } from "../generated/octaverModel";
 import { pluginMeta as whammyMeta } from "../generated/whammyModel";
+import { pluginMeta as impulseMeta } from "../generated/impulseModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
 export const editorSizes: Record<PluginId, { width: number; height: number }> = {
@@ -50,4 +51,5 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   tuner: tunerMeta.editor,
   octaver: octaverMeta.editor,
   whammy: whammyMeta.editor,
+  impulse: impulseMeta.editor,
 };
