@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import './Header.scss';
 import { CalfNxtLogo } from '../CalfNxtLogo';
 import { Button, Knob, MenuButton, MultiMeter, Toggle } from '../../widgets';
@@ -18,24 +18,12 @@ import {
   type ThemeAccent,
   type ThemeMode,
 } from '../../prefs/theme';
-import type { DynamicValue } from '@deutschesoft/awml';
+import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 
 export interface HeaderProps {
   title?: string;
   /** Optional shared I/O model; defaults to a fresh silence/io model. */
   io?: IHeaderIo;
-}
-
-function useDynamicNumber(dv: DynamicValue<number>): number {
-  const [v, setV] = useState(() => dv.value);
-  useEffect(() => dv.subscribe(setV), [dv]);
-  return v;
-}
-
-function useDynamicValue<T>(dv: DynamicValue<T>): T {
-  const [v, setV] = useState(() => dv.value);
-  useEffect(() => dv.subscribe(setV), [dv]);
-  return v;
 }
 
 export function Header(props: React.PropsWithChildren<HeaderProps>) {
@@ -49,12 +37,12 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
   useEffect(() => () => ownedIo?.dispose(), [ownedIo]);
 
   const io = external ?? ownedIo!;
-  const inputChannelCount = useDynamicNumber(io.inputChannelCount$);
-  const outputChannelCount = useDynamicNumber(io.outputChannelCount$);
+  const inputChannelCount = useDynamicValueReadonly(io.inputChannelCount$, 2);
+  const outputChannelCount = useDynamicValueReadonly(io.outputChannelCount$, 2);
   const inLabels = labelsForChannelCount(inputChannelCount);
   const outLabels = labelsForChannelCount(outputChannelCount);
-  const themeMode = useDynamicValue<ThemeMode>(themeMode$);
-  const themeAccent = useDynamicValue<ThemeAccent>(themeAccent$);
+  const themeMode = useDynamicValueReadonly<ThemeMode>(themeMode$, 'night');
+  const themeAccent = useDynamicValueReadonly<ThemeAccent>(themeAccent$, 'calfnxt');
 
   return (
     <div className="Header">

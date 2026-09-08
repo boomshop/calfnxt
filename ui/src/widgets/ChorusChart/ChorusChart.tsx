@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
+import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import './ChorusChart.scss';
 
 export interface ChorusChartProps {
@@ -100,22 +101,10 @@ export function ChorusChart(props: ChorusChartProps) {
   const rateBoxRef = useRef<HTMLDivElement>(null);
   const depthSize = usePanelSize(depthBoxRef);
   const rateSize = usePanelSize(rateBoxRef);
-  const [voices, setVoices] = useState(() => voices$.value);
-  const [overlap, setOverlap] = useState(() => overlap$.value);
-  const [vphase, setVphase] = useState(() => vphase$.value);
-  const [lfo, setLfo] = useState<number[]>(() => lfo$.value ?? [0, 0, 0, 0]);
-
-  useEffect(() => {
-    const u = [
-      voices$.subscribe((v) => setVoices(v)),
-      overlap$.subscribe((v) => setOverlap(v)),
-      vphase$.subscribe((v) => setVphase(v)),
-      lfo$.subscribe((v) => {
-        if (Array.isArray(v) && v.length >= 4) setLfo(v);
-      }),
-    ];
-    return () => u.forEach((fn) => fn());
-  }, [voices$, overlap$, vphase$, lfo$]);
+  const voices = useDynamicValueReadonly(voices$, 1);
+  const overlap = useDynamicValueReadonly(overlap$, 0);
+  const vphase = useDynamicValueReadonly(vphase$, 0);
+  const lfo = useDynamicValueReadonly(lfo$, [0, 0, 0, 0]);
 
   const nVoices = Math.max(1, Math.min(8, Math.round(voices)));
   const unit = 1 - Math.min(1, Math.max(0, overlap));

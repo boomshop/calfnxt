@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
+import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { postToHost } from '../../bridge';
-import { themeColors$ } from '../../theme/themeColors';
+import { useThemeColors } from '../../theme/themeColors';
 import './PitchRollChart.scss';
 
 /** Fixed history window (ms) — keep in sync with Tuner DSP. */
@@ -22,6 +23,22 @@ const NOTE_NAMES = [
   'A♯',
   'B',
 ];
+
+function useNoteMask(notes$: readonly DynamicValue<boolean>[]): boolean[] {
+  const n0 = useDynamicValueReadonly(notes$[0], false);
+  const n1 = useDynamicValueReadonly(notes$[1], false);
+  const n2 = useDynamicValueReadonly(notes$[2], false);
+  const n3 = useDynamicValueReadonly(notes$[3], false);
+  const n4 = useDynamicValueReadonly(notes$[4], false);
+  const n5 = useDynamicValueReadonly(notes$[5], false);
+  const n6 = useDynamicValueReadonly(notes$[6], false);
+  const n7 = useDynamicValueReadonly(notes$[7], false);
+  const n8 = useDynamicValueReadonly(notes$[8], false);
+  const n9 = useDynamicValueReadonly(notes$[9], false);
+  const n10 = useDynamicValueReadonly(notes$[10], false);
+  const n11 = useDynamicValueReadonly(notes$[11], false);
+  return [n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11];
+}
 
 function isBlack(pc: number): boolean {
   return pc === 1 || pc === 3 || pc === 6 || pc === 8 || pc === 10;
@@ -133,13 +150,14 @@ export function PitchRollChart(props: PitchRollChartProps) {
   } = props;
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const dataRef = useRef(data$.value);
-  const fminRef = useRef(fmin$.value);
-  const fmaxRef = useRef(fmax$.value);
-  const notesRef = useRef<boolean[]>(notes$.map((d) => d.value));
-  const showInRef = useRef(showIn$?.value ?? true);
-  const showTargRef = useRef(showTarg$?.value ?? true);
-  const showOutRef = useRef(showOut$?.value ?? true);
+  const pitchData = useDynamicValueReadonly(data$, null);
+  const fmin = useDynamicValueReadonly(fmin$, 31);
+  const fmax = useDynamicValueReadonly(fmax$, 400);
+  const notes = useNoteMask(notes$);
+  const showIn = useDynamicValueReadonly(showIn$, true);
+  const showTarg = useDynamicValueReadonly(showTarg$, true);
+  const showOut = useDynamicValueReadonly(showOut$, true);
+  const theme = useThemeColors();
   const modeRef = useRef(mode);
   const showStripRef = useRef(showConfidenceStrip);
   modeRef.current = mode;
@@ -162,6 +180,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
       canvas.height = h;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    void theme;
 
     const bg = readCss(wrap, '--background', '#000');
     const fg = readCss(wrap, '--color', '#fff');
@@ -185,8 +204,8 @@ export function PitchRollChart(props: PitchRollChartProps) {
     const stripH = showStripRef.current ? 8 : 0;
     const plotW = Math.max(1, cssW - keyW);
     const plotH = Math.max(1, cssH - stripH);
-    const midiLo = Math.max(12, Math.floor(midiFromHz(fminRef.current)) - 2);
-    const midiHi = Math.min(108, Math.ceil(midiFromHz(fmaxRef.current)) + 2);
+    const midiLo = Math.max(12, Math.floor(midiFromHz(fmin)) - 2);
+    const midiHi = Math.min(108, Math.ceil(midiFromHz(fmax)) + 2);
     const midiSpan = Math.max(1, midiHi - midiLo);
     const rowH = plotH / midiSpan;
     const fontFamily = readCss(wrap, 'font-family', 'sans-serif');
@@ -203,7 +222,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
       const y = yOf(m + 0.5);
       ctx.fillStyle = isBlack(pc) ? laneBlack : laneWhite;
       ctx.fillRect(keyW, y, plotW, rowH);
-      if (!notesRef.current[pc]) {
+      if (!notes[pc]) {
         ctx.fillStyle = 'rgba(0,0,0,0.28)';
         ctx.fillRect(keyW, y, plotW, rowH);
       }
@@ -213,7 +232,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
     for (let m = midiLo; m < midiHi; ++m) {
       const pc = ((m % 12) + 12) % 12;
       const y = yOf(m + 0.5);
-      const allowed = notesRef.current[pc];
+      const allowed = notes[pc];
       if (isBlack(pc)) {
         ctx.fillStyle = allowed ? keyBlackOn : keyBlackOff;
         ctx.fillRect(0, y, keyW, rowH);
@@ -258,7 +277,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
       ctx.stroke();
     }
 
-    const buf = dataRef.current;
+    const buf = pitchData;
     if (!buf || buf.length < HIST_CH + 1) {
       return;
     }
@@ -375,9 +394,9 @@ export function PitchRollChart(props: PitchRollChartProps) {
       const outMidi = (i: number) =>
         inMidi(i) + (data[i * HIST_CH + 4] ?? 0) / 100;
 
-      if (showTargRef.current)
+      if (showTarg)
         strokePitch(tgtMidi, withAlpha(fg, 0.5), 1.75, PITCH_DASH_TIGHT);
-      if (showInRef.current) {
+      if (showIn) {
         strokePitch(inMidi, accent, 1.75, []);
         for (let i = 0; i < slots; ++i) {
           const flags = data[i * HIST_CH + 3] ?? 0;
@@ -390,7 +409,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
           ctx.fill();
         }
       }
-      if (showOutRef.current) strokePitch(outMidi, warn, 1.75, []);
+      if (showOut) strokePitch(outMidi, warn, 1.75, []);
     }
 
     ctx.fillStyle = fg;
@@ -398,70 +417,20 @@ export function PitchRollChart(props: PitchRollChartProps) {
     ctx.textAlign = 'right';
     ctx.fillText(`${Math.round(PITCH_ROLL_MS / 1000)}s`, cssW - 6, 12);
     ctx.textAlign = 'left';
-  }, []);
+  }, [
+    pitchData,
+    fmin,
+    fmax,
+    notes,
+    showIn,
+    showOut,
+    showTarg,
+    theme,
+  ]);
 
   useEffect(() => {
-    const u1 = data$.subscribe((v) => {
-      dataRef.current = v;
-      paint();
-    });
-    const u2 = fmin$.subscribe((v) => {
-      fminRef.current = v;
-      paint();
-    });
-    const u3 = fmax$.subscribe((v) => {
-      fmaxRef.current = v;
-      paint();
-    });
-    const uTheme = themeColors$.subscribe(() => paint());
     paint();
-    return () => {
-      u1();
-      u2();
-      u3();
-      uTheme();
-    };
-  }, [data$, fmin$, fmax$, paint]);
-
-  useEffect(() => {
-    showInRef.current = showIn$?.value ?? true;
-    showTargRef.current = showTarg$?.value ?? true;
-    showOutRef.current = showOut$?.value ?? true;
-    const uIn = showIn$?.subscribe((v) => {
-      showInRef.current = v;
-      paint();
-    });
-    const uTarg = showTarg$?.subscribe((v) => {
-      showTargRef.current = v;
-      paint();
-    });
-    const uOut = showOut$?.subscribe((v) => {
-      showOutRef.current = v;
-      paint();
-    });
-    paint();
-    return () => {
-      uIn?.();
-      uTarg?.();
-      uOut?.();
-    };
-  }, [showIn$, showTarg$, showOut$, paint]);
-
-  useEffect(() => {
-    const unsubs = notes$.map((dv, i) =>
-      dv.subscribe((v) => {
-        const next = notesRef.current.slice();
-        next[i] = v;
-        notesRef.current = next;
-        paint();
-      }),
-    );
-    notesRef.current = notes$.map((d) => d.value);
-    paint();
-    return () => {
-      for (const u of unsubs) u();
-    };
-  }, [notes$, paint]);
+  }, [paint]);
 
   useEffect(() => {
     const wrap = wrapRef.current;

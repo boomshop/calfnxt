@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
+import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import {
   sampleCrushResponse,
   type CrushPt,
@@ -84,29 +85,12 @@ export function CrusherChart(props: CrusherChartProps) {
   const [curveEl, setCurveEl] = useState<SVGPathElement | null>(null);
   const [zoneEl, setZoneEl] = useState<SVGPathElement | null>(null);
   const [size, setSize] = useState({ w: 1, h: 1 });
-  const [bits, setBits] = useState(() => bits$.value);
-  const [morph, setMorph] = useState(() => morph$.value);
-  const [mode, setMode] = useState(() => mode$.value);
-  const [dc, setDc] = useState(() => dc$.value);
-  const [aa, setAa] = useState(() => aa$.value);
-  const [viz, setViz] = useState<number[]>(() => viz$?.value ?? [0]);
-
-  useEffect(() => {
-    const u = [
-      bits$.subscribe((v) => setBits(v)),
-      morph$.subscribe((v) => setMorph(v)),
-      mode$.subscribe((v) => setMode(v)),
-      dc$.subscribe((v) => setDc(v)),
-      aa$.subscribe((v) => setAa(v)),
-    ];
-    const uViz = viz$?.subscribe((v) => {
-      if (Array.isArray(v) && v.length >= 1) setViz(v);
-    });
-    return () => {
-      u.forEach((fn) => fn());
-      uViz?.();
-    };
-  }, [bits$, morph$, mode$, dc$, aa$, viz$]);
+  const bits = useDynamicValueReadonly(bits$, 0);
+  const morph = useDynamicValueReadonly(morph$, 0);
+  const mode = useDynamicValueReadonly(mode$, 0);
+  const dc = useDynamicValueReadonly(dc$, 0);
+  const aa = useDynamicValueReadonly(aa$, 0);
+  const viz = useDynamicValueReadonly(viz$, [0]);
 
   useEffect(() => {
     const el = svgRef.current;

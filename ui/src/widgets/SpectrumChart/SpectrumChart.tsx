@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
-import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
+import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { postToHost } from '../../bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { themeColors$ } from '../../theme/themeColors';
@@ -285,7 +285,9 @@ export function SpectrumChart(props: SpectrumChartProps) {
   const chartRef = useRef<AuxChartInstance | null>(null);
   const graphsRef = useRef<AuxGraph[]>([]);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
-  const dataRef = useRef<number[]>([]);
+  const data = useDynamicValueReadonly(data$, [] as number[]);
+  const dataLatestRef = useRef(data);
+  dataLatestRef.current = data;
   const modeRef = useRef(mode);
   const holdRef = useRef(hold);
   const scaleRef = useRef(scale);
@@ -529,7 +531,6 @@ export function SpectrumChart(props: SpectrumChartProps) {
       }
 
       setChartSvg(chart.svg ?? null);
-      buildPoints(dataRef.current);
 
       if (!resizeRoRef.current) {
         const el = chart.element ?? chart.svg;
@@ -589,23 +590,18 @@ export function SpectrumChart(props: SpectrumChartProps) {
       if (raf) cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         raf = 0;
-        buildPoints(dataRef.current);
+        buildPoints(data);
       });
     };
     sync();
-    const unsub = data$.subscribe((v) => {
-      dataRef.current = Array.isArray(v) ? v : [];
-      sync();
-    }, false);
     return () => {
       if (raf) cancelAnimationFrame(raf);
-      unsub();
     };
-  }, [data$, buildPoints]);
+  }, [data, buildPoints]);
 
   useEffect(() => {
-    buildPoints(dataRef.current);
-  }, [mode, hold, scale, buildPoints]);
+    buildPoints(data);
+  }, [mode, hold, scale, buildPoints, data]);
 
   useEffect(() => () => detach(), [detach]);
 
@@ -618,7 +614,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
     const ro = new ResizeObserver(() => {
       waterfallRef.current = null;
       sendVizBins(canvas);
-      buildPoints(dataRef.current);
+      buildPoints(dataLatestRef.current);
     });
     ro.observe(canvas);
     const unsubTheme = themeColors$.subscribe(() => {

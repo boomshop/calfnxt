@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
-import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
+import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { postToHost } from '../../bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import './HistoryChart.scss';
@@ -129,7 +129,9 @@ export function HistoryChart(props: HistoryChartProps) {
     .map((g) => `${g.className}:${g.mode ?? 'line'}:${!!g.gradient}`)
     .join('|');
 
-  const dataRef = useRef(data$.value);
+  const data = useDynamicValueReadonly(data$, null);
+  const dataLatestRef = useRef(data);
+  dataLatestRef.current = data;
   const graphsSpecRef = useRef(graphs);
   graphsSpecRef.current = graphs;
   const chartRef = useRef<AuxChartInstance | null>(null);
@@ -252,7 +254,7 @@ export function HistoryChart(props: HistoryChartProps) {
 
       setChartSvg(chart.svg ?? null);
       setGradTargets(grads);
-      buildPoints(dataRef.current);
+      buildPoints(dataLatestRef.current);
 
       const el = chart.element ?? chart.svg;
       if (el) {
@@ -287,19 +289,14 @@ export function HistoryChart(props: HistoryChartProps) {
       if (raf) cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         raf = 0;
-        buildPoints(dataRef.current);
+        buildPoints(data);
       });
     };
     sync();
-    const unsubData = data$.subscribe((v) => {
-      dataRef.current = v;
-      sync();
-    }, false);
     return () => {
       if (raf) cancelAnimationFrame(raf);
-      unsubData();
     };
-  }, [buildPoints, data$]);
+  }, [buildPoints, data]);
 
   // Rebuild graphs when channel layout / classes change.
   useEffect(() => {

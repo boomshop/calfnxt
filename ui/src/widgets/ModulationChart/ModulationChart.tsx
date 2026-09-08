@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { FrequencyResponse as AuxFrequencyResponse } from '@deutschesoft/aux-widgets/src/widgets/frequencyresponse.js';
 import type { DynamicValue } from '@deutschesoft/awml';
-import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
+import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { postToHost } from '../../bridge';
 import './ModulationChart.scss';
 
@@ -111,7 +111,7 @@ export function ModulationChart(props: ModulationChartProps) {
 
   const chartRef = useRef<AuxFrInstance | null>(null);
   const graphsRef = useRef<AuxGraph[]>([]);
-  const dataRef = useRef<number[]>([]);
+  const data = useDynamicValueReadonly(data$, [] as number[]);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   const modeRef = useRef(mode);
   modeRef.current = mode;
@@ -121,7 +121,7 @@ export function ModulationChart(props: ModulationChartProps) {
     const graphs = graphsRef.current;
     if (!chart || chart.isDestructed?.() || graphs.length < 2)
       return;
-    const raw = dataRef.current;
+    const raw = data;
     if (modeRef.current === 'comb') {
       graphs[0]?.set('dots', combStems(raw, 'L', dbMin, dbMax));
       graphs[1]?.set('dots', combStems(raw, 'R', dbMin, dbMax));
@@ -131,7 +131,7 @@ export function ModulationChart(props: ModulationChartProps) {
     const n = Math.max(1, payload.bins);
     graphs[0]?.set('dots', seriesDots(payload.L, n, dbMin, dbMax));
     graphs[1]?.set('dots', seriesDots(payload.R, n, dbMin, dbMax));
-  }, [dbMin, dbMax]);
+  }, [data, dbMin, dbMax]);
 
   const sendVizBins = useCallback(
     (el: Element) => {
@@ -144,10 +144,9 @@ export function ModulationChart(props: ModulationChartProps) {
     [vizId],
   );
 
-  useEffect(() => data$.subscribe((v) => {
-    dataRef.current = Array.isArray(v) ? v : [];
+  useEffect(() => {
     applyCurves();
-  }), [data$, applyCurves]);
+  }, [applyCurves]);
 
   useEffect(() => {
     const chart = chartRef.current;

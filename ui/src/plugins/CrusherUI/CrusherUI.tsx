@@ -1,5 +1,6 @@
 import { DynamicValue as DV } from '@deutschesoft/awml';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { Header } from '../../components';
 import { CrusherChart, Knob, Toggle, WithInfo } from '../../widgets';
 import { paramIds } from '../../generated/crusherModel';
@@ -49,14 +50,16 @@ export function CrusherUI(props: CrusherUIProps) {
     endEdit: () => host.endEdit(id),
   });
 
-  // Chart expects numeric mode 0/1; host uses boolean Toggle.
-  const modeNum$ = useMemo(() => {
-    const dv = DV.fromConstant(host.mode$.value ? 1 : 0);
-    host.mode$.subscribe((on) => {
-      if (dv.value !== (on ? 1 : 0)) dv.set(on ? 1 : 0);
-    });
-    return dv;
-  }, [host.mode$]);
+  const modeOn = useDynamicValueReadonly(host.mode$, false);
+  const modeNum$ = useMemo(
+    () => DV.fromConstant(host.mode$.value ? 1 : 0),
+    [host.mode$],
+  );
+  useEffect(() => {
+    const next = modeOn ? 1 : 0;
+    if (modeNum$.value !== next)
+      modeNum$.set(next);
+  }, [modeOn, modeNum$]);
 
   return (
     <div className="CrusherUI PluginUI">

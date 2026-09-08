@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { DynamicValue } from '@deutschesoft/awml';
 import { themeAccent$, themeMode$ } from '../prefs/theme';
 
@@ -118,7 +118,5 @@ export function meterGradientForRange(
 }
 
 export function useThemeColors(): ThemeColors {
-  const [colors, setColors] = useState(() => themeColors$.value);
-  useEffect(() => themeColors$.subscribe(setColors), []);
-  return colors;
+  return useDynamicValueReadonly(themeColors$, FALLBACK);
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
+import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import {
   Compressor as AuxCompressor,
   Expander as AuxExpander,
@@ -123,6 +123,14 @@ export function DynamicsChart(props: DynamicsChartProps) {
     ...rest
   } = props;
 
+  const threshold = useDynamicValueReadonly(threshold$, -32);
+  const ratio = useDynamicValueReadonly(ratio$, 4);
+  const knee = useDynamicValueReadonly(knee$, 6);
+  const range = useDynamicValueReadonly(range$, -60);
+  const releaseThreshold = useDynamicValueReadonly(releaseThreshold$, -32);
+  const relThreshActive = useDynamicValueReadonly(relThreshActive$, false);
+  const point = useDynamicValueReadonly(point$, [-60, -60]);
+
   const composedOnSet = composeInteractingOnSet({ beginEdit, endEdit }, onSet);
   const relThreshActiveRef = useRef(false);
 
@@ -156,8 +164,8 @@ export function DynamicsChart(props: DynamicsChartProps) {
   reassertRef.current = reassertGradStroke;
 
   const isRelThreshActive = useCallback(
-    () => relThreshActive$?.value ?? relThreshActiveRef.current,
-    [relThreshActive$],
+    () => relThreshActive,
+    [relThreshActive],
   );
 
   const syncHysteresisBand = useCallback(
@@ -183,14 +191,14 @@ export function DynamicsChart(props: DynamicsChartProps) {
     (w: AuxDynamicsInstance) => {
       if (type !== 'expander' || !w.response?.set) return;
       const active = isRelThreshActive();
-      const th = threshold$?.value ?? -32;
-      const rel = Math.min(releaseThreshold$?.value ?? th, th);
-      const ratio = ratio$?.value ?? 4;
-      const knee = knee$?.value ?? 6;
-      const range = range$?.value ?? -60;
+      const th = threshold;
+      const rel = Math.min(releaseThreshold, th);
+      const r = ratio;
+      const k = knee;
+      const rng = range;
       w.response.set(
         'dots',
-        expanderResponseDots(-60, 24, th, ratio, knee, range),
+        expanderResponseDots(-60, 24, th, r, k, rng),
       );
       const release = releaseCurveRef.current;
       if (release?.set) {
@@ -198,7 +206,7 @@ export function DynamicsChart(props: DynamicsChartProps) {
         if (active) {
           release.set(
             'dots',
-            expanderResponseDots(-60, 24, rel, ratio, knee, range),
+            expanderResponseDots(-60, 24, rel, r, k, rng),
           );
         }
       }
@@ -206,11 +214,11 @@ export function DynamicsChart(props: DynamicsChartProps) {
     },
     [
       type,
-      threshold$,
-      releaseThreshold$,
-      ratio$,
-      knee$,
-      range$,
+      threshold,
+      releaseThreshold,
+      ratio,
+      knee,
+      range,
       isRelThreshActive,
     ],
   );
@@ -227,15 +235,15 @@ export function DynamicsChart(props: DynamicsChartProps) {
     (_w: AuxDynamicsInstance) => {
       if (type !== 'expander') return;
       const active = isRelThreshActive();
-      const open = threshold$?.value ?? -32;
-      const rel = Math.min(releaseThreshold$?.value ?? open, open);
+      const open = threshold;
+      const rel = Math.min(releaseThreshold, open);
       syncRelHandle(rel, active);
       syncHysteresisBand(open, rel);
     },
     [
       type,
-      threshold$,
-      releaseThreshold$,
+      threshold,
+      releaseThreshold,
       isRelThreshActive,
       syncHysteresisBand,
       syncRelHandle,
@@ -377,15 +385,6 @@ export function DynamicsChart(props: DynamicsChartProps) {
 
       const h = pointHandleRef.current;
       if (!h) return;
-
-      const apply = (v: number[]) => {
-        if (!Array.isArray(v) || v.length < 2) return;
-        h.set('x', v[0]);
-        h.set('y', v[1]);
-        reassertRef.current();
-      };
-      apply(point$.value);
-      pointUnsubRef.current = point$.subscribe(apply, false);
     },
     [point$],
   );
@@ -429,33 +428,27 @@ export function DynamicsChart(props: DynamicsChartProps) {
   }, [chart]);
 
   useEffect(() => {
+    const h = pointHandleRef.current;
+    if (!h || !Array.isArray(point) || point.length < 2)
+      return;
+    h.set('x', point[0]);
+    h.set('y', point[1]);
+    reassertRef.current();
+  }, [point, chart]);
+
+  useEffect(() => {
     if (!chart || chart.isDestructed()) return;
-    const unsubs: (() => void)[] = [];
-    const bump = () => {
-      relThreshActiveRef.current = relThreshActive$?.value ?? false;
-      syncExpanderCurveRef.current(chart);
-      syncHysteresisRef.current(chart);
-    };
-    for (const dv of [
-      threshold$,
-      ratio$,
-      knee$,
-      range$,
-      releaseThreshold$,
-      relThreshActive$,
-    ]) {
-      if (dv) unsubs.push(dv.subscribe(bump, false));
-    }
-    bump();
-    return () => unsubs.forEach((u) => u());
+    relThreshActiveRef.current = relThreshActive;
+    syncExpanderCurveRef.current(chart);
+    syncHysteresisRef.current(chart);
   }, [
     chart,
-    threshold$,
-    ratio$,
-    knee$,
-    range$,
-    releaseThreshold$,
-    relThreshActive$,
+    threshold,
+    ratio,
+    knee,
+    range,
+    releaseThreshold,
+    relThreshActive,
   ]);
 
   const cls = ['DynamicsChart', type, className ?? '']

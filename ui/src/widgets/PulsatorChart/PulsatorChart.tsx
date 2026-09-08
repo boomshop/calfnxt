@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
+import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import {
   lfoValueFromPhase,
   pulseWidthFromEnum,
@@ -48,26 +49,12 @@ export function PulsatorChart(props: PulsatorChartProps) {
   } = props;
   const svgRef = useRef<SVGSVGElement>(null);
   const [size, setSize] = useState({ w: 1, h: 1 });
-  const [mode, setMode] = useState(() => mode$.value);
-  const [amount, setAmount] = useState(() => amount$.value);
-  const [offsetL, setOffsetL] = useState(() => offsetL$.value);
-  const [offsetR, setOffsetR] = useState(() => offsetR$.value);
-  const [pwEnum, setPwEnum] = useState(() => pulseWidth$.value);
-  const [lfo, setLfo] = useState<number[]>(() => lfo$.value ?? [0, 0, 0, 0]);
-
-  useEffect(() => {
-    const u = [
-      mode$.subscribe((v) => setMode(v)),
-      amount$.subscribe((v) => setAmount(v)),
-      offsetL$.subscribe((v) => setOffsetL(v)),
-      offsetR$.subscribe((v) => setOffsetR(v)),
-      pulseWidth$.subscribe((v) => setPwEnum(v)),
-      lfo$.subscribe((v) => {
-        if (Array.isArray(v) && v.length >= 4) setLfo(v);
-      }),
-    ];
-    return () => u.forEach((fn) => fn());
-  }, [mode$, amount$, offsetL$, offsetR$, pulseWidth$, lfo$]);
+  const mode = useDynamicValueReadonly(mode$, 0);
+  const amount = useDynamicValueReadonly(amount$, 0);
+  const offsetL = useDynamicValueReadonly(offsetL$, 0);
+  const offsetR = useDynamicValueReadonly(offsetR$, 0);
+  const pwEnum = useDynamicValueReadonly(pulseWidth$, 0);
+  const lfo = useDynamicValueReadonly(lfo$, [0, 0, 0, 0]);
 
   useEffect(() => {
     const el = svgRef.current;

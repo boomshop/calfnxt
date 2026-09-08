@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
+import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import {
   makeTapCoeffs,
   sampleTransferCurve,
@@ -63,25 +64,10 @@ export function WaveshapeChart(props: WaveshapeChartProps) {
   const [curveEl, setCurveEl] = useState<SVGPathElement | null>(null);
   const [zoneEl, setZoneEl] = useState<SVGPathElement | null>(null);
   const [size, setSize] = useState({ w: 1, h: 1 });
-  const [drive, setDrive] = useState(() => drive$.value);
-  const [blend, setBlend] = useState(() => blend$.value);
-  const [asymmetry, setAsymmetry] = useState(() => asymmetry$?.value ?? 0);
-  const [viz, setViz] = useState<number[]>(() => viz$?.value ?? [0]);
-
-  useEffect(() => {
-    const u1 = drive$.subscribe((v) => setDrive(v));
-    const u2 = blend$.subscribe((v) => setBlend(v));
-    const uA = asymmetry$?.subscribe((v) => setAsymmetry(v));
-    const u3 = viz$?.subscribe((v) => {
-      if (Array.isArray(v) && v.length >= 1) setViz(v);
-    });
-    return () => {
-      u1();
-      u2();
-      uA?.();
-      u3?.();
-    };
-  }, [drive$, blend$, asymmetry$, viz$]);
+  const drive = useDynamicValueReadonly(drive$, 0);
+  const blend = useDynamicValueReadonly(blend$, 0);
+  const asymmetry = useDynamicValueReadonly(asymmetry$, 0);
+  const viz = useDynamicValueReadonly(viz$, [0]);
 
   useEffect(() => {
     const el = svgRef.current;

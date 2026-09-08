@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
-import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
+import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { postToHost } from '../../bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import './EnvelopeChart.scss';
@@ -120,8 +120,12 @@ type Graphs = {
  */
 export function EnvelopeChart(props: EnvelopeChartProps) {
   const { data$, view$, vizId = 'env', className } = props;
-  const dataRef = useRef<Float32Array | null>(data$.value);
-  const viewRef = useRef<number>(view$.value);
+  const data = useDynamicValueReadonly(data$, null);
+  const view = useDynamicValueReadonly(view$, 0);
+  const dataLatestRef = useRef(data);
+  const viewLatestRef = useRef(view);
+  dataLatestRef.current = data;
+  viewLatestRef.current = view;
   const chartRef = useRef<AuxChartInstance | null>(null);
   const graphsRef = useRef<Graphs>({
     original: null,
@@ -287,7 +291,7 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
       );
       setChartSvg(chart.svg ?? null);
       setResultPath(graphsRef.current.result?.element ?? null);
-      buildPoints(dataRef.current, viewRef.current);
+      buildPoints(dataLatestRef.current, viewLatestRef.current);
 
       const el = chart.element ?? chart.svg;
       if (el) {
@@ -321,24 +325,14 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
       if (raf) cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         raf = 0;
-        buildPoints(dataRef.current, viewRef.current);
+        buildPoints(data, view);
       });
     };
     sync();
-    const unsubData = data$.subscribe((v) => {
-      dataRef.current = v;
-      sync();
-    }, false);
-    const unsubView = view$.subscribe((v) => {
-      viewRef.current = v;
-      sync();
-    }, false);
     return () => {
       if (raf) cancelAnimationFrame(raf);
-      unsubData();
-      unsubView();
     };
-  }, [buildPoints, data$, view$]);
+  }, [buildPoints, data, view]);
 
   useEffect(() => () => detach(), [detach]);
 

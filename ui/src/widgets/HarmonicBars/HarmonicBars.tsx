@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
+import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { harmonicLevels } from '../../dsp/tapDistortion';
 import './HarmonicBars.scss';
 
@@ -19,20 +20,9 @@ const LABELS = ['2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
  */
 export function HarmonicBars(props: HarmonicBarsProps) {
   const { className, drive$, blend$, asymmetry$, count = 5 } = props;
-  const [drive, setDrive] = useState(() => drive$.value);
-  const [blend, setBlend] = useState(() => blend$.value);
-  const [asymmetry, setAsymmetry] = useState(() => asymmetry$?.value ?? 0);
-
-  useEffect(() => {
-    const u1 = drive$.subscribe((v) => setDrive(v));
-    const u2 = blend$.subscribe((v) => setBlend(v));
-    const uA = asymmetry$?.subscribe((v) => setAsymmetry(v));
-    return () => {
-      u1();
-      u2();
-      uA?.();
-    };
-  }, [drive$, blend$, asymmetry$]);
+  const drive = useDynamicValueReadonly(drive$, 0);
+  const blend = useDynamicValueReadonly(blend$, 0);
+  const asymmetry = useDynamicValueReadonly(asymmetry$, 0);
 
   const levels = useMemo(
     () => harmonicLevels(blend, drive, count + 1, asymmetry),

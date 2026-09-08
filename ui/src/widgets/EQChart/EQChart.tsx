@@ -6,6 +6,7 @@ import {
 } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import {
   componentFromWidget,
+  useDynamicValueReadonly,
   useWidgetsWithBindingsAndEvents,
 } from '@deutschesoft/use-aux-widgets';
 import type { EqFilterType, IEqualizerBand } from '../../host/equalizerHost';
@@ -132,6 +133,7 @@ export function EQChart(props: EQChartProps) {
   const [eqWidget, setEqWidget] = useState<unknown>(null);
   const isMini = size === 'mini';
   const spectrumOn = !isMini && Math.round(spectrumMode) >= 1;
+  const spectrum = useDynamicValueReadonly(spectrum$, [] as number[]);
   const spectrumGraphRef = useRef<{
     set: (k: string, v: unknown) => void;
     element?: SVGElement;
@@ -499,21 +501,43 @@ export function EQChart(props: EQChartProps) {
       );
     };
 
-    const unsub = spectrum$.subscribe((v) => {
-      if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        paint(Array.isArray(v) ? v : []);
-      });
-    }, false);
-    paint(Array.isArray(spectrum$.value) ? spectrum$.value : []);
+    paint(Array.isArray(spectrum) ? spectrum : []);
 
     return () => {
       if (raf) cancelAnimationFrame(raf);
-      unsub();
       ro?.disconnect();
     };
-  }, [eqWidget, isMini, spectrum$, spectrumOn]);
+  }, [eqWidget, isMini, spectrumOn]);
+
+  useEffect(() => {
+    if (!spectrumOn) return;
+    const g = spectrumGraphRef.current;
+    if (!g) return;
+    let raf = 0;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      const payload = parseSpectrumPayload(Array.isArray(spectrum) ? spectrum : []);
+      if (!payload) {
+        g.set('dots', null);
+        return;
+      }
+      const yr = yRangeRef.current;
+      const slope = spectrumSlope(spectrumModeRef.current);
+      g.set(
+        'dots',
+        spectrumSeriesDots(
+          payload.avg,
+          payload.bins,
+          yr.min,
+          yr.max,
+          slope,
+        ),
+      );
+    });
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [spectrum, spectrumOn, spectrumMode, yRange]);
 
   // Detach spectrum graph on unmount / mini switch.
   useEffect(() => {

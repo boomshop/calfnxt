@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
+import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
 import { themeColors$, type ThemeColors } from '../../theme/themeColors';
@@ -230,6 +230,7 @@ export interface GonioMeterProps {
 
 export function GonioMeter(props: GonioMeterProps) {
   const { samples$, drawMode = 'dots', className, ...rest } = props;
+  const samples = useDynamicValueReadonly(samples$, [] as number[]);
   const graphRefs = useRef<(AuxGraphInstance | null)[]>([]);
   const chartRef = useRef<AuxChartInstance | null>(null);
   const gradDisposeRef = useRef<(() => void) | null>(null);
@@ -330,12 +331,8 @@ export function GonioMeter(props: GonioMeterProps) {
   }, [drawMode, pushDots]);
 
   useEffect(() => {
-    if (!samples$)
-      return;
-    const sync = (v: number[]) => pushDots(v);
-    sync(samples$.value);
-    return samples$.subscribe(sync);
-  }, [samples$, pushDots]);
+    pushDots(samples);
+  }, [samples, pushDots]);
 
   const cls = ['GonioMeter', `mode-${drawMode}`, className ?? '']
     .filter(Boolean)

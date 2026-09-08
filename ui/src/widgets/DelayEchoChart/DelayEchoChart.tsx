@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
-import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
+import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import {
   buildDelayEchoTaps,
   linToDb,
@@ -351,15 +351,24 @@ export function DelayEchoChart(props: DelayEchoChartProps) {
     width$,
   } = props;
 
+  const bpm = useDynamicValueReadonly(bpm$, 120);
+  const subdiv = useDynamicValueReadonly(subdiv$, 1);
+  const timeL = useDynamicValueReadonly(timeL$, 0);
+  const timeR = useDynamicValueReadonly(timeR$, 0);
+  const feedback = useDynamicValueReadonly(feedback$, 0);
+  const amount = useDynamicValueReadonly(amount$, 0);
+  const mixMode = useDynamicValueReadonly(mixMode$, 1);
+  const width = useDynamicValueReadonly(width$, 1);
+
   const paramsRef = useRef<EchoParams>({
-    bpm: bpm$.value,
-    subdiv: subdiv$.value,
-    timeL: timeL$.value,
-    timeR: timeR$.value,
-    feedback: feedback$.value,
-    amountDb: amount$.value,
-    mixMode: Math.round(mixMode$.value) as DelayMixMode,
-    width: width$.value,
+    bpm,
+    subdiv,
+    timeL,
+    timeR,
+    feedback,
+    amountDb: amount,
+    mixMode: Math.round(mixMode) as DelayMixMode,
+    width,
   });
 
   const left = useEchoPane('L', paramsRef);
@@ -369,49 +378,29 @@ export function DelayEchoChart(props: DelayEchoChartProps) {
   const rightRebuild = right.rebuild;
 
   useEffect(() => {
-    const sync = () => {
-      paramsRef.current = {
-        bpm: bpm$.value,
-        subdiv: subdiv$.value,
-        timeL: timeL$.value,
-        timeR: timeR$.value,
-        feedback: feedback$.value,
-        amountDb: amount$.value,
-        mixMode: Math.max(
-          0,
-          Math.min(3, Math.round(mixMode$.value)),
-        ) as DelayMixMode,
-        width: width$.value,
-      };
-      leftRebuild();
-      rightRebuild();
+    paramsRef.current = {
+      bpm,
+      subdiv,
+      timeL,
+      timeR,
+      feedback,
+      amountDb: amount,
+      mixMode: Math.max(0, Math.min(3, Math.round(mixMode))) as DelayMixMode,
+      width,
     };
-    sync();
-    const unsubs = [
-      bpm$.subscribe(sync, false),
-      subdiv$.subscribe(sync, false),
-      timeL$.subscribe(sync, false),
-      timeR$.subscribe(sync, false),
-      feedback$.subscribe(sync, false),
-      amount$.subscribe(sync, false),
-      mixMode$.subscribe(sync, false),
-      width$.subscribe(sync, false),
-    ];
-    return () => {
-      for (const u of unsubs)
-        u();
-    };
+    leftRebuild();
+    rightRebuild();
   }, [
-    amount$,
-    bpm$,
-    feedback$,
+    amount,
+    bpm,
+    feedback,
     leftRebuild,
-    mixMode$,
+    mixMode,
     rightRebuild,
-    subdiv$,
-    timeL$,
-    timeR$,
-    width$,
+    subdiv,
+    timeL,
+    timeR,
+    width,
   ]);
 
   const cls = ['DelayEchoChart', className ?? ''].filter(Boolean).join(' ');
