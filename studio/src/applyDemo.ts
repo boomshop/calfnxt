@@ -972,18 +972,21 @@ export function applyImpulseDemo(
   setNum(host.source$, params.source);
   setNum(host.shape$, params.shape);
   setNum(host.quality$, params.quality);
-  host.root$.set('Halls');
-  host.openDirs$.set(['Halls']);
+  host.root$.set('Lexicon 480L');
+  host.openDirs$.set(['Lexicon 480L']);
   host.treeScroll$.set(0);
-  host.selected$.set('Halls/Church.wav');
-  host.status$.set('Church.wav');
+  host.selected$.set('Lexicon 480L/Buck Ram.aif');
+  host.status$.set('Buck Ram.aif');
   host.tree$.set([
     {
-      n: 'Halls',
+      n: 'Lexicon 480L',
       d: 1,
       c: [
-        { n: 'Church.wav', p: 'Halls/Church.wav' },
-        { n: 'Plate.aif', p: 'Halls/Plate.aif' },
+        { n: 'Buck Ram.aif', p: 'Lexicon 480L/Buck Ram.aif' },
+        { n: 'Drum Plate.aif', p: 'Lexicon 480L/Drum Plate.aif' },
+        { n: 'Jazz Hall.aif', p: 'Lexicon 480L/Jazz Hall.aif' },
+        { n: 'Large Hall.aif', p: 'Lexicon 480L/Large Hall.aif' },
+        { n: 'Large Plate.aif', p: 'Lexicon 480L/Large Plate.aif' },
       ],
     },
   ]);

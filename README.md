@@ -70,7 +70,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 |--------|--------|------------|
 | **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo/Ping-Pong/L-R); tempo sync; echo charts |
 | **Reverb** | `calfNXTReverb.vst3` | Algorithmic ER + late (no IR); duck/gate/freeze; room presets |
-| **Impulse** | `calfNXTImpulse.vst3` | Convolution reverb; WAV/AIFF library tree; decay on Aux Chart |
+| **Impulse** | `calfNXTImpulse.vst3` | Convolution reverb; WAV/AIFF library; decay/shape on Aux Chart; wet HP/LP; Quality Lo/Mid/Hi |
 
 ### Modulators
 

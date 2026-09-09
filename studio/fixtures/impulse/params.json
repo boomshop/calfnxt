@@ -1,6 +1,6 @@
 {
   "bypass": false,
-  "decay": 1,
+  "decay": 0.8,
   "predelay": 0,
   "hipass": 60,
   "lopass": 10000,
