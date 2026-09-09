@@ -63,7 +63,9 @@
     }
 
     .Buttons {
-      justify-content: center;
+      > .Button {
+        flex: 1;
+      }
     }
 
     .asym {
