@@ -151,21 +151,35 @@ export function FilterUI(props: FilterUIProps) {
               {...edit(paramIds.frequency)}
             />
           </WithInfo>
-          <WithInfo title={filterInfo.resonance}>
-            <Knob
-              label="Res"
-              value$={host.resonance$}
-              min={0.707}
-              max={32}
-              reset={filterParamDefault('resonance')}
-              scale="log2"
-              log_factor={4}
-              dots={RES_DOTS}
-              labels={RES_LABELS}
-              size="medium"
-              {...edit(paramIds.resonance)}
-            />
-          </WithInfo>
+          <div className="knobs-row">
+            <WithInfo title={filterInfo.resonance}>
+              <Knob
+                label="Res"
+                value$={host.resonance$}
+                min={0.707}
+                max={32}
+                reset={filterParamDefault('resonance')}
+                scale="log2"
+                log_factor={4}
+                dots={RES_DOTS}
+                labels={RES_LABELS}
+                size="medium"
+                {...edit(paramIds.resonance)}
+              />
+            </WithInfo>
+            <WithInfo title={filterInfo.softClip}>
+              <Knob
+                label="Soft"
+                value$={host.softClip$}
+                min={0}
+                max={1}
+                reset={filterParamDefault('soft_clip')}
+                dots={SOFT_DOTS}
+                labels={SOFT_LABELS}
+                {...edit(paramIds.soft_clip)}
+              />
+            </WithInfo>
+          </div>
           <div className="knobs-row">
             <WithInfo title={filterInfo.inertia}>
               <Knob
@@ -180,19 +194,6 @@ export function FilterUI(props: FilterUIProps) {
                 labels={INERTIA_LABELS}
                 size="small"
                 {...edit(paramIds.inertia)}
-              />
-            </WithInfo>
-            <WithInfo title={filterInfo.softClip}>
-              <Knob
-                label="Soft"
-                value$={host.softClip$}
-                min={0}
-                max={1}
-                reset={filterParamDefault('soft_clip')}
-                dots={SOFT_DOTS}
-                labels={SOFT_LABELS}
-                size="small"
-                {...edit(paramIds.soft_clip)}
               />
             </WithInfo>
             <WithInfo title={filterInfo.mix}>

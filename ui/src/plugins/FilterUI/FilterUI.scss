@@ -15,11 +15,6 @@
     align-items: stretch;
     min-width: 200px;
 
-    > .mode,
-    > .top-row,
-    > .filter-top {
-    }
-
     > .filter-top {
       display: flex;
       gap: var(--gap);
@@ -66,7 +61,7 @@
     > .knobs .knobs-row {
       display: flex;
       gap: var(--gap);
-      justify-content: space-evenly;
+      justify-content: space-around;
       align-items: center;
       width: 100%;
     }
