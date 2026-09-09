@@ -40,6 +40,10 @@ function fadeDb(t: number, shape: number): number {
   return DB_MIN * u ** p;
 }
 
+function clampDb(y: number): number {
+  return Math.min(DB_MAX, Math.max(DB_MIN, y));
+}
+
 function formatMs(ms: number): string {
   if (ms >= 1000) {
     const s = ms / 1000;
@@ -107,6 +111,7 @@ const ChartWidget = componentFromWidget(
 type AuxGraph = {
   set: (k: string, v: unknown) => void;
   element?: SVGElement;
+  toFront?: () => void;
   destroyAndRemove?: () => void;
   destroy?: () => void;
 };
@@ -165,7 +170,9 @@ export interface ImpulseChartProps {
 
 /**
  * IR energy envelope (dB vs time) + decay handle on an Aux Chart.
- * Viz: [bins, origMs, usedMs, db0…].
+ * Blue fill = captured IR; `--color` fill = same IR after Decay/Shape
+ * (`irDecayGainAt`); dashed line = the fade envelope. Viz: [bins, origMs,
+ * usedMs, db0…].
  */
 export function ImpulseChart(props: ImpulseChartProps) {
   const { data$, decay$, predelay$, shape$, beginEdit, endEdit, className } = props;
@@ -181,6 +188,7 @@ export function ImpulseChart(props: ImpulseChartProps) {
 
   const chartRef = useRef<AuxChartInstance | null>(null);
   const irGraphRef = useRef<AuxGraph | null>(null);
+  const usedGraphRef = useRef<AuxGraph | null>(null);
   const decayGraphRef = useRef<AuxGraph | null>(null);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   const mapRef = useRef({ origMs, pre, decay });
@@ -268,8 +276,10 @@ export function ImpulseChart(props: ImpulseChartProps) {
     resizeRoRef.current = null;
     const inst = chartRef.current;
     const ir = irGraphRef.current;
+    const used = usedGraphRef.current;
     const dec = decayGraphRef.current;
     irGraphRef.current = null;
+    usedGraphRef.current = null;
     decayGraphRef.current = null;
     chartRef.current = null;
     setChart(null);
@@ -279,6 +289,8 @@ export function ImpulseChart(props: ImpulseChartProps) {
       return;
     if (dec)
       disposeGraph(inst, dec);
+    if (used)
+      disposeGraph(inst, used);
     if (ir)
       disposeGraph(inst, ir);
   }, []);
@@ -301,6 +313,18 @@ export function ImpulseChart(props: ImpulseChartProps) {
         });
         ir.element?.classList.add('ir-wave');
         irGraphRef.current = ir;
+      }
+      if (!usedGraphRef.current) {
+        const used = inst.addGraph({
+          dots: null,
+          type: 'L',
+          mode: 'bottom',
+          class: 'ir-used',
+        });
+        used.element?.classList.add('ir-used');
+        usedGraphRef.current = used;
+      }
+      if (!decayGraphRef.current) {
         const dec = inst.addGraph({
           dots: null,
           type: 'L',
@@ -360,6 +384,7 @@ export function ImpulseChart(props: ImpulseChartProps) {
   useEffect(() => {
     const inst = chartRef.current;
     const ir = irGraphRef.current;
+    const used = usedGraphRef.current;
     const dec = decayGraphRef.current;
     if (!inst || !ir)
       return;
@@ -372,6 +397,7 @@ export function ImpulseChart(props: ImpulseChartProps) {
 
     if (bins < 2 || v.length < 3 + bins) {
       ir.set('dots', null);
+      used?.set('dots', null);
       dec?.set('dots', null);
       return;
     }
@@ -384,7 +410,32 @@ export function ImpulseChart(props: ImpulseChartProps) {
     ir.set('dots', irPts);
 
     const usedMs = Math.max(0, Math.min(capturedMs, capturedMs * decay));
-    if (decay < 0.999 && usedMs > 0) {
+    const applyFade = decay < 0.999 && usedMs > 0;
+    const usedPts: { x: number; y: number }[] = [];
+    if (!applyFade) {
+      for (const p of irPts)
+        usedPts.push(p);
+    } else {
+      const denom = Math.max(1, bins - 1);
+      for (let i = 0; i < bins; ++i) {
+        const frac = i / denom;
+        const t = (frac * capturedMs) / usedMs;
+        if (t > 1)
+          break;
+        const irDb = v[3 + i] ?? DB_MIN;
+        usedPts.push({
+          x: pre + frac * capturedMs,
+          y: clampDb(irDb + fadeDb(t, shape)),
+        });
+      }
+      const endX = pre + usedMs;
+      if (!usedPts.length || usedPts[usedPts.length - 1].x < endX - 1e-6)
+        usedPts.push({ x: endX, y: DB_MIN });
+    }
+    used?.set('dots', usedPts);
+    used?.toFront?.();
+
+    if (applyFade) {
       const decayPts: { x: number; y: number }[] = [];
       for (let i = 0; i <= SHAPE_POINTS; ++i) {
         const t = i / SHAPE_POINTS;
@@ -396,6 +447,7 @@ export function ImpulseChart(props: ImpulseChartProps) {
     } else {
       dec?.set('dots', null);
     }
+    dec?.toFront?.();
     reassertGrad();
   }, [chart, data, decay, pre, shape, reassertGrad]);
 
