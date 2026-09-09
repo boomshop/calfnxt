@@ -38,36 +38,8 @@
     > .upper,
     > .lower {
       display: flex;
-      justify-content: space-evenly;
+      justify-content: space-around;
       align-items: center;
-    }
-
-    > .upper {
-      gap: 48px;
-
-      > .sustain {
-        margin-top: -24px;
-      }
-    }
-
-    > .lower {
-      justify-content: center;
-
-      > .attack,
-      > .release {
-        top: -40px;
-      }
-
-      > .look {
-        top: 12px;
-      }
-
-      > .clip {
-        margin-right: 48px;
-      }
-      > .sensitivity {
-        margin-left: 48px;
-      }
     }
   }
 }

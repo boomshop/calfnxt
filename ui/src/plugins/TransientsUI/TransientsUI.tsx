@@ -202,6 +202,7 @@ export function TransientsUI(props: TransientsUIProps) {
               labels={SUSTAIN_LABELS}
               {...edit(paramIds.sustain_threshold)}
               className="sustain"
+              size="large"
             />
           </WithInfo>
 
@@ -241,7 +242,7 @@ export function TransientsUI(props: TransientsUIProps) {
 
           <WithInfo title={transientsInfo.attackTime}>
             <Knob
-              label="Attack"
+              label="Attack ms"
               value$={host.attackTime$}
               min={1}
               max={500}
@@ -262,7 +263,6 @@ export function TransientsUI(props: TransientsUIProps) {
               min={0}
               max={100}
               reset={transientsParamDefault('lookahead')}
-              size="small"
               dots={LOOKAHEAD_DOTS}
               labels={LOOKAHEAD_LABELS}
               {...{ 'value.format': (v: number) => v.toFixed(0) }}
@@ -273,7 +273,7 @@ export function TransientsUI(props: TransientsUIProps) {
 
           <WithInfo title={transientsInfo.releaseTime}>
             <Knob
-              label="Release"
+              label="Release ms"
               value$={host.releaseTime$}
               min={1}
               max={5000}
