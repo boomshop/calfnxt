@@ -1,7 +1,7 @@
 .CrusherUI {
   display: grid;
   grid-template-areas: 'response bits shape';
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr 0.5fr auto;
   grid-template-rows: 1fr;
   align-items: stretch;
 
@@ -12,6 +12,7 @@
   > .bits {
     grid-area: bits;
     align-items: center;
+    justify-content: center;
   }
 
   > .shape {
