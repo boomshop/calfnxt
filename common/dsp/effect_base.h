@@ -47,6 +47,8 @@ protected:
                                 const Steinberg::Vst::TChar* sidechainName = nullptr);
   void addMonoInStereoOut(const Steinberg::Vst::TChar* inName = nullptr,
                           const Steinberg::Vst::TChar* outName = nullptr);
+  /** Event input bus for note hold / MIDI overlay plugins (16 channels). */
+  void addMidiInput(const Steinberg::Vst::TChar* name = nullptr);
 
   /** Last point from inputParameterChanges → plain value. */
   bool applyLastParamPlain(Steinberg::Vst::ProcessData& data, Steinberg::Vst::ParamID id,

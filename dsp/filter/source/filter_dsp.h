@@ -2,6 +2,7 @@
 
 #include "effect_base.h"
 #include "io_stage.h"
+#include "midi_note_hold.h"
 #include "multimode_filter.h"
 #include "spectrum_tap.h"
 #include "viz_source.h"
@@ -38,6 +39,7 @@ public:
   int takeSpectrum(float* out, int maxOut) override;
   const char* vizSpectrumId() const override { return "fft"; }
   void configureVizBins(const char* id, int bins) override;
+  bool handleMidiCommand(const char* json) override;
 
   OBJ_METHODS(FilterPlugin, Plugin::EffectBase)
   DEFINE_INTERFACES
@@ -69,6 +71,8 @@ private:
 
   BlockState makeBlockState() const;
   void resetProcessing();
+  /** Knob frequency, or last held MIDI note → Hz while notes are down. */
+  float effectiveFrequencyHz(const BlockState& state) const;
 
   float params_[kParamCount] {};
   Dsp::IoStage io_;
@@ -77,6 +81,7 @@ private:
   Dsp::MultimodeFilter filter_;
   Dsp::LevelEnvelope envelope_;
   Dsp::SpectrumTap spectrum_;
+  Dsp::MidiNoteHold midi_;
   std::atomic<bool> spectrumActive_{false};
   std::atomic<float> effectiveCutoffHz_ { 1000.f };
   /** After one quiet zero-feed block, resonant state is drained. */

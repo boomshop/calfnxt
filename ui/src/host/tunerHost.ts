@@ -1,5 +1,6 @@
 import { DynamicValue } from '@deutschesoft/awml';
 import { paramIds, pluginMeta } from '../generated/tunerModel';
+import { postMidiAllOff } from '../midi';
 import {
   bindBoolParamToHost,
   bindParamToHost,
@@ -8,7 +9,6 @@ import {
   postBegin,
   postEnd,
 } from '../bind_param';
-import { postToHost } from '../bridge';
 
 export const TUNER_VIZ_ID = 'tuner';
 
@@ -283,7 +283,7 @@ export function createBoundTunerHost(): ITunerHost {
 
   const clearMidiOverride = () => {
     midiOverride$.set([0, 0]);
-    postToHost({ t: 'midi', cmd: 'alloff' });
+    postMidiAllOff();
   };
 
   return {

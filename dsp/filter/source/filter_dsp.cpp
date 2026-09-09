@@ -43,6 +43,7 @@ tresult PLUGIN_API FilterPlugin::initialize(FUnknown* context)
     return result;
 
   addStereoIO();
+  addMidiInput();
   registerParameters(parameters);
   readParamPlains(params_, kParamCount);
   return kResultOk;
@@ -56,6 +57,7 @@ void FilterPlugin::resetProcessing()
   envelope_.reset();
   spectrum_.setSampleRate(sampleRate_);
   spectrum_.reset();
+  midi_.clear();
 }
 
 tresult PLUGIN_API FilterPlugin::setActive(TBool state)
@@ -94,17 +96,37 @@ FilterPlugin::BlockState FilterPlugin::makeBlockState() const
   return s;
 }
 
+float FilterPlugin::effectiveFrequencyHz(const BlockState& state) const
+{
+  if (midi_.active())
+  {
+    const int pitch = midi_.lastPitch();
+    if (pitch >= 0)
+      return std::clamp(Dsp::MidiNoteHold::midiNoteToHz(pitch), 10.f, 20000.f);
+  }
+  return std::clamp(state.frequency, 10.f, 20000.f);
+}
+
+bool FilterPlugin::handleMidiCommand(const char* json)
+{
+  return midi_.handleAllOffCommand(json);
+}
+
 tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
 {
   syncParamPlains(data, params_, kParamCount);
 
+  midi_.consumeClearRequest();
+  midi_.ingest(data.inputEvents);
+
   const BlockState state = makeBlockState();
+  const float baseHz = effectiveFrequencyHz(state);
   spectrumActive_.store(state.spectrumOn, std::memory_order_relaxed);
   filter_.setInertiaMs(state.inertiaMs);
   filter_.setMode(state.mode);
   filter_.setResonanceInertia(state.resonance);
   if (!state.envOn)
-    filter_.setCutoffInertia(state.frequency);
+    filter_.setCutoffInertia(baseHz);
 
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
@@ -115,7 +137,7 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
 
   if (state.bypass && !state.spectrumOn)
   {
-    effectiveCutoffHz_.store(state.frequency, std::memory_order_relaxed);
+    effectiveCutoffHz_.store(baseHz, std::memory_order_relaxed);
     if (hasHostAudio)
       io_.end(data);
     return kResultOk;
@@ -128,7 +150,7 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
   if (quietIn && envIdle && quietDrained_)
   {
     effectiveCutoffHz_.store(
-      state.bypass ? state.frequency : filter_.lastCutoffHz(),
+      state.bypass ? baseHz : filter_.lastCutoffHz(),
       std::memory_order_relaxed);
     if (hasHostAudio)
       io_.end(data);
@@ -148,7 +170,7 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
   // Block-rate envelope prep + log endpoints (avoid per-sample log10).
   if (!state.bypass && state.envOn)
     envelope_.prepare(state.attackMs, state.releaseMs);
-  const float floorHz = std::clamp(state.frequency, 10.f, 20000.f);
+  const float floorHz = baseHz;
   const float ceilHz = std::clamp(state.target, 10.f, 20000.f);
   const float logFloor = std::log10(floorHz);
   const float logCeil = std::log10(ceilHz);
@@ -224,7 +246,7 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
     run(data.outputs[0].channelBuffers64, !hasHostAudio);
 
   if (state.bypass)
-    effectiveCutoffHz_.store(state.frequency, std::memory_order_relaxed);
+    effectiveCutoffHz_.store(baseHz, std::memory_order_relaxed);
   else
     effectiveCutoffHz_.store(filter_.lastCutoffHz(), std::memory_order_relaxed);
 

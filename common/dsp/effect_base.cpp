@@ -88,6 +88,11 @@ void EffectBase::addMonoInStereoOut(const TChar* inName, const TChar* outName)
   addAudioOutput(outName ? outName : STR16("Stereo Out"), SpeakerArr::kStereo);
 }
 
+void EffectBase::addMidiInput(const TChar* name)
+{
+  addEventInput(name ? name : STR16("MIDI In"), 16);
+}
+
 bool EffectBase::applyLastParamPlain(ProcessData& data, ParamID id, float& plainOut)
 {
   if (!data.inputParameterChanges)

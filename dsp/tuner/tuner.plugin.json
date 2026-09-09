@@ -28,6 +28,12 @@
         "name": "Stereo Out",
         "channels": 2
       }
+    ],
+    "event_inputs": [
+      {
+        "name": "MIDI In",
+        "channels": 16
+      }
     ]
   },
   "parameters": [

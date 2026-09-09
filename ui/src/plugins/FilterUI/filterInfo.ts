@@ -14,7 +14,7 @@ export const filterInfo = {
     'Emphasis at the cutoff / center. Low (≈0.7) = smooth Butterworth-ish, natural. Higher = a peak or “sing” at the edge — classic filter scream, auto-wah bite, synth resonance. Very high Q can ring, whistle, or make Mix sound hollow when dry is blended in (the complementary dry path softens then — expect some coloration).',
 
   frequency:
-    'Where the filter sits (Hz). On a low-pass it’s the “open/closed” point; on high-pass the cleanup floor; on band-pass/reject the center. With Envelope on, this is the start of the sweep (quiet detector → here). Drag Target below Freq for a downward sweep (e.g. ducking filter).',
+    'Where the filter sits (Hz). On a low-pass it’s the “open/closed” point; on high-pass the cleanup floor; on band-pass/reject the center. With Envelope on, this is the start of the sweep (quiet detector → here). Drag Target below Freq for a downward sweep (e.g. ducking filter). Held MIDI notes temporarily park the cutoff on that pitch (A440, with Inertia) until note-off — moving this knob clears any held MIDI so the dial is the target again.',
 
   inertia:
     'How lazily Frequency and Resonance catch up when you move them (or when the envelope jumps). Low = snappy, zipper-free but still quick — good for deliberate tweaks. Higher = portamento / “liquid” filter moves — musical on envelope auto-wah, less twitchy on busy sources. Too high can feel laggy behind the groove.',

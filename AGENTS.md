@@ -280,8 +280,9 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
   **Custom** entry (no rewrite); Key stays unhighlighted until picked; editing any
   note key jumps Scale→Custom and clears Key highlight (no reverse-match from bits).
   MIDI event input: held notes (no sustain) temporarily replace the UI mask by
-  pitch class; viz `kind:"midi"` `[active,mask]`; Scale/Key change → UI `alloff`.
-  Note markers: `--color-accent` normally, `--color-warn` while MIDI overrides.
+  pitch class (`common/dsp/midi_note_hold.h`); viz `kind:"midi"` `[active,mask]`;
+  Scale/Key change → UI `alloff`. Note markers: `--color-accent` normally,
+  `--color-warn` while MIDI overrides.
   Header Voice/Strings/Guitar writes
   range/retune/flex/Keep/formant/unvoiced/octave. Bass uses Guitar + Low toward 31 Hz (B0); Low floor is 25 Hz.
 - UI blocks: Notes (scale/key/mask/A4), Detector, Correction, Vibrato. History is full-width.
@@ -355,7 +356,8 @@ Ideas only if explicitly revived — do not start these unprompted:
 | Multiband Limiter           | `dsp/mblimiter/source/*_dsp.*`, `band_splitter.h`, `lookahead_limiter.h`; UI `ui/src/plugins/MblimiterUI/*`, `host/mblimiterHost.ts`                                                                |
 | Harmonics                   | `dsp/harmonics/source/*_dsp.*`, `common/dsp/tap_distortion.h`; UI `ui/src/plugins/HarmonicsUI/*`, `host/harmonicsHost.ts`                                                                           |
 | Analyzer                    | `dsp/analyzer/source/*_dsp.*`, `common/dsp/fft_r2.h`, `common/dsp/spectrum_tap.h`; UI `ui/src/plugins/AnalyzerUI/*`, `host/analyzerHost.ts`, `widgets/SpectrumChart/*`                              |
-| Filter DSP                  | `dsp/filter/source/*_dsp.*`, `common/dsp/multimode_filter.h`, `common/dsp/inertia.h`                                                                                                                |
+| Filter DSP                  | `dsp/filter/source/*_dsp.*`, `common/dsp/multimode_filter.h`, `common/dsp/inertia.h`, `common/dsp/midi_note_hold.h` (MIDI → cutoff)                                                                  |
+| MIDI note hold (shared)     | `common/dsp/midi_note_hold.h`, UI `ui/src/midi.ts` (`postMidiAllOff`); Tuner mask + Filter Hz                                                                                                         |
 | Ring Modulator DSP          | `dsp/ringmod/source/*_dsp.*`, `common/dsp/simple_lfo.h`                                                                                                                                             |
 | Pulsator DSP                | `dsp/pulsator/source/*_dsp.*`, `common/dsp/simple_lfo.h`                                                                                                                                            |
 | Crusher DSP                 | `dsp/crusher/source/*_dsp.*`, `common/dsp/bitreduction.h`; UI `ui/src/plugins/CrusherUI/*`, `widgets/CrusherChart/*`                                                                                 |

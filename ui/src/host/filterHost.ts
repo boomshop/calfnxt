@@ -8,6 +8,7 @@ import {
   postBegin,
   postEnd,
 } from '../bind_param';
+import { postMidiAllOff } from '../midi';
 import {
   EQ_SPECTRUM_ENTRIES,
   type EqFilterType,
@@ -72,6 +73,8 @@ export type IFilterHost = {
   filterBands: IEqualizerBand[];
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
+  /** Freq knob / chart drag: release MIDI note-hold so the knob is the target again. */
+  clearMidiOverride: () => void;
 };
 
 function paramDefault(name: keyof typeof paramIds, fallback = 0): number {
@@ -308,6 +311,7 @@ export function createBoundFilterHost(): IFilterHost {
   const curveFreq$ = DynamicValue.fromConstant(frequency$.value);
   bindVizHz(curveFreq$, 'filt');
   frequency$.subscribe((hz) => {
+    postMidiAllOff();
     if (!envPower$.value) curveFreq$.set(hz);
   }, false);
   envPower$.subscribe((on) => {
@@ -346,5 +350,6 @@ export function createBoundFilterHost(): IFilterHost {
     ),
     beginEdit: postBegin,
     endEdit: postEnd,
+    clearMidiOverride: postMidiAllOff,
   };
 }
