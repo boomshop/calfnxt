@@ -548,7 +548,7 @@ export function MblimiterUI(props: MblimiterUIProps) {
         </div>
 
         <div className="block meter">
-          <div className="title">Attenuation</div>
+          <div className="title">GR</div>
           <WithInfo title={mblimiterInfo.gr}>
             <LevelMeter
               className="gr"
@@ -557,7 +557,6 @@ export function MblimiterUI(props: MblimiterUIProps) {
               max={24}
               base={0}
               reverse
-              label="GR"
               show_scale
               falling={0}
               show_hold={false}

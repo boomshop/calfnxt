@@ -43,11 +43,17 @@
   }
 
   &.aux-preset-medium {
+    --aux-main-fontsize: 14px;
+
+    > .aux-label {
+      bottom: -2px;
+    }
+
     > .aux-value {
       width: 80px;
 
       > input {
-        font-size: 18px;
+        font-size: 16px;
       }
     }
   }

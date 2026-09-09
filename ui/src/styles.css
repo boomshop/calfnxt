@@ -30,9 +30,9 @@
 
   --gap: 8px;
 
-  --font-size-tiny: 8px;
-  --font-size-small: 10px;
-  --font-size: 15px;
+  --font-size-tiny: 9px;
+  --font-size-small: 13px;
+  --font-size: 16px;
   --font-size-large: 20px;
 
   --aux-main-smallfontsize: var(--font-size-tiny);
@@ -137,7 +137,7 @@ body,
   background: var(--background);
   color: var(--color);
   font:
-    14px/1.4 'Pragati Narrow',
+    16px/1.4 'PragatiNarrow',
     'Oswald',
     sans-serif;
   user-select: none;
@@ -181,7 +181,9 @@ textarea::selection {
     text-align: center;
     padding: 4px;
     background: var(--background-lesser);
-    font-size: var(--font-size-small);
+    color: var(--color-least);
+    font-family: Oswald;
+    font-size: 12px;
   }
 
   &:has(.title) {
@@ -194,9 +196,17 @@ textarea::selection {
 
   > .block {
     background: var(--background);
+
+    &:has(.title) {
+      padding-top: 26px !important;
+    }
+
     > .title {
       background: transparent;
       color: var(--color-least);
+      padding: 2px;
+      opacity: 0.75;
+      font-size: 11px;
     }
   }
 }
@@ -252,6 +262,7 @@ textarea::selection {
       > .aux-gridlabel {
         fill: var(--color-least);
         font-size: 9px;
+        font-family: Oswald;
       }
 
       > .aux-gridlabel.aux-vertical {

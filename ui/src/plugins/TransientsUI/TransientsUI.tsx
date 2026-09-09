@@ -241,7 +241,7 @@ export function TransientsUI(props: TransientsUIProps) {
 
           <WithInfo title={transientsInfo.attackTime}>
             <Knob
-              label="Attack ms"
+              label="Attack"
               value$={host.attackTime$}
               min={1}
               max={500}
@@ -273,7 +273,7 @@ export function TransientsUI(props: TransientsUIProps) {
 
           <WithInfo title={transientsInfo.releaseTime}>
             <Knob
-              label="Release ms"
+              label="Release"
               value$={host.releaseTime$}
               min={1}
               max={5000}

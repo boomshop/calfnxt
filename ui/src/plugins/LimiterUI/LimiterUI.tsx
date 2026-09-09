@@ -263,7 +263,7 @@ export function LimiterUI(props: LimiterUIProps) {
         </div>
 
         <div className="block meter">
-          <div className="title">Attenuation</div>
+          <div className="title">GR</div>
           <WithInfo title={limiterInfo.gr}>
             <LevelMeter
               className="gr"
@@ -272,7 +272,6 @@ export function LimiterUI(props: LimiterUIProps) {
               max={24}
               base={0}
               reverse
-              label="GR"
               show_scale
               falling={0}
               show_hold={false}

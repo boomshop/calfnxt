@@ -14,7 +14,7 @@
     grid-template-areas: 'bpm tap' 'ms sync';
     grid-template-columns: auto auto;
     grid-template-rows: auto auto;
-    gap: var(--gap);
+    gap: var(--gap) 16px;
 
     > .sync {
       grid-area: sync;
