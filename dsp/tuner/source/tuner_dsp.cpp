@@ -3,6 +3,8 @@
 #include "base/source/fstreamer.h"
 #include "gain_util.h"
 
+#include "pluginterfaces/vst/ivstevents.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -50,6 +52,7 @@ tresult PLUGIN_API TunerPlugin::initialize(FUnknown* context)
     return result;
 
   addStereoIO();
+  addEventInput(STR16("MIDI In"), 16);
   registerParameters(parameters);
   readParamPlains(params_, kParamCount);
   return kResultOk;
@@ -113,6 +116,8 @@ void TunerPlugin::resetProcessing()
   duckHops_ = 0;
   leapHold_ = 0;
   dryHops_ = 0;
+  clearMidiNotes();
+  midiClearRequest_.store(false, std::memory_order_relaxed);
   std::memset(yinBuf_, 0, sizeof(yinBuf_));
   std::memset(histBuf_, 0, sizeof(histBuf_));
   histPos_ = 0;
@@ -275,9 +280,98 @@ void TunerPlugin::configureVizBins(const char* id, int bins)
   histVisibleSlots_ = std::max(kHistMinSlots, std::min(kHistSlots, bins));
 }
 
+void TunerPlugin::clearMidiNotes()
+{
+  std::memset(midiNoteCount_, 0, sizeof(midiNoteCount_));
+  midiMask_.store(0, std::memory_order_relaxed);
+  midiActive_.store(false, std::memory_order_relaxed);
+}
+
+void TunerPlugin::rebuildMidiMask()
+{
+  uint16_t mask = 0;
+  for (int n = 0; n < 128; ++n)
+  {
+    if (midiNoteCount_[n] > 0)
+      mask |= static_cast<uint16_t>(1u << (n % 12));
+  }
+  midiMask_.store(mask, std::memory_order_relaxed);
+  midiActive_.store(mask != 0, std::memory_order_relaxed);
+}
+
+void TunerPlugin::noteOnMidi(int pitch)
+{
+  if (pitch < 0 || pitch > 127)
+    return;
+  if (midiNoteCount_[pitch] < 255)
+    ++midiNoteCount_[pitch];
+  rebuildMidiMask();
+}
+
+void TunerPlugin::noteOffMidi(int pitch)
+{
+  if (pitch < 0 || pitch > 127)
+    return;
+  if (midiNoteCount_[pitch] > 0)
+    --midiNoteCount_[pitch];
+  rebuildMidiMask();
+}
+
+void TunerPlugin::ingestMidiEvents(IEventList* events)
+{
+  if (!events)
+    return;
+  const int32 count = events->getEventCount();
+  for (int32 i = 0; i < count; ++i)
+  {
+    Event e {};
+    if (events->getEvent(i, e) != kResultOk)
+      continue;
+    if (e.type == Event::kNoteOnEvent)
+    {
+      // Velocity 0 is a note-off in some hosts.
+      if (e.noteOn.velocity <= 0.f)
+        noteOffMidi(e.noteOn.pitch);
+      else
+        noteOnMidi(e.noteOn.pitch);
+    }
+    else if (e.type == Event::kNoteOffEvent)
+    {
+      noteOffMidi(e.noteOff.pitch);
+    }
+  }
+}
+
+int TunerPlugin::takeMidiOverride(float* out, int maxOut)
+{
+  if (!out || maxOut < 2)
+    return 0;
+  out[0] = midiActive_.load(std::memory_order_relaxed) ? 1.f : 0.f;
+  out[1] = static_cast<float>(midiMask_.load(std::memory_order_relaxed));
+  return 2;
+}
+
+bool TunerPlugin::handleMidiCommand(const char* json)
+{
+  if (!json)
+    return false;
+  // Minimal parse: look for "alloff" in the cmd field.
+  if (std::strstr(json, "alloff") == nullptr)
+    return false;
+  midiClearRequest_.store(true, std::memory_order_relaxed);
+  // Optimistic viz clear so the UI drops warn markers without waiting a block.
+  midiMask_.store(0, std::memory_order_relaxed);
+  midiActive_.store(false, std::memory_order_relaxed);
+  return true;
+}
+
 tresult PLUGIN_API TunerPlugin::process(ProcessData& data)
 {
   syncParamPlains(data, params_, kParamCount);
+
+  if (midiClearRequest_.exchange(false, std::memory_order_relaxed))
+    clearMidiNotes();
+  ingestMidiEvents(data.inputEvents);
 
   const BlockState state = makeBlockState();
   updateLatency(state, false);
@@ -321,7 +415,10 @@ tresult PLUGIN_API TunerPlugin::process(ProcessData& data)
   cp.vibHz = state.vibHz;
   cp.octaveProtect = state.octaveProtect;
   cp.refHz = state.refHz;
-  cp.noteMask = state.noteMask;
+  if (midiActive_.load(std::memory_order_relaxed))
+    cp.noteMask = midiMask_.load(std::memory_order_relaxed);
+  else
+    cp.noteMask = state.noteMask;
 
   auto run = [&](auto** out, bool zeros) {
     for (int32 i = 0; i < nFrames; ++i)

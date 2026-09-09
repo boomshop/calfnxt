@@ -40,6 +40,9 @@ public:
   int takeOutputLevelsDb(float* out, int maxOut) override { return io_.takeOutputLevelsDb(out, maxOut); }
   int takePitchHistory(float* out, int maxOut) override;
   const char* vizPitchId() const override { return "tuner"; }
+  int takeMidiOverride(float* out, int maxOut) override;
+  const char* vizMidiId() const override { return "tuner"; }
+  bool handleMidiCommand(const char* json) override;
   void configureVizBins(const char* id, int bins) override;
 
   OBJ_METHODS(TunerPlugin, Plugin::EffectBase)
@@ -93,6 +96,11 @@ private:
   void copyYinWindow(const BlockState& state, int latency);
   void histFeed(float inMidi, float tgtMidi, float conf, float flags, float corrCents);
   void publishHistSnapshot();
+  void clearMidiNotes();
+  void rebuildMidiMask();
+  void ingestMidiEvents(Steinberg::Vst::IEventList* events);
+  void noteOnMidi(int pitch);
+  void noteOffMidi(int pitch);
 
   float params_[kParamCount] {};
   Dsp::IoStage io_;
@@ -114,6 +122,12 @@ private:
   int duckHops_ = 0;
   int leapHold_ = 0;
   int dryHops_ = 0;
+
+  /** Held MIDI notes (no sustain). Counts allow stacked note-ons. */
+  uint8_t midiNoteCount_[128] {};
+  std::atomic<uint16_t> midiMask_ {0};
+  std::atomic<bool> midiActive_ {false};
+  std::atomic<bool> midiClearRequest_ {false};
 
   std::mutex histMutex_;
   float histBuf_[kHistBufSize] {};

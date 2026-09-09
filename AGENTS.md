@@ -279,12 +279,16 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 - Scale templates in the UI only write the 12 note bits. Select has a session-only
   **Custom** entry (no rewrite); Key stays unhighlighted until picked; editing any
   note key jumps Scale→Custom and clears Key highlight (no reverse-match from bits).
+  MIDI event input: held notes (no sustain) temporarily replace the UI mask by
+  pitch class; viz `kind:"midi"` `[active,mask]`; Scale/Key change → UI `alloff`.
+  Note markers: `--color-accent` normally, `--color-warn` while MIDI overrides.
   Header Voice/Strings/Guitar writes
   range/retune/flex/Keep/formant/unvoiced/octave. Bass uses Guitar + Low toward 31 Hz (B0); Low floor is 25 Hz.
 - UI blocks: Notes (scale/key/mask/A4), Detector, Correction, Vibrato. History is full-width.
 - Artificial vibrato (UI block): `vib_on` + Depth (`settle`) + Rate + Delay + Fade after lock. Keep (`vibrato`) is preserve-natural.
 - Viz id `"tuner"` kind `"pitch"`: `[inMidi, targetMidi, conf, flags, corrCents] × slots + phase`
   (flags: 1 voiced, 2 unvoiced, 4 octave-suspect). Piano-roll widget is display-only.
+  kind `"midi"`: `[active, maskBits]` for the note-key marker colour.
 
 ### Whammy
 

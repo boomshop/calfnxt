@@ -122,18 +122,24 @@
             min-height: 0;
             padding: 0;
 
-            &.aux-active {
-              &::after {
-                content: '';
-                width: 8px;
-                height: 8px;
-                background: var(--color-warn);
-                position: absolute;
-                top: 50%;
-                right: 4px;
-                transform: translateY(-50%);
-              }
+            &::after {
+              content: none;
             }
+          }
+
+          > .note-key.is-target .Toggle::after {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--color-accent);
+            position: absolute;
+            top: 50%;
+            right: 4px;
+            transform: translateY(-50%);
+          }
+
+          &.midi-override > .note-key.is-target .Toggle::after {
+            background: var(--color-warn);
           }
 
           .Toggle.key-white,

@@ -22,8 +22,10 @@ namespace Ui {
    *   {t:"viz", id:"mod", kind:"comb", v:[nL,nR,(f,dB)…]} // Flanger peak/notch stems
    *   {t:"viz", id:"filt", kind:"hz", v:[fcHz]}       // live filter cutoff
    *   {t:"viz", id:"tuner", kind:"pitch", v:[…]}      // history: midi, target, conf, flags, corrCents
+   *   {t:"viz", id:"tuner", kind:"midi", v:[active, mask]} // held MIDI pitch-class override
    *   {t:"viz", id:"impulse", kind:"wave", v:[bins,origMs,usedMs,db…]}
    *   UI→host {t:"vizcfg", id:"fft"|"mod"|"impulse", bins:N} after measuring pixel width.
+   *   UI→host {t:"midi", cmd:"alloff"} clears held MIDI notes (Tuner).
    */
 class IVizSource
 {
@@ -295,6 +297,31 @@ public:
 
   /** Stream id for pitch history (nullptr = do not flush). */
   virtual const char* vizPitchId() const { return nullptr; }
+
+  /**
+   * MIDI note-mask override (Tuner).
+   * Layout: [active (0/1), maskBits (0…4095, bit0=C … bit11=B)].
+   * active=1 while any MIDI notes are held; then DSP uses mask instead of UI notes.
+   * Flushed as {t:"viz", id, kind:"midi", v:[…]}.
+   */
+  virtual int takeMidiOverride(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for MIDI override (nullptr = do not flush). */
+  virtual const char* vizMidiId() const { return nullptr; }
+
+  /**
+   * UI MIDI commands (`{t:"midi", cmd:"alloff"}`). Returns true if consumed.
+   */
+  virtual bool handleMidiCommand(const char* json)
+  {
+    (void)json;
+    return false;
+  }
 
   /**
    * IR waveform envelope (Impulse).

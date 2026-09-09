@@ -1046,6 +1046,9 @@ int main(int argc, char** argv)
     "if(src.cmd!=null)o.cmd=String(src.cmd);"
     "if(src.path!=null)o.path=String(src.path);"
     "}"
+    "if(src.t==='midi'){"
+    "if(src.cmd!=null)o.cmd=String(src.cmd);"
+    "}"
     "window.webkit.messageHandlers.calfnxt.postMessage(JSON.stringify(o));}};"
     ;
   auto* script = webkit_user_script_new(bridge, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,

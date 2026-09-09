@@ -68,13 +68,13 @@ export const tunerInfo = {
     'Concert A in Hz (the “zero cents” of the scale). 440 = pop/studio. 442–444 = typical orchestra house pitch. 415 ≈ Baroque (about a semitone down). 432 = the alternate “natural” camp. 466 ≈ high historical Chorton (about a semitone up). This is not a transpose — it slides every target together. If the section is at 442 and you leave 440, everything sits a few cents “corrected” the wrong way.',
 
   notes:
-    'Which pitch classes are legal targets. Scales in this UI only set these twelve bits; the engine never sees “major”, only the mask. Toggle notes for custom sets (e.g. pentatonic, drone + fifths). All off is treated as chromatic so the plugin cannot freeze with nowhere to go.',
+    'Which pitch classes are legal targets. Scales in this UI only set these twelve bits; the engine never sees “major”, only the mask. Toggle notes for custom sets (e.g. pentatonic, drone + fifths). All off is treated as chromatic so the plugin cannot freeze with nowhere to go. Held MIDI notes temporarily replace this mask (octaves ignored); the accent/warn marker follows the effective targets.',
 
   scale:
-    'Convenience only: writes the note toggles from a template, rotated by Key when one is selected (otherwise from C). Does not live on the DSP — automation/presets store the twelve notes. Custom means “I edited the keys myself” and does not rewrite anything. After reload the select resets to Chromatic even if the bits are still a saved mask — pick the scale again if you want the label to match.',
+    'Convenience only: writes the note toggles from a template, rotated by Key when one is selected (otherwise from C). Does not live on the DSP — automation/presets store the twelve notes. Custom means “I edited the keys myself” and does not rewrite anything. Changing Scale also clears any held MIDI override so these static bits apply again until you play MIDI. After reload the select resets to Chromatic even if the bits are still a saved mask — pick the scale again if you want the label to match.',
 
   key:
-    'Root for the current scale template (C major vs E♭ major, etc.). Nothing is highlighted until you pick one; then that root stays lit while Scale is not Custom. Changing Key rewrites the twelve bits from the current template. Editing any note key jumps Scale to Custom and clears this highlight.',
+    'Root for the current scale template (C major vs E♭ major, etc.). Nothing is highlighted until you pick one; then that root stays lit while Scale is not Custom. Changing Key rewrites the twelve bits from the current template and clears any held MIDI override. Editing any note key jumps Scale to Custom and clears this highlight.',
 
   history:
     'Scrolling piano roll (~10 s), display only — not a Melodyne editor. Blue = detected pitch (natural vibrato included). Faint dashed = scale target (the grid, not the audio). Warn colour = processed pitch (Retune scoop + added vibrato). Header In / Targ / Out hide each trace. Octave-suspect dots sit on In. The strip under the roll is pull amount: black = none, accent = a semitone, warn = a whole tone, white = two whole tones. Gaps are unvoiced (breath / S / bow / pick), left unpitched.',

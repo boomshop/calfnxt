@@ -136,6 +136,34 @@ const VIB_RATE_LABELS = [
   { pos: 10, label: '10' },
 ];
 
+function TunerNoteKey(props: {
+  state$: DynamicValue<boolean>;
+  label: string;
+  black: boolean;
+  midiActive: boolean;
+  midiOn: boolean;
+  onUserEdit: () => void;
+}) {
+  const on = useDynamicValueReadonly(props.state$, false);
+  const target = props.midiActive ? props.midiOn : on;
+  const cls = [
+    'note-key',
+    props.black ? 'key-black' : 'key-white',
+    target ? 'is-target' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return (
+    <span className={cls} onPointerDown={props.onUserEdit}>
+      <Toggle
+        state$={props.state$}
+        label={props.label}
+        className={props.black ? 'key-black' : 'key-white'}
+      />
+    </span>
+  );
+}
+
 export function TunerUI(props: TunerUIProps) {
   const { host } = props;
   const edit = (id: number) => ({
@@ -144,6 +172,9 @@ export function TunerUI(props: TunerUIProps) {
   });
   const profile = useDynamicValueReadonly(host.profile$, 0);
   const detect = useDynamicValueReadonly(host.detect$, 0);
+  const midiOv = useDynamicValueReadonly(host.midiOverride$, [0, 0]);
+  const midiActive = (midiOv[0] ?? 0) >= 0.5;
+  const midiMask = Math.round(midiOv[1] ?? 0) & 0x0fff;
   const src = tunerSourceDefaults(profile);
   // Scale / Key are session UI only (DSP stores the 12 note bits). No reverse
   // match from bits — after reload labels reset; edits stay consistent in-session.
@@ -155,6 +186,7 @@ export function TunerUI(props: TunerUIProps) {
 
   useEffect(() => {
     return scale$.subscribe((v) => {
+      host.clearMidiOverride();
       const i = Math.round(Number(v));
       if (i === TUNER_SCALE_CUSTOM) return;
       if (i < 0 || i >= TUNER_SCALE_TEMPLATES.length) return;
@@ -262,6 +294,7 @@ export function TunerUI(props: TunerUIProps) {
               entries={TUNER_KEY_ENTRIES}
               value={key}
               onChange={(v) => {
+                host.clearMidiOverride();
                 setKey(v);
                 const i = Math.round(Number(scale$.value));
                 if (i === TUNER_SCALE_CUSTOM) return;
@@ -270,23 +303,21 @@ export function TunerUI(props: TunerUIProps) {
             />
           </WithInfo>
           <WithInfo title={tunerInfo.notes} className="info-block keys">
-            <div className="note-row">
+            <div
+              className={
+                midiActive ? 'note-row midi-override' : 'note-row'
+              }
+            >
               {host.notes$.map((dv, i) => (
-                <span
+                <TunerNoteKey
                   key={TUNER_NOTE_LABELS[i]}
-                  className="note-key"
-                  onPointerDown={markNotesCustom}
-                >
-                  <Toggle
-                    state$={dv}
-                    label={TUNER_NOTE_LABELS[i]}
-                    className={
-                      i === 1 || i === 3 || i === 6 || i === 8 || i === 10
-                        ? 'key-black'
-                        : 'key-white'
-                    }
-                  />
-                </span>
+                  state$={dv}
+                  label={TUNER_NOTE_LABELS[i]}
+                  black={i === 1 || i === 3 || i === 6 || i === 8 || i === 10}
+                  midiActive={midiActive}
+                  midiOn={((midiMask >> i) & 1) !== 0}
+                  onUserEdit={markNotesCustom}
+                />
               ))}
             </div>
           </WithInfo>

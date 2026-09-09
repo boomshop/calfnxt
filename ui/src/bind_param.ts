@@ -14,6 +14,7 @@ const vizCorrApplies = new Map<string, HostApply>();
 const vizGonioApplies = new Map<string, VizLevelsApply>();
 const vizEnvelopeApplies = new Map<string, (v: Float32Array) => void>();
 const vizPitchApplies = new Map<string, (v: Float32Array) => void>();
+const vizMidiApplies = new Map<string, VizLevelsApply>();
 const vizGrApplies = new Map<string, HostApply>();
 const vizGrArrayApplies = new Map<string, VizLevelsApply>();
 const vizBandIoApplies = new Map<string, VizLevelsApply>();
@@ -71,6 +72,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizEnvelopeApplies.get(msg.id)?.(new Float32Array(msg.v));
   if (msg.t === "viz" && msg.kind === "pitch" && Array.isArray(msg.v))
     vizPitchApplies.get(msg.id)?.(new Float32Array(msg.v));
+  if (msg.t === "viz" && msg.kind === "midi" && Array.isArray(msg.v))
+    vizMidiApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "gr" && Array.isArray(msg.v) && typeof msg.v[0] === "number") {
     vizGrApplies.get(msg.id)?.(msg.v[0]);
     vizGrArrayApplies.get(msg.id)?.(msg.v);
@@ -256,6 +259,15 @@ export function bindVizPitch(dv: DynamicValue<Float32Array | null>, id: string):
   vizPitchApplies.set(id, (v) => dv.set(v));
   return () => {
     vizPitchApplies.delete(id);
+  };
+}
+
+/** Wire MIDI override state: `[active, maskBits]` (id e.g. `"tuner"`). */
+export function bindVizMidi(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizMidiApplies.set(id, (v) => dv.set(v.slice()));
+  return () => {
+    vizMidiApplies.delete(id);
   };
 }
 

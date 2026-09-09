@@ -3,10 +3,12 @@ import { paramIds, pluginMeta } from '../generated/tunerModel';
 import {
   bindBoolParamToHost,
   bindParamToHost,
+  bindVizMidi,
   bindVizPitch,
   postBegin,
   postEnd,
 } from '../bind_param';
+import { postToHost } from '../bridge';
 
 export const TUNER_VIZ_ID = 'tuner';
 
@@ -180,10 +182,14 @@ export type ITunerHost = {
   ref$: DynamicValue<number>;
   notes$: DynamicValue<boolean>[];
   pitchData$: DynamicValue<Float32Array | null>;
+  /** DSP viz: `[active, maskBits]` — held MIDI pitch classes override the UI mask. */
+  midiOverride$: DynamicValue<number[]>;
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
   applyProfile: (profile: number) => void;
   applyScale: (templateIndex: number, key: number) => void;
+  /** UI→DSP: drop held MIDI notes so the static note toggles apply again. */
+  clearMidiOverride: () => void;
 };
 
 function paramDefault(name: keyof typeof paramIds, fallback = 0): number {
@@ -272,6 +278,13 @@ export function createBoundTunerHost(): ITunerHost {
 
   const pitchData$ = DynamicValue.fromConstant<Float32Array | null>(null);
   bindVizPitch(pitchData$, TUNER_VIZ_ID);
+  const midiOverride$ = DynamicValue.fromConstant<number[]>([0, 0]);
+  bindVizMidi(midiOverride$, TUNER_VIZ_ID);
+
+  const clearMidiOverride = () => {
+    midiOverride$.set([0, 0]);
+    postToHost({ t: 'midi', cmd: 'alloff' });
+  };
 
   return {
     meta: pluginMeta,
@@ -299,9 +312,11 @@ export function createBoundTunerHost(): ITunerHost {
     ref$: bindNum('ref', 440),
     notes$,
     pitchData$,
+    midiOverride$,
     beginEdit: postBegin,
     endEdit: postEnd,
     applyProfile,
     applyScale,
+    clearMidiOverride,
   };
 }

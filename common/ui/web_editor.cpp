@@ -999,6 +999,13 @@ void WebEditor::flushViz()
         flushVizArray(pitchId, "pitch", envBuf, nPitch);
       }
     }
+
+    if (const char* midiId = vizSource_->vizMidiId())
+    {
+      float midi[2];
+      if (vizSource_->takeMidiOverride(midi, 2) == 2)
+        flushVizArray(midiId, "midi", midi, 2);
+    }
   }
 
   if (lastVizFlush_.time_since_epoch().count() != 0)
@@ -1503,6 +1510,13 @@ bool WebEditor::onWebMessage(const char* json)
     }
     if (vizSource_)
       vizSource_->handleIrCommand(json);
+    return true;
+  }
+
+  if (jsonHasType(json, "midi"))
+  {
+    if (vizSource_)
+      vizSource_->handleMidiCommand(json);
     return true;
   }
 
