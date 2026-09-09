@@ -55,7 +55,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 | Plugin | Bundle | Highlights |
 |--------|--------|------------|
 | **Equalizer** | `calfNXTEqualizer.vst3` | 16-band parametric / dyn EQ; Listen; Mono; interactive response |
-| **Filter** | `calfNXTFilter.vst3` | Multimode LP/HP/BP/BR/AP; optional envelope; Mono; spectrum overlay |
+| **Filter** | `calfNXTFilter.vst3` | Multimode LP/HP/BP/BR/AP; optional envelope; Mono; spectrum overlay; MIDI note-hold can drive cutoff (Inertia-smoothed) |
 
 ### Harmonics
 
@@ -94,7 +94,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 
 | Plugin | Bundle | Highlights |
 |--------|--------|------------|
-| **Tuner** | `calfNXTTuner.vst3` | Realtime pitch correction (Voice / Strings / Guitar); linked stereo PSOLA; scale + piano-roll history. First cut — DSP is expected to keep changing. |
+| **Tuner** | `calfNXTTuner.vst3` | Realtime pitch correction (Voice / Strings / Guitar); linked stereo PSOLA; scale + piano-roll history; MIDI note-hold overrides scale mask while notes are held. First cut — DSP is expected to keep changing. |
 | **Octaver** | `calfNXTOctaver.vst3` | Polyphonic-friendly octave stack (−2/−1/+1 PSOLA + Sub); Voice / Cello / Bass / Guitar; linked stereo F0; pitch-roll history. |
 | **Whammy** | `calfNXTWhammy.vst3` | Delay-line pitch pedal ±24 st (up and down); Free/ST/WT snap; Fast/Normal/Smooth/Studio grains; Mix/Glide/Tone. |
 
