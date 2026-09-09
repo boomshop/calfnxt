@@ -147,6 +147,12 @@ type AuxChartInstance = {
   removeHandle?: (h: unknown) => void;
 };
 
+type AuxHandleInstance = {
+  set: (k: string, v: unknown) => unknown;
+  get?: (k: string) => unknown;
+  isDestructed?: () => boolean;
+};
+
 export interface ImpulseChartProps {
   data$: DynamicValue<number[]>;
   decay$: DynamicValue<number>;
@@ -170,11 +176,15 @@ export function ImpulseChart(props: ImpulseChartProps) {
 
   const origMs = origMsFromWave(data);
   const pre = clampPredelay(predelay);
+  const handleX = decayToX(decay, origMs, pre);
+  const waveReady = data.length >= 3 && Math.round(data[0] ?? 0) >= 2;
 
   const chartRef = useRef<AuxChartInstance | null>(null);
   const irGraphRef = useRef<AuxGraph | null>(null);
   const decayGraphRef = useRef<AuxGraph | null>(null);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
+  const mapRef = useRef({ origMs, pre, decay });
+  mapRef.current = { origMs, pre, decay };
   const [chart, setChart] = useState<AuxChartInstance | null>(null);
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
   const [gradTarget, setGradTarget] = useState<SVGElement | null>(null);
@@ -190,6 +200,9 @@ export function ImpulseChart(props: ImpulseChartProps) {
         z: 0.707,
         y_min: DB_MIN,
         y_max: DB_MAX,
+        // Default ChartHandle.x is 0, which clamps to x_min (15%). Seed the
+        // mapped decay so addHandle's range_x snap does not park there.
+        x: decayToX(mapRef.current.decay, origMs, pre),
         x_min: pre + DECAY_MIN * origMs,
         x_max: pre + origMs,
         show_axis: false,
@@ -206,12 +219,14 @@ export function ImpulseChart(props: ImpulseChartProps) {
         {
           name: 'x',
           backendValue: decay$,
-          transformReceive: (d: number) => decayToX(d, origMs, pre),
-          transformSend: (x: number) => xToDecay(x, origMs, pre),
+          transformReceive: (d: number) =>
+            decayToX(d, mapRef.current.origMs, mapRef.current.pre),
+          transformSend: (x: number) =>
+            xToDecay(x, mapRef.current.origMs, mapRef.current.pre),
         },
       ],
     ],
-    [decay$, origMs, pre],
+    [decay$],
   );
 
   const handleEvents = useMemo(
@@ -383,6 +398,18 @@ export function ImpulseChart(props: ImpulseChartProps) {
     }
     reassertGrad();
   }, [chart, data, decay, pre, shape, reassertGrad]);
+
+  // After addHandle (range_x snap) and after the IR span is applied.
+  // ChartHandle defaults x=0 → x_min (15%); the decay$ binding does not
+  // replay when only the chart range / IR length changes.
+  useEffect(() => {
+    const h = handle as AuxHandleInstance | undefined;
+    if (!chart || !h || h.isDestructed?.())
+      return;
+    if (h.get?.('interacting'))
+      return;
+    h.set('x', handleX);
+  }, [chart, handle, handleX, waveReady]);
 
   useEffect(() => () => detach(), [detach]);
 
