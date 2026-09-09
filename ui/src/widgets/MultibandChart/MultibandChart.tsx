@@ -472,6 +472,7 @@ export function MultibandChart(props: MultibandChartProps) {
             z: MB_XOVER_Q,
             y_min: MB_GAIN_MIN,
             y_max: MB_GAIN_MAX,
+            min_size: 0,
             show_axis: false,
           }))
         : [],
@@ -583,10 +584,7 @@ export function MultibandChart(props: MultibandChartProps) {
       mark(threshHandles, b);
       const listening = !!listen$?.[b]?.value;
       // mode change re-renders from cached dots[] via Graph (no path rewrite).
-      graph?.set?.(
-        'mode',
-        b === selectedBand || listening ? 'bottom' : 'line',
-      );
+      graph?.set?.('mode', b === selectedBand || listening ? 'bottom' : 'line');
       const bypassed = derived.bypassed$[b]?.value ?? false;
       graph?.element?.classList.toggle('mb-bypassed', bypassed);
     }
