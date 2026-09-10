@@ -5,11 +5,10 @@
 </p>
 
 **calfNXT** is the successor to [Calf Studio Gear](https://calf-studio-gear.org):
-a **VST3** plugin suite with a React + AUX web UI (**Linux + X11**). The editor
-is **not** the classic Calf in-process GTK UI: WebKitGTK runs only in
-**`calfnxt-web-host`**, so the plugin `.so` stays free of GTK/WebKit. See
-[Editor architecture](#editor-architecture). Classic Calf DSP heritage is reused
-where it fits, substantially reworked for this stack.
+a **VST3** plugin suite with a React + AUX web UI (**Linux + X11**). WebKitGTK
+runs in a separate **`calfnxt-web-host`** process (X11 embed) so the plugin `.so`
+stays free of GTK — required for hosts like Ardour. Classic Calf DSP heritage is
+reused where it fits, substantially reworked for this stack.
 
 - Site: [https://calfnxt.org](https://calfnxt.org/)
 - Branding / namespace: **calfNXT** (shared SPA packed per plugin into each
@@ -30,82 +29,6 @@ if you want to take the code in a new direction!
 
 DSP heritage from Calf (LGPL-2.1) is used under the GPL as permitted by the LGPL.
 UI building blocks include GPL-licensed `@deutschesoft/aux-widgets` / AWML.
-
----
-
-## Editor architecture
-
-Classic Calf Studio Gear loaded **GTK 2 into the plugin process**. Hosts that
-ship their own toolkit (official Ardour / Mixbus binaries) then collide on GType
-/ ABI and abort. **calfNXT does not do that.** The VST3 `.so` is DSP plus a thin
-editor proxy. GTK 3 and WebKitGTK live in a **separate helper process**.
-
-Code-level map: [`ARCHITECTURE.md`](ARCHITECTURE.md). The notes below are the
-host-compatibility contract.
-
-### Two processes
-
-```
-DAW process                            helper process
-───────────                            ──────────────
-calfNXT*.so                            calfnxt-web-host
-  DSP (no GUI toolkit)                   GTK 3 GtkPlug
-  WebEditor (VST3 IPlugView proxy)       WebKitGTK (webkit2gtk-4.1)
-  posix_spawn + Unix socketpair          XEmbed into the host X11 window
-```
-
-- **`ldd` on the plugin `.so` must not list `libgtk-3` or `libwebkit`.** Only
-  `calfnxt-web-host` links those (`common/ui/CMakeLists.txt`). CMake
-  `pkg_check_modules` for GTK/WebKit is there, not on the plugin targets.
-- Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
-- Linux VST3 editors are **X11**. On a Wayland session the embed runs under
-  XWayland (see [GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland)).
-
-Official Ardour binaries can **load** the `.so` because it does not pull system
-GTK into Ardour. The custom editor is the helper using **system** WebKitGTK.
-
-```bash
-ldd ~/.vst3/calfNXTEqualizer.vst3/Contents/x86_64-linux/calfNXTEqualizer.so \
-  | grep -E 'libgtk|libwebkit' || echo 'ok: no GTK/WebKit in the plugin'
-```
-
-### `webkit2gtk-4.1` is GTK 3, not GTK 2
-
-The pkg-config name is easy to misread. The **`2` is WebKit2** (WebKit’s
-multiprocess engine), **not GTK 2**. This repo has never linked GTK 2.
-
-| Token in `webkit2gtk-4.1` | Means                                                |
-| ------------------------- | ---------------------------------------------------- |
-| **WebKit2**               | Multiprocess WebKit API (the `2` in the module name) |
-| **GTK 3**                 | Toolkit module `gtk+-3.0`                            |
-| **4.1**                   | WebKitGTK API series for GTK 3 + libsoup 3           |
-
-GTK 4 WebKit is a **different** module (`webkitgtk-6.0`). Distro names such as
-`webkit2gtk`, `webkitgtk`, or “webkit 3/4” do not mean GTK 2 vs GTK 3 vs GTK 4.
-If a rolling distro dropped the `webkit2gtk-4.1` development package, that is
-packaging — not evidence that this UI is GTK 2.
-
-### Mixbus and Ardour LD_LIBRARY_PATH (child only)
-
-Harrison Mixbus and some Ardour packages prepend `$INSTALL_DIR/lib` to
-`LD_LIBRARY_PATH` so the **DAW** finds bundled glib/GTK. The helper is a
-**system** WebKitGTK binary. If it inherited that path, the linker would load
-Mixbus’s older `libglib-2.0.so` first; system `libatspi` then fails
-(`undefined symbol: g_once_init_leave_pointer`) → helper **exit 127**, black
-editor, audio still runs.
-
-**What we do:** `posix_spawn` receives a **copied** environment with
-`LD_LIBRARY_PATH` omitted (`buildWebHostEnviron` in `common/ui/web_editor.cpp`).
-That copy is the helper’s `envp` only.
-
-**What we do not do:** we never `unsetenv` / `setenv` / `putenv`
-`LD_LIBRARY_PATH` in the DAW process. The host `environ` is unchanged. Later
-`dlopen` of control surfaces and other modules still sees Ardour’s original
-path.
-
-Opt out (helper inherits the host path; Mixbus editor typically dies again):
-`CALFNXT_KEEP_HOST_LDPATH=1`. Logs:
-[Editor black in Mixbus](#editor-black-in-mixbus-helper-exit-127).
 
 ---
 
@@ -352,7 +275,7 @@ Boolean-style flags are **on** when set to any non-empty value (e.g. `1`).
 Editor / WebKit vars must be in the **plugin host** environment (`calfnxt-web-host`
 inherits them via `posix_spawn`). The helper’s spawn `envp` omits
 `LD_LIBRARY_PATH`; the **host process environment is not modified** — see
-[Editor architecture](#editor-architecture) and
+[Clarifications](#clarifications) and
 [Editor black in Mixbus](#editor-black-in-mixbus-helper-exit-127).
 Example: `CALFNXT_WEB_DEBUG=1 carla …`.
 
@@ -394,6 +317,107 @@ Related (not calfNXT-owned):
 
 ---
 
+## Clarifications
+
+A few recurring claims recycle the **classic Calf** story (GTK 2 loaded into the
+plugin process) or misread package names. calfNXT is a different architecture.
+
+Code-level map: [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+### Not in-process GTK
+
+Classic Calf Studio Gear linked **GTK 2 into the plugin `.so`**. Hosts that ship
+their own toolkit (official Ardour / Mixbus binaries) then collide on GType /
+ABI and abort. **calfNXT does not do that.** The VST3 `.so` is DSP plus a thin
+editor proxy. GTK 3 and WebKitGTK live in a **separate helper process**.
+
+```
+DAW process                            helper process
+───────────                            ──────────────
+calfNXT*.so                            calfnxt-web-host
+  DSP (no GUI toolkit)                   GTK 3 GtkPlug
+  WebEditor (VST3 IPlugView proxy)       WebKitGTK (webkit2gtk-4.1)
+  posix_spawn + Unix socketpair          XEmbed into the host X11 window
+```
+
+- **`ldd` on the plugin `.so` must not list `libgtk-3` or `libwebkit`.** Only
+  `calfnxt-web-host` links those (`common/ui/CMakeLists.txt`). CMake
+  `pkg_check_modules` for GTK/WebKit is there, not on the plugin targets.
+- Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
+- Linux VST3 editors are **X11**. On a Wayland session the embed runs under
+  XWayland (see [GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland)).
+
+Official Ardour binaries can **load** the `.so` because it does not pull system
+GTK into Ardour. The custom editor is the helper using **system** WebKitGTK.
+
+```bash
+ldd ~/.vst3/calfNXTEqualizer.vst3/Contents/x86_64-linux/calfNXTEqualizer.so \
+  | grep -E 'libgtk|libwebkit' || echo 'ok: no GTK/WebKit in the plugin'
+```
+
+### GTK is not the plugin UI
+
+Knobs, meters, and layout are **React in WebKit**, not GTK widgets. GTK is only
+the XEmbed shell: WebKitGTK is a `GtkWidget`, and `GtkPlug` is how that widget
+is embedded into the host’s X11 editor window. The widget tree we create is one
+`GtkPlug`, one `WebKitWebView` inside it, and Impulse’s folder picker. The
+actual GTK in `common/ui/web_host_main.cpp` is this shape:
+
+```cpp
+gdk_set_allowed_backends("x11");
+gtk_init_check(&argc, &argv);
+
+g.plug = gtk_plug_new(parentXid);
+gtk_container_add(GTK_CONTAINER(g.plug), GTK_WIDGET(g.webview));
+gtk_widget_show_all(g.plug);
+
+gtk_main();
+```
+
+The helper is ~1200 lines mostly socket bridge, URI scheme, WebKit settings, and
+X11/XWayland workarounds — not a GTK control surface. The plugin `.so` links
+none of it.
+
+### `webkit2gtk-4.1` is GTK 3, not GTK 2
+
+The pkg-config name is easy to misread. The **`2` is WebKit2** (WebKit’s
+multiprocess engine), **not GTK 2**. This repo has never linked GTK 2.
+
+| Token in `webkit2gtk-4.1` | Means                                                |
+| ------------------------- | ---------------------------------------------------- |
+| **WebKit2**               | Multiprocess WebKit API (the `2` in the module name) |
+| **GTK 3**                 | Toolkit module `gtk+-3.0`                            |
+| **4.1**                   | WebKitGTK API series for GTK 3 + libsoup 3           |
+
+GTK 4 WebKit is a **different** module (`webkitgtk-6.0`). Distro names such as
+`webkit2gtk`, `webkitgtk`, or “webkit 3/4” do not mean GTK 2 vs GTK 3 vs GTK 4.
+If a rolling distro dropped the `webkit2gtk-4.1` development package, that is
+packaging — not evidence that this UI is GTK 2.
+
+### Mixbus and Ardour LD_LIBRARY_PATH (child only)
+
+Harrison Mixbus and some Ardour packages prepend `$INSTALL_DIR/lib` to
+`LD_LIBRARY_PATH` so the **DAW** finds bundled glib/GTK. The helper is a
+**system** WebKitGTK binary. If it inherited that path, the linker would load
+Mixbus’s older `libglib-2.0.so` first; system `libatspi` then fails
+(`undefined symbol: g_once_init_leave_pointer`) → helper **exit 127**, black
+editor, audio still runs.
+
+**What we do:** `posix_spawn` receives a **copied** environment with
+`LD_LIBRARY_PATH` omitted (`buildWebHostEnviron` in `common/ui/web_editor.cpp`).
+That copy is the helper’s `envp` only.
+
+**What we do not do:** we never `unsetenv` / `setenv` / `putenv`
+`LD_LIBRARY_PATH` in the DAW process. The host `environ` is unchanged. Later
+`dlopen` of control surfaces and other modules still sees Ardour’s original
+path.
+
+Opt out (helper inherits the host path; Mixbus editor typically dies again):
+`CALFNXT_KEEP_HOST_LDPATH=1`. Logs:
+[Editor black in Mixbus](#editor-black-in-mixbus-helper-exit-127).
+
+---
+
 ## Editor black or frozen on GNOME/Wayland
 
 Long form of `CALFNXT_XWAYLAND_NUDGE`. **VST3 Linux editors are X11-only.** On
@@ -423,7 +447,7 @@ failed UI build, or React loading flash. `kids=0` in `_diag` is a red herring
 ### Why
 
 Hosts hand an **X11 embed window ID**. GTK/WebKit stay out of the `.so`
-([Editor architecture](#editor-architecture)); **`calfnxt-web-host`** does GtkPlug +
+([Clarifications](#clarifications)); **`calfnxt-web-host`** does GtkPlug +
 WebKit, XEmbedded into that XID, JSON over a socketpair. On Wayland that tree is
 under **XWayland**. Pixels exist; the parent `wl_surface` present fails without
 Configure. Resize generates Configure — hence “just resize it.”

@@ -5,7 +5,7 @@
 Greenfield: **VST3 + WebKitGTK** (Linux first; WebKit in **`calfnxt-web-host`**, not the `.so`).
 Classic Calf Studio Gear DSP stays the audio core; UI is a modern Web view (React + DynamicValues).
 Host-compatibility contract (not in-process GTK 2, `webkit2gtk` is not GTK 2, child-only
-`LD_LIBRARY_PATH`): **[`README.md`](README.md)** → Editor architecture.
+`LD_LIBRARY_PATH`): **[`README.md`](README.md)** → Clarifications.
 
 ## Stack
 
