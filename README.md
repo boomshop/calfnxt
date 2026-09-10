@@ -123,13 +123,13 @@ Target: **Linux + X11** (the editor forces the GDK X11 backend for host embeddin
 
 ### Tools
 
-| Tool                     | Role                                                           |
-| ------------------------ | -------------------------------------------------------------- |
-| **CMake** ≥ 3.25         | Build                                                          |
-| **GCC or Clang** (C++17) | Compile                                                        |
-| **pkg-config**           | Find GTK / WebKit                                              |
-| **Python 3**             | Parameter codegen                                              |
-| **Node.js** + **npm**    | React / Vite UI (not needed with `CALFNXT_USE_PREBUILT_UI=ON`) |
+| Tool                     | Role                                                                                                                                                              |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CMake** ≥ 3.25         | Build                                                                                                                                                             |
+| **GCC or Clang** (C++17) | Compile                                                                                                                                                           |
+| **pkg-config**           | Find GTK / WebKit                                                                                                                                                 |
+| **Python 3**             | Parameter codegen                                                                                                                                                 |
+| **Node.js** + **npm**    | Only to **rebuild** the React SPA from `ui/src`. Not needed to run or to compile plugins if you unpack the release ui-dist tarball (`CALFNXT_USE_PREBUILT_UI=ON`) |
 
 Optional: **Ninja**.
 
@@ -157,6 +157,7 @@ sudo apt install --no-install-recommends \
 ```
 
 Host for testing (e.g. **Carla**, Ardour) is not required to compile.
+Omit `nodejs` / `npm` if you unpack the [prebuilt UI tarball](#packaging--offline-ui).
 
 ### Steinberg VST3 SDK
 
@@ -171,9 +172,15 @@ VSTGUI is disabled (`SMTG_ENABLE_VSTGUI_SUPPORT=OFF`).
 
 ### npm (UI)
 
+**Runtime and C++ build:** none, if `ui/dist` comes from the GitHub **ui-dist**
+tarball (`-DCALFNXT_USE_PREBUILT_UI=ON`). See
+[npm is not required to run or build](#npm-is-not-required-to-run-or-build).
+
+**Rebuild the SPA from TypeScript** (UI source changes, HMR, a new ui-dist):
 CMake runs `npm ci` in `ui/` when `node_modules` is missing, otherwise
-`npm run build` only. Manual: `cd ui && npm ci`. Stack: React, Vite, TypeScript,
-Sass, `@deutschesoft/aux-widgets`, `awml`, `use-aux-widgets`.
+`npm run build` only (lockfile, not a shopping list). Manual: `cd ui && npm ci`.
+Stack: React, Vite, TypeScript, Sass, `@deutschesoft/aux-widgets`, `awml`,
+`use-aux-widgets`.
 
 ### Packaging / offline UI
 
@@ -320,7 +327,8 @@ Related (not calfNXT-owned):
 ## Clarifications
 
 A few recurring claims recycle the **classic Calf** story (GTK 2 loaded into the
-plugin process) or misread package names. calfNXT is a different architecture.
+plugin process), misread package names, or confuse a build tool with what
+users install. calfNXT is a different architecture.
 
 Code-level map: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
@@ -329,7 +337,7 @@ Code-level map: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 Classic Calf Studio Gear linked **GTK 2 into the plugin `.so`**. Hosts that ship
 their own toolkit (official Ardour / Mixbus binaries) then collide on GType /
 ABI and abort. **calfNXT does not do that.** The VST3 `.so` is DSP plus a thin
-editor proxy. GTK 3 and WebKitGTK live in a **separate helper process**.
+editor proxy. GTK 3 and WebKitGTK live in a separate helper process.
 
 ```
 DAW process                            helper process
@@ -347,8 +355,8 @@ calfNXT*.so                            calfnxt-web-host
 - Linux VST3 editors are **X11**. On a Wayland session the embed runs under
   XWayland (see [GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland)).
 
-Official Ardour binaries can **load** the `.so` because it does not pull system
-GTK into Ardour. The custom editor is the helper using **system** WebKitGTK.
+Official Ardour binaries can load the `.so` because it does not pull system
+GTK into Ardour. The custom editor is the helper using system WebKitGTK.
 
 ```bash
 ldd ~/.vst3/calfNXTEqualizer.vst3/Contents/x86_64-linux/calfNXTEqualizer.so \
@@ -389,7 +397,7 @@ multiprocess engine), **not GTK 2**. This repo has never linked GTK 2.
 | **GTK 3**                 | Toolkit module `gtk+-3.0`                            |
 | **4.1**                   | WebKitGTK API series for GTK 3 + libsoup 3           |
 
-GTK 4 WebKit is a **different** module (`webkitgtk-6.0`). Distro names such as
+GTK 4 WebKit is a different module (`webkitgtk-6.0`). Distro names such as
 `webkit2gtk`, `webkitgtk`, or “webkit 3/4” do not mean GTK 2 vs GTK 3 vs GTK 4.
 If a rolling distro dropped the `webkit2gtk-4.1` development package, that is
 packaging — not evidence that this UI is GTK 2.
@@ -397,13 +405,13 @@ packaging — not evidence that this UI is GTK 2.
 ### Mixbus and Ardour LD_LIBRARY_PATH (child only)
 
 Harrison Mixbus and some Ardour packages prepend `$INSTALL_DIR/lib` to
-`LD_LIBRARY_PATH` so the **DAW** finds bundled glib/GTK. The helper is a
+`LD_LIBRARY_PATH` so the DAW finds bundled glib/GTK. The helper is a
 **system** WebKitGTK binary. If it inherited that path, the linker would load
 Mixbus’s older `libglib-2.0.so` first; system `libatspi` then fails
 (`undefined symbol: g_once_init_leave_pointer`) → helper **exit 127**, black
 editor, audio still runs.
 
-**What we do:** `posix_spawn` receives a **copied** environment with
+**What we do:** `posix_spawn` receives a copied environment with
 `LD_LIBRARY_PATH` omitted (`buildWebHostEnviron` in `common/ui/web_editor.cpp`).
 That copy is the helper’s `envp` only.
 
@@ -415,6 +423,23 @@ path.
 Opt out (helper inherits the host path; Mixbus editor typically dies again):
 `CALFNXT_KEEP_HOST_LDPATH=1`. Logs:
 [Editor black in Mixbus](#editor-black-in-mixbus-helper-exit-127).
+
+### npm is not required to run or build
+
+The editor hosts load is **static HTML / JS / CSS** inside each `.vst3`
+`Resources/`. `calfnxt-web-host` (WebKitGTK) serves that. **Node.js and npm are
+not runtime dependencies**, and they are **not required to compile** the
+plugins either.
+
+Each GitHub Release ships a **prebuilt UI tarball** (`calfnxt-*-ui-dist.tar.xz`).
+Unpack it at the source tree root (`ui/dist/` including `.stamp`) and configure
+`-DCALFNXT_USE_PREBUILT_UI=ON`. CMake never calls npm; there is no registry
+access. That is the path for distro packages and for anyone building the C++
+from a tagged release. Details: [Packaging / offline UI](#packaging--offline-ui).
+
+npm is only a UI-source tool: changing React/TS, `npm run dev` (HMR), or
+cutting a new ui-dist (`./tools/release.sh`). Then CMake runs `npm ci` from
+`ui/package-lock.json`.
 
 ---
 
