@@ -73,158 +73,158 @@ export function pluginIdFromHash(hash = window.location.hash): string {
   return hash.replace(/^#/, '').split(/[?/]/, 1)[0].trim();
 }
 
-export { editorSizes } from './dev/editorSizes';
+export { editorSizes } from '../dev/editorSizes';
 
-export { CompressorUI } from './plugins/CompressorUI/CompressorUI';
+export { CompressorUI } from '../plugins/CompressorUI/CompressorUI';
 export {
   createBoundCompressorHost,
   type ICompressorHost,
-} from './host/compressorHost';
+} from '../host/compressorHost';
 
-export { ExpanderUI } from './plugins/ExpanderUI/ExpanderUI';
+export { ExpanderUI } from '../plugins/ExpanderUI/ExpanderUI';
 export {
   createBoundExpanderHost,
   type IExpanderHost,
-} from './host/expanderHost';
+} from '../host/expanderHost';
 
-export { DeesserUI } from './plugins/DeesserUI/DeesserUI';
+export { DeesserUI } from '../plugins/DeesserUI/DeesserUI';
 export {
   createBoundDeesserHost,
   type IDeesserHost,
-} from './host/deesserHost';
+} from '../host/deesserHost';
 
-export { DelayUI } from './plugins/DelayUI/DelayUI';
-export { createBoundDelayHost, type IDelayHost } from './host/delayHost';
+export { DelayUI } from '../plugins/DelayUI/DelayUI';
+export { createBoundDelayHost, type IDelayHost } from '../host/delayHost';
 
-export { EqualizerUI } from './plugins/EqualizerUI/EqualizerUI';
+export { EqualizerUI } from '../plugins/EqualizerUI/EqualizerUI';
 export {
   createBoundEqualizerHost,
   type IEqualizerHost,
   type IEqualizerBand,
-} from './host/equalizerHost';
+} from '../host/equalizerHost';
 
-export { MbcompUI } from './plugins/MbcompUI/MbcompUI';
+export { MbcompUI } from '../plugins/MbcompUI/MbcompUI';
 export {
   createBoundMbcompHost,
   type IMbcompHost,
   type IMbcompBand,
-} from './host/mbcompHost';
+} from '../host/mbcompHost';
 
-export { LimiterUI } from './plugins/LimiterUI/LimiterUI';
+export { LimiterUI } from '../plugins/LimiterUI/LimiterUI';
 export {
   createBoundLimiterHost,
   type ILimiterHost,
-} from './host/limiterHost';
+} from '../host/limiterHost';
 
-export { MblimiterUI } from './plugins/MblimiterUI/MblimiterUI';
+export { MblimiterUI } from '../plugins/MblimiterUI/MblimiterUI';
 export {
   createBoundMblimiterHost,
   type IMblimiterHost,
   type IMblimiterBand,
-} from './host/mblimiterHost';
+} from '../host/mblimiterHost';
 
-export { HarmonicsUI } from './plugins/HarmonicsUI/HarmonicsUI';
+export { HarmonicsUI } from '../plugins/HarmonicsUI/HarmonicsUI';
 export {
   createBoundHarmonicsHost,
   type IHarmonicsHost,
-} from './host/harmonicsHost';
-export { HARMONICS_PRESETS } from './plugins/HarmonicsUI/harmonicsPresets';
+} from '../host/harmonicsHost';
+export { HARMONICS_PRESETS } from '../plugins/HarmonicsUI/harmonicsPresets';
 
-export { ReverbUI } from './plugins/ReverbUI/ReverbUI';
-export { createBoundReverbHost, type IReverbHost } from './host/reverbHost';
-export { REVERB_PRESETS } from './plugins/ReverbUI/reverbPresets';
+export { ReverbUI } from '../plugins/ReverbUI/ReverbUI';
+export { createBoundReverbHost, type IReverbHost } from '../host/reverbHost';
+export { REVERB_PRESETS } from '../plugins/ReverbUI/reverbPresets';
 
-export { StereoUI } from './plugins/StereoUI/StereoUI';
-export { createBoundStereoHost, type IStereoHost } from './host/stereoHost';
+export { StereoUI } from '../plugins/StereoUI/StereoUI';
+export { createBoundStereoHost, type IStereoHost } from '../host/stereoHost';
 
-export { TransientsUI } from './plugins/TransientsUI/TransientsUI';
+export { TransientsUI } from '../plugins/TransientsUI/TransientsUI';
 export {
   createBoundTransientsHost,
   type ITransientsHost,
-} from './host/transientsHost';
+} from '../host/transientsHost';
 
-export { AnalyzerUI } from './plugins/AnalyzerUI/AnalyzerUI';
+export { AnalyzerUI } from '../plugins/AnalyzerUI/AnalyzerUI';
 export {
   createBoundAnalyzerHost,
   type IAnalyzerHost,
-} from './host/analyzerHost';
+} from '../host/analyzerHost';
 
-export { FilterUI } from './plugins/FilterUI/FilterUI';
+export { FilterUI } from '../plugins/FilterUI/FilterUI';
 export {
   createBoundFilterHost,
   type IFilterHost,
-} from './host/filterHost';
+} from '../host/filterHost';
 
-export { RingmodUI } from './plugins/RingmodUI/RingmodUI';
+export { RingmodUI } from '../plugins/RingmodUI/RingmodUI';
 export {
   createBoundRingmodHost,
   type IRingmodHost,
-} from './host/ringmodHost';
+} from '../host/ringmodHost';
 
-export { PulsatorUI } from './plugins/PulsatorUI/PulsatorUI';
+export { PulsatorUI } from '../plugins/PulsatorUI/PulsatorUI';
 export {
   createBoundPulsatorHost,
   type IPulsatorHost,
-} from './host/pulsatorHost';
+} from '../host/pulsatorHost';
 
-export { CrusherUI } from './plugins/CrusherUI/CrusherUI';
+export { CrusherUI } from '../plugins/CrusherUI/CrusherUI';
 export {
   createBoundCrusherHost,
   type ICrusherHost,
-} from './host/crusherHost';
+} from '../host/crusherHost';
 
-export { PhaserUI } from './plugins/PhaserUI/PhaserUI';
+export { PhaserUI } from '../plugins/PhaserUI/PhaserUI';
 export {
   createBoundPhaserHost,
   type IPhaserHost,
-} from './host/phaserHost';
+} from '../host/phaserHost';
 
-export { FlangerUI } from './plugins/FlangerUI/FlangerUI';
+export { FlangerUI } from '../plugins/FlangerUI/FlangerUI';
 export {
   createBoundFlangerHost,
   type IFlangerHost,
-} from './host/flangerHost';
+} from '../host/flangerHost';
 
-export { ChorusUI } from './plugins/ChorusUI/ChorusUI';
+export { ChorusUI } from '../plugins/ChorusUI/ChorusUI';
 export {
   createBoundChorusHost,
   type IChorusHost,
-} from './host/chorusHost';
+} from '../host/chorusHost';
 
-export { SplitUI } from './plugins/SplitUI/SplitUI';
+export { SplitUI } from '../plugins/SplitUI/SplitUI';
 export {
   createBoundSplitHost,
   type ISplitHost,
-} from './host/splitHost';
+} from '../host/splitHost';
 
-export { TunerUI } from './plugins/TunerUI/TunerUI';
+export { TunerUI } from '../plugins/TunerUI/TunerUI';
 export {
   createBoundTunerHost,
   type ITunerHost,
-} from './host/tunerHost';
+} from '../host/tunerHost';
 
-export { OctaverUI } from './plugins/OctaverUI/OctaverUI';
+export { OctaverUI } from '../plugins/OctaverUI/OctaverUI';
 export {
   createBoundOctaverHost,
   type IOctaverHost,
-} from './host/octaverHost';
+} from '../host/octaverHost';
 
-export { WhammyUI } from './plugins/WhammyUI/WhammyUI';
+export { WhammyUI } from '../plugins/WhammyUI/WhammyUI';
 export {
   createBoundWhammyHost,
   type IWhammyHost,
-} from './host/whammyHost';
+} from '../host/whammyHost';
 
-export { ImpulseUI } from './plugins/ImpulseUI/ImpulseUI';
+export { ImpulseUI } from '../plugins/ImpulseUI/ImpulseUI';
 export {
   createBoundImpulseHost,
   type IImpulseHost,
-} from './host/impulseHost';
+} from '../host/impulseHost';
 
-export { createHeaderIo, type IHeaderIo } from './host/headerMeters';
+export { createHeaderIo, type IHeaderIo } from '../host/headerMeters';
 
 /** Studio forces this off before capture (WithInfo tip bubbles). */
-export { showWidgetInfo$ } from './prefs/showWidgetInfo';
+export { showWidgetInfo$ } from '../prefs/showWidgetInfo';
 
 /** Studio forces night + calfnxt accents for consistent website shots. */
-export { themeAccent$, themeMode$ } from './prefs/theme';
+export { themeAccent$, themeMode$ } from '../prefs/theme';

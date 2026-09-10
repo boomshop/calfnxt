@@ -7,7 +7,7 @@ import {
   bindVizUnitLevels,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 export type IRingmodHost = {
   meta: typeof pluginMeta;

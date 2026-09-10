@@ -7,7 +7,7 @@ import {
   bindVizGr,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 export const LIMITER_CURVE_ENTRIES = [
   { label: 'Lin', value: 0 },

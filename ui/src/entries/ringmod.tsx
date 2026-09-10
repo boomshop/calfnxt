@@ -2,7 +2,7 @@ import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import BoundRingmodUI from '../plugins/RingmodUI/BoundRingmodUI';
 import { pluginMeta } from '../generated/ringmodModel';
-import { reportCssViewportOnce } from '../reportViewport';
+import { reportCssViewportOnce } from '../utils/reportViewport';
 import '../styles.css';
 
 function Root() {

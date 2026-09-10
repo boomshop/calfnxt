@@ -5,7 +5,7 @@ import {
   bindVizLevels,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 export const kSilenceDb = -96;
 export const kMaxIoChannels = 8;

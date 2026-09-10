@@ -8,7 +8,7 @@ import {
   type PluginId,
 } from './plugins/registry';
 import { editorSizes } from './dev/editorSizes';
-import { reportCssViewportOnce } from './reportViewport';
+import { reportCssViewportOnce } from './utils/reportViewport';
 import { Loading } from './widgets';
 
 function FallbackMissing({ id }: { id: string }) {

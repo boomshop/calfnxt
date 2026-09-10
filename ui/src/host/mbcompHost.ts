@@ -15,7 +15,7 @@ import {
   bindVizPoint,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 import { createHeaderIo, type IHeaderIo } from './headerMeters';
 import {
   COMPRESSOR_LINK_ENTRIES,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
 import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
-import { postToHost } from '../../bridge';
+import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import './HistoryChart.scss';
 

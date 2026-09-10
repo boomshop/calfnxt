@@ -30,7 +30,7 @@ import {
 import '../PluginUI.scss';
 import './MbcompUI.scss';
 import { mbcompInfo } from './mbcompInfo';
-import { isStudioCapture } from '../../studioFlag';
+import { isStudioCapture } from '../../utils/studioFlag';
 
 const RATIO_DOTS = [1, 2, 4, 8, 12, 20];
 const RATIO_LABELS = RATIO_DOTS.map((n) => ({ pos: n, label: String(n) }));

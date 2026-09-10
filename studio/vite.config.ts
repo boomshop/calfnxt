@@ -12,7 +12,7 @@ export default defineConfig({
   base: './',
   resolve: {
     alias: {
-      '@calfnxt/ui': path.resolve(uiSrc, 'studioApi.ts'),
+      '@calfnxt/ui': path.resolve(uiSrc, 'utils/studioApi.ts'),
       // Force a single React / AUX copy when pulling in ../ui/src
       react: path.resolve(studioNode, 'react'),
       'react-dom': path.resolve(studioNode, 'react-dom'),

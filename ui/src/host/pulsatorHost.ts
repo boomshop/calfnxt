@@ -7,7 +7,7 @@ import {
   bindVizTempo,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 export const PULSATOR_PW_ENTRIES = [
   { label: '⅛', value: 0 },

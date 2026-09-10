@@ -6,7 +6,7 @@ import {
   bindVizLfo,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 export type IChorusHost = {
   meta: typeof pluginMeta;

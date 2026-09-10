@@ -7,9 +7,9 @@ import {
   bindVizWave,
   postBegin,
   postEnd,
-} from '../bind_param';
-import { postToHost } from '../bridge';
-import type { IrNode } from '../irTypes';
+} from '../utils/bind_param';
+import { postToHost } from '../utils/bridge';
+import type { IrNode } from '../utils/irTypes';
 
 export const IMPULSE_QUALITY_ENTRIES = [
   { label: 'Lo', value: 0 },

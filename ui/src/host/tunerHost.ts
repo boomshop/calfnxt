@@ -1,6 +1,6 @@
 import { DynamicValue } from '@deutschesoft/awml';
 import { paramIds, pluginMeta } from '../generated/tunerModel';
-import { postMidiAllOff } from '../midi';
+import { postMidiAllOff } from '../utils/midi';
 import {
   bindBoolParamToHost,
   bindParamToHost,
@@ -8,7 +8,7 @@ import {
   bindVizPitch,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 export const TUNER_VIZ_ID = 'tuner';
 

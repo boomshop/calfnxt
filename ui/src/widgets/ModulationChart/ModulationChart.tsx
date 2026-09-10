@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { FrequencyResponse as AuxFrequencyResponse } from '@deutschesoft/aux-widgets/src/widgets/frequencyresponse.js';
 import type { DynamicValue } from '@deutschesoft/awml';
 import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
-import { postToHost } from '../../bridge';
+import { postToHost } from '../../utils/bridge';
 import './ModulationChart.scss';
 
 type AuxFrInstance = InstanceType<typeof AuxFrequencyResponse> & {

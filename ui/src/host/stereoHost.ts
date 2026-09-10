@@ -7,7 +7,7 @@ import {
   bindVizGonio,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 export const STEREO_MODE_ENTRIES = [
   { label: 'LR → LR', value: 0 },

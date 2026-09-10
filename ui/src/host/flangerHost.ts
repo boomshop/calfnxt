@@ -6,7 +6,7 @@ import {
   bindVizComb,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 export type IFlangerHost = {
   meta: typeof pluginMeta;

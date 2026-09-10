@@ -29,7 +29,7 @@ import {
 import '../PluginUI.scss';
 import './MblimiterUI.scss';
 import { mblimiterInfo } from './mblimiterInfo';
-import { isStudioCapture } from '../../studioFlag';
+import { isStudioCapture } from '../../utils/studioFlag';
 
 /** Band strips are capped so wide editors keep them readable, centered in the row. */
 const STRIP_MAX_PX = 256;

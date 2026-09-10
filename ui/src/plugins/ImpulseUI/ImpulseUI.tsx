@@ -17,7 +17,7 @@ import {
   impulseParamDefault,
   type IImpulseHost,
 } from '../../host/impulseHost';
-import type { IrNode } from '../../irTypes';
+import type { IrNode } from '../../utils/irTypes';
 import { impulseInfo } from './impulseInfo';
 import '../PluginUI.scss';
 import './ImpulseUI.scss';

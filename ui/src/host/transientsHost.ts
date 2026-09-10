@@ -1,6 +1,6 @@
 import { DynamicValue } from '@deutschesoft/awml';
 import { paramIds, pluginMeta } from '../generated/transientsModel';
-import { bindBoolParamToHost, bindParamToHost, bindVizEnvelope, postBegin, postEnd } from '../bind_param';
+import { bindBoolParamToHost, bindParamToHost, bindVizEnvelope, postBegin, postEnd } from '../utils/bind_param';
 import { FREQUENCY_RANGE_MODE_ENTRIES } from '../widgets/FrequencyRange';
 
 export const TRANSIENTS_VIEW_ENTRIES = [

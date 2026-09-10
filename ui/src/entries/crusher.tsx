@@ -2,7 +2,7 @@ import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import BoundCrusherUI from '../plugins/CrusherUI/BoundCrusherUI';
 import { pluginMeta } from '../generated/crusherModel';
-import { reportCssViewportOnce } from '../reportViewport';
+import { reportCssViewportOnce } from '../utils/reportViewport';
 import '../styles.css';
 
 function Root() {

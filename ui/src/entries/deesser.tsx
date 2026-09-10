@@ -2,7 +2,7 @@ import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import BoundDeesserUI from '../plugins/DeesserUI/BoundDeesserUI';
 import { pluginMeta } from '../generated/deesserModel';
-import { reportCssViewportOnce } from '../reportViewport';
+import { reportCssViewportOnce } from '../utils/reportViewport';
 import '../styles.css';
 
 function Root() {

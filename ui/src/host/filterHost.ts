@@ -7,8 +7,8 @@ import {
   bindVizSpectrum,
   postBegin,
   postEnd,
-} from '../bind_param';
-import { postMidiAllOff } from '../midi';
+} from '../utils/bind_param';
+import { postMidiAllOff } from '../utils/midi';
 import {
   EQ_SPECTRUM_ENTRIES,
   type EqFilterType,

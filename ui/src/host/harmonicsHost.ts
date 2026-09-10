@@ -6,7 +6,7 @@ import {
   bindVizShape,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 import {
   HARMONICS_PRESETS,
   type HarmonicsPresetId,

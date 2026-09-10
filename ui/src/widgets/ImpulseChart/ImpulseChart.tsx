@@ -9,7 +9,7 @@ import {
   useDynamicValueReadonly,
   useWidgetsWithBindingsAndEvents,
 } from '@deutschesoft/use-aux-widgets';
-import { postToHost } from '../../bridge';
+import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import './ImpulseChart.scss';
 

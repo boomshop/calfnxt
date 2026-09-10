@@ -2,7 +2,7 @@ import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import BoundCompressorUI from '../plugins/CompressorUI/BoundCompressorUI';
 import { pluginMeta } from '../generated/compressorModel';
-import { reportCssViewportOnce } from '../reportViewport';
+import { reportCssViewportOnce } from '../utils/reportViewport';
 import '../styles.css';
 
 function Root() {

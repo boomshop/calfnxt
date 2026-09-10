@@ -7,7 +7,7 @@ import {
   bindVizGr,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 import {
   type EqFilterType,
   type EqPassSlope,

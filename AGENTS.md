@@ -103,7 +103,7 @@ Codegen always injects standard **`in_gain` / `out_gain`** (ParamIDs 0/1) ahead 
 3. `WebEditor` proxy: `IDependent::update` + **poll ~16 ms** → `pushParamPlain` → coalesce →
    socket line → helper `evalJs` `__calfnxtOnHost({t:"param",id,v})` with locale-safe
    `std::to_chars` (never `snprintf %.g` under `de_DE`).
-4. `bind_param.ts` → AWML `DynamicValue.set(plain)`.
+4. `utils/bind_param.ts` → AWML `DynamicValue.set(plain)`.
 5. AUX widget via `use-aux-widgets` (`value$`, Fader often `sync: true`).
 
 ### UI → Host/DSP
@@ -357,7 +357,7 @@ Ideas only if explicitly revived — do not start these unprompted:
 | Harmonics                   | `dsp/harmonics/source/*_dsp.*`, `common/dsp/tap_distortion.h`; UI `ui/src/plugins/HarmonicsUI/*`, `host/harmonicsHost.ts`                                                                           |
 | Analyzer                    | `dsp/analyzer/source/*_dsp.*`, `common/dsp/fft_r2.h`, `common/dsp/spectrum_tap.h`; UI `ui/src/plugins/AnalyzerUI/*`, `host/analyzerHost.ts`, `widgets/SpectrumChart/*`                              |
 | Filter DSP                  | `dsp/filter/source/*_dsp.*`, `common/dsp/multimode_filter.h`, `common/dsp/inertia.h`, `common/dsp/midi_note_hold.h` (MIDI → cutoff)                                                                  |
-| MIDI note hold (shared)     | `common/dsp/midi_note_hold.h`, UI `ui/src/midi.ts` (`postMidiAllOff`); Tuner mask + Filter Hz                                                                                                         |
+| MIDI note hold (shared)     | `common/dsp/midi_note_hold.h`, UI `ui/src/utils/midi.ts` (`postMidiAllOff`); Tuner mask + Filter Hz                                                                                                         |
 | Ring Modulator DSP          | `dsp/ringmod/source/*_dsp.*`, `common/dsp/simple_lfo.h`                                                                                                                                             |
 | Pulsator DSP                | `dsp/pulsator/source/*_dsp.*`, `common/dsp/simple_lfo.h`                                                                                                                                            |
 | Crusher DSP                 | `dsp/crusher/source/*_dsp.*`, `common/dsp/bitreduction.h`; UI `ui/src/plugins/CrusherUI/*`, `widgets/CrusherChart/*`                                                                                 |
@@ -369,7 +369,7 @@ Ideas only if explicitly revived — do not start these unprompted:
 | Octaver DSP                 | `dsp/octaver/source/*_dsp.*`, `common/dsp/octaver_pitch_law.h`, `yin_detector.h`, `psola_shifter.h`, `sub_harmonic.h`; UI `ui/src/plugins/OctaverUI/*`, `host/octaverHost.ts`, `widgets/PitchRollChart/*` |
 | Whammy DSP                  | `dsp/whammy/source/*_dsp.*`, `common/dsp/whammy_shifter.h`; UI `ui/src/plugins/WhammyUI/*`, `host/whammyHost.ts`                                                                                        |
 | Impulse DSP                 | `dsp/impulse/source/*_dsp.*`, `common/dsp/partitioned_convolver.h`, `wav_load.h`, `ir_library.h`; UI `ui/src/plugins/ImpulseUI/*`, `host/impulseHost.ts`, `widgets/ImpulseChart/*`                     |
-| Param bind                  | `ui/src/bridge.ts`, `bind_param.ts`, `host/*Host.ts`                                                                                                                                                |
+| Param bind                  | `ui/src/utils/bridge.ts`, `ui/src/utils/bind_param.ts`, `host/*Host.ts`                                                                                                                              |
 | Header I/O                  | `ui/src/components/Header/*`, `host/headerMeters.ts`                                                                                                                                                |
 | Meters                      | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*`                                                                                                                                                       |
 | Codegen                     | `tools/codegen/generate_plugin.py`                                                                                                                                                                  |

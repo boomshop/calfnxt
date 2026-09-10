@@ -28,7 +28,7 @@ import {
   bindVizSpectrum,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 /** UI / Select filter type ids (numeric = VST plain type param). */
 export type EqFilterType =

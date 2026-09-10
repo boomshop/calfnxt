@@ -8,7 +8,7 @@ import {
   bindVizSpectrum,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 export const ANALYZER_MODE_ENTRIES = [
   { label: 'Average', value: 0 },

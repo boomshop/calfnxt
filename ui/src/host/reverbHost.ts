@@ -5,7 +5,7 @@ import {
   bindParamToHost,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 import {
   REVERB_PRESETS,
   type ReverbPresetId,

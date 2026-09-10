@@ -2,7 +2,7 @@ import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import BoundMblimiterUI from '../plugins/MblimiterUI/BoundMblimiterUI';
 import { pluginMeta } from '../generated/mblimiterModel';
-import { reportCssViewportOnce } from '../reportViewport';
+import { reportCssViewportOnce } from '../utils/reportViewport';
 import '../styles.css';
 
 function Root() {

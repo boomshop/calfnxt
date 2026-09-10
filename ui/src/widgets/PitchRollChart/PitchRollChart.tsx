@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
-import { postToHost } from '../../bridge';
+import { postToHost } from '../../utils/bridge';
 import { useThemeColors } from '../../theme/themeColors';
 import './PitchRollChart.scss';
 

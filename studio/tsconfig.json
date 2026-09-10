@@ -11,7 +11,7 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "paths": {
-      "@calfnxt/ui": ["../ui/src/studioApi.ts"],
+      "@calfnxt/ui": ["../ui/src/utils/studioApi.ts"],
       "@calfnxt/ui/*": ["../ui/src/*"]
     }
   },

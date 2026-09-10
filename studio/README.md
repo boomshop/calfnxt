@@ -77,7 +77,7 @@ cd studio && npm run dev
 
 | Path | Role |
 |------|------|
-| `src/` | Vite app: mounts presentational UIs from `ui/src/studioApi.ts` |
+| `src/` | Vite app: mounts presentational UIs from `ui/src/utils/studioApi.ts` |
 | `fixtures/<id>/params.json` | Knob / mode plains |
 | `fixtures/<id>/viz.json` | Static levels, history, GR, gonio, … |
 | `scripts/shot.mjs` | Playwright capture |

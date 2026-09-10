@@ -21,7 +21,7 @@ import {
   bandSupportsDyn,
 } from '../../host/equalizerHost';
 import { DynamicValue } from '@deutschesoft/awml';
-import { postToHost } from '../../bridge';
+import { postToHost } from '../../utils/bridge';
 import {
   useChartGradient,
 } from '../../hooks/useChartGradient';

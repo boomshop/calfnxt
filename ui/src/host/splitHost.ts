@@ -5,7 +5,7 @@ import {
   bindParamToHost,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 export type ISplitHost = {
   meta: typeof pluginMeta;

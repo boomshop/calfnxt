@@ -6,7 +6,7 @@ import {
   bindVizResponse,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 export type IPhaserHost = {
   meta: typeof pluginMeta;

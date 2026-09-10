@@ -1,6 +1,6 @@
 import { DynamicValue } from '@deutschesoft/awml';
 import { paramIds, pluginMeta } from '../generated/whammyModel';
-import { bindBoolParamToHost, bindParamToHost, postBegin, postEnd } from '../bind_param';
+import { bindBoolParamToHost, bindParamToHost, postBegin, postEnd } from '../utils/bind_param';
 
 export const WHAMMY_SNAP_ENTRIES = [
   { label: 'Free', value: 0 },

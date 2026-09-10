@@ -6,7 +6,7 @@ import {
   bindVizTempo,
   postBegin,
   postEnd,
-} from '../bind_param';
+} from '../utils/bind_param';
 
 export const DELAY_MIX_MODE_ENTRIES = [
   { label: 'Stereo', value: 0 },
