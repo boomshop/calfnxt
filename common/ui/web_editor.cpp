@@ -218,12 +218,15 @@ int clampPx(int v, int lo, int hi)
 }
 
 /**
- * Child environ for calfnxt-web-host: omit LD_LIBRARY_PATH.
+ * Child environ for calfnxt-web-host: omit LD_LIBRARY_PATH from spawn envp.
  *
  * Mixbus/Ardour launchers prepend $INSTALL_DIR/lib (older glib). The helper is
  * a system WebKitGTK binary; inheriting that path → symbol lookup failure
- * (exit 127, black editor). Clearing LD_LIBRARY_PATH is enough — the helper
- * does not need host JACK/custom paths. Opt out: CALFNXT_KEEP_HOST_LDPATH.
+ * (exit 127, black editor). Omitting LD_LIBRARY_PATH in the child's envp is
+ * enough — the helper does not need host JACK/custom paths.
+ *
+ * Does not unsetenv/setenv the host process. Ardour control surfaces and later
+ * dlopen still see the original LD_LIBRARY_PATH. Opt out: CALFNXT_KEEP_HOST_LDPATH.
  *
  * Returns true if `ptrs` is a replacement environ (storage must stay alive
  * until posix_spawn returns). False → use the process `environ`.

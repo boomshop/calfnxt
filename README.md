@@ -5,10 +5,11 @@
 </p>
 
 **calfNXT** is the successor to [Calf Studio Gear](https://calf-studio-gear.org):
-a **VST3** plugin suite with a React + AUX web UI (**Linux + X11**). WebKitGTK
-runs in a separate **`calfnxt-web-host`** process (X11 embed) so the plugin `.so`
-stays free of GTK — required for hosts like Ardour. Classic Calf DSP heritage is
-reused where it fits, substantially reworked for this stack.
+a **VST3** plugin suite with a React + AUX web UI (**Linux + X11**). The editor
+is **not** the classic Calf in-process GTK UI: WebKitGTK runs only in
+**`calfnxt-web-host`**, so the plugin `.so` stays free of GTK/WebKit. See
+[Editor architecture](#editor-architecture). Classic Calf DSP heritage is reused
+where it fits, substantially reworked for this stack.
 
 - Site: [https://calfnxt.org](https://calfnxt.org/)
 - Branding / namespace: **calfNXT** (shared SPA packed per plugin into each
@@ -29,6 +30,82 @@ if you want to take the code in a new direction!
 
 DSP heritage from Calf (LGPL-2.1) is used under the GPL as permitted by the LGPL.
 UI building blocks include GPL-licensed `@deutschesoft/aux-widgets` / AWML.
+
+---
+
+## Editor architecture
+
+Classic Calf Studio Gear loaded **GTK 2 into the plugin process**. Hosts that
+ship their own toolkit (official Ardour / Mixbus binaries) then collide on GType
+/ ABI and abort. **calfNXT does not do that.** The VST3 `.so` is DSP plus a thin
+editor proxy. GTK 3 and WebKitGTK live in a **separate helper process**.
+
+Code-level map: [`ARCHITECTURE.md`](ARCHITECTURE.md). The notes below are the
+host-compatibility contract.
+
+### Two processes
+
+```
+DAW process                            helper process
+───────────                            ──────────────
+calfNXT*.so                            calfnxt-web-host
+  DSP (no GUI toolkit)                   GTK 3 GtkPlug
+  WebEditor (VST3 IPlugView proxy)       WebKitGTK (webkit2gtk-4.1)
+  posix_spawn + Unix socketpair          XEmbed into the host X11 window
+```
+
+- **`ldd` on the plugin `.so` must not list `libgtk-3` or `libwebkit`.** Only
+  `calfnxt-web-host` links those (`common/ui/CMakeLists.txt`). CMake
+  `pkg_check_modules` for GTK/WebKit is there, not on the plugin targets.
+- Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
+- Linux VST3 editors are **X11**. On a Wayland session the embed runs under
+  XWayland (see [GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland)).
+
+Official Ardour binaries can **load** the `.so` because it does not pull system
+GTK into Ardour. The custom editor is the helper using **system** WebKitGTK.
+
+```bash
+ldd ~/.vst3/calfNXTEqualizer.vst3/Contents/x86_64-linux/calfNXTEqualizer.so \
+  | grep -E 'libgtk|libwebkit' || echo 'ok: no GTK/WebKit in the plugin'
+```
+
+### `webkit2gtk-4.1` is GTK 3, not GTK 2
+
+The pkg-config name is easy to misread. The **`2` is WebKit2** (WebKit’s
+multiprocess engine), **not GTK 2**. This repo has never linked GTK 2.
+
+| Token in `webkit2gtk-4.1` | Means                                                |
+| ------------------------- | ---------------------------------------------------- |
+| **WebKit2**               | Multiprocess WebKit API (the `2` in the module name) |
+| **GTK 3**                 | Toolkit module `gtk+-3.0`                            |
+| **4.1**                   | WebKitGTK API series for GTK 3 + libsoup 3           |
+
+GTK 4 WebKit is a **different** module (`webkitgtk-6.0`). Distro names such as
+`webkit2gtk`, `webkitgtk`, or “webkit 3/4” do not mean GTK 2 vs GTK 3 vs GTK 4.
+If a rolling distro dropped the `webkit2gtk-4.1` development package, that is
+packaging — not evidence that this UI is GTK 2.
+
+### Mixbus and Ardour LD_LIBRARY_PATH (child only)
+
+Harrison Mixbus and some Ardour packages prepend `$INSTALL_DIR/lib` to
+`LD_LIBRARY_PATH` so the **DAW** finds bundled glib/GTK. The helper is a
+**system** WebKitGTK binary. If it inherited that path, the linker would load
+Mixbus’s older `libglib-2.0.so` first; system `libatspi` then fails
+(`undefined symbol: g_once_init_leave_pointer`) → helper **exit 127**, black
+editor, audio still runs.
+
+**What we do:** `posix_spawn` receives a **copied** environment with
+`LD_LIBRARY_PATH` omitted (`buildWebHostEnviron` in `common/ui/web_editor.cpp`).
+That copy is the helper’s `envp` only.
+
+**What we do not do:** we never `unsetenv` / `setenv` / `putenv`
+`LD_LIBRARY_PATH` in the DAW process. The host `environ` is unchanged. Later
+`dlopen` of control surfaces and other modules still sees Ardour’s original
+path.
+
+Opt out (helper inherits the host path; Mixbus editor typically dies again):
+`CALFNXT_KEEP_HOST_LDPATH=1`. Logs:
+[Editor black in Mixbus](#editor-black-in-mixbus-helper-exit-127).
 
 ---
 
@@ -54,63 +131,63 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 
 ### Dynamics
 
-| Plugin | Bundle | Description |
-|--------|--------|-------------|
-| **Compressor** | `calfNXTCompressor.vst3` | Feed-forward compressor |
-| **Expander** | `calfNXTExpander.vst3` | Downward expander / gate |
-| **Multiband Compressor** | `calfNXTMbcomp.vst3` | 2–6 band Linkwitz–Riley compressor |
-| **Limiter** | `calfNXTLimiter.vst3` | Lookahead brickwall limiter |
-| **Multiband Limiter** | `calfNXTMblimiter.vst3` | 2–6 band lookahead limiter + broadband stage |
-| **DeEsser** | `calfNXTDeesser.vst3` | Sibilance / rumble dynamics |
-| **Transients** | `calfNXTTransients.vst3` | Attack / sustain envelope shaper |
+| Plugin                   | Bundle                   | Description                                  |
+| ------------------------ | ------------------------ | -------------------------------------------- |
+| **Compressor**           | `calfNXTCompressor.vst3` | Feed-forward compressor                      |
+| **Expander**             | `calfNXTExpander.vst3`   | Downward expander / gate                     |
+| **Multiband Compressor** | `calfNXTMbcomp.vst3`     | 2–6 band Linkwitz–Riley compressor           |
+| **Limiter**              | `calfNXTLimiter.vst3`    | Lookahead brickwall limiter                  |
+| **Multiband Limiter**    | `calfNXTMblimiter.vst3`  | 2–6 band lookahead limiter + broadband stage |
+| **DeEsser**              | `calfNXTDeesser.vst3`    | Sibilance / rumble dynamics                  |
+| **Transients**           | `calfNXTTransients.vst3` | Attack / sustain envelope shaper             |
 
 ### EQ & filter
 
-| Plugin | Bundle | Description |
-|--------|--------|-------------|
+| Plugin        | Bundle                  | Description                                    |
+| ------------- | ----------------------- | ---------------------------------------------- |
 | **Equalizer** | `calfNXTEqualizer.vst3` | 16-band parametric EQ with optional dynamic EQ |
-| **Filter** | `calfNXTFilter.vst3` | Multimode LP / HP / BP / BR / allpass |
+| **Filter**    | `calfNXTFilter.vst3`    | Multimode LP / HP / BP / BR / allpass          |
 
 ### Harmonics
 
-| Plugin | Bundle | Description |
-|--------|--------|-------------|
+| Plugin        | Bundle                  | Description                         |
+| ------------- | ----------------------- | ----------------------------------- |
 | **Harmonics** | `calfNXTHarmonics.vst3` | Saturator / exciter / bass enhancer |
-| **Crusher** | `calfNXTCrusher.vst3` | Bit crusher |
+| **Crusher**   | `calfNXTCrusher.vst3`   | Bit crusher                         |
 
 ### Delay & reverb
 
-| Plugin | Bundle | Description |
-|--------|--------|-------------|
-| **Delay** | `calfNXTDelay.vst3` | Stereo / ping-pong / sequential delay |
-| **Reverb** | `calfNXTReverb.vst3` | Algorithmic early + late reverb |
-| **Impulse** | `calfNXTImpulse.vst3` | Convolution reverb |
+| Plugin      | Bundle                | Description                           |
+| ----------- | --------------------- | ------------------------------------- |
+| **Delay**   | `calfNXTDelay.vst3`   | Stereo / ping-pong / sequential delay |
+| **Reverb**  | `calfNXTReverb.vst3`  | Algorithmic early + late reverb       |
+| **Impulse** | `calfNXTImpulse.vst3` | Convolution reverb                    |
 
 ### Modulators
 
-| Plugin | Bundle | Description |
-|--------|--------|-------------|
-| **Ring Modulator** | `calfNXTRingmodulator.vst3` | Stereo ring modulator |
-| **Pulsator** | `calfNXTPulsator.vst3` | Stereo tremolo / autopanner |
-| **Phaser** | `calfNXTPhaser.vst3` | Stereo allpass phaser |
-| **Flanger** | `calfNXTFlanger.vst3` | Stereo delay flanger |
-| **Chorus** | `calfNXTChorus.vst3` | Multi-tap chorus (up to 8 voices) |
+| Plugin             | Bundle                      | Description                       |
+| ------------------ | --------------------------- | --------------------------------- |
+| **Ring Modulator** | `calfNXTRingmodulator.vst3` | Stereo ring modulator             |
+| **Pulsator**       | `calfNXTPulsator.vst3`      | Stereo tremolo / autopanner       |
+| **Phaser**         | `calfNXTPhaser.vst3`        | Stereo allpass phaser             |
+| **Flanger**        | `calfNXTFlanger.vst3`       | Stereo delay flanger              |
+| **Chorus**         | `calfNXTChorus.vst3`        | Multi-tap chorus (up to 8 voices) |
 
 ### Tools
 
-| Plugin | Bundle | Description |
-|--------|--------|-------------|
+| Plugin       | Bundle                 | Description                                       |
+| ------------ | ---------------------- | ------------------------------------------------- |
 | **Analyzer** | `calfNXTAnalyzer.vst3` | Spectrum / goniometer / correlation (passthrough) |
-| **Stereo** | `calfNXTStereo.vst3` | Width / M/S imaging |
-| **Split** | `calfNXTSplit.vst3` | Mono in → stereo out |
+| **Stereo**   | `calfNXTStereo.vst3`   | Width / M/S imaging                               |
+| **Split**    | `calfNXTSplit.vst3`    | Mono in → stereo out                              |
 
 ### Pitch
 
-| Plugin | Bundle | Description |
-|--------|--------|-------------|
-| **Tuner** | `calfNXTTuner.vst3` | Realtime monophonic pitch correction |
-| **Octaver** | `calfNXTOctaver.vst3` | Monophonic octave stack (−2 / −1 / +1 + sub) |
-| **Bender** | `calfNXTBender.vst3` | Delay-line pitch pedal (±24 st). **2.0.0:** new identity (trademark); old sessions do not load |
+| Plugin      | Bundle                | Description                                                                                    |
+| ----------- | --------------------- | ---------------------------------------------------------------------------------------------- |
+| **Tuner**   | `calfNXTTuner.vst3`   | Realtime monophonic pitch correction                                                           |
+| **Octaver** | `calfNXTOctaver.vst3` | Monophonic octave stack (−2 / −1 / +1 + sub)                                                   |
+| **Bender**  | `calfNXTBender.vst3`  | Delay-line pitch pedal (±24 st). **2.0.0:** new identity (trademark); old sessions do not load |
 
 Site and per-plugin descriptors: [calfnxt.org](https://calfnxt.org/),
 `dsp/<id>/<id>.plugin.json`.
@@ -123,22 +200,22 @@ Target: **Linux + X11** (the editor forces the GDK X11 backend for host embeddin
 
 ### Tools
 
-| Tool | Role |
-|------|------|
-| **CMake** ≥ 3.25 | Build |
-| **GCC or Clang** (C++17) | Compile |
-| **pkg-config** | Find GTK / WebKit |
-| **Python 3** | Parameter codegen |
-| **Node.js** + **npm** | React / Vite UI (not needed with `CALFNXT_USE_PREBUILT_UI=ON`) |
+| Tool                     | Role                                                           |
+| ------------------------ | -------------------------------------------------------------- |
+| **CMake** ≥ 3.25         | Build                                                          |
+| **GCC or Clang** (C++17) | Compile                                                        |
+| **pkg-config**           | Find GTK / WebKit                                              |
+| **Python 3**             | Parameter codegen                                              |
+| **Node.js** + **npm**    | React / Vite UI (not needed with `CALFNXT_USE_PREBUILT_UI=ON`) |
 
 Optional: **Ninja**.
 
 ### System libraries (pkg-config)
 
-| Module | Purpose |
-|--------|---------|
-| `gtk+-3.0` | GtkPlug / X11 embed (**only** in `calfnxt-web-host`, not the `.so`) |
-| `webkit2gtk-4.1` | WebKitGTK in `calfnxt-web-host` (do **not** substitute 4.0) |
+| Module           | Purpose                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `gtk+-3.0`       | GtkPlug / X11 embed (**only** `calfnxt-web-host`, never the `.so`)                                                        |
+| `webkit2gtk-4.1` | WebKitGTK **for GTK 3** in the helper (`2` = WebKit2 engine, **not** GTK 2; do **not** substitute 4.0 or `webkitgtk-6.0`) |
 
 Usually pulled in as deps: GLib, GObject, Cairo, Soup, X11.
 
@@ -229,15 +306,15 @@ Then rescan in the host. Bundles: `~/.vst3/calfNXTEqualizer.vst3`, …
 
 ### Day-to-day
 
-| Goal | Command |
-|------|---------|
-| All plugins + embed + `~/.vst3` | `./tools/install-user-vst3.sh` |
-| One plugin (fast iterate) | `./tools/install-user-vst3.sh mbcomp` |
-| Custom dest | `./tools/install-user-vst3.sh --dest /usr/lib/vst3 mbcomp` |
-| UI pack only (no install) | `cd ui && npm run build -- mbcomp` (omit id = all) |
-| DSP/C++ only, then install | `cmake --build build --target calfnxt-plugins -j` then `install-user-vst3` / the script |
-| System install (packaging) | `cmake --install build --prefix /usr` → `$prefix/lib/vst3` |
-| Single cmake targets | `cmake --build build --target calfnxt-<id> calfnxt-<id>-resources -j` then `install-user-vst3-copy` |
+| Goal                            | Command                                                                                             |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| All plugins + embed + `~/.vst3` | `./tools/install-user-vst3.sh`                                                                      |
+| One plugin (fast iterate)       | `./tools/install-user-vst3.sh mbcomp`                                                               |
+| Custom dest                     | `./tools/install-user-vst3.sh --dest /usr/lib/vst3 mbcomp`                                          |
+| UI pack only (no install)       | `cd ui && npm run build -- mbcomp` (omit id = all)                                                  |
+| DSP/C++ only, then install      | `cmake --build build --target calfnxt-plugins -j` then `install-user-vst3` / the script             |
+| System install (packaging)      | `cmake --install build --prefix /usr` → `$prefix/lib/vst3`                                          |
+| Single cmake targets            | `cmake --build build --target calfnxt-<id> calfnxt-<id>-resources -j` then `install-user-vst3-copy` |
 
 A Vite build **alone** does not update the VST editor — Resources must be
 re-embedded (the install script does that). Plugin ids for the script / Vite:
@@ -273,45 +350,47 @@ See [`studio/README.md`](studio/README.md).
 
 Boolean-style flags are **on** when set to any non-empty value (e.g. `1`).
 Editor / WebKit vars must be in the **plugin host** environment (`calfnxt-web-host`
-inherits via `posix_spawn`, except `LD_LIBRARY_PATH` is cleared for the helper —
-see [Editor black in Mixbus](#editor-black-in-mixbus-helper-exit-127)).
+inherits them via `posix_spawn`). The helper’s spawn `envp` omits
+`LD_LIBRARY_PATH`; the **host process environment is not modified** — see
+[Editor architecture](#editor-architecture) and
+[Editor black in Mixbus](#editor-black-in-mixbus-helper-exit-127).
 Example: `CALFNXT_WEB_DEBUG=1 carla …`.
 
 ### Editor / WebKit (`calfnxt-web-host`)
 
-| Variable | Values | Effect |
-|----------|--------|--------|
-| `CALFNXT_UI_SCALE` | float ≈ `0.05`…`8` | Force editor scale (HiDPI) instead of measuring CSS vs host pixels. Invalid → ignored. |
-| `CALFNXT_WEB_DEBUG` | non-empty | Extra stderr logging; WebKit developer extras + console→stdout. File log is always `/tmp/calfnxt-ui.log` (capped at 512 KiB, then truncated). |
-| `CALFNXT_WEB_INSPECTOR` | non-empty | Open WebKit Inspector on editor load. |
-| `CALFNXT_WEB_NO_GPU` | non-empty | Hardware accel **off** (`NEVER`). Default is **on** (`ALWAYS`). Use if the embed paints blank. |
-| `CALFNXT_XWAYLAND_NUDGE` | non-empty | Opt-in GNOME/Mutter + Ardour on Wayland workaround. **Off by default.** See [Editor black or frozen on GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland). |
-| `CALFNXT_KEEP_HOST_LDPATH` | non-empty | Keep the host `LD_LIBRARY_PATH` for `calfnxt-web-host`. Default: clear it (Mixbus/Ardour bundled glib). |
+| Variable                   | Values             | Effect                                                                                                                                                                         |
+| -------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CALFNXT_UI_SCALE`         | float ≈ `0.05`…`8` | Force editor scale (HiDPI) instead of measuring CSS vs host pixels. Invalid → ignored.                                                                                         |
+| `CALFNXT_WEB_DEBUG`        | non-empty          | Extra stderr logging; WebKit developer extras + console→stdout. File log is always `/tmp/calfnxt-ui.log` (capped at 512 KiB, then truncated).                                  |
+| `CALFNXT_WEB_INSPECTOR`    | non-empty          | Open WebKit Inspector on editor load.                                                                                                                                          |
+| `CALFNXT_WEB_NO_GPU`       | non-empty          | Hardware accel **off** (`NEVER`). Default is **on** (`ALWAYS`). Use if the embed paints blank.                                                                                 |
+| `CALFNXT_XWAYLAND_NUDGE`   | non-empty          | Opt-in GNOME/Mutter + Ardour on Wayland workaround. **Off by default.** See [Editor black or frozen on GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland).                |
+| `CALFNXT_KEEP_HOST_LDPATH` | non-empty          | Copy the host `LD_LIBRARY_PATH` into the helper’s spawn `envp`. Default: omit it **for the child only** (Mixbus/Ardour bundled glib). Never touches the DAW’s own environment. |
 
 Related (not calfNXT-owned):
 
-| Variable | Notes |
-|----------|--------|
-| `GDK_BACKEND=x11` | Force X11 for the helper on Wayland-only sessions. |
-| `WEBKIT_DISABLE_DMABUF_RENDERER` | Blank-window workaround on some drivers; set yourself if needed. |
-| `WEBKIT_DISABLE_COMPOSITING_MODE` | Last-resort compositing disable; not set by calfNXT. |
-| `DISPLAY` | Required for the X11 `GtkPlug` embed. |
+| Variable                          | Notes                                                            |
+| --------------------------------- | ---------------------------------------------------------------- |
+| `GDK_BACKEND=x11`                 | Force X11 for the helper on Wayland-only sessions.               |
+| `WEBKIT_DISABLE_DMABUF_RENDERER`  | Blank-window workaround on some drivers; set yourself if needed. |
+| `WEBKIT_DISABLE_COMPOSITING_MODE` | Last-resort compositing disable; not set by calfNXT.             |
+| `DISPLAY`                         | Required for the X11 `GtkPlug` embed.                            |
 
 ### Install helpers
 
-| Variable | Effect |
-|----------|--------|
-| `CALFNXT_VST3_DIR` | Dest for user install (default `~/.vst3`). |
-| `BUILD_DIR` | Build tree for `./tools/install-user-vst3.sh` (default `<repo>/build`). |
-| `JOBS` | Parallelism for that script (default `nproc`). |
+| Variable           | Effect                                                                  |
+| ------------------ | ----------------------------------------------------------------------- |
+| `CALFNXT_VST3_DIR` | Dest for user install (default `~/.vst3`).                              |
+| `BUILD_DIR`        | Build tree for `./tools/install-user-vst3.sh` (default `<repo>/build`). |
+| `JOBS`             | Parallelism for that script (default `nproc`).                          |
 
 ### CMake options (`-D`, not `getenv`)
 
-| Option | Effect |
-|--------|--------|
-| `CALFNXT_USE_PREBUILT_UI=ON` | Use unpacked `ui/dist` (needs `.stamp`); no `npm` during build. |
-| `CALFNXT_VST3_INSTALL_DIR` | Path under prefix for `cmake --install` (default `${CMAKE_INSTALL_LIBDIR}/vst3`). |
-| `CALFNXT_USER_VST3_DIR` | Cache default for user-copy when `CALFNXT_VST3_DIR` is unset. |
+| Option                       | Effect                                                                            |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| `CALFNXT_USE_PREBUILT_UI=ON` | Use unpacked `ui/dist` (needs `.stamp`); no `npm` during build.                   |
+| `CALFNXT_VST3_INSTALL_DIR`   | Path under prefix for `cmake --install` (default `${CMAKE_INSTALL_LIBDIR}/vst3`). |
+| `CALFNXT_USER_VST3_DIR`      | Cache default for user-copy when `CALFNXT_VST3_DIR` is unset.                     |
 
 ---
 
@@ -343,8 +422,8 @@ failed UI build, or React loading flash. `kids=0` in `_diag` is a red herring
 
 ### Why
 
-Hosts hand an **X11 embed window ID**. calfNXT must not link GTK/WebKit into the
-`.so` (Ardour toolkit collision), so **`calfnxt-web-host`** does GtkPlug +
+Hosts hand an **X11 embed window ID**. GTK/WebKit stay out of the `.so`
+([Editor architecture](#editor-architecture)); **`calfnxt-web-host`** does GtkPlug +
 WebKit, XEmbedded into that XID, JSON over a socketpair. On Wayland that tree is
 under **XWayland**. Pixels exist; the parent `wl_surface` present fails without
 Configure. Resize generates Configure — hence “just resize it.”
@@ -396,19 +475,16 @@ and `nudge cfg-*` / `live-cfg`. Optional: `GDK_BACKEND=x11`, `CALFNXT_WEB_DEBUG=
 
 ## Editor black in Mixbus (helper exit 127)
 
-Harrison Mixbus (and some Ardour packages) prepend `$INSTALL_DIR/lib` to
-`LD_LIBRARY_PATH` so the DAW uses its bundled glib/GTK. `calfnxt-web-host` is a
-**system** WebKitGTK binary. If it inherits that path, the dynamic linker loads
-Mixbus’s older `libglib-2.0.so` first; system `libatspi` (pulled in by WebKit)
-then fails with `undefined symbol: g_once_init_leave_pointer` → helper **exit 127**,
-black editor, audio still runs.
+Symptom of the Mixbus/Ardour launcher putting bundled glib on `LD_LIBRARY_PATH`
+while the helper needs **system** WebKitGTK. Background and why this does **not**
+break Ardour control surfaces:
+[Mixbus and Ardour LD_LIBRARY_PATH](#mixbus-and-ardour-ld_library_path-child-only).
 
-Vanilla Ardour often works on the same machine because it bundles a newer glib
-or does not override `LD_LIBRARY_PATH` the same way. `ldd` on the helper looks
-fine; the clash only happens at runtime under Mixbus.
+Vanilla Ardour often works on the same machine (newer bundled glib, or no
+`LD_LIBRARY_PATH` override). `ldd` on the helper looks fine; the clash is
+runtime under Mixbus.
 
-`WebEditor` clears `LD_LIBRARY_PATH` for the helper only (system library search
-path). Confirm in `/tmp/calfnxt-ui.log`:
+Confirm in `/tmp/calfnxt-ui.log`:
 
 ```text
 [calfnxt] helper env: LD_LIBRARY_PATH cleared for web-host
@@ -416,4 +492,5 @@ path). Confirm in `/tmp/calfnxt-ui.log`:
 ```
 
 without a following `exited immediately (code=127)`. Opt out:
-`CALFNXT_KEEP_HOST_LDPATH=1`.
+`CALFNXT_KEEP_HOST_LDPATH=1` (helper inherits the host path; Mixbus will typically
+fail again).

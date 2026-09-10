@@ -4,6 +4,8 @@
 
 Greenfield: **VST3 + WebKitGTK** (Linux first; WebKit in **`calfnxt-web-host`**, not the `.so`).
 Classic Calf Studio Gear DSP stays the audio core; UI is a modern Web view (React + DynamicValues).
+Host-compatibility contract (not in-process GTK 2, `webkit2gtk` is not GTK 2, child-only
+`LD_LIBRARY_PATH`): **[`README.md`](README.md)** → Editor architecture.
 
 ## Stack
 
@@ -47,7 +49,8 @@ Optional `vizSource()` for non-parameter telemetry (peak meters).
 ### `common/ui` — `WebEditor` + `calfnxt-web-host`
 
 Host-process **proxy** (`WebEditor`): VST3 `IPlugView`, spawn helper, Unix-socket JSON bridge, IRunLoop timer.
-UI process **`calfnxt-web-host`**: WebKitGTK + X11 `GtkPlug` + `calfnxt://` scheme (keeps GTK out of Ardour).
+Does **not** link GTK/WebKit; spawn `envp` omits `LD_LIBRARY_PATH` (host `environ` unchanged).
+UI process **`calfnxt-web-host`**: WebKitGTK (`webkit2gtk-4.1` = WebKit2 + **GTK 3**) + X11 `GtkPlug` + `calfnxt://` scheme (keeps GTK out of Ardour).
 Param bridge + viz flush (~30 Hz): `{t:"viz",id:"in"|"out",kind:"levels",v:[…]}`.
 Editor HiDPI: UI `{t:"viewport"}` → `resizeView` (optional `CALFNXT_UI_SCALE`).
 

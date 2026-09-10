@@ -28,6 +28,11 @@ if(SMTG_LINUX)
 endif()
 
 # Out-of-process GtkPlug + WebKitGTK helper (XEmbed into host parent XID).
+# GTK/WebKit are resolved here only — never on calfnxt_ui or plugin .so targets.
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
+pkg_check_modules(WEBKIT REQUIRED IMPORTED_TARGET webkit2gtk-4.1)
+
 add_executable(calfnxt-web-host
   web_host_main.cpp
 )

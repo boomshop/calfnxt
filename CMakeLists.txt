@@ -41,10 +41,7 @@ add_subdirectory(external/vst3sdk)
 set(SDK_ROOT "${CMAKE_SOURCE_DIR}/external/vst3sdk")
 set(public_sdk_SOURCE_DIR "${SDK_ROOT}/public.sdk")
 
-find_package(PkgConfig REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
-pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
-pkg_check_modules(WEBKIT REQUIRED IMPORTED_TARGET webkit2gtk-4.1)
 
 add_subdirectory(ui)
 add_subdirectory(common/ui)
