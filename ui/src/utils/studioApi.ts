@@ -73,7 +73,7 @@ export function pluginIdFromHash(hash = window.location.hash): string {
   return hash.replace(/^#/, '').split(/[?/]/, 1)[0].trim();
 }
 
-export { editorSizes } from '../dev/editorSizes';
+export { editorSizes } from '../components/DevShell';
 
 export { CompressorUI } from '../plugins/CompressorUI/CompressorUI';
 export {

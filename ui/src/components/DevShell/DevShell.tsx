@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { knownPluginIds, type PluginId } from "../plugins/registry";
+import { knownPluginIds, type PluginId } from "../../plugins/registry";
 import { editorSizes } from "./editorSizes";
 import "./DevShell.scss";
 

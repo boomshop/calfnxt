@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
-import { DevShell } from './dev/DevShell';
+import { DevShell, editorSizes } from './components/DevShell';
 import {
   isPluginId,
   knownPluginIds,
@@ -7,7 +7,6 @@ import {
   pluginIdFromHash,
   type PluginId,
 } from './plugins/registry';
-import { editorSizes } from './dev/editorSizes';
 import { reportCssViewportOnce } from './utils/reportViewport';
 import { Loading } from './widgets';
 
