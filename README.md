@@ -40,63 +40,63 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 
 ### Dynamics
 
-| Plugin | Bundle | Highlights |
-|--------|--------|------------|
-| **Compressor** | `calfNXTCompressor.vst3` | Feed-forward GR; Peak/RMS/Opto; stereo sidechain bus; HP/LP + listen; history |
-| **Expander** | `calfNXTExpander.vst3` | Downward expander/gate; stereo sidechain bus; hysteresis + hold; dual transfer curves |
-| **Multiband Compressor** | `calfNXTMbcomp.vst3` | 2–6 LR bands; per-band dynamics; Mono; response + history |
-| **Limiter** | `calfNXTLimiter.vst3` | Lookahead brickwall; ASC; OS 1–4×; True Peak; Diff Listen |
-| **Multiband Limiter** | `calfNXTMblimiter.vst3` | Weighted multi-band brickwall + final limiter; Mono |
-| **DeEsser** | `calfNXTDeesser.vst3` | Ess/Rumble; Wide/Split; detector HP/LP + peaking; history |
-| **Transients** | `calfNXTTransients.vst3` | Attack/release shaper; sensitivity; lookahead; HP/LP; envelope history |
+| Plugin | Bundle | Description |
+|--------|--------|-------------|
+| **Compressor** | `calfNXTCompressor.vst3` | Feed-forward compressor |
+| **Expander** | `calfNXTExpander.vst3` | Downward expander / gate |
+| **Multiband Compressor** | `calfNXTMbcomp.vst3` | 2–6 band Linkwitz–Riley compressor |
+| **Limiter** | `calfNXTLimiter.vst3` | Lookahead brickwall limiter |
+| **Multiband Limiter** | `calfNXTMblimiter.vst3` | 2–6 band lookahead limiter + broadband stage |
+| **DeEsser** | `calfNXTDeesser.vst3` | Sibilance / rumble dynamics |
+| **Transients** | `calfNXTTransients.vst3` | Attack / sustain envelope shaper |
 
 ### EQ & filter
 
-| Plugin | Bundle | Highlights |
-|--------|--------|------------|
-| **Equalizer** | `calfNXTEqualizer.vst3` | 16-band parametric / dyn EQ; Listen; Mono; interactive response |
-| **Filter** | `calfNXTFilter.vst3` | Multimode LP/HP/BP/BR/AP; optional envelope; Mono; spectrum overlay; MIDI note-hold can drive cutoff (Inertia-smoothed) |
+| Plugin | Bundle | Description |
+|--------|--------|-------------|
+| **Equalizer** | `calfNXTEqualizer.vst3` | 16-band parametric EQ with optional dynamic EQ |
+| **Filter** | `calfNXTFilter.vst3` | Multimode LP / HP / BP / BR / allpass |
 
 ### Harmonics
 
-| Plugin | Bundle | Highlights |
-|--------|--------|------------|
-| **Harmonics** | `calfNXTHarmonics.vst3` | Saturator / Exciter / Bass; Feed→shape→Post; Drive/Blend/Asym/Tone/OS |
-| **Crusher** | `calfNXTCrusher.vst3` | Bit crusher; response heat chart |
+| Plugin | Bundle | Description |
+|--------|--------|-------------|
+| **Harmonics** | `calfNXTHarmonics.vst3` | Saturator / exciter / bass enhancer |
+| **Crusher** | `calfNXTCrusher.vst3` | Bit crusher |
 
 ### Delay & reverb
 
-| Plugin | Bundle | Highlights |
-|--------|--------|------------|
-| **Delay** | `calfNXTDelay.vst3` | Dual delay (Stereo/Ping-Pong/L-R); tempo sync; echo charts |
-| **Reverb** | `calfNXTReverb.vst3` | Algorithmic ER + late (no IR); duck/gate/freeze; room presets |
-| **Impulse** | `calfNXTImpulse.vst3` | Convolution reverb; WAV/AIFF library; decay/shape on Aux Chart; wet HP/LP; Quality Lo/Mid/Hi |
+| Plugin | Bundle | Description |
+|--------|--------|-------------|
+| **Delay** | `calfNXTDelay.vst3` | Stereo / ping-pong / sequential delay |
+| **Reverb** | `calfNXTReverb.vst3` | Algorithmic early + late reverb |
+| **Impulse** | `calfNXTImpulse.vst3` | Convolution reverb |
 
 ### Modulators
 
-| Plugin | Bundle | Highlights |
-|--------|--------|------------|
-| **Ring Modulator** | `calfNXTRingmodulator.vst3` | Stereo ring mod; dual LFOs; live effective knobs |
-| **Pulsator** | `calfNXTPulsator.vst3` | Tremolo / autopanner; tempo sync; dual-phase LFO chart |
-| **Phaser** | `calfNXTPhaser.vst3` | Allpass phaser; LFO freeze/Reset; live L/R response chart |
-| **Flanger** | `calfNXTFlanger.vst3` | Delay comb + feedback; LFO freeze/Reset; comb peak/notch chart |
-| **Chorus** | `calfNXTChorus.vst3` | Multi-tap (≤8 voices); LFO position charts; post FrequencyRange |
+| Plugin | Bundle | Description |
+|--------|--------|-------------|
+| **Ring Modulator** | `calfNXTRingmodulator.vst3` | Stereo ring modulator |
+| **Pulsator** | `calfNXTPulsator.vst3` | Stereo tremolo / autopanner |
+| **Phaser** | `calfNXTPhaser.vst3` | Stereo allpass phaser |
+| **Flanger** | `calfNXTFlanger.vst3` | Stereo delay flanger |
+| **Chorus** | `calfNXTChorus.vst3` | Multi-tap chorus (up to 8 voices) |
 
 ### Tools
 
-| Plugin | Bundle | Highlights |
-|--------|--------|------------|
-| **Analyzer** | `calfNXTAnalyzer.vst3` | Spectrum + spectralizer + gonio/correlation (passthrough) |
-| **Stereo** | `calfNXTStereo.vst3` | Width, M/S, decorrelator, imaging; gonio + correlation |
-| **Split** | `calfNXTSplit.vst3` | Mono in → stereo out; per-channel volume, mute, phase invert |
+| Plugin | Bundle | Description |
+|--------|--------|-------------|
+| **Analyzer** | `calfNXTAnalyzer.vst3` | Spectrum / goniometer / correlation (passthrough) |
+| **Stereo** | `calfNXTStereo.vst3` | Width / M/S imaging |
+| **Split** | `calfNXTSplit.vst3` | Mono in → stereo out |
 
 ### Pitch
 
-| Plugin | Bundle | Highlights |
-|--------|--------|------------|
-| **Tuner** | `calfNXTTuner.vst3` | Realtime pitch correction (Voice / Strings / Guitar); linked stereo PSOLA; scale + piano-roll history; MIDI note-hold overrides scale mask while notes are held. First cut — DSP is expected to keep changing. |
-| **Octaver** | `calfNXTOctaver.vst3` | Polyphonic-friendly octave stack (−2/−1/+1 PSOLA + Sub); Voice / Cello / Bass / Guitar; linked stereo F0; pitch-roll history. |
-| **Whammy** | `calfNXTWhammy.vst3` | Delay-line pitch pedal ±24 st (up and down); Free/ST/WT snap; Fast/Normal/Smooth/Studio grains; Mix/Glide/Tone. |
+| Plugin | Bundle | Description |
+|--------|--------|-------------|
+| **Tuner** | `calfNXTTuner.vst3` | Realtime monophonic pitch correction |
+| **Octaver** | `calfNXTOctaver.vst3` | Monophonic octave stack (−2 / −1 / +1 + sub) |
+| **Whammy** | `calfNXTWhammy.vst3` | Delay-line pitch pedal (±24 st) |
 
 Site and per-plugin descriptors: [calfnxt.org](https://calfnxt.org/),
 `dsp/<id>/<id>.plugin.json`.
