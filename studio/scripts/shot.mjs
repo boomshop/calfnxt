@@ -66,7 +66,7 @@ const ALL = [
   'split',
   'tuner',
   'octaver',
-  'whammy',
+  'bender',
   'impulse',
 ];
 

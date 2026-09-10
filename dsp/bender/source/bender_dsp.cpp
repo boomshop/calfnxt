@@ -1,4 +1,4 @@
-#include "whammy_dsp.h"
+#include "bender_dsp.h"
 
 #include "base/source/fstreamer.h"
 #include "dsp_math.h"
@@ -7,13 +7,13 @@
 #include <cmath>
 
 namespace calfNXT {
-namespace Whammy {
+namespace Bender {
 
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
 namespace {
-constexpr uint32 kStateMagic = 0x434e5857u; // 'CNXW'
+constexpr uint32 kStateMagic = 0x434e5842u; // 'CNXB'
 constexpr uint32 kStateVersion = 2; // + mono (trailing)
 
 // Grain length → latency ≈ half of this (Fast ~8 ms at 48 kHz).
@@ -32,12 +32,12 @@ float snapPitchPlain(float pitch, float snapPlain)
 }
 } // namespace
 
-WhammyPlugin::WhammyPlugin()
+BenderPlugin::BenderPlugin()
 : Plugin::EffectBase(ViewRect(0, 0, kEditorWidth, kEditorHeight))
 {
 }
 
-tresult PLUGIN_API WhammyPlugin::initialize(FUnknown* context)
+tresult PLUGIN_API BenderPlugin::initialize(FUnknown* context)
 {
   tresult result = EffectBase::initialize(context);
   if (result != kResultOk)
@@ -50,15 +50,15 @@ tresult PLUGIN_API WhammyPlugin::initialize(FUnknown* context)
   return kResultOk;
 }
 
-int WhammyPlugin::grainSamples(int quality) const
+int BenderPlugin::grainSamples(int quality) const
 {
   const int q = std::clamp(quality, 0, 3);
   const float sr = static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0);
   const int n = static_cast<int>(sr * kGrainMs[q] * 0.001f + 0.5f);
-  return std::clamp(n, 128, Dsp::WhammyShifter::kSize / 2 - 16);
+  return std::clamp(n, 128, Dsp::BenderShifter::kSize / 2 - 16);
 }
 
-void WhammyPlugin::applyQuality(int quality)
+void BenderPlugin::applyQuality(int quality)
 {
   const int q = std::clamp(quality, 0, 3);
   if (q == quality_)
@@ -68,7 +68,7 @@ void WhammyPlugin::applyQuality(int quality)
   shifter_.reset();
 }
 
-void WhammyPlugin::updateLatency(bool forceZero)
+void BenderPlugin::updateLatency(bool forceZero)
 {
   const uint32 want =
     forceZero ? 0u : static_cast<uint32>(std::max(1, shifter_.latency()));
@@ -82,12 +82,12 @@ void WhammyPlugin::updateLatency(bool forceZero)
     componentHandler->restartComponent(kLatencyChanged);
 }
 
-uint32 PLUGIN_API WhammyPlugin::getLatencySamples()
+uint32 PLUGIN_API BenderPlugin::getLatencySamples()
 {
   return latencySamples_;
 }
 
-void WhammyPlugin::quantizePitchParam()
+void BenderPlugin::quantizePitchParam()
 {
   const float snapped = snapPitchPlain(params_[kParamPitch], params_[kParamSnap]);
   if (std::abs(snapped - params_[kParamPitch]) < 1e-5f)
@@ -100,7 +100,7 @@ void WhammyPlugin::quantizePitchParam()
     p->setNormalized(p->toNormalized(static_cast<double>(snapped)));
 }
 
-void WhammyPlugin::resetProcessing()
+void BenderPlugin::resetProcessing()
 {
   quality_ = -1;
   quantizePitchParam();
@@ -110,7 +110,7 @@ void WhammyPlugin::resetProcessing()
   updateLatency(false);
 }
 
-tresult PLUGIN_API WhammyPlugin::setActive(TBool state)
+tresult PLUGIN_API BenderPlugin::setActive(TBool state)
 {
   if (state)
     resetProcessing();
@@ -119,14 +119,14 @@ tresult PLUGIN_API WhammyPlugin::setActive(TBool state)
   return EffectBase::setActive(state);
 }
 
-tresult PLUGIN_API WhammyPlugin::setupProcessing(ProcessSetup& newSetup)
+tresult PLUGIN_API BenderPlugin::setupProcessing(ProcessSetup& newSetup)
 {
   sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
   resetProcessing();
   return EffectBase::setupProcessing(newSetup);
 }
 
-WhammyPlugin::BlockState WhammyPlugin::makeBlockState() const
+BenderPlugin::BlockState BenderPlugin::makeBlockState() const
 {
   BlockState s;
   s.bypass = params_[kParamBypass] >= 0.5f;
@@ -139,7 +139,7 @@ WhammyPlugin::BlockState WhammyPlugin::makeBlockState() const
   return s;
 }
 
-tresult PLUGIN_API WhammyPlugin::process(ProcessData& data)
+tresult PLUGIN_API BenderPlugin::process(ProcessData& data)
 {
   syncParamPlains(data, params_, kParamCount);
   quantizePitchParam();
@@ -213,7 +213,7 @@ tresult PLUGIN_API WhammyPlugin::process(ProcessData& data)
   return kResultOk;
 }
 
-tresult PLUGIN_API WhammyPlugin::setState(IBStream* state)
+tresult PLUGIN_API BenderPlugin::setState(IBStream* state)
 {
   if (!state)
     return kResultFalse;
@@ -254,7 +254,7 @@ tresult PLUGIN_API WhammyPlugin::setState(IBStream* state)
   return kResultOk;
 }
 
-tresult PLUGIN_API WhammyPlugin::getState(IBStream* state)
+tresult PLUGIN_API BenderPlugin::getState(IBStream* state)
 {
   if (!state)
     return kResultFalse;
@@ -269,5 +269,5 @@ tresult PLUGIN_API WhammyPlugin::getState(IBStream* state)
   return kResultOk;
 }
 
-} // namespace Whammy
+} // namespace Bender
 } // namespace calfNXT

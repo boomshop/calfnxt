@@ -47,7 +47,7 @@ declare -A PLUGIN_TARGET=(
   [split]=calfnxt-split
   [tuner]=calfnxt-tuner
   [octaver]=calfnxt-octaver
-  [whammy]=calfnxt-whammy
+  [bender]=calfnxt-bender
   [impulse]=calfnxt-impulse
 )
 declare -A PLUGIN_VST3=(
@@ -74,7 +74,7 @@ declare -A PLUGIN_VST3=(
   [split]=calfNXTSplit
   [tuner]=calfNXTTuner
   [octaver]=calfNXTOctaver
-  [whammy]=calfNXTWhammy
+  [bender]=calfNXTBender
   [impulse]=calfNXTImpulse
 )
 

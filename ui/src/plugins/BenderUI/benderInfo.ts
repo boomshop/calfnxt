@@ -1,4 +1,4 @@
-export const whammyInfo = {
+export const benderInfo = {
   bypass:
     'Turns the shifter off so you hear the delayed dry path (In/Out gains still apply). Latency stays reported to the host so timing does not jump. A/B whether the throw is adding drama or just making the part sound thin and grainy.',
 
@@ -15,7 +15,7 @@ export const whammyInfo = {
     'Grain size vs latency — larger window = fewer splices, cleaner sustains, later in the host. Fast ≈ 16 ms (about 8 ms PDC): snappy, a bit grainy, closest to those 90s pedals that felt almost live. Normal doubles that. Smooth is 64 ms grain / ~32 ms PDC — the usual print setting. Studio doubles again (128 ms / ~64 ms): +octave gets much quieter, +two octaves still has some gargle, attacks smear more, and it is not for playing through. Changing Quality can make the host re-compensate latency — do it while stopped if the graph jumps.',
 
   mix:
-    'Dry vs shifted. 100% = classic lead Whammy (only the thrown pitch). Lower = harmony / doubling — original plus interval, like the pedal’s harmony modes. Dry is delayed to the same latency as the shifter so Mix is not a PDC comb at unison; once you leave 0 the wet delay is moving, so 50/50 can still chorus a little — that is the old harmonizer sound. If the blend feels hollow, push Mix toward 100% or stay closer to unison.',
+    'Dry vs shifted. 100% = classic lead (only the thrown pitch). Lower = harmony / doubling — original plus interval, like the pedal’s harmony modes. Dry is delayed to the same latency as the shifter so Mix is not a PDC comb at unison; once you leave 0 the wet delay is moving, so 50/50 can still chorus a little — that is the old harmonizer sound. If the blend feels hollow, push Mix toward 100% or stay closer to unison.',
 
   glide:
     'How fast Pitch catches the knob (or automation). Short (a few ms) = the pedal is under your foot, zipper-free but immediate. Longer = portamento / dive — the interval eases in instead of stepping. Pair with ST/WT when you want audible slides between grid notes. Too long and the throw lags the groove; too short on big jumps can click — if it does, add a few milliseconds.',

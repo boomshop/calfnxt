@@ -24,7 +24,7 @@ export type PluginId =
   | "split"
   | "tuner"
   | "octaver"
-  | "whammy"
+  | "bender"
   | "impulse";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
@@ -54,7 +54,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   split: () => import("./SplitUI/BoundSplitUI"),
   tuner: () => import("./TunerUI/BoundTunerUI"),
   octaver: () => import("./OctaverUI/BoundOctaverUI"),
-  whammy: () => import("./WhammyUI/BoundWhammyUI"),
+  bender: () => import("./BenderUI/BoundBenderUI"),
   impulse: () => import("./ImpulseUI/BoundImpulseUI"),
 };
 

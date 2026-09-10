@@ -3,21 +3,21 @@
 #include "effect_base.h"
 #include "io_stage.h"
 #include "viz_source.h"
-#include "whammy_shifter.h"
+#include "bender_shifter.h"
 
-#include "whammy_params.h"
+#include "bender_params.h"
 
 namespace calfNXT {
-namespace Whammy {
+namespace Bender {
 
-class WhammyPlugin : public Plugin::EffectBase, public Ui::IVizSource
+class BenderPlugin : public Plugin::EffectBase, public Ui::IVizSource
 {
 public:
-  WhammyPlugin();
+  BenderPlugin();
 
   static Steinberg::FUnknown* createInstance(void*)
   {
-    return static_cast<Steinberg::Vst::IAudioProcessor*>(new WhammyPlugin);
+    return static_cast<Steinberg::Vst::IAudioProcessor*>(new BenderPlugin);
   }
 
   Steinberg::tresult PLUGIN_API initialize(Steinberg::FUnknown* context) SMTG_OVERRIDE;
@@ -32,7 +32,7 @@ public:
   int takeInputLevelsDb(float* out, int maxOut) override { return io_.takeInputLevelsDb(out, maxOut); }
   int takeOutputLevelsDb(float* out, int maxOut) override { return io_.takeOutputLevelsDb(out, maxOut); }
 
-  OBJ_METHODS(WhammyPlugin, Plugin::EffectBase)
+  OBJ_METHODS(BenderPlugin, Plugin::EffectBase)
   DEFINE_INTERFACES
   END_DEFINE_INTERFACES(Plugin::EffectBase)
   REFCOUNT_METHODS(Plugin::EffectBase)
@@ -61,12 +61,12 @@ private:
 
   float params_[kParamCount] {};
   Dsp::IoStage io_;
-  Dsp::WhammyShifter shifter_;
+  Dsp::BenderShifter shifter_;
   double sampleRate_ = 44100.0;
   float pitchSm_ = 0.f;
   int quality_ = -1;
   Steinberg::uint32 latencySamples_ = 0;
 };
 
-} // namespace Whammy
+} // namespace Bender
 } // namespace calfNXT

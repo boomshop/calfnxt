@@ -1,7 +1,7 @@
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import BoundWhammyUI from '../plugins/WhammyUI/BoundWhammyUI';
-import { pluginMeta } from '../generated/whammyModel';
+import BoundBenderUI from '../plugins/BenderUI/BoundBenderUI';
+import { pluginMeta } from '../generated/benderModel';
 import { reportCssViewportOnce } from '../utils/reportViewport';
 import '../styles.css';
 
@@ -9,7 +9,7 @@ function Root() {
   useEffect(() => {
     reportCssViewportOnce(pluginMeta.editor);
   }, []);
-  return <BoundWhammyUI />;
+  return <BoundBenderUI />;
 }
 
 createRoot(document.getElementById('root')!).render(

@@ -1,21 +1,21 @@
 import { DynamicValue } from '@deutschesoft/awml';
-import { paramIds, pluginMeta } from '../generated/whammyModel';
+import { paramIds, pluginMeta } from '../generated/benderModel';
 import { bindBoolParamToHost, bindParamToHost, postBegin, postEnd } from '../utils/bind_param';
 
-export const WHAMMY_SNAP_ENTRIES = [
+export const BENDER_SNAP_ENTRIES = [
   { label: 'Free', value: 0 },
   { label: 'ST', value: 1 },
   { label: 'WT', value: 2 },
 ];
 
-export const WHAMMY_QUALITY_ENTRIES = [
+export const BENDER_QUALITY_ENTRIES = [
   { label: 'Fast', value: 0 },
   { label: 'Normal', value: 1 },
   { label: 'Smooth', value: 2 },
   { label: 'Studio', value: 3 },
 ];
 
-export type IWhammyHost = {
+export type IBenderHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
   mono$: DynamicValue<boolean>;
@@ -34,7 +34,7 @@ function paramDefault(name: keyof typeof paramIds, fallback = 0): number {
   return typeof meta?.default === 'number' ? meta.default : fallback;
 }
 
-export function snapWhammyPitch(v: number, snap: number): number {
+export function snapBenderPitch(v: number, snap: number): number {
   const x = Math.max(-24, Math.min(24, v));
   const mode = Math.round(snap);
   if (mode <= 0) return x;
@@ -42,7 +42,7 @@ export function snapWhammyPitch(v: number, snap: number): number {
   return Math.max(-24, Math.min(24, Math.round(x / step) * step));
 }
 
-export function whammyParamDefault(
+export function benderParamDefault(
   name: keyof typeof paramIds,
   fallback = 0,
 ): number {
@@ -65,13 +65,13 @@ function bindBool(name: keyof typeof paramIds): DynamicValue<boolean> {
   return dv;
 }
 
-export function createBoundWhammyHost(): IWhammyHost {
+export function createBoundBenderHost(): IBenderHost {
   const snap$ = bindNum('snap', 0);
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
     mono$: bindBool('mono'),
-    pitch$: bindNum('pitch', 0, (v) => snapWhammyPitch(v, snap$.value)),
+    pitch$: bindNum('pitch', 0, (v) => snapBenderPitch(v, snap$.value)),
     snap$,
     quality$: bindNum('quality', 2),
     mix$: bindNum('mix', 1),

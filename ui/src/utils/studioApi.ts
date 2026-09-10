@@ -29,7 +29,7 @@ export type PluginId =
   | 'split'
   | 'tuner'
   | 'octaver'
-  | 'whammy'
+  | 'bender'
   | 'impulse';
 
 const PLUGIN_IDS: PluginId[] = [
@@ -56,7 +56,7 @@ const PLUGIN_IDS: PluginId[] = [
   'split',
   'tuner',
   'octaver',
-  'whammy',
+  'bender',
   'impulse',
 ];
 
@@ -209,11 +209,11 @@ export {
   type IOctaverHost,
 } from '../host/octaverHost';
 
-export { WhammyUI } from '../plugins/WhammyUI/WhammyUI';
+export { BenderUI } from '../plugins/BenderUI/BenderUI';
 export {
-  createBoundWhammyHost,
-  type IWhammyHost,
-} from '../host/whammyHost';
+  createBoundBenderHost,
+  type IBenderHost,
+} from '../host/benderHost';
 
 export { ImpulseUI } from '../plugins/ImpulseUI/ImpulseUI';
 export {

@@ -87,14 +87,14 @@ dsp/delay/
 dsp/crusher/
 dsp/tuner/
 dsp/octaver/
-dsp/whammy/
+dsp/bender/
 dsp/impulse/
 tools/codegen/
 ui/
   index.html            # SPA shell
   src/
     App.tsx             # hash router
-    plugins/            # … TunerUI, OctaverUI, WhammyUI, ImpulseUI, registry
+    plugins/            # … TunerUI, OctaverUI, BenderUI, ImpulseUI, registry
     generated/          # codegen TS models
 external/vst3sdk/
 ```

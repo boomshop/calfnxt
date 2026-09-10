@@ -32,6 +32,20 @@ UI building blocks include GPL-licensed `@deutschesoft/aux-widgets` / AWML.
 
 ---
 
+## 2.0.0 — breaking rename (trademark)
+
+**This major bump exists for trademark reasons, not because the DSP changed.**
+
+The pitch-pedal plugin is now **Bender** (`calfNXTBender.vst3`, `#bender`). The
+previous plugin identity — bundle name, VST3 UID, and plugin id — is
+**discontinued**. We will not keep shipping a third-party trademark.
+
+Hosts will **not** map old sessions, presets, or automations onto Bender. That
+incompatibility is intentional. Replace the insert with Bender and remove the
+old `.vst3` from your plugin folder.
+
+---
+
 ## Plugins
 
 Install paths are always `~/.vst3/<Bundle>` (or `$CALFNXT_VST3_DIR` /
@@ -96,7 +110,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 |--------|--------|-------------|
 | **Tuner** | `calfNXTTuner.vst3` | Realtime monophonic pitch correction |
 | **Octaver** | `calfNXTOctaver.vst3` | Monophonic octave stack (−2 / −1 / +1 + sub) |
-| **Whammy** | `calfNXTWhammy.vst3` | Delay-line pitch pedal (±24 st) |
+| **Bender** | `calfNXTBender.vst3` | Delay-line pitch pedal (±24 st). **2.0.0:** new identity (trademark); old sessions do not load |
 
 Site and per-plugin descriptors: [calfnxt.org](https://calfnxt.org/),
 `dsp/<id>/<id>.plugin.json`.
@@ -230,7 +244,7 @@ re-embedded (the install script does that). Plugin ids for the script / Vite:
 `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay`
 `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter`
 `ringmod` `pulsator` `crusher` `phaser` `flanger` `chorus` `split` `tuner`
-`octaver` `whammy` `impulse`.
+`octaver` `bender` `impulse`.
 
 Codegen is part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++
 params + `ui/src/generated/`).

@@ -43,7 +43,7 @@ const ALL_PLUGINS = [
   'split',
   'tuner',
   'octaver',
-  'whammy',
+  'bender',
   'impulse',
 ];
 

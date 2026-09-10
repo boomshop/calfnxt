@@ -2,20 +2,20 @@ import { useCallback } from 'react';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { Header } from '../../components';
 import { Buttons, Knob, Toggle, WithInfo } from '../../widgets';
-import { paramIds } from '../../generated/whammyModel';
+import { paramIds } from '../../generated/benderModel';
 import {
-  WHAMMY_QUALITY_ENTRIES,
-  WHAMMY_SNAP_ENTRIES,
-  snapWhammyPitch,
-  whammyParamDefault,
-  type IWhammyHost,
-} from '../../host/whammyHost';
-import { whammyInfo } from './whammyInfo';
+  BENDER_QUALITY_ENTRIES,
+  BENDER_SNAP_ENTRIES,
+  snapBenderPitch,
+  benderParamDefault,
+  type IBenderHost,
+} from '../../host/benderHost';
+import { benderInfo } from './benderInfo';
 import '../PluginUI.scss';
-import './WhammyUI.scss';
+import './BenderUI.scss';
 
-export interface WhammyUIProps {
-  host: IWhammyHost;
+export interface BenderUIProps {
+  host: IBenderHost;
 }
 
 const PITCH_DOTS = [
@@ -86,7 +86,7 @@ function formatPitch(v: number, snap: number): string {
   return `${sign}${Math.abs(n).toFixed(decimals)}`;
 }
 
-export function WhammyUI(props: WhammyUIProps) {
+export function BenderUI(props: BenderUIProps) {
   const { host } = props;
   const edit = (id: number) => ({
     beginEdit: () => host.beginEdit(id),
@@ -102,7 +102,7 @@ export function WhammyUI(props: WhammyUIProps) {
       host.snap$.set(next);
       host.endEdit(paramIds.snap);
       if (next > 0) {
-        const snapped = snapWhammyPitch(host.pitch$.value, next);
+        const snapped = snapBenderPitch(host.pitch$.value, next);
         if (snapped !== host.pitch$.value) {
           host.beginEdit(paramIds.pitch);
           host.pitch$.set(snapped);
@@ -116,38 +116,38 @@ export function WhammyUI(props: WhammyUIProps) {
   const snapStep = snap <= 0 ? 0 : snap >= 2 ? 2 : 1;
 
   return (
-    <div className="WhammyUI PluginUI">
-      <Header title="Whammy">
-        <WithInfo title={whammyInfo.mono}>
+    <div className="BenderUI PluginUI">
+      <Header title="Bender">
+        <WithInfo title={benderInfo.mono}>
           <Toggle state$={host.mono$} icon="stereo" icon_active="mono" />
         </WithInfo>
-        <WithInfo title={whammyInfo.bypass}>
+        <WithInfo title={benderInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>
       </Header>
 
       <div className="block mix">
         <div className="title">Blend</div>
-        <WithInfo title={whammyInfo.tone} className="tone">
+        <WithInfo title={benderInfo.tone} className="tone">
           <Knob
             label="Tone"
             value$={host.tone$}
             min={0}
             max={1}
-            reset={whammyParamDefault('tone')}
+            reset={benderParamDefault('tone')}
             dots={TONE_DOTS}
             labels={TONE_LABELS}
             size="medium"
             {...edit(paramIds.tone)}
           />
         </WithInfo>
-        <WithInfo title={whammyInfo.mix} className="mix">
+        <WithInfo title={benderInfo.mix} className="mix">
           <Knob
             label="Mix"
             value$={host.mix$}
             min={0}
             max={1}
-            reset={whammyParamDefault('mix')}
+            reset={benderParamDefault('mix')}
             dots={MIX_DOTS}
             labels={MIX_LABELS}
             size="large"
@@ -158,15 +158,15 @@ export function WhammyUI(props: WhammyUIProps) {
 
       <div className="block pedal">
         <div className="title">Pitch</div>
-        <WithInfo title={whammyInfo.snap} className=" snap">
+        <WithInfo title={benderInfo.snap} className=" snap">
           <Buttons
             layout="vertical"
-            entries={[...WHAMMY_SNAP_ENTRIES]}
+            entries={[...BENDER_SNAP_ENTRIES]}
             value={snap}
             onChange={onSnap}
           />
         </WithInfo>
-        <WithInfo title={whammyInfo.pitch} className=" pitch">
+        <WithInfo title={benderInfo.pitch} className=" pitch">
           <Knob
             label="Pitch"
             size="huge"
@@ -174,7 +174,7 @@ export function WhammyUI(props: WhammyUIProps) {
             min={-24}
             max={24}
             base={0}
-            reset={whammyParamDefault('pitch')}
+            reset={benderParamDefault('pitch')}
             snap={snapStep}
             step={snapStep || 1}
             dots={PITCH_DOTS}
@@ -187,10 +187,10 @@ export function WhammyUI(props: WhammyUIProps) {
 
       <div className="block feel">
         <div className="title">Feel</div>
-        <WithInfo title={whammyInfo.quality} className="quality">
+        <WithInfo title={benderInfo.quality} className="quality">
           <Buttons
             layout="vertical"
-            entries={[...WHAMMY_QUALITY_ENTRIES]}
+            entries={[...BENDER_QUALITY_ENTRIES]}
             value={quality}
             onChange={(v) => {
               host.beginEdit(paramIds.quality);
@@ -199,13 +199,13 @@ export function WhammyUI(props: WhammyUIProps) {
             }}
           />
         </WithInfo>
-        <WithInfo title={whammyInfo.glide} className="glide">
+        <WithInfo title={benderInfo.glide} className="glide">
           <Knob
             label="Glide"
             value$={host.glide$}
             min={0.5}
             max={250}
-            reset={whammyParamDefault('glide')}
+            reset={benderParamDefault('glide')}
             scale="log2"
             log_factor={4}
             dots={GLIDE_DOTS}

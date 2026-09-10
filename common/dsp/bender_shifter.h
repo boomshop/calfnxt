@@ -18,7 +18,7 @@
 namespace calfNXT {
 namespace Dsp {
 
-class WhammyShifter
+class BenderShifter
 {
 public:
   static constexpr int kSize = 65536;

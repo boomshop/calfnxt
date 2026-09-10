@@ -23,7 +23,7 @@ import {
   SplitUI,
   TunerUI,
   OctaverUI,
-  WhammyUI,
+  BenderUI,
   ImpulseUI,
   createBoundCompressorHost,
   createBoundExpanderHost,
@@ -48,7 +48,7 @@ import {
   createBoundSplitHost,
   createBoundTunerHost,
   createBoundOctaverHost,
-  createBoundWhammyHost,
+  createBoundBenderHost,
   createBoundImpulseHost,
   showWidgetInfo$,
   type PluginId,
@@ -129,9 +129,9 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
     params: (await import('../fixtures/octaver/params.json')).default,
     viz: (await import('../fixtures/octaver/viz.json')).default,
   }),
-  whammy: async () => ({
-    params: (await import('../fixtures/whammy/params.json')).default,
-    viz: (await import('../fixtures/whammy/viz.json')).default,
+  bender: async () => ({
+    params: (await import('../fixtures/bender/params.json')).default,
+    viz: (await import('../fixtures/bender/viz.json')).default,
   }),
   impulse: async () => ({
     params: (await import('../fixtures/impulse/params.json')).default,
@@ -205,8 +205,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundTunerHost();
       case 'octaver':
         return createBoundOctaverHost();
-      case 'whammy':
-        return createBoundWhammyHost();
+      case 'bender':
+        return createBoundBenderHost();
       case 'impulse':
         return createBoundImpulseHost();
       case 'limiter':
@@ -318,9 +318,9 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
       return (
         <OctaverUI host={host as ReturnType<typeof createBoundOctaverHost>} />
       );
-    case 'whammy':
+    case 'bender':
       return (
-        <WhammyUI host={host as ReturnType<typeof createBoundWhammyHost>} />
+        <BenderUI host={host as ReturnType<typeof createBoundBenderHost>} />
       );
     case 'impulse':
       return (

@@ -1,14 +1,14 @@
 {
-  "id": "whammy",
-  "name": "calfNXT Whammy",
+  "id": "bender",
+  "name": "calfNXT Bender",
   "vendor": "calfNXT",
   "vendor_url": "https://calfnxt.org",
   "vendor_email": "mailto:schmidt@boomshop.net",
-  "version": "1.9.0",
+  "version": "2.0.0",
   "category": "Fx|Pitch Shift",
   "vst3_uid": [
-    "0x5748414D",
-    "0x4D593031",
+    "0x42454E44",
+    "0x45523031",
     "0x43414C46",
     "0x4E585431"
   ],

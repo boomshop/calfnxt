@@ -23,7 +23,7 @@ import type {
   ISplitHost,
   ITunerHost,
   IOctaverHost,
-  IWhammyHost,
+  IBenderHost,
   IImpulseHost,
   PluginId,
 } from '@calfnxt/ui';
@@ -938,8 +938,8 @@ export function applyOctaverDemo(
   return () => window.clearInterval(hold);
 }
 
-export function applyWhammyDemo(
-  host: IWhammyHost,
+export function applyBenderDemo(
+  host: IBenderHost,
   params: Record<string, unknown>,
   viz: VizFixture,
 ) {
@@ -1025,6 +1025,6 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   split: applySplitDemo as DemoApplier,
   tuner: applyTunerDemo as DemoApplier,
   octaver: applyOctaverDemo as DemoApplier,
-  whammy: applyWhammyDemo as DemoApplier,
+  bender: applyBenderDemo as DemoApplier,
   impulse: applyImpulseDemo as DemoApplier,
 };

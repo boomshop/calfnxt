@@ -1,11 +1,11 @@
-#include "whammy_dsp.h"
-#include "whammy_params.h"
+#include "bender_dsp.h"
+#include "bender_params.h"
 #include "version.h"
 
 #include "public.sdk/source/main/pluginfactory.h"
 
 using namespace Steinberg;
-using namespace calfNXT::Whammy;
+using namespace calfNXT::Bender;
 
 BEGIN_FACTORY_DEF(stringCompanyName, stringCompanyWeb, stringCompanyEmail)
 
@@ -17,6 +17,6 @@ BEGIN_FACTORY_DEF(stringCompanyName, stringCompanyWeb, stringCompanyEmail)
              kPluginCategory,
              FULL_VERSION_STR,
              kVstVersionString,
-             WhammyPlugin::createInstance)
+             BenderPlugin::createInstance)
 
 END_FACTORY

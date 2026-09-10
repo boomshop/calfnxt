@@ -3,8 +3,8 @@
 #include "pluginterfaces/base/fplatform.h"
 #include "projectversion.h"
 
-#define stringOriginalFilename "calfNXTWhammy.vst3"
-#define stringFileDescription "calfNXT Whammy"
+#define stringOriginalFilename "calfNXTBender.vst3"
+#define stringFileDescription "calfNXT Bender"
 #define stringCompanyWeb "https://calfnxt.org"
 #define stringCompanyEmail "mailto:schmidt@boomshop.net"
 #define stringCompanyName "calfNXT"

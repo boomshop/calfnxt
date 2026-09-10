@@ -41,7 +41,7 @@ const knownPlugins = [
   "split",
   "tuner",
   "octaver",
-  "whammy",
+  "bender",
   "impulse",
 ] as const;
 
