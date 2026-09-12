@@ -1,4 +1,5 @@
 #include "web_editor.h"
+#include "viz_hz.h"
 #include "ui_file_log.h"
 #include "viz_bin.h"
 
@@ -999,9 +1000,15 @@ void WebEditor::flushViz()
 
   using clock = std::chrono::steady_clock;
   const auto now = clock::now();
+  int hz = vizHzRuntime().hz.load(std::memory_order_relaxed);
+  if (hz < 5)
+    hz = 5;
+  else if (hz > 60)
+    hz = 60;
+  const auto minGap = std::chrono::milliseconds(1000 / hz);
 
   if (lastEnvVizFlush_.time_since_epoch().count() == 0
-      || now - lastEnvVizFlush_ >= std::chrono::milliseconds(1000 / kEnvVizHz))
+      || now - lastEnvVizFlush_ >= minGap)
   {
     lastEnvVizFlush_ = now;
     constexpr int kMaxEnvFloats = 6 * (512 * 3) + 1;
@@ -1045,7 +1052,6 @@ void WebEditor::flushViz()
 
   if (lastVizFlush_.time_since_epoch().count() != 0)
   {
-    const auto minGap = std::chrono::milliseconds(1000 / kVizHz);
     if (now - lastVizFlush_ < minGap)
       return;
   }
@@ -1531,6 +1537,18 @@ bool WebEditor::onWebMessage(const char* json)
         || !jsonNumberAfterKey(json, "\"bins\"", binsf))
       return false;
     vizSource_->configureVizBins(id, static_cast<int>(std::lround(binsf)));
+    return true;
+  }
+
+  if (jsonHasType(json, "vizhz"))
+  {
+    double v = 0.0;
+    if (jsonNumberAfterKey(json, "\"hz\"", v))
+    {
+      const int hz = static_cast<int>(std::lround(v));
+      if (hz >= 5 && hz <= 60)
+        vizHzRuntime().hz.store(hz, std::memory_order_relaxed);
+    }
     return true;
   }
 

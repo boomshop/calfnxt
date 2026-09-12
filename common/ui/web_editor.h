@@ -126,8 +126,6 @@ private:
 
   // Headroom for large plugins (EQ ~195 today; multiband / future analyzers).
   static constexpr std::uint32_t kMaxQueuedParams = 1024;
-  static constexpr int kVizHz = 30;
-  static constexpr int kEnvVizHz = 30;
   std::atomic<bool> pendingParamDirty_[kMaxQueuedParams] {};
   std::atomic<double> pendingParamPlain_[kMaxQueuedParams] {};
   double lastFlushedPlain_[kMaxQueuedParams] {};

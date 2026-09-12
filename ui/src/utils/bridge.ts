@@ -16,6 +16,8 @@ export type calfNXTMsg =
   | { t: "viz"; id: string; kind: "levels" | "unit" | "spectrum" | "gains" | "corr" | "gonio" | "envelope" | "pitch" | "midi" | "gr" | "bandio" | "point" | "tempo" | "shape" | "hz" | "ctrl" | "lfo" | "response" | "comb" | "wave"; v: number[] | Float32Array }
   /** UI→host viz config (e.g. FFT bin count from pixel width). */
   | { t: "vizcfg"; id: string; bins?: number }
+  /** Editor viz flush rate (Hz), default 30. */
+  | { t: "vizhz"; hz: number }
   /** Tuner: clear held MIDI note override (`cmd:"alloff"`). */
   | { t: "midi"; cmd: string }
   /** Impulse library: browse / select / tree / status. */

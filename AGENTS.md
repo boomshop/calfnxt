@@ -46,7 +46,7 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | URI scheme             | `calfnxt://bundle/...`                                                                                                                                                                                                                                                                                              |
 | JS bridge              | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ`                                                                                                                                                                                                                                                    |
 | Script message handler | `webkit.messageHandlers.calfnxt`                                                                                                                                                                                                                                                                                    |
-| Env flags              | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_XWAYLAND_NUDGE`, `CALFNXT_KEEP_HOST_LDPATH` (full list in `README.md`)                                                                                                                                               |
+| Env flags              | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_VIZ_HZ`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_XWAYLAND_NUDGE`, `CALFNXT_KEEP_HOST_LDPATH` (full list in `README.md`)                                                                                                                                               |
 | Install (packaging)    | `cmake --install` → `${prefix}/${CALFNXT_VST3_INSTALL_DIR}` (default `lib/vst3`); user copy via `./tools/install-user-vst3.sh` `[plugin…]` / `[--dest dir]`                                                                                                                                                         |
 | Msg type (TS)          | `calfNXTMsg`                                                                                                                                                                                                                                                                                                        |
 
@@ -243,6 +243,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 - UI: always 16 rows; Active toggle label = band number (`index+1`); default selection = band 9; Dyn controls in band detail row when type supports dyn.
 - Default layout: B1–B12 peaking 60…5k, B13 LS@120, B14 HS@5k, B15 HP@30, B16 LP@10k.
 - Chart curves use RBJ factories in `ui/src/dsp/eqFilters.ts` (same math as `common/dsp/biquad.h`); band-pass applies gain.
+- Editor viz flush rate (suite-wide): `{t:"vizhz"}` / `ui/src/prefs/vizHz.ts` (30/25/20/15/10, default 30, localStorage). Optional env: `CALFNXT_VIZ_HZ`.
 
 ---
 

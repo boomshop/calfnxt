@@ -4,6 +4,8 @@ add_library(calfnxt_ui STATIC
   web_editor.cpp
   web_editor.h
   viz_source.h
+  viz_hz.cpp
+  viz_hz.h
 )
 
 target_include_directories(calfnxt_ui
