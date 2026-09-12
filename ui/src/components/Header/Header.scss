@@ -78,16 +78,89 @@
   }
 }
 
-/* MenuButton portals the panel to document.body — style swatch there. */
-.MenuButton-menu .theme-swatch {
-  > .aux-icon {
-    color: transparent !important;
-    background: linear-gradient(
-      to top right,
-      var(--color-accent),
-      var(--color-warn)
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
+/* MenuButton portals the panel to document.body. */
+.MenuButton-menu .Header-prefs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px;
+  box-sizing: border-box;
+
+  > .prefs-row {
+    display: flex;
+    align-items: center;
+    gap: var(--gap);
+    min-width: 0;
+
+    > .prefs-label {
+      flex: 0 0 44px;
+    }
+
+    > .Buttons.prefs-mode,
+    > .Buttons.prefs-hz {
+      flex: 1;
+      min-width: 0;
+      gap: 2px;
+
+      > .Button {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        height: 28px;
+        padding: 0 4px;
+        font-size: 11px;
+      }
+    }
+
+    > .prefs-accent {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      gap: 2px;
+
+      > .Button.accent-swatch {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        height: 28px;
+        padding: 0 4px;
+
+        /*
+         * AUX paints the glyph on ::before. Gradients must clip there —
+         * clipping .aux-icon itself fills the icon box (solid square),
+         * especially under WebKitGTK.
+         */
+        > .aux-icon {
+          color: transparent !important;
+          background: none !important;
+
+          &::before {
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+          }
+        }
+
+        &.accent-calfnxt > .aux-icon::before {
+          background-image: linear-gradient(
+            to top right,
+            hsl(216, 100%, 50%),
+            #ff0066
+          );
+        }
+        &.accent-lime > .aux-icon::before {
+          background-image: linear-gradient(to top right, #00cc00, #dddd00);
+        }
+        &.accent-fire > .aux-icon::before {
+          background-image: linear-gradient(to top right, #990000, #ffcc00);
+        }
+        &.accent-sea > .aux-icon::before {
+          background-image: linear-gradient(to top right, #0033cc, #00ccff);
+        }
+      }
+    }
   }
 }

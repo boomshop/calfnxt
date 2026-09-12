@@ -243,7 +243,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 - UI: always 16 rows; Active toggle label = band number (`index+1`); default selection = band 9; Dyn controls in band detail row when type supports dyn.
 - Default layout: B1–B12 peaking 60…5k, B13 LS@120, B14 HS@5k, B15 HP@30, B16 LP@10k.
 - Chart curves use RBJ factories in `ui/src/dsp/eqFilters.ts` (same math as `common/dsp/biquad.h`); band-pass applies gain.
-- Editor viz flush rate (suite-wide): `{t:"vizhz"}` / `ui/src/prefs/vizHz.ts` (30/25/20/15/10, default 30, localStorage). Optional env: `CALFNXT_VIZ_HZ`.
+- Editor viz flush rate (suite-wide): Header prefs → `{t:"vizhz"}` / `ui/src/prefs/vizHz.ts` (30/25/20/15/10, default 30, localStorage). Optional env: `CALFNXT_VIZ_HZ`.
 
 ---
 

@@ -227,9 +227,10 @@ export function MenuButton(props: MenuButtonProps) {
 
     const update = () => {
       const btn = btnEl.getBoundingClientRect();
-      // offsetWidth/Height ignore transform and work while visibility:hidden.
-      const mw = Math.max(menuEl.offsetWidth, menuEl.scrollWidth);
-      const mh = Math.max(menuEl.offsetHeight, menuEl.scrollHeight);
+      // Prefer laid-out width; scrollWidth can include overflow and fight
+      // max-width under WebKitGTK (horizontal scrollbar / body spill).
+      const mw = menuEl.offsetWidth;
+      const mh = menuEl.offsetHeight;
       const clip = clipRectFor(rootRef.current);
       setPos(placeMenu(anchor, btn, mw, mh, viewportPadding, clip));
     };

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import './Header.scss';
 import { CalfNxtLogo } from '../CalfNxtLogo';
-import { Button, Knob, MenuButton, MultiMeter, Toggle } from '../../widgets';
+import { Button, Buttons, Knob, MenuButton, MultiMeter, Toggle } from '../../widgets';
 import {
   createHeaderIo,
   ioGainMeta,
@@ -10,14 +10,20 @@ import {
 } from '../../host/headerMeters';
 import { showWidgetInfo$ } from '../../prefs/showWidgetInfo';
 import {
+  ACCENT_CLASSES,
+  setThemeAccent,
+  setThemeMode,
   themeAccent$,
   themeMode$,
-  toggleThemeAccent,
-  toggleThemeMode,
-  nextThemeAccent,
   type ThemeAccent,
   type ThemeMode,
 } from '../../prefs/theme';
+import {
+  setVizHz,
+  syncVizHzToHost,
+  VIZ_HZ_OPTIONS,
+  vizHz$,
+} from '../../prefs/vizHz';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 
 export interface HeaderProps {
@@ -25,6 +31,16 @@ export interface HeaderProps {
   /** Optional shared I/O model; defaults to a fresh silence/io model. */
   io?: IHeaderIo;
 }
+
+const MODE_ENTRIES: { value: ThemeMode; icon: string }[] = [
+  { value: 'night', icon: 'night' },
+  { value: 'day', icon: 'day' },
+];
+
+const HZ_ENTRIES = VIZ_HZ_OPTIONS.map((hz) => ({
+  label: String(hz),
+  value: hz,
+}));
 
 export function Header(props: React.PropsWithChildren<HeaderProps>) {
   const { children, title, io: ioProp } = props;
@@ -35,6 +51,9 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
     [external],
   );
   useEffect(() => () => ownedIo?.dispose(), [ownedIo]);
+  useEffect(() => {
+    syncVizHzToHost();
+  }, []);
 
   const io = external ?? ownedIo!;
   const inputChannelCount = useDynamicValueReadonly(io.inputChannelCount$, 2);
@@ -42,7 +61,11 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
   const inLabels = labelsForChannelCount(inputChannelCount);
   const outLabels = labelsForChannelCount(outputChannelCount);
   const themeMode = useDynamicValueReadonly<ThemeMode>(themeMode$, 'night');
-  const themeAccent = useDynamicValueReadonly<ThemeAccent>(themeAccent$, 'calfnxt');
+  const themeAccent = useDynamicValueReadonly<ThemeAccent>(
+    themeAccent$,
+    'calfnxt',
+  );
+  const vizHz = useDynamicValueReadonly(vizHz$, 30);
 
   return (
     <div className="Header">
@@ -107,19 +130,46 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
       />
 
       <MenuButton icon="show" className="topmenu" anchor="top-right">
-        <Button
-          icon={themeMode === 'day' ? 'day' : 'night'}
-          label={false}
-          title={themeMode === 'day' ? 'Switch to night' : 'Switch to day'}
-          onClick={toggleThemeMode}
-        />
-        <Button
-          icon="gear"
-          label={false}
-          className="theme-swatch"
-          title={`Switch to ${nextThemeAccent(themeAccent)} accents`}
-          onClick={toggleThemeAccent}
-        />
+        <div className="Header-prefs">
+          <div className="prefs-row">
+            <span className="prefs-label">Theme</span>
+            <Buttons
+              className="prefs-mode"
+              layout="horizontal"
+              entries={MODE_ENTRIES}
+              value={themeMode}
+              onChange={(m) => setThemeMode(m as ThemeMode)}
+            />
+          </div>
+          <div className="prefs-row">
+            <span className="prefs-label">Color</span>
+            <div className="prefs-accent" role="group" aria-label="Accent color">
+              {ACCENT_CLASSES.map((accent) => (
+                <Button
+                  key={accent}
+                  icon="gear"
+                  label={false}
+                  className={`accent-swatch accent-${accent}`}
+                  state={themeAccent === accent}
+                  title={accent}
+                  onClick={() => setThemeAccent(accent)}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="prefs-row">
+            <span className="prefs-label" title="UI meter/chart refresh rate">
+              UI Hz
+            </span>
+            <Buttons
+              className="prefs-hz"
+              layout="horizontal"
+              entries={HZ_ENTRIES}
+              value={Math.round(vizHz)}
+              onChange={(hz) => setVizHz(hz as number)}
+            />
+          </div>
+        </div>
       </MenuButton>
     </div>
   );

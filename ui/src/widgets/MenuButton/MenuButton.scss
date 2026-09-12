@@ -20,7 +20,9 @@
   width: max-content;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
-  overflow: auto;
+  /* Horizontal bar was common under WebKitGTK when max-content > max-width. */
+  overflow-x: hidden;
+  overflow-y: auto;
   box-sizing: border-box;
   background: var(--background-lesser);
   border: 1px solid var(--background-least);

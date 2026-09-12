@@ -94,14 +94,10 @@ export function toggleThemeMode(): void {
   themeMode$.set(themeMode$.value === 'day' ? 'night' : 'day');
 }
 
-/** Cycle calfnxt → lime → fire → sea → calfnxt. */
-export function toggleThemeAccent(): void {
-  const i = ACCENT_CLASSES.indexOf(themeAccent$.value);
-  const next = ACCENT_CLASSES[(i + 1) % ACCENT_CLASSES.length]!;
-  themeAccent$.set(next);
+export function setThemeMode(mode: ThemeMode): void {
+  themeMode$.set(mode);
 }
 
-export function nextThemeAccent(current: ThemeAccent): ThemeAccent {
-  const i = ACCENT_CLASSES.indexOf(current);
-  return ACCENT_CLASSES[(i + 1) % ACCENT_CLASSES.length]!;
+export function setThemeAccent(accent: ThemeAccent): void {
+  themeAccent$.set(accent);
 }
