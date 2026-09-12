@@ -1,8 +1,8 @@
 import type { DynamicValue } from "@deutschesoft/awml";
-import { onHostMessage, plainFromMsg, postToHost, type calfNXTMsg } from "./bridge";
+import { isVizSamples, onHostMessage, plainFromMsg, postToHost, type calfNXTMsg } from "./bridge";
 
 type HostApply = (v: number) => void;
-type VizLevelsApply = (v: number[]) => void;
+type VizLevelsApply = (v: ArrayLike<number>) => void;
 type ChannelCountApply = (ch: number) => void;
 type IoChannelCountsApply = (inputCh: number, outputCh: number) => void;
 
@@ -37,6 +37,27 @@ function nearlyEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
 }
 
+function asFloat32(v: ArrayLike<number>): Float32Array {
+  return v instanceof Float32Array ? v : Float32Array.from(v);
+}
+
+/** Map ArrayLike (number[] / Float32Array) → number[] without relying on .map. */
+function mapVizSamples(
+  v: ArrayLike<number>,
+  fn: (x: number, i: number) => number,
+): number[] {
+  const out = new Array<number>(v.length);
+  for (let i = 0; i < v.length; ++i) {
+    const x = v[i];
+    out[i] = fn(typeof x === "number" ? x : Number.NaN, i);
+  }
+  return out;
+}
+
+function copyVizSamples(v: ArrayLike<number>): number[] {
+  return mapVizSamples(v, (x) => (Number.isFinite(x) ? x : 0));
+}
+
 function dispatchHost(msg: calfNXTMsg): void {
   if (msg.t === "param") {
     const v = plainFromMsg(msg);
@@ -60,45 +81,45 @@ function dispatchHost(msg: calfNXTMsg): void {
     channelCountApplies.forEach((apply) => apply(outCh));
     return;
   }
-  if (msg.t === "viz" && msg.kind === "levels" && Array.isArray(msg.v))
+  if (msg.t === "viz" && (msg.kind === "levels" || msg.kind === "unit") && isVizSamples(msg.v))
     vizLevelsApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "gains" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "gains" && isVizSamples(msg.v))
     vizGainsApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "corr" && Array.isArray(msg.v) && typeof msg.v[0] === "number")
+  if (msg.t === "viz" && msg.kind === "corr" && isVizSamples(msg.v) && typeof msg.v[0] === "number")
     vizCorrApplies.get(msg.id)?.(msg.v[0]);
-  if (msg.t === "viz" && msg.kind === "gonio" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "gonio" && isVizSamples(msg.v))
     vizGonioApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "envelope" && Array.isArray(msg.v))
-    vizEnvelopeApplies.get(msg.id)?.(new Float32Array(msg.v));
-  if (msg.t === "viz" && msg.kind === "pitch" && Array.isArray(msg.v))
-    vizPitchApplies.get(msg.id)?.(new Float32Array(msg.v));
-  if (msg.t === "viz" && msg.kind === "midi" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "envelope" && isVizSamples(msg.v))
+    vizEnvelopeApplies.get(msg.id)?.(asFloat32(msg.v));
+  if (msg.t === "viz" && msg.kind === "pitch" && isVizSamples(msg.v))
+    vizPitchApplies.get(msg.id)?.(asFloat32(msg.v));
+  if (msg.t === "viz" && msg.kind === "midi" && isVizSamples(msg.v))
     vizMidiApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "gr" && Array.isArray(msg.v) && typeof msg.v[0] === "number") {
+  if (msg.t === "viz" && msg.kind === "gr" && isVizSamples(msg.v) && typeof msg.v[0] === "number") {
     vizGrApplies.get(msg.id)?.(msg.v[0]);
     vizGrArrayApplies.get(msg.id)?.(msg.v);
   }
-  if (msg.t === "viz" && msg.kind === "bandio" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "bandio" && isVizSamples(msg.v))
     vizBandIoApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "point" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "point" && isVizSamples(msg.v))
     vizPointApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "shape" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "shape" && isVizSamples(msg.v))
     vizShapeApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "tempo" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "tempo" && isVizSamples(msg.v))
     vizTempoApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "spectrum" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "spectrum" && isVizSamples(msg.v))
     vizSpectrumApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "response" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "response" && isVizSamples(msg.v))
     vizResponseApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "comb" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "comb" && isVizSamples(msg.v))
     vizCombApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "hz" && Array.isArray(msg.v) && typeof msg.v[0] === "number")
+  if (msg.t === "viz" && msg.kind === "hz" && isVizSamples(msg.v) && typeof msg.v[0] === "number")
     vizHzApplies.get(msg.id)?.(msg.v[0]);
-  if (msg.t === "viz" && msg.kind === "ctrl" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "ctrl" && isVizSamples(msg.v))
     vizCtrlApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "lfo" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "lfo" && isVizSamples(msg.v))
     vizLfoApplies.get(msg.id)?.(msg.v);
-  if (msg.t === "viz" && msg.kind === "wave" && Array.isArray(msg.v))
+  if (msg.t === "viz" && msg.kind === "wave" && isVizSamples(msg.v))
     vizWaveApplies.get(msg.id)?.(msg.v);
   if (msg.t === "ir")
     irApplies.forEach((apply) => apply(msg));
@@ -169,31 +190,29 @@ export function bindParamToHost(
 export function bindVizLevels(dv: DynamicValue<number[]>, id: string): () => void {
   ensureHostWire();
   vizLevelsApplies.set(id, (v) => {
-    const clean = v.map((x) => {
-      if (typeof x !== "number" || !Number.isFinite(x))
+    dv.set(mapVizSamples(v, (x) => {
+      if (!Number.isFinite(x))
         return -96;
       return Math.min(12, Math.max(-96, x));
-    });
-    dv.set(clean);
+    }));
   });
   return () => {
     vizLevelsApplies.delete(id);
   };
 }
 
-/** Wire unit-interval level arrays from DSP viz (id e.g. "lfo" activity 0…1). */
+/** Wire unit-interval level arrays from DSP viz kind `"unit"` (id e.g. "lfo"). */
 export function bindVizUnitLevels(
   dv: DynamicValue<number[]>,
   id: string,
 ): () => void {
   ensureHostWire();
   vizLevelsApplies.set(id, (v) => {
-    const clean = v.map((x) => {
-      if (typeof x !== "number" || !Number.isFinite(x))
+    dv.set(mapVizSamples(v, (x) => {
+      if (!Number.isFinite(x))
         return 0;
       return Math.min(1, Math.max(0, x));
-    });
-    dv.set(clean);
+    }));
   });
   return () => {
     vizLevelsApplies.delete(id);
@@ -204,12 +223,11 @@ export function bindVizUnitLevels(
 export function bindVizGains(dv: DynamicValue<number[]>, id: string): () => void {
   ensureHostWire();
   vizGainsApplies.set(id, (v) => {
-    const clean = v.map((x) => {
-      if (typeof x !== "number" || !Number.isFinite(x))
+    dv.set(mapVizSamples(v, (x) => {
+      if (!Number.isFinite(x))
         return 0;
       return Math.min(24, Math.max(-24, x));
-    });
-    dv.set(clean);
+    }));
   });
   return () => {
     vizGainsApplies.delete(id);
@@ -232,12 +250,11 @@ export function bindVizCorr(dv: DynamicValue<number>, id: string): () => void {
 export function bindVizGonio(dv: DynamicValue<number[]>, id: string): () => void {
   ensureHostWire();
   vizGonioApplies.set(id, (v) => {
-    const clean = v.map((x) => {
-      if (typeof x !== "number" || !Number.isFinite(x))
+    dv.set(mapVizSamples(v, (x) => {
+      if (!Number.isFinite(x))
         return 0;
       return Math.min(2, Math.max(-2, x));
-    });
-    dv.set(clean);
+    }));
   });
   return () => {
     vizGonioApplies.delete(id);
@@ -265,7 +282,7 @@ export function bindVizPitch(dv: DynamicValue<Float32Array | null>, id: string):
 /** Wire MIDI override state: `[active, maskBits]` (id e.g. `"tuner"`). */
 export function bindVizMidi(dv: DynamicValue<number[]>, id: string): () => void {
   ensureHostWire();
-  vizMidiApplies.set(id, (v) => dv.set(v.slice()));
+  vizMidiApplies.set(id, (v) => dv.set(copyVizSamples(v)));
   return () => {
     vizMidiApplies.delete(id);
   };
@@ -293,13 +310,11 @@ export function bindVizGrArray(
 ): () => void {
   ensureHostWire();
   vizGrArrayApplies.set(id, (v) => {
-    apply(
-      v.map((x) => {
-        if (typeof x !== "number" || !Number.isFinite(x))
-          return 0;
-        return Math.min(60, Math.max(0, -x));
-      }),
-    );
+    apply(mapVizSamples(v, (x) => {
+      if (!Number.isFinite(x))
+        return 0;
+      return Math.min(60, Math.max(0, -x));
+    }));
   });
   return () => {
     vizGrArrayApplies.delete(id);
@@ -310,12 +325,11 @@ export function bindVizGrArray(
 export function bindVizBandIo(dv: DynamicValue<number[]>, id: string): () => void {
   ensureHostWire();
   vizBandIoApplies.set(id, (v) => {
-    const clean = v.map((x) => {
-      if (typeof x !== "number" || !Number.isFinite(x))
+    dv.set(mapVizSamples(v, (x) => {
+      if (!Number.isFinite(x))
         return -96;
       return Math.min(12, Math.max(-96, x));
-    });
-    dv.set(clean);
+    }));
   });
   return () => {
     vizBandIoApplies.delete(id);
@@ -339,12 +353,11 @@ export function bindVizTempo(dv: DynamicValue<number[]>, id: string): () => void
 export function bindVizPoint(dv: DynamicValue<number[]>, id: string): () => void {
   ensureHostWire();
   vizPointApplies.set(id, (v) => {
-    const clean = v.map((x) => {
-      if (typeof x !== "number" || !Number.isFinite(x))
+    dv.set(mapVizSamples(v, (x) => {
+      if (!Number.isFinite(x))
         return -96;
       return Math.min(24, Math.max(-96, x));
-    });
-    dv.set(clean);
+    }));
   });
   return () => {
     vizPointApplies.delete(id);
@@ -355,12 +368,11 @@ export function bindVizPoint(dv: DynamicValue<number[]>, id: string): () => void
 export function bindVizShape(dv: DynamicValue<number[]>, id: string): () => void {
   ensureHostWire();
   vizShapeApplies.set(id, (v) => {
-    const clean = v.map((x) => {
-      if (typeof x !== "number" || !Number.isFinite(x))
+    dv.set(mapVizSamples(v, (x) => {
+      if (!Number.isFinite(x))
         return 0;
       return Math.min(1, Math.max(0, x));
-    });
-    dv.set(clean);
+    }));
   });
   return () => {
     vizShapeApplies.delete(id);
@@ -378,16 +390,15 @@ export function bindVizSpectrum(dv: DynamicValue<number[]>, id: string): () => v
       dv.set([]);
       return;
     }
-    const clean = v.map((x, i) => {
-      if (typeof x !== "number" || !Number.isFinite(x))
+    dv.set(mapVizSamples(v, (x, i) => {
+      if (!Number.isFinite(x))
         return i < 2 ? 0 : -120;
       if (i === 0)
         return Math.min(256, Math.max(1, Math.round(x)));
       if (i === 1)
         return x >= 0.5 ? 1 : 0;
       return Math.min(12, Math.max(-120, x));
-    });
-    dv.set(clean);
+    }));
   });
   return () => {
     vizSpectrumApplies.delete(id);
@@ -405,14 +416,13 @@ export function bindVizResponse(dv: DynamicValue<number[]>, id: string): () => v
       dv.set([]);
       return;
     }
-    const clean = v.map((x, i) => {
-      if (typeof x !== "number" || !Number.isFinite(x))
+    dv.set(mapVizSamples(v, (x, i) => {
+      if (!Number.isFinite(x))
         return i === 0 ? 0 : -96;
       if (i === 0)
         return Math.min(512, Math.max(1, Math.round(x)));
       return Math.min(48, Math.max(-96, x));
-    });
-    dv.set(clean);
+    }));
   });
   return () => {
     vizResponseApplies.delete(id);
@@ -476,9 +486,7 @@ export function bindVizHz(dv: DynamicValue<number>, id: string): () => void {
 export function bindVizCtrl(dv: DynamicValue<number[]>, id: string): () => void {
   ensureHostWire();
   vizCtrlApplies.set(id, (v) => {
-    dv.set(
-      v.map((x) => (typeof x === "number" && Number.isFinite(x) ? x : 0)),
-    );
+    dv.set(copyVizSamples(v));
   });
   return () => {
     vizCtrlApplies.delete(id);
@@ -492,9 +500,7 @@ export function bindVizCtrl(dv: DynamicValue<number[]>, id: string): () => void 
 export function bindVizLfo(dv: DynamicValue<number[]>, id: string): () => void {
   ensureHostWire();
   vizLfoApplies.set(id, (v) => {
-    dv.set(
-      v.map((x) => (typeof x === "number" && Number.isFinite(x) ? x : 0)),
-    );
+    dv.set(copyVizSamples(v));
   });
   return () => {
     vizLfoApplies.delete(id);
@@ -590,7 +596,7 @@ export function bindBoolParamToHost(
 export function bindVizWave(dv: DynamicValue<number[]>, id: string): () => void {
   ensureHostWire();
   vizWaveApplies.set(id, (v) => {
-    dv.set(Array.isArray(v) ? v.slice() : []);
+    dv.set(copyVizSamples(v));
   });
   return () => {
     vizWaveApplies.delete(id);

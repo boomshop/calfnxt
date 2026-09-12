@@ -1,5 +1,6 @@
 #include "web_editor.h"
 #include "ui_file_log.h"
+#include "viz_bin.h"
 
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/vstspeaker.h"
@@ -336,19 +337,12 @@ tresult PLUGIN_API WebEditor::isPlatformTypeSupported(FIDString type)
   return kResultFalse;
 }
 
-bool WebEditor::sendLine(const char* line)
+bool WebEditor::sendBytes(const void* data, size_t n)
 {
-  if (sock_ < 0 || !line)
+  if (sock_ < 0 || (!data && n > 0))
     return false;
-  const size_t n = std::strlen(line);
-  std::string msg;
-  msg.reserve(n + 1);
-  msg.append(line, n);
-  if (n == 0 || line[n - 1] != '\n')
-    msg.push_back('\n');
-
-  const char* p = msg.data();
-  size_t left = msg.size();
+  const char* p = static_cast<const char*>(data);
+  size_t left = n;
   while (left > 0)
   {
     const ssize_t w = ::write(sock_, p, left);
@@ -358,7 +352,7 @@ bool WebEditor::sendLine(const char* line)
         continue;
       if (errno == EAGAIN || errno == EWOULDBLOCK)
       {
-        // Bulk param sync can fill the socket; wait longer than one frame.
+        // Bulk param/viz sync can fill the socket; wait longer than one frame.
         pollfd pfd {sock_, POLLOUT, 0};
         if (poll(&pfd, 1, 250) <= 0)
           return false;
@@ -371,6 +365,19 @@ bool WebEditor::sendLine(const char* line)
     left -= static_cast<size_t>(w);
   }
   return true;
+}
+
+bool WebEditor::sendLine(const char* line)
+{
+  if (sock_ < 0 || !line)
+    return false;
+  const size_t n = std::strlen(line);
+  std::string msg;
+  msg.reserve(n + 1);
+  msg.append(line, n);
+  if (n == 0 || line[n - 1] != '\n')
+    msg.push_back('\n');
+  return sendBytes(msg.data(), msg.size());
 }
 
 void WebEditor::sendSizeToHelper()
@@ -403,6 +410,13 @@ void WebEditor::handleHelperLine(const std::string& line)
       logMsg("[calfnxt] socket size %dx%d (design %dx%d)\n", socketWidth_, socketHeight_,
              designWidth_, designHeight_);
     }
+    return;
+  }
+  if (jsonHasType(line.c_str(), "_visible"))
+  {
+    double v = 0.0;
+    if (jsonNumberAfterKey(line.c_str(), "\"v\"", v))
+      setEditorVisible(v >= 0.5);
     return;
   }
   if (jsonHasType(line.c_str(), "_ready"))
@@ -454,13 +468,13 @@ void WebEditor::pumpSocket()
       if (errno == EAGAIN || errno == EWOULDBLOCK)
         break;
       logMsg("[calfnxt] socket read failed: %s\n", std::strerror(errno));
-      closeHelper();
+      stopWebKit();
       return;
     }
     if (n == 0)
     {
       logMsg("[calfnxt] web-host socket closed\n");
-      closeHelper();
+      stopWebKit();
       return;
     }
     readBuf_.append(chunk, static_cast<size_t>(n));
@@ -483,7 +497,8 @@ bool WebEditor::openHelper(void* x11Parent)
   if (!x11Parent)
     return false;
 
-  closeHelper();
+  // Tear down a previous helper if any — keep the IRunLoop timer registered.
+  stopWebKit();
   fillWebRoot(webRoot_, sizeof webRoot_);
 
   char helperPath[4096];
@@ -531,6 +546,16 @@ bool WebEditor::openHelper(void* x11Parent)
   }
   posix_spawn_file_actions_addclose(&actions, sp[0]);
 
+  posix_spawnattr_t spawnAttr;
+  posix_spawnattr_t* spawnAttrPtr = nullptr;
+  if (posix_spawnattr_init(&spawnAttr) == 0)
+  {
+    // New process group so stopWebKit can SIGTERM/-KILL the whole WebKit tree.
+    if (posix_spawnattr_setflags(&spawnAttr, POSIX_SPAWN_SETPGROUP) == 0
+        && posix_spawnattr_setpgroup(&spawnAttr, 0) == 0)
+      spawnAttrPtr = &spawnAttr;
+  }
+
   char fdArg[32];
   char parentArg[32];
   char widthArg[32];
@@ -564,8 +589,10 @@ bool WebEditor::openHelper(void* x11Parent)
   char** envp = sanitized ? childEnv.data() : environ;
 
   pid_t pid = -1;
-  const int rc = posix_spawn(&pid, helperPath, &actions, nullptr, argv, envp);
+  const int rc = posix_spawn(&pid, helperPath, &actions, spawnAttrPtr, argv, envp);
   posix_spawn_file_actions_destroy(&actions);
+  if (spawnAttrPtr)
+    posix_spawnattr_destroy(&spawnAttr);
   ::close(sp[1]);
 
   if (rc != 0)
@@ -617,15 +644,43 @@ bool WebEditor::openHelper(void* x11Parent)
   return true;
 }
 
-void WebEditor::closeHelper()
+void WebEditor::setEditorVisible(bool visible)
 {
-  if (timerRegistered_ && runLoop_)
-  {
-    runLoop_->unregisterTimer(this);
-    timerRegistered_ = false;
-  }
-  runLoop_ = nullptr;
+  if (editorVisible_ == visible)
+    return;
+  editorVisible_ = visible;
+  logMsg("[calfnxt] editor visible=%d\n", visible ? 1 : 0);
+  if (vizSource_)
+    vizSource_->setVizConsumerActive(visible);
+}
 
+void WebEditor::reapHelperNonBlocking()
+{
+  if (reapPid_ <= 0)
+    return;
+  int status = 0;
+  const pid_t r = waitpid(reapPid_, &status, WNOHANG);
+  if (r == reapPid_ || (r < 0 && errno == ECHILD))
+  {
+    reapPid_ = -1;
+    reapTicks_ = 0;
+    return;
+  }
+  ++reapTicks_;
+  // ~1s at 16 ms: escalate. Never block the host UI/audio thread.
+  if (reapTicks_ == 60)
+    kill(reapPid_, SIGKILL);
+  if (reapTicks_ > 120)
+  {
+    logMsg("[calfnxt] web-host reap abandoned pid=%d\n", static_cast<int>(reapPid_));
+    reapPid_ = -1;
+    reapTicks_ = 0;
+  }
+}
+
+void WebEditor::stopWebKit()
+{
+  pageReady_ = false;
   if (sock_ >= 0)
   {
     ::shutdown(sock_, SHUT_RDWR);
@@ -633,27 +688,33 @@ void WebEditor::closeHelper()
     sock_ = -1;
   }
   readBuf_.clear();
-  pageReady_ = false;
 
   if (helperPid_ > 0)
   {
+    // Non-blocking only — usleep/waitpid(0) here froze Ardour's UI thread.
     kill(helperPid_, SIGTERM);
-    for (int i = 0; i < 50; ++i)
-    {
-      int status = 0;
-      const pid_t r = waitpid(helperPid_, &status, WNOHANG);
-      if (r == helperPid_ || (r < 0 && errno == ECHILD))
-        break;
-      usleep(10 * 1000);
-    }
-    int status = 0;
-    if (waitpid(helperPid_, &status, WNOHANG) == 0)
-    {
-      kill(helperPid_, SIGKILL);
-      waitpid(helperPid_, &status, 0);
-    }
+    if (reapPid_ > 0 && reapPid_ != helperPid_)
+      kill(reapPid_, SIGKILL);
+    reapPid_ = helperPid_;
+    reapTicks_ = 0;
     helperPid_ = -1;
+    logBoth("[calfnxt] web-host stop signaled (non-blocking)\n");
   }
+}
+
+void WebEditor::closeHelper()
+{
+  setEditorVisible(false);
+  stopWebKit();
+  if (timerRegistered_ && runLoop_)
+  {
+    runLoop_->unregisterTimer(this);
+    timerRegistered_ = false;
+  }
+  runLoop_ = nullptr;
+  // Best-effort final reap after stop; still non-blocking.
+  for (int i = 0; i < 5 && reapPid_ > 0; ++i)
+    reapHelperNonBlocking();
 }
 
 void WebEditor::requestHostSize()
@@ -765,6 +826,7 @@ tresult PLUGIN_API WebEditor::attached(void* parent, FIDString type)
     logBoth("[calfnxt] attached: openHelper failed\n");
     return kResultFalse;
   }
+  setEditorVisible(true);
 
   if (plugFrame)
   {
@@ -833,12 +895,14 @@ tresult PLUGIN_API WebEditor::onSize(ViewRect* newSize)
 
 void PLUGIN_API WebEditor::onTimer()
 {
+  reapHelperNonBlocking();
   pumpSocket();
   if (sock_ < 0 || !pageReady_)
     return;
   pollParamsFromController();
   flushPendingParams();
-  flushViz();
+  if (editorVisible_)
+    flushViz();
 }
 
 void WebEditor::evalJs(const char* js)
@@ -920,44 +984,12 @@ void WebEditor::flushVizArray(const char* streamId, const char* kind, float* val
   if (sock_ < 0 || !streamId || !kind || n < 0)
     return;
 
-  // Multiband envelope: up to 6×(512×3)+1 floats. A fixed 24 KiB stack buffer
-  // overflowed once values stopped being short zeros — flush aborted silently
-  // and history froze until bypass reset cleared the ring.
-  constexpr size_t kHeaderReserve = 128;
-  constexpr size_t kBytesPerFloat = 18; // worst-case to_chars + comma
-  const size_t jsCap =
-    std::max<size_t>(24576, kHeaderReserve + static_cast<size_t>(n) * kBytesPerFloat + 32);
-
-  thread_local std::vector<char> jsBuf;
-  if (jsBuf.size() < jsCap)
-    jsBuf.resize(jsCap);
-  char* js = jsBuf.data();
-  char* p = js;
-  char* end = js + jsCap;
-  int written = std::snprintf(p, static_cast<size_t>(end - p),
-                              "try{window.__calfnxtOnHost&&window.__calfnxtOnHost({t:\"viz\",id:\"%s\",kind:\"%s\",v:[",
-                              streamId, kind);
-  if (written < 0 || p + written >= end)
+  // Binary CNXV v2 frame (quantized per kind) → Float32Array in the page.
+  thread_local std::vector<char> frame;
+  frame.clear();
+  if (!VizBin::encode(frame, streamId, kind, values, n))
     return;
-  p += written;
-
-  for (int i = 0; i < n; ++i)
-  {
-    char num[64];
-    const auto [endp, ec] = std::to_chars(num, num + sizeof num, static_cast<double>(values[i]),
-                                          std::chars_format::general, 6);
-    if (ec != std::errc())
-      return;
-    *endp = '\0';
-    written = std::snprintf(p, static_cast<size_t>(end - p), "%s%s", i ? "," : "", num);
-    if (written < 0 || p + written >= end)
-      return;
-    p += written;
-  }
-  written = std::snprintf(p, static_cast<size_t>(end - p), "]});}catch(e){}");
-  if (written < 0 || p + written >= end)
-    return;
-  evalJs(js);
+  sendBytes(frame.data(), frame.size());
 }
 
 void WebEditor::flushViz()
@@ -1260,7 +1292,7 @@ void WebEditor::flushViz()
           act[i] = 0.f;
         act[i] = std::clamp(act[i], 0.f, 1.f);
       }
-      flushVizArray(lfoId, "levels", act, n);
+      flushVizArray(lfoId, "unit", act, n);
     }
   }
 

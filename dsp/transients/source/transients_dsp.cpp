@@ -161,6 +161,8 @@ void TransientsPlugin::resetEnvSlotAccum(float dryPeak, float filteredPeak, floa
 void TransientsPlugin::envBufFeedSample(float dryPeak, float filteredPeak, float wetPeak,
                                         float scale)
 {
+  if (!vizConsumerActive())
+    return;
   const int pos = envPos_;
   const float env = transients_.envelope();
   const float att = transients_.attack();

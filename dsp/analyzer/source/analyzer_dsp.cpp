@@ -71,8 +71,8 @@ tresult PLUGIN_API AnalyzerPlugin::process(ProcessData& data)
 
   const bool hasHostAudio = io_.begin(data);
   const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
-  // Quiet: skip FFT/gonio — keep last display frame.
-  if (quietIn)
+  // Quiet or UI hidden: skip FFT/gonio — keep last display frame.
+  if (quietIn || !vizConsumerActive())
   {
     if (hasHostAudio)
       io_.end(data);

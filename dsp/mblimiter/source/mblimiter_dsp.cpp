@@ -503,6 +503,8 @@ void MblimiterPlugin::applyParams(bool force)
 
 void MblimiterPlugin::histFeedSample(int band, float fullPeak, float bandPeak, float grLin)
 {
+  if (!vizConsumerActive())
+    return;
   if (band < 0 || band >= kMaxBands)
     return;
   const int sps = std::max(1, histSamplesPerSlot_);

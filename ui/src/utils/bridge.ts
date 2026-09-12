@@ -12,8 +12,8 @@ export type calfNXTMsg =
   | { t: "_diag"; msg?: string; w?: number; h?: number }
   /** Host→UI: bus channel counts (`ch` = out, legacy; `in`/`out` when they differ). */
   | { t: "io"; ch: number; in?: number; out?: number }
-  /** DSP→UI telemetry (meters now; spectrum arrays later). */
-  | { t: "viz"; id: string; kind: "levels" | "spectrum" | "gains" | "corr" | "gonio" | "envelope" | "pitch" | "midi" | "gr" | "bandio" | "point" | "tempo" | "shape" | "hz" | "ctrl" | "lfo" | "response" | "comb" | "wave"; v: number[] }
+  /** DSP→UI telemetry (meters / charts). `v` is often a Float32Array from binary viz. */
+  | { t: "viz"; id: string; kind: "levels" | "unit" | "spectrum" | "gains" | "corr" | "gonio" | "envelope" | "pitch" | "midi" | "gr" | "bandio" | "point" | "tempo" | "shape" | "hz" | "ctrl" | "lfo" | "response" | "comb" | "wave"; v: number[] | Float32Array }
   /** UI→host viz config (e.g. FFT bin count from pixel width). */
   | { t: "vizcfg"; id: string; bins?: number }
   /** Tuner: clear held MIDI note override (`cmd:"alloff"`). */
@@ -37,27 +37,47 @@ declare global {
     calfnxtNative?: { post: (msg: calfNXTMsg | string) => void };
     __calfnxtOnHost?: (msg: calfNXTMsg) => void;
     __calfnxtHostQ?: calfNXTMsg[];
-    /** Shared viz snapshot bag (`id:kind` → `v`), also filled by web-host inject. */
-    __calfnxtVizDump?: Record<string, number[]>;
+    /** Shared viz snapshot bag (`id:kind` → samples), also filled by web-host inject. */
+    __calfnxtVizDump?: Record<string, number[] | Float32Array>;
     /**
      * Latest viz payloads as pretty JSON (console.log + return). Installed as a
      * classic global by calfnxt-web-host so bare `__calfnxtDumpViz()` works in
      * the WebKit inspector (ES-module `window.x=` alone often does not).
      */
     __calfnxtDumpViz?: () => string;
+    /** false while XEmbed parent is hidden (helper visibility poll). */
+    __calfnxtUiVisible?: boolean;
   }
 }
 
-function vizDumpBag(): Record<string, number[]> {
+function vizDumpBag(): Record<string, number[] | Float32Array> {
   if (!window.__calfnxtVizDump)
     window.__calfnxtVizDump = {};
   return window.__calfnxtVizDump;
 }
 
+/** True for number[] or typed-array viz payloads (binary path uses Float32Array). */
+export function isVizSamples(v: unknown): v is ArrayLike<number> {
+  return Array.isArray(v)
+    || (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(v) && !(v instanceof DataView));
+}
+
+function vizSamplesForDump(v: ArrayLike<number>): number[] | Float32Array {
+  if (v instanceof Float32Array)
+    return v;
+  if (Array.isArray(v))
+    return (v as number[]).slice();
+  return Array.from(v);
+}
+
 function installVizDumpApi(): void {
   // Keep / refresh the classic global (web-host injects a stub at document start).
   window.__calfnxtDumpViz = () => {
-    const json = JSON.stringify(vizDumpBag(), null, 2);
+    const bag = vizDumpBag();
+    const jsonReady: Record<string, number[]> = {};
+    for (const [k, v] of Object.entries(bag))
+      jsonReady[k] = Array.from(v);
+    const json = JSON.stringify(jsonReady, null, 2);
     try {
       void navigator.clipboard?.writeText(json);
     } catch {
@@ -70,6 +90,10 @@ function installVizDumpApi(): void {
 
 installVizDumpApi();
 
+export function isHostUiVisible(): boolean {
+  return window.__calfnxtUiVisible !== false;
+}
+
 export function postToHost(msg: calfNXTMsg): void {
   window.calfnxtNative?.post(msg);
 }
@@ -77,8 +101,8 @@ export function postToHost(msg: calfNXTMsg): void {
 /** Install host→UI handler and flush messages queued before React mounted. */
 export function onHostMessage(handler: (msg: calfNXTMsg) => void): void {
   window.__calfnxtOnHost = (msg) => {
-    if (msg?.t === "viz" && typeof msg.id === "string" && Array.isArray(msg.v))
-      vizDumpBag()[`${msg.id}:${msg.kind}`] = msg.v.slice();
+    if (msg?.t === "viz" && typeof msg.id === "string" && isVizSamples(msg.v))
+      vizDumpBag()[`${msg.id}:${msg.kind}`] = vizSamplesForDump(msg.v);
     handler(msg);
   };
   const q = window.__calfnxtHostQ;

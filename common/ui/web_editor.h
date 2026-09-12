@@ -68,7 +68,10 @@ protected:
 
 private:
   bool openHelper(void* x11Parent);
+  /** Kill web-host (non-blocking). Full removed() also drops the timer. */
+  void stopWebKit();
   void closeHelper();
+  void reapHelperNonBlocking();
   void attachParamListeners();
   void detachParamListeners();
   void flushPendingParams();
@@ -85,6 +88,8 @@ private:
   void sendHelperSize(int w, int h);
 
   bool sendLine(const char* line);
+  bool sendBytes(const void* data, size_t n);
+  void setEditorVisible(bool visible);
   void pumpSocket();
   void handleHelperLine(const std::string& line);
   void sendSizeToHelper();
@@ -102,8 +107,13 @@ private:
   bool requestingHostResize_ = false;
   bool viewportApplied_ = false;
   bool pageReady_ = false;
+  /** Helper `_visible` / DSP gate. WebKit park/resume is done in calfnxt-web-host. */
+  bool editorVisible_ = false;
   int sock_ = -1;
   pid_t helperPid_ = -1;
+  /** Zombie reap after non-blocking stopWebKit (never block the host UI thread). */
+  pid_t reapPid_ = -1;
+  int reapTicks_ = 0;
   std::string readBuf_;
   std::chrono::steady_clock::time_point lastVizFlush_ {};
   std::chrono::steady_clock::time_point lastEnvVizFlush_ {};

@@ -225,6 +225,8 @@ void LimiterPlugin::applyParams(bool force)
 
 void LimiterPlugin::histFeedSample(float audioPeakLin, float grLin)
 {
+  if (!vizConsumerActive())
+    return;
   const int pos = histPos_;
   histBuf_[pos + 0] = std::max(histBuf_[pos + 0], audioPeakLin);
   if (histSampleCount_ == 0)

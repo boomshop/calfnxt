@@ -202,6 +202,8 @@ void TunerPlugin::copyYinWindow(const BlockState& state, int latency)
 
 void TunerPlugin::histFeed(float inMidi, float tgtMidi, float conf, float flags, float corrCents)
 {
+  if (!vizConsumerActive())
+    return;
   const int pos = histPos_;
   histBuf_[pos + 0] = inMidi;
   histBuf_[pos + 1] = tgtMidi;

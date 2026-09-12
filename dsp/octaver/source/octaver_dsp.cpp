@@ -267,6 +267,8 @@ void OctaverPlugin::copyYinWindow(const BlockState& state, int latency)
 
 void OctaverPlugin::histFeed(float inMidi, float layerBits, float conf, float flags)
 {
+  if (!vizConsumerActive())
+    return;
   const int pos = histPos_;
   histBuf_[pos + 0] = inMidi;
   histBuf_[pos + 1] = layerBits;

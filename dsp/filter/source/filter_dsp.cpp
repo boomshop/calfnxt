@@ -157,7 +157,8 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
-  if (state.spectrumOn)
+  const bool wantSpectrum = state.spectrumOn && vizConsumerActive();
+  if (wantSpectrum)
   {
     spectrum_.setSampleRate(sampleRate_);
     spectrum_.setFftSize(2048);
@@ -230,7 +231,7 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
       }
 
       // Post-filter tap (before out_gain) — overlay shows the filtered signal.
-      if (state.spectrumOn)
+      if (wantSpectrum)
         spectrum_.process(L, state.mono ? L : R);
 
       if (nCh > 0)
@@ -250,7 +251,7 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
   else
     effectiveCutoffHz_.store(filter_.lastCutoffHz(), std::memory_order_relaxed);
 
-  if (state.spectrumOn)
+  if (wantSpectrum)
     spectrum_.publish();
 
   if (quietIn && envIdle)

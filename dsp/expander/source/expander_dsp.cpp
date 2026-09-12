@@ -123,6 +123,8 @@ ExpanderPlugin::BlockState ExpanderPlugin::makeBlockState() const
 
 void ExpanderPlugin::histFeedSample(float audioPeakLin, float detPeakLin, float grLin)
 {
+  if (!vizConsumerActive())
+    return;
   const int pos = histPos_;
   histBuf_[pos + 0] = std::max(audioPeakLin, histBuf_[pos + 0]);
   histBuf_[pos + 1] = std::max(detPeakLin, histBuf_[pos + 1]);

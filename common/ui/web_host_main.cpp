@@ -1,11 +1,12 @@
 /**
  * calfnxt-web-host — out-of-process GtkPlug + WebKitGTK editor.
  *
- * Spawned by the VST3 module (no GTK in the host process). Speaks newline-
- * delimited messages on an inherited Unix socket FD:
- *   plugin → host: JS one-liners to evaluate, or {"t":"_size","w","h"}
- *   host → plugin: UI JSON from calfnxtNative.post, {"t":"_ready"}, or
- *                  {"t":"_socket","w","h"} (XEmbed parent size)
+ * Spawned by the VST3 module (no GTK in the host process). Speaks mixed
+ * messages on an inherited Unix socket FD:
+ *   plugin → host: newline JS one-liners, {"t":"_size",…}, or binary CNXV
+ *                  viz frames (see viz_bin.h) injected as Float32Array
+ *   host → plugin: UI JSON from calfnxtNative.post, {"t":"_ready"},
+ *                  {"t":"_socket","w","h"}, or {"t":"_visible","v":0|1}
  */
 
 #include <gdk/gdkx.h>
@@ -16,6 +17,7 @@
 #include <webkit2/webkit2.h>
 
 #include "ui_file_log.h"
+#include "viz_bin.h"
 
 #include <cerrno>
 #include <cstdint>
@@ -27,6 +29,7 @@
 #include <fcntl.h>
 #include <string>
 #include <unistd.h>
+#include <vector>
 
 namespace {
 
@@ -52,6 +55,10 @@ struct HostState
   guint mapPollSource = 0;
   int mapPollTries = 0;
   bool mapOk = false;
+  /** Ongoing parent-visibility watch (Ardour hides without removed()). */
+  guint visibilityPollSource = 0;
+  int lastParentVisible = -1; // -1 unknown, 0 hidden, 1 viewable
+  bool webParked = false;
   /** Opt-in XWayland Configure nudge (`CALFNXT_XWAYLAND_NUDGE`). */
   guint nudgeSource = 0;
   int nudgeTries = 0;
@@ -64,6 +71,9 @@ HostState g;
 constexpr int kMapPollMs = 16;
 /** Give up after ~2s so a stuck embedder cannot spin forever. */
 constexpr int kMapPollMaxTries = 2000 / kMapPollMs;
+
+void evalJs(const char* js);
+bool sendLine(const char* line);
 
 bool envFlag(const char* name)
 {
@@ -320,6 +330,109 @@ bool surfaceX11Viewable()
   return g.plug && x11IsViewable(g.plug) && (!g.webview || x11IsViewable(GTK_WIDGET(g.webview)));
 }
 
+Display* x11Display()
+{
+  if (g.plug)
+  {
+    if (GdkWindow* win = gtk_widget_get_window(g.plug))
+      return GDK_WINDOW_XDISPLAY(win);
+  }
+  if (GdkDisplay* gd = gdk_display_get_default())
+    return GDK_DISPLAY_XDISPLAY(gd);
+  return nullptr;
+}
+
+/** Host embed socket still shown? Ardour often unmaps this without removed(). */
+bool parentEmbedVisible()
+{
+  if (!g.parentXid)
+    return false;
+  Display* dpy = x11Display();
+  if (!dpy)
+    return false;
+  XWindowAttributes wa {};
+  if (!XGetWindowAttributes(dpy, static_cast<Window>(g.parentXid), &wa))
+    return false;
+  if (wa.map_state != IsViewable)
+    return false;
+  return wa.width >= 2 && wa.height >= 2;
+}
+
+void notifyPageUiVisible(bool visible)
+{
+  if (!g.webview)
+    return;
+  char js[160];
+  std::snprintf(js, sizeof js,
+                "window.__calfnxtUiVisible=%s;"
+                "try{document.dispatchEvent(new Event('calfnxt-visibility'));}catch(e){}",
+                visible ? "true" : "false");
+  evalJs(js);
+}
+
+void applyUiVisible(bool visible, const char* why)
+{
+  const int v = visible ? 1 : 0;
+  if (g.lastParentVisible == v)
+    return;
+  const int prev = g.lastParentVisible;
+  g.lastParentVisible = v;
+  hostLog("[calfnxt-web-host] visible=%d (%s)\n", v, why ? why : "?");
+
+  char line[64];
+  std::snprintf(line, sizeof line, "{\"t\":\"_visible\",\"v\":%d}\n", v);
+  sendLine(line);
+
+  // After first known state: park/resume WebKit (do not exit — plugin must stay alive).
+  if (g.webview && prev >= 0)
+  {
+    if (visible)
+    {
+      gtk_widget_show(GTK_WIDGET(g.webview));
+      if (g.webParked)
+      {
+        char uri[512];
+        std::snprintf(uri, sizeof uri, "calfnxt://bundle/%s", g.entryHtml);
+        hostLog("[calfnxt-web-host] resume web process → %s\n", uri);
+        webkit_web_view_load_uri(g.webview, uri);
+        g.webParked = false;
+      }
+      notifyPageUiVisible(true);
+    }
+    else
+    {
+      // Park before terminate — otherwise web-process-terminated reloads immediately.
+      g.webParked = true;
+      webkit_web_view_terminate_web_process(g.webview);
+      gtk_widget_hide(GTK_WIDGET(g.webview));
+      notifyPageUiVisible(false);
+    }
+  }
+  else if (visible)
+    notifyPageUiVisible(true);
+
+  if (!visible && g.liveNudgeSource)
+  {
+    g_source_remove(g.liveNudgeSource);
+    g.liveNudgeSource = 0;
+  }
+}
+
+gboolean onVisibilityPoll(gpointer)
+{
+  applyUiVisible(parentEmbedVisible(), "poll");
+  return G_SOURCE_CONTINUE;
+}
+
+void startVisibilityPoll()
+{
+  if (g.visibilityPollSource)
+    return;
+  // Immediate sample, then 250 ms — cheap XGetWindowAttributes.
+  applyUiVisible(parentEmbedVisible(), "start");
+  g.visibilityPollSource = g_timeout_add(250, onVisibilityPoll, nullptr);
+}
+
 void mapX11Windows()
 {
   auto mapOne = [](GtkWidget* widget) {
@@ -465,6 +578,7 @@ gboolean onMapPoll(gpointer)
     g.mapOk = true;
     g.mapPollSource = 0;
     reportSocketSize("map-ok");
+    startVisibilityPoll();
     return G_SOURCE_REMOVE;
   }
 
@@ -480,6 +594,7 @@ gboolean onMapPoll(gpointer)
     g.mapOk = true;
     g.mapPollSource = 0;
     reportSocketSize("map-ok");
+    startVisibilityPoll();
     return G_SOURCE_REMOVE;
   }
 
@@ -489,6 +604,7 @@ gboolean onMapPoll(gpointer)
             g.mapPollTries, g.mapPollTries * kMapPollMs, x11MapState(g.plug),
             g.webview ? x11MapState(GTK_WIDGET(g.webview)) : -1);
     g.mapPollSource = 0;
+    startVisibilityPoll();
     return G_SOURCE_REMOVE;
   }
 
@@ -502,6 +618,7 @@ void startMapPoll()
   if (surfaceX11Viewable())
   {
     g.mapOk = true;
+    startVisibilityPoll();
     return;
   }
   g.mapPollTries = 0;
@@ -655,6 +772,74 @@ void evalJs(const char* js)
         g_object_unref(value);
     },
     nullptr);
+}
+
+/** Inject viz payload — tiny JS body; samples as base64 + fmt/scale/bias (no float parse). */
+void injectVizBin(const calfNXT::Ui::VizBin::Decoded& dec)
+{
+  if (!g.webview || dec.id.empty() || dec.kind.empty() || dec.count < 0)
+    return;
+  if (dec.count > 0 && !dec.payload)
+    return;
+
+  const gsize nbytes =
+    static_cast<gsize>(dec.count) * calfNXT::Ui::VizBin::bytesPerSample(dec.fmt);
+  gchar* b64 = nullptr;
+  if (nbytes > 0)
+  {
+    b64 = g_base64_encode(dec.payload, nbytes);
+    if (!b64)
+      return;
+  }
+
+  GVariantDict dict;
+  g_variant_dict_init(&dict, nullptr);
+  g_variant_dict_insert(&dict, "id", "s", dec.id.c_str());
+  g_variant_dict_insert(&dict, "kind", "s", dec.kind.c_str());
+  g_variant_dict_insert(&dict, "fmt", "u", static_cast<guint32>(dec.fmt));
+  g_variant_dict_insert(&dict, "scale", "d", static_cast<gdouble>(dec.scale));
+  g_variant_dict_insert(&dict, "bias", "d", static_cast<gdouble>(dec.bias));
+  g_variant_dict_insert(&dict, "n", "u", static_cast<guint32>(dec.count));
+  g_variant_dict_insert(&dict, "b64", "s", b64 ? b64 : "");
+  GVariant* args = g_variant_ref_sink(g_variant_dict_end(&dict));
+  g_free(b64);
+
+  // Named args: id, kind, fmt, scale, bias, n, b64.
+  // fmt: 0=f32 1=i16 2=u8 3=i8 — expand to Float32Array for the SPA.
+  static const char body[] =
+    "const s=atob(b64);"
+    "const u8=new Uint8Array(s.length);"
+    "for(let i=0;i<s.length;++i)u8[i]=s.charCodeAt(i);"
+    "const v=new Float32Array(n|0);"
+    "const sc=+scale,bi=+bias,f=fmt|0;"
+    "if(f===0){const src=new Float32Array(u8.buffer,u8.byteOffset,n|0);"
+    "v.set(src);}"
+    "else if(f===1){const src=new Int16Array(u8.buffer,u8.byteOffset,n|0);"
+    "for(let i=0;i<v.length;++i)v[i]=src[i]*sc+bi;}"
+    "else if(f===3){const src=new Int8Array(u8.buffer,u8.byteOffset,n|0);"
+    "for(let i=0;i<v.length;++i)v[i]=src[i]*sc+bi;}"
+    "else{for(let i=0;i<v.length;++i)v[i]=u8[i]*sc+bi;}"
+    "const m={t:'viz',id:id,kind:kind,v:v};"
+    "if(window.__calfnxtVizDump)window.__calfnxtVizDump[String(id)+':'+String(kind)]=v;"
+    "if(window.__calfnxtOnHost)window.__calfnxtOnHost(m);"
+    "else{(window.__calfnxtHostQ=window.__calfnxtHostQ||[]).push(m);}";
+
+  webkit_web_view_call_async_javascript_function(
+    g.webview, body, -1, args, nullptr, nullptr, nullptr,
+    +[](GObject* object, GAsyncResult* result, gpointer) {
+      GError* error = nullptr;
+      JSCValue* value =
+        webkit_web_view_call_async_javascript_function_finish(WEBKIT_WEB_VIEW(object), result, &error);
+      if (error)
+      {
+        logEvalJsError(error->message);
+        g_error_free(error);
+      }
+      if (value)
+        g_object_unref(value);
+    },
+    nullptr);
+  g_variant_unref(args);
 }
 
 /** Probe DOM/CSS sizes after load — distinguishes layout-0 vs paint/compositing hole. */
@@ -880,6 +1065,12 @@ void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
 
 void onWebProcessTerminated(WebKitWebView*, WebKitWebProcessTerminationReason reason, gpointer)
 {
+  if (g.webParked)
+  {
+    hostLog("[calfnxt-web-host] web process terminated (reason=%d) — parked, no reload\n",
+            static_cast<int>(reason));
+    return;
+  }
   hostLog("[calfnxt-web-host] web process terminated (reason=%d) — reloading\n",
           static_cast<int>(reason));
   if (!g.webview)
@@ -920,6 +1111,24 @@ gboolean onSocketReadable(gint /*fd*/, GIOCondition condition, gpointer)
     g.readBuf.append(chunk, static_cast<size_t>(n));
     for (;;)
     {
+      if (calfNXT::Ui::VizBin::looksLikeMagic(g.readBuf.data(), g.readBuf.size()))
+      {
+        calfNXT::Ui::VizBin::Decoded dec;
+        bool corrupt = false;
+        if (!calfNXT::Ui::VizBin::tryDecode(g.readBuf.data(), g.readBuf.size(), dec, corrupt))
+        {
+          if (corrupt)
+          {
+            g.readBuf.erase(0, 1);
+            continue;
+          }
+          break; // incomplete frame
+        }
+        injectVizBin(dec);
+        g.readBuf.erase(0, dec.frameBytes);
+        continue;
+      }
+
       const auto pos = g.readBuf.find('\n');
       if (pos == std::string::npos)
         break;
@@ -1019,6 +1228,7 @@ int main(int argc, char** argv)
 
   static const char bridge[] =
     "window.__calfnxtHostQ=window.__calfnxtHostQ||[];"
+    "window.__calfnxtUiVisible=true;"
     "window.__calfnxtVizDump=window.__calfnxtVizDump||{};"
     "window.__calfnxtDumpViz=function(){"
     "var json=JSON.stringify(window.__calfnxtVizDump||{},null,2);"

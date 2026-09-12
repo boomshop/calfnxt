@@ -1,36 +1,40 @@
 #pragma once
 
+#include <atomic>
 #include <string>
 
 namespace calfNXT {
 namespace Ui {
 
-/** Optional DSP→editor telemetry (meters now; spectrum arrays later).
+/** Optional DSP→editor telemetry (meters / charts).
  *
  * Not VST3 parameters — high-rate display data only.
- * Protocol (host→UI JSON via __calfnxtOnHost):
+ * Protocol (host→UI via binary CNXV → Float32Array `v`; see viz_bin.h):
  *   {t:"io", ch:N}                         // bus channel count (WebEditor)
  *   {t:"viz", id:"in"|"out", kind:"levels", v:[...dBFS]}
- *   {t:"viz", id:"eq", kind:"gains", v:[...dB]}  // per-band applied gain (EQ)
- *   {t:"viz", id:"stereo", kind:"corr", v:[c]}   // correlation −1…1
- *   {t:"viz", id:"stereo", kind:"gonio", v:[l,r,…]} // interleaved L/R
- *   {t:"viz", id:"comp", kind:"gr", v:[grDb]}       // gain reduction ≤0 dB
- *   {t:"viz", id:"comp", kind:"point", v:[inDb,outDb]} // transfer operating point
- *   {t:"viz", id:"comp", kind:"envelope", v:[…]}   // history: audio, GR (2×slots + phase)
-   *   {t:"viz", id:"fft", kind:"spectrum", v:[bins,hold,avg…,max…,L…,R…]}
-   *   {t:"viz", id:"mod", kind:"response", v:[bins,L…,R…]} // Phaser/Chorus |H|
-   *   {t:"viz", id:"mod", kind:"comb", v:[nL,nR,(f,dB)…]} // Flanger peak/notch stems
-   *   {t:"viz", id:"filt", kind:"hz", v:[fcHz]}       // live filter cutoff
-   *   {t:"viz", id:"tuner", kind:"pitch", v:[…]}      // history: midi, target, conf, flags, corrCents
-   *   {t:"viz", id:"tuner", kind:"midi", v:[active, mask]} // held MIDI pitch-class override
-   *   {t:"viz", id:"impulse", kind:"wave", v:[bins,origMs,usedMs,db…]}
-   *   UI→host {t:"vizcfg", id:"fft"|"mod"|"impulse", bins:N} after measuring pixel width.
-   *   UI→host {t:"midi", cmd:"alloff"} clears held MIDI notes (Tuner).
-   */
+ *   …
+ *   Helper→plugin {t:"_visible", v:0|1} when the XEmbed parent maps/unmaps
+ *   (Ardour often hides the editor without IPlugView::removed).
+ */
 class IVizSource
 {
 public:
   virtual ~IVizSource() = default;
+
+  /**
+   * Editor visibility / consumer interest. False → DSP should skip history,
+   * FFT, gonio, and other display-only work. Default false until the editor
+   * reports visible (no UI open → no viz cost).
+   */
+  void setVizConsumerActive(bool on) noexcept
+  {
+    vizConsumerActive_.store(on, std::memory_order_relaxed);
+  }
+
+  bool vizConsumerActive() const noexcept
+  {
+    return vizConsumerActive_.load(std::memory_order_relaxed);
+  }
 
   /** Input peak-hold exchange: fill out[] with dBFS, reset DSP holds. Returns ch count. */
   virtual int takeInputLevelsDb(float* out, int maxOut)
@@ -355,6 +359,9 @@ public:
     (void)out;
     return false;
   }
+
+private:
+  std::atomic<bool> vizConsumerActive_ {false};
 };
 
 } // namespace Ui

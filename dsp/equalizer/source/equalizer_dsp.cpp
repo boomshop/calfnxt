@@ -140,6 +140,7 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
     static_cast<int>(std::lround(std::clamp(params_[kParamSpectrum], 0.f, 3.f)));
   const bool spectrumOn = spectrumMode >= 1;
   spectrumActive_.store(spectrumOn, std::memory_order_relaxed);
+  const bool spectrumRun = spectrumOn && vizConsumerActive();
 
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
   io_.setBypassGains(bypass);
@@ -169,13 +170,13 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
 
   const bool doEq = !bypass && hasAnyActiveBandsOrListen();
   // Idle fast-path only when there is nothing to do — Mono still folds L→R.
-  if (!doEq && !spectrumOn && !mono)
+  if (!doEq && !spectrumRun && !mono)
   {
     io_.end(data);
     return kResultOk;
   }
 
-  if (spectrumOn)
+  if (spectrumRun)
   {
     spectrum_.setSampleRate(sampleRate_);
     spectrum_.setFftSize(2048);
@@ -227,7 +228,7 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
       if (mono)
         R = L;
       // Post-EQ tap (before out_gain) — overlay shows the shaped signal.
-      if (spectrumOn)
+      if (spectrumRun)
         spectrum_.process(L, mono ? L : R);
       if (nCh > 0)
         out[0][i] = L;
@@ -264,7 +265,7 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
       }
       if (mono)
         R = L;
-      if (spectrumOn)
+      if (spectrumRun)
         spectrum_.process(L, mono ? L : R);
       if (nCh > 0)
         out[0][i] = L;
@@ -280,7 +281,7 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
     publishDisplayGains();
   }
 
-  if (spectrumOn)
+  if (spectrumRun)
     spectrum_.publish();
 
   // This quiet block zero-fed the bands — further quiet blocks may skip.
