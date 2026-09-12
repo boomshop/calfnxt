@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Equalizer as AuxEqualizer,
   EqBand as AuxEqBand,
@@ -6,7 +12,6 @@ import {
 } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import {
   componentFromWidget,
-  useDynamicValueReadonly,
   useWidgetsWithBindingsAndEvents,
 } from '@deutschesoft/use-aux-widgets';
 import type { EqFilterType, IEqualizerBand } from '../../host/equalizerHost';
@@ -21,6 +26,8 @@ import {
   bandSupportsDyn,
 } from '../../host/equalizerHost';
 import { DynamicValue } from '@deutschesoft/awml';
+import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
+import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import {
   useChartGradient,
@@ -133,13 +140,15 @@ export function EQChart(props: EQChartProps) {
   const [eqWidget, setEqWidget] = useState<unknown>(null);
   const isMini = size === 'mini';
   const spectrumOn = !isMini && Math.round(spectrumMode) >= 1;
-  const spectrum = useDynamicValueReadonly(spectrum$, [] as number[]);
+  // High-rate spectrum must NOT go through React state — paint AUX Graph directly.
   const spectrumGraphRef = useRef<{
     set: (k: string, v: unknown) => void;
     element?: SVGElement;
   } | null>(null);
+  const spectrumBindingsRef = useRef<Bindings | null>(null);
   const spectrumModeRef = useRef(spectrumMode);
   const yRangeRef = useRef(yRange);
+  const spectrumLastRawRef = useRef<number[] | null>(null);
   spectrumModeRef.current = spectrumMode;
   yRangeRef.current = yRange;
 
@@ -424,7 +433,7 @@ export function EQChart(props: EQChartProps) {
     return () => unsubs.forEach((u) => u());
   }, [handles, graphs, bandModels, selectedBandId]);
 
-  // Spectrum analyzer fill (behind EQ curves). Off → no vizcfg / no updates.
+  // Spectrum fill: AWML Binding → AUX dots. No React on viz ticks.
   useEffect(() => {
     if (!eqWidget || isMini || !spectrum$) return;
     const eq = eqWidget as {
@@ -440,11 +449,12 @@ export function EQChart(props: EQChartProps) {
     };
     if (eq.isDestructed?.()) return;
 
+    spectrumBindingsRef.current?.dispose();
+    spectrumBindingsRef.current = null;
+
     if (!spectrumOn) {
-      const g = spectrumGraphRef.current;
-      if (g) {
-        g.set('dots', null);
-      }
+      spectrumGraphRef.current?.set('dots', null);
+      spectrumLastRawRef.current = null;
       return;
     }
 
@@ -457,12 +467,41 @@ export function EQChart(props: EQChartProps) {
       });
       g.element?.classList.add('eq-spectrum');
       spectrumGraphRef.current = g;
-      // Keep under band curves / baseline.
       eq.baseline?.toFront?.();
     }
 
+    const g = spectrumGraphRef.current;
+    if (!g) return;
+
+    const bindings = bindAuxOptions(g, [
+      {
+        name: 'dots',
+        backendValue: spectrum$,
+        readonly: true,
+        transformReceive: (raw: unknown) => {
+          if (!Array.isArray(raw) || !raw.length) {
+            spectrumLastRawRef.current = null;
+            return null;
+          }
+          spectrumLastRawRef.current = raw as number[];
+          const payload = parseSpectrumPayload(raw as number[]);
+          if (!payload) return null;
+          const yr = yRangeRef.current;
+          return spectrumSeriesDots(
+            payload.avg,
+            payload.bins,
+            yr.min,
+            yr.max,
+            spectrumSlope(spectrumModeRef.current),
+          );
+        },
+      },
+    ]);
+    spectrumBindingsRef.current = bindings;
+
     const el = eq.element ?? eq.svg;
     let ro: ResizeObserver | null = null;
+    let resizeRaf = 0;
     if (el) {
       const sendBins = () => {
         const width = Math.round(el.getBoundingClientRect().width);
@@ -470,84 +509,61 @@ export function EQChart(props: EQChartProps) {
         postToHost({ t: 'vizcfg', id: SPECTRUM_VIZ_ID, bins: next });
       };
       sendBins();
-      let raf = 0;
       ro = new ResizeObserver(() => {
-        if (raf) cancelAnimationFrame(raf);
-        raf = requestAnimationFrame(sendBins);
+        if (resizeRaf) cancelAnimationFrame(resizeRaf);
+        resizeRaf = requestAnimationFrame(() => {
+          resizeRaf = 0;
+          sendBins();
+        });
       });
       ro.observe(el);
     }
 
-    let raf = 0;
-    const paint = (raw: number[]) => {
-      const g = spectrumGraphRef.current;
-      if (!g || eq.isDestructed?.()) return;
-      const payload = parseSpectrumPayload(raw);
-      if (!payload) {
-        g.set('dots', null);
-        return;
-      }
-      const yr = yRangeRef.current;
-      const slope = spectrumSlope(spectrumModeRef.current);
-      g.set(
-        'dots',
-        spectrumSeriesDots(
-          payload.avg,
-          payload.bins,
-          yr.min,
-          yr.max,
-          slope,
-        ),
-      );
-    };
-
-    paint(Array.isArray(spectrum) ? spectrum : []);
-
     return () => {
-      if (raf) cancelAnimationFrame(raf);
+      bindings.dispose();
+      if (spectrumBindingsRef.current === bindings)
+        spectrumBindingsRef.current = null;
+      if (resizeRaf) cancelAnimationFrame(resizeRaf);
       ro?.disconnect();
     };
-  }, [eqWidget, isMini, spectrumOn]);
+  }, [eqWidget, isMini, spectrum$, spectrumOn]);
 
+  // Rare: tilt / y-range change — re-apply last buffer through the same transform path.
   useEffect(() => {
     if (!spectrumOn) return;
     const g = spectrumGraphRef.current;
-    if (!g) return;
-    let raf = 0;
-    raf = requestAnimationFrame(() => {
-      raf = 0;
-      const payload = parseSpectrumPayload(Array.isArray(spectrum) ? spectrum : []);
-      if (!payload) {
-        g.set('dots', null);
-        return;
-      }
-      const yr = yRangeRef.current;
-      const slope = spectrumSlope(spectrumModeRef.current);
-      g.set(
-        'dots',
-        spectrumSeriesDots(
-          payload.avg,
-          payload.bins,
-          yr.min,
-          yr.max,
-          slope,
-        ),
-      );
-    });
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [spectrum, spectrumOn, spectrumMode, yRange]);
+    const raw = spectrumLastRawRef.current;
+    if (!g || !raw) return;
+    const payload = parseSpectrumPayload(raw);
+    if (!payload) {
+      g.set('dots', null);
+      return;
+    }
+    const yr = yRangeRef.current;
+    g.set(
+      'dots',
+      spectrumSeriesDots(
+        payload.avg,
+        payload.bins,
+        yr.min,
+        yr.max,
+        spectrumSlope(spectrumMode),
+      ),
+    );
+  }, [spectrumMode, spectrumOn, yRange.min, yRange.max]);
 
   // Detach spectrum graph on unmount / mini switch.
   useEffect(() => {
     return () => {
+      spectrumBindingsRef.current?.dispose();
+      spectrumBindingsRef.current = null;
       const eq = eqWidget as {
         removeGraph?: (g: unknown) => void;
         isDestructed?: () => boolean;
       } | null;
       const g = spectrumGraphRef.current;
       spectrumGraphRef.current = null;
+      spectrumLastRawRef.current = null;
       if (!eq || !g || eq.isDestructed?.()) return;
       eq.removeGraph?.(g);
     };

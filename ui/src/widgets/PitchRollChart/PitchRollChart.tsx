@@ -133,6 +133,9 @@ export interface PitchRollChartProps {
  * Scrolling Melodyne-style piano roll (display only). Newest is on the right.
  * Buffer layout matches DSP: [inMidi, targetMidi, conf, flags, corrCents] × slots + phase.
  * corrCents is the actual pitch shift (retune + added vibrato).
+ *
+ * Canvas paint — no AUX option target for AWML Bindings; `data$` subscribe → paint
+ * is the supported high-rate path (never `useDynamicValueReadonly` on the buffer).
  */
 export function PitchRollChart(props: PitchRollChartProps) {
   const {
@@ -150,7 +153,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
   } = props;
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const pitchData = useDynamicValueReadonly(data$, null);
+  const dataRef = useRef<Float32Array | null>(null);
   const fmin = useDynamicValueReadonly(fmin$, 31);
   const fmax = useDynamicValueReadonly(fmax$, 400);
   const notes = useNoteMask(notes$);
@@ -277,7 +280,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
       ctx.stroke();
     }
 
-    const buf = pitchData;
+    const buf = dataRef.current;
     if (!buf || buf.length < HIST_CH + 1) {
       return;
     }
@@ -418,7 +421,6 @@ export function PitchRollChart(props: PitchRollChartProps) {
     ctx.fillText(`${Math.round(PITCH_ROLL_MS / 1000)}s`, cssW - 6, 12);
     ctx.textAlign = 'left';
   }, [
-    pitchData,
     fmin,
     fmax,
     notes,
@@ -427,6 +429,14 @@ export function PitchRollChart(props: PitchRollChartProps) {
     showTarg,
     theme,
   ]);
+
+  useEffect(() => {
+    const unsub = data$.subscribe((buf: Float32Array | null) => {
+      dataRef.current = buf;
+      paint();
+    }, true);
+    return unsub;
+  }, [data$, paint]);
 
   useEffect(() => {
     paint();

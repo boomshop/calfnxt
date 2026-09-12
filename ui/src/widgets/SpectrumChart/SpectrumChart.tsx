@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
-import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
+import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
+import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
+import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { themeColors$ } from '../../theme/themeColors';
 import './SpectrumChart.scss';
+
+/** Stable empty default — never inline `[]` in hook deps / subscribe fallbacks. */
+const EMPTY_SPECTRUM: number[] = [];
 
 /** Chart display range (visible). DSP floor is lower (−120) for tilt footroom. */
 export const SPECTRUM_DB_MIN = -96;
@@ -284,10 +289,10 @@ export function SpectrumChart(props: SpectrumChartProps) {
 
   const chartRef = useRef<AuxChartInstance | null>(null);
   const graphsRef = useRef<AuxGraph[]>([]);
+  const graphBindingsRef = useRef<Bindings | null>(null);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
-  const data = useDynamicValueReadonly(data$, [] as number[]);
-  const dataLatestRef = useRef(data);
-  dataLatestRef.current = data;
+  // High-rate spectrum → AUX/canvas only (no React re-render from data$).
+  const dataLatestRef = useRef<number[]>(EMPTY_SPECTRUM);
   const modeRef = useRef(mode);
   const holdRef = useRef(hold);
   const scaleRef = useRef(scale);
@@ -391,22 +396,22 @@ export function SpectrumChart(props: SpectrumChartProps) {
   );
 
   const buildPoints = useCallback(
-    (raw: number[]) => {
+    (raw: number[]): { x: number; y: number }[] | null => {
       const m = Math.round(modeRef.current);
       const slope = slopeDbPerOct(scaleRef.current);
       const payload = parseSpectrumPayload(raw);
-      if (!payload) return;
+      if (!payload) return null;
 
       if (m === SPECTRUM_MODE.Spectralizer) {
         paintWaterfall(payload, slope);
         if (corridorElRef.current)
           corridorElRef.current.hidden = true;
-        return;
+        return null;
       }
 
       const chart = chartRef.current;
       const graphs = graphsRef.current;
-      if (!chart || chart.isDestructed?.()) return;
+      if (!chart || chart.isDestructed?.()) return null;
 
       if (payload.bins !== binsRef.current) {
         binsRef.current = payload.bins;
@@ -428,20 +433,22 @@ export function SpectrumChart(props: SpectrumChartProps) {
         );
       }
 
-      for (const g of graphs) g.set('dots', null);
-
       const [g0, g1, gHold] = graphs;
       if (m !== SPECTRUM_MODE.Difference)
         gHold?.element?.classList.remove('spec-diff');
 
+      let primary: { x: number; y: number }[] | null = null;
+      g1?.set('dots', null);
+      gHold?.set('dots', null);
+
       if (m === SPECTRUM_MODE.Average) {
-        g0?.set('dots', seriesDots(payload.avg, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope));
+        primary = seriesDots(payload.avg, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope);
         if (showHold)
           gHold?.set('dots', seriesDots(payload.max, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope));
       } else if (m === SPECTRUM_MODE.Max) {
-        g0?.set('dots', seriesDots(payload.max, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope));
+        primary = seriesDots(payload.max, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope);
       } else if (m === SPECTRUM_MODE.Stereo) {
-        g0?.set('dots', seriesDots(payload.L, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope));
+        primary = seriesDots(payload.L, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope);
         g1?.set('dots', seriesDots(payload.R, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope));
         if (showHold)
           gHold?.set('dots', seriesDots(payload.max, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope));
@@ -453,10 +460,11 @@ export function SpectrumChart(props: SpectrumChartProps) {
         }
         for (let i = 0; i < payload.bins; ++i) {
           const d = (payload.L[i] ?? SPECTRUM_DSP_FLOOR_DB) - (payload.R[i] ?? SPECTRUM_DSP_FLOOR_DB);
-          smooth[i] = DIFF_EMA * smooth[i] + (1 - DIFF_EMA) * d;
+          smooth[i] = DIFF_EMA * smooth[i]! + (1 - DIFF_EMA) * d;
         }
         gHold?.set('dots', seriesDots(smooth, payload.bins, -24, 24, 0));
         gHold?.element?.classList.add('spec-diff');
+        primary = null;
       }
 
       // Filled midband corridor in tilted Average/Max/Stereo views.
@@ -478,13 +486,42 @@ export function SpectrumChart(props: SpectrumChartProps) {
 
       gHold?.toFront?.();
       reassertRef.current();
+      // Silence unused — Binding drives g0.dots from the return value.
+      void g0;
+      return primary;
     },
     [paintWaterfall],
   );
 
+  const disposeBindings = useCallback(() => {
+    graphBindingsRef.current?.dispose();
+    graphBindingsRef.current = null;
+  }, []);
+
+  const attachBindings = useCallback(() => {
+    disposeBindings();
+    const g0 = graphsRef.current[0];
+    if (!g0) return;
+    // Primary Binding: returns g0 dots; siblings / waterfall / corridor via buildPoints.
+    graphBindingsRef.current = bindAuxOptions(g0, [
+      {
+        name: 'dots',
+        backendValue: data$,
+        readonly: true,
+        transformReceive: (raw: unknown) => {
+          const next =
+            Array.isArray(raw) && raw.length ? (raw as number[]) : EMPTY_SPECTRUM;
+          dataLatestRef.current = next;
+          return buildPoints(next);
+        },
+      },
+    ]);
+  }, [data$, buildPoints, disposeBindings]);
+
   const detach = useCallback(() => {
     resizeRoRef.current?.disconnect();
     resizeRoRef.current = null;
+    disposeBindings();
     const chart = chartRef.current;
     const graphs = graphsRef.current;
     graphsRef.current = [];
@@ -493,7 +530,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
     setGradTargets([]);
     if (!chart || chart.isDestructed?.()) return;
     for (const g of graphs) chart.removeGraph(g);
-  }, []);
+  }, [disposeBindings]);
 
   const attach = useCallback(
     (chart: AuxChartInstance) => {
@@ -531,6 +568,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
       }
 
       setChartSvg(chart.svg ?? null);
+      attachBindings();
 
       if (!resizeRoRef.current) {
         const el = chart.element ?? chart.svg;
@@ -546,7 +584,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
         }
       }
     },
-    [buildPoints, sendVizBins],
+    [attachBindings, sendVizBins],
   );
 
   /** Spectralizer: AUX Chart used only as frequency/dB grid overlay. */
@@ -584,24 +622,37 @@ export function SpectrumChart(props: SpectrumChartProps) {
     [attach, detach],
   );
 
+  // Mode / hold / scale: re-paint last buffer (Binding only fires on data$).
   useEffect(() => {
+    buildPoints(dataLatestRef.current);
+  }, [mode, hold, scale, buildPoints]);
+
+  // Re-attach Binding when data$ / paint identity changes (curve modes only).
+  useEffect(() => {
+    if (isSpectralizer || !graphsRef.current[0]) return;
+    attachBindings();
+  }, [attachBindings, isSpectralizer]);
+
+  // Spectralizer: canvas only — no AUX graph for Bindings; subscribe → paint.
+  useEffect(() => {
+    if (!isSpectralizer) return;
+    disposeBindings();
     let raf = 0;
-    const sync = () => {
+    const unsub = data$.subscribe((raw: number[]) => {
+      const next =
+        Array.isArray(raw) && raw.length ? raw : EMPTY_SPECTRUM;
+      dataLatestRef.current = next;
       if (raf) cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         raf = 0;
-        buildPoints(data);
+        buildPoints(dataLatestRef.current);
       });
-    };
-    sync();
+    }, true);
     return () => {
+      unsub();
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [data, buildPoints]);
-
-  useEffect(() => {
-    buildPoints(data);
-  }, [mode, hold, scale, buildPoints, data]);
+  }, [isSpectralizer, data$, buildPoints, disposeBindings]);
 
   useEffect(() => () => detach(), [detach]);
 

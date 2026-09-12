@@ -40,6 +40,9 @@ const HP_LP_LABELS = [
   { pos: 20000, label: '20k' },
 ];
 
+/** Stable y-range object — inline literals re-trigger AUX range_y sets every render. */
+const FREQ_RANGE_Y = { min: -60, max: 6 };
+
 /** Map DSP mode 0…4 → chart slope (mode 0 unused while inactive). */
 function slopeFromMode(mode: number): EqPassSlope {
   if (mode >= 4) return 48;
@@ -189,7 +192,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
         bands={filterBands}
         interactive
         showLabels={false}
-        yRange={{ min: -60, max: 6 }}
+        yRange={FREQ_RANGE_Y}
         dbGrid={12}
       />
 

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
-import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
+import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
+import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
+import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import './HistoryChart.scss';
@@ -112,9 +114,44 @@ export interface HistoryChartProps {
   className?: string;
 }
 
+type HistDot = { x: number; y: number };
+
+/** Build one channel’s AUX dots from the interleaved history buffer. */
+function historyChannelDots(
+  buf: Float32Array | null,
+  channel: number,
+  nCh: number,
+  windowMs: number,
+  toDb: (v: number) => number,
+): HistDot[] | null {
+  if (!buf || nCh < 1 || buf.length < nCh) return null;
+
+  let phase = 0;
+  let data = buf;
+  if (buf.length % nCh === 1) {
+    phase = buf[buf.length - 1] ?? 0;
+    data = buf.subarray(0, buf.length - 1);
+  }
+
+  const slots = Math.floor(data.length / nCh);
+  if (slots < 1) return null;
+
+  const slotMs = slots > 1 ? windowMs / (slots - 1) : windowMs;
+  const phaseShift = phase * slotMs;
+  const pts: HistDot[] = [];
+  for (let i = 0; i < slots; ++i) {
+    const age = i === slots - 1 ? 0 : slotMs * (slots - 1 - i) + phaseShift;
+    pts.push({
+      x: age,
+      y: toDb(data[i * nCh + channel] ?? 0),
+    });
+  }
+  return pts;
+}
+
 /**
  * Scrolling multi-series history chart. Channel count = `graphs.length`.
- * Paint (fill/stroke) is entirely CSS via each graph’s `className`.
+ * Paint via AWML Bindings → AUX `dots` (no React re-render on viz ticks).
  */
 export function HistoryChart(props: HistoryChartProps) {
   const {
@@ -129,13 +166,13 @@ export function HistoryChart(props: HistoryChartProps) {
     .map((g) => `${g.className}:${g.mode ?? 'line'}:${!!g.gradient}`)
     .join('|');
 
-  const data = useDynamicValueReadonly(data$, null);
-  const dataLatestRef = useRef(data);
-  dataLatestRef.current = data;
   const graphsSpecRef = useRef(graphs);
   graphsSpecRef.current = graphs;
+  const windowMsRef = useRef(windowMs);
+  windowMsRef.current = windowMs;
   const chartRef = useRef<AuxChartInstance | null>(null);
   const auxGraphsRef = useRef<AuxGraph[]>([]);
+  const graphBindingsRef = useRef<Bindings[]>([]);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
   const [gradTargets, setGradTargets] = useState<SVGElement[]>([]);
@@ -145,63 +182,13 @@ export function HistoryChart(props: HistoryChartProps) {
     enabled: !!chartSvg && gradTargets.length > 0,
     targets: gradTargets,
     paint: 'stroke',
-    // GR-style: 0 dB at top → blue; deeper toward bottom → red.
     reverse: true,
   });
   const reassertRef = useRef(reassertGradStroke);
   reassertRef.current = reassertGradStroke;
 
-  const buildPoints = useCallback(
-    (buf: Float32Array | null) => {
-      const specs = graphsSpecRef.current;
-      const nCh = specs.length;
-      const aux = auxGraphsRef.current;
-      if (!buf || nCh < 1 || buf.length < nCh) {
-        for (const g of aux) g.set('dots', null);
-        return;
-      }
-
-      let phase = 0;
-      let data = buf;
-      if (buf.length % nCh === 1) {
-        phase = buf[buf.length - 1] ?? 0;
-        data = buf.subarray(0, buf.length - 1);
-      }
-
-      const slots = Math.floor(data.length / nCh);
-      if (slots < 1) {
-        for (const g of aux) g.set('dots', null);
-        return;
-      }
-
-      const slotMs = slots > 1 ? windowMs / (slots - 1) : windowMs;
-      const phaseShift = phase * slotMs;
-
-      for (let c = 0; c < nCh; ++c) {
-        const toDb = specs[c]?.toDb ?? historyLinToDb;
-        const pts: { x: number; y: number }[] = [];
-        for (let i = 0; i < slots; ++i) {
-          const age =
-            i === slots - 1 ? 0 : slotMs * (slots - 1 - i) + phaseShift;
-          pts.push({
-            x: age,
-            y: toDb(data[i * nCh + c] ?? 0),
-          });
-        }
-        aux[c]?.set('dots', pts);
-      }
-
-      for (let c = 0; c < nCh; ++c) {
-        if (specs[c]?.toFront) aux[c]?.toFront?.();
-      }
-      reassertRef.current();
-    },
-    [windowMs],
-  );
-
   const sendVizBins = useCallback(
     (el: Element) => {
-      // Aim for ~1 sample per CSS pixel; DSP ring is capped at 512 slots.
       const width = Math.round(el.getBoundingClientRect().width);
       const bins = Math.max(48, Math.min(512, width));
       postToHost({ t: 'vizcfg', id: vizId, bins });
@@ -212,6 +199,8 @@ export function HistoryChart(props: HistoryChartProps) {
   const detach = useCallback(() => {
     resizeRoRef.current?.disconnect();
     resizeRoRef.current = null;
+    for (const b of graphBindingsRef.current) b.dispose();
+    graphBindingsRef.current = [];
     const chart = chartRef.current;
     const aux = auxGraphsRef.current;
     auxGraphsRef.current = [];
@@ -231,9 +220,13 @@ export function HistoryChart(props: HistoryChartProps) {
       chart.set('grid_x', buildTimeGridX(windowMs));
 
       const specs = graphsSpecRef.current;
+      const nCh = specs.length;
       const aux: AuxGraph[] = [];
       const grads: SVGElement[] = [];
-      for (const spec of specs) {
+      const bindingsList: Bindings[] = [];
+
+      for (let c = 0; c < nCh; ++c) {
+        const spec = specs[c]!;
         const g = chart.addGraph({
           dots: null,
           type: 'L',
@@ -243,8 +236,29 @@ export function HistoryChart(props: HistoryChartProps) {
         g.element?.classList.add(spec.className);
         if (spec.gradient && g.element) grads.push(g.element);
         aux.push(g);
+
+        const channel = c;
+        const toDb = spec.toDb ?? historyLinToDb;
+        const bindings = bindAuxOptions(g, [
+          {
+            name: 'dots',
+            backendValue: data$,
+            readonly: true,
+            transformReceive: (buf: unknown) =>
+              historyChannelDots(
+                buf as Float32Array | null,
+                channel,
+                nCh,
+                windowMsRef.current,
+                toDb,
+              ),
+          },
+        ]);
+        bindingsList.push(bindings);
       }
+
       auxGraphsRef.current = aux;
+      graphBindingsRef.current = bindingsList;
       for (const spec of specs) {
         if (spec.toFront) {
           const i = specs.indexOf(spec);
@@ -254,7 +268,8 @@ export function HistoryChart(props: HistoryChartProps) {
 
       setChartSvg(chart.svg ?? null);
       setGradTargets(grads);
-      buildPoints(dataLatestRef.current);
+      // One-shot after attach (CSS var --chart-level-stroke covers later redraws).
+      queueMicrotask(() => reassertRef.current());
 
       const el = chart.element ?? chart.svg;
       if (el) {
@@ -268,7 +283,7 @@ export function HistoryChart(props: HistoryChartProps) {
         resizeRoRef.current = ro;
       }
     },
-    [buildPoints, sendVizBins, windowMs, graphsKey],
+    [data$, sendVizBins, windowMs, graphsKey],
   );
 
   const widgetRef = useCallback(
@@ -282,21 +297,6 @@ export function HistoryChart(props: HistoryChartProps) {
     },
     [attach, detach],
   );
-
-  useEffect(() => {
-    let raf = 0;
-    const sync = () => {
-      if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        buildPoints(data);
-      });
-    };
-    sync();
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [buildPoints, data]);
 
   // Rebuild graphs when channel layout / classes change.
   useEffect(() => {

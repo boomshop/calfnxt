@@ -1,7 +1,10 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+// @ts-expect-error AUX frequencyresponse has no published typings in this package build.
 import { FrequencyResponse as AuxFrequencyResponse } from '@deutschesoft/aux-widgets/src/widgets/frequencyresponse.js';
 import type { DynamicValue } from '@deutschesoft/awml';
-import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
+import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
+import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
+import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import './ModulationChart.scss';
 
@@ -83,6 +86,20 @@ function combStems(
   return pts;
 }
 
+function modulationDots(
+  raw: number[],
+  channel: 'L' | 'R',
+  mode: 'response' | 'comb',
+  dbMin: number,
+  dbMax: number,
+): { x: number; y: number }[] | null {
+  if (!Array.isArray(raw) || !raw.length) return null;
+  if (mode === 'comb') return combStems(raw, channel, dbMin, dbMax);
+  const payload = parseResponse(raw);
+  const n = Math.max(1, payload.bins);
+  return seriesDots(channel === 'L' ? payload.L : payload.R, n, dbMin, dbMax);
+}
+
 export interface ModulationChartProps {
   /** Viz payload: response [bins,L×N,R×N] or comb [nL,nR,(f,dB)…]. */
   data$: DynamicValue<number[]>;
@@ -97,7 +114,7 @@ export interface ModulationChartProps {
 
 /**
  * L/R modulation chart (Phaser response curve or Flanger comb stems).
- * AUX FrequencyResponse + log frequency axis.
+ * AUX FrequencyResponse + log frequency axis; paint via AWML Bindings.
  */
 export function ModulationChart(props: ModulationChartProps) {
   const {
@@ -111,27 +128,14 @@ export function ModulationChart(props: ModulationChartProps) {
 
   const chartRef = useRef<AuxFrInstance | null>(null);
   const graphsRef = useRef<AuxGraph[]>([]);
-  const data = useDynamicValueReadonly(data$, [] as number[]);
+  const graphBindingsRef = useRef<Bindings[]>([]);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   const modeRef = useRef(mode);
   modeRef.current = mode;
-
-  const applyCurves = useCallback(() => {
-    const chart = chartRef.current;
-    const graphs = graphsRef.current;
-    if (!chart || chart.isDestructed?.() || graphs.length < 2)
-      return;
-    const raw = data;
-    if (modeRef.current === 'comb') {
-      graphs[0]?.set('dots', combStems(raw, 'L', dbMin, dbMax));
-      graphs[1]?.set('dots', combStems(raw, 'R', dbMin, dbMax));
-      return;
-    }
-    const payload = parseResponse(raw);
-    const n = Math.max(1, payload.bins);
-    graphs[0]?.set('dots', seriesDots(payload.L, n, dbMin, dbMax));
-    graphs[1]?.set('dots', seriesDots(payload.R, n, dbMin, dbMax));
-  }, [data, dbMin, dbMax]);
+  const dbMinRef = useRef(dbMin);
+  const dbMaxRef = useRef(dbMax);
+  dbMinRef.current = dbMin;
+  dbMaxRef.current = dbMax;
 
   const sendVizBins = useCallback(
     (el: Element) => {
@@ -144,30 +148,66 @@ export function ModulationChart(props: ModulationChartProps) {
     [vizId],
   );
 
-  useEffect(() => {
-    applyCurves();
-  }, [applyCurves]);
+  const disposeBindings = useCallback(() => {
+    for (const b of graphBindingsRef.current) b.dispose();
+    graphBindingsRef.current = [];
+  }, []);
 
+  // Rare axis / mode change: re-bind so transformReceive closes over new mode.
   useEffect(() => {
     const chart = chartRef.current;
-    if (!chart || chart.isDestructed?.())
-      return;
+    const graphs = graphsRef.current;
+    if (!chart || chart.isDestructed?.() || graphs.length < 2) return;
     chart.set('range_y', { min: dbMin, max: dbMax, scale: 'linear' });
     chart.set('db_grid', 12);
-    applyCurves();
-  }, [dbMin, dbMax, mode, applyCurves]);
+    disposeBindings();
+    graphBindingsRef.current = [
+      bindAuxOptions(graphs[0]!, [
+        {
+          name: 'dots',
+          backendValue: data$,
+          readonly: true,
+          transformReceive: (raw: unknown) =>
+            modulationDots(
+              (raw as number[]) ?? [],
+              'L',
+              modeRef.current,
+              dbMinRef.current,
+              dbMaxRef.current,
+            ),
+        },
+      ]),
+      bindAuxOptions(graphs[1]!, [
+        {
+          name: 'dots',
+          backendValue: data$,
+          readonly: true,
+          transformReceive: (raw: unknown) =>
+            modulationDots(
+              (raw as number[]) ?? [],
+              'R',
+              modeRef.current,
+              dbMinRef.current,
+              dbMaxRef.current,
+            ),
+        },
+      ]),
+    ];
+  }, [data$, dbMin, dbMax, mode, disposeBindings]);
 
   const widgetRef = useCallback(
     (w: AuxFrInstance | null) => {
       if (!w) {
         resizeRoRef.current?.disconnect();
         resizeRoRef.current = null;
+        disposeBindings();
         chartRef.current = null;
         graphsRef.current = [];
         return;
       }
       if (chartRef.current === w)
         return;
+      disposeBindings();
       chartRef.current = w;
       graphsRef.current = [];
 
@@ -192,7 +232,38 @@ export function ModulationChart(props: ModulationChartProps) {
         gR.element?.classList.add('mod-stem');
       }
       graphsRef.current = [gL, gR];
-      applyCurves();
+      graphBindingsRef.current = [
+        bindAuxOptions(gL, [
+          {
+            name: 'dots',
+            backendValue: data$,
+            readonly: true,
+            transformReceive: (raw: unknown) =>
+              modulationDots(
+                (raw as number[]) ?? [],
+                'L',
+                modeRef.current,
+                dbMinRef.current,
+                dbMaxRef.current,
+              ),
+          },
+        ]),
+        bindAuxOptions(gR, [
+          {
+            name: 'dots',
+            backendValue: data$,
+            readonly: true,
+            transformReceive: (raw: unknown) =>
+              modulationDots(
+                (raw as number[]) ?? [],
+                'R',
+                modeRef.current,
+                dbMinRef.current,
+                dbMaxRef.current,
+              ),
+          },
+        ]),
+      ];
 
       if (w.element && !resizeRoRef.current) {
         sendVizBins(w.element);
@@ -209,7 +280,7 @@ export function ModulationChart(props: ModulationChartProps) {
         resizeRoRef.current = ro;
       }
     },
-    [applyCurves, dbMin, dbMax, mode, sendVizBins],
+    [data$, dbMin, dbMax, mode, sendVizBins, disposeBindings],
   );
 
   return (

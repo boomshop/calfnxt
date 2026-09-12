@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
+import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
+import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
+import { bindAuxOptions } from '../../utils/aux_bindings';
 import { themeColors$, type ThemeColors } from '../../theme/themeColors';
 import './GonioMeter.scss';
+
+const EMPTY_SAMPLES: number[] = [];
 
 const ChartBindings = {};
 
@@ -230,20 +234,21 @@ export interface GonioMeterProps {
 
 export function GonioMeter(props: GonioMeterProps) {
   const { samples$, drawMode = 'dots', className, ...rest } = props;
-  const samples = useDynamicValueReadonly(samples$, [] as number[]);
   const graphRefs = useRef<(AuxGraphInstance | null)[]>([]);
   const chartRef = useRef<AuxChartInstance | null>(null);
   const gradDisposeRef = useRef<(() => void) | null>(null);
-  const historyRef = useRef<number[][]>([[], [], []]);
+  const layerBindingRef = useRef<Bindings | null>(null);
+  const historyRef = useRef<number[][]>([
+    EMPTY_SAMPLES,
+    EMPTY_SAMPLES,
+    EMPTY_SAMPLES,
+  ]);
   const modeRef = useRef(drawMode);
   modeRef.current = drawMode;
 
-  const renderHistory = useCallback((history: number[][]) => {
-    for (let i = 0; i < graphRefs.current.length; ++i) {
-      const graph = graphRefs.current[i];
-      if (!graph || graph.isDestructed?.())
-        continue;
-      const samples = history[i] ?? [];
+  const paintLayer = useCallback(
+    (graph: AuxGraphInstance | null, samples: number[]) => {
+      if (!graph || graph.isDestructed?.()) return;
       if (modeRef.current === 'line') {
         graph.set('mode', 'line');
         graph.set('type', 'L');
@@ -252,26 +257,77 @@ export function GonioMeter(props: GonioMeterProps) {
         graph.set('mode', 'fill');
         graph.set('dots', (g: AuxGraphInstance) => makeDotsPath(samples, g));
       }
-    }
+    },
+    [],
+  );
+
+  const renderHistory = useCallback(
+    (history: number[][]) => {
+      for (let i = 0; i < graphRefs.current.length; ++i) {
+        paintLayer(graphRefs.current[i] ?? null, history[i] ?? EMPTY_SAMPLES);
+      }
+    },
+    [paintLayer],
+  );
+
+  const dotsFromSamples = useCallback(
+    (raw: unknown, rotateHistory: boolean) => {
+      const samples = Array.isArray(raw) ? (raw as number[]) : EMPTY_SAMPLES;
+      const nextHistory = rotateHistory
+        ? !samples.length
+          ? [EMPTY_SAMPLES, EMPTY_SAMPLES, EMPTY_SAMPLES]
+          : [
+              samples,
+              historyRef.current[0] ?? EMPTY_SAMPLES,
+              historyRef.current[1] ?? EMPTY_SAMPLES,
+            ]
+        : historyRef.current;
+      historyRef.current = nextHistory;
+      // Trail layers 1–2 (Binding only drives layer 0’s `dots` option).
+      paintLayer(graphRefs.current[1] ?? null, nextHistory[1] ?? EMPTY_SAMPLES);
+      paintLayer(graphRefs.current[2] ?? null, nextHistory[2] ?? EMPTY_SAMPLES);
+      const front = nextHistory[0] ?? EMPTY_SAMPLES;
+      if (modeRef.current === 'line') return makeLineDots(front);
+      // Scatter: AUX calls the function with the graph instance.
+      return (g: AuxGraphInstance) => makeDotsPath(front, g);
+    },
+    [paintLayer],
+  );
+
+  const disposeBinding = useCallback(() => {
+    layerBindingRef.current?.dispose();
+    layerBindingRef.current = null;
   }, []);
 
-  const pushDots = useCallback((samples: number[], rotateHistory = true) => {
-    const nextHistory = rotateHistory
-      ? !samples.length
-        ? [[], [], []]
-        : [samples, historyRef.current[0] ?? [], historyRef.current[1] ?? []]
-      : historyRef.current;
-    historyRef.current = nextHistory;
-    renderHistory(nextHistory);
-  }, [renderHistory]);
+  const attachBinding = useCallback(() => {
+    disposeBinding();
+    const front = graphRefs.current[0];
+    if (!front || !samples$) {
+      renderHistory(historyRef.current);
+      return;
+    }
+    // Mode for layer 0 must match before Binding writes dots.
+    if (modeRef.current === 'line') {
+      front.set('mode', 'line');
+      front.set('type', 'L');
+    } else {
+      front.set('mode', 'fill');
+    }
+    layerBindingRef.current = bindAuxOptions(front, [
+      {
+        name: 'dots',
+        backendValue: samples$,
+        readonly: true,
+        transformReceive: (raw: unknown) => dotsFromSamples(raw, true),
+      },
+    ]);
+  }, [samples$, dotsFromSamples, disposeBinding, renderHistory]);
 
   const attach = useCallback(
     (chart: AuxChartInstance) => {
       chartRef.current = chart;
-      if (chart.isDestructed?.())
-        return;
-      if (graphRefs.current.length)
-        return;
+      if (chart.isDestructed?.()) return;
+      if (graphRefs.current.length) return;
       if (chart.svg && !gradDisposeRef.current)
         gradDisposeRef.current = installMsGradient(chart.svg);
 
@@ -288,12 +344,13 @@ export function GonioMeter(props: GonioMeterProps) {
         layers[historyIdx] = graph;
       }
       graphRefs.current = layers;
-      pushDots(historyRef.current[0] ?? [], false);
+      attachBinding();
     },
-    [pushDots],
+    [attachBinding],
   );
 
   const detach = useCallback(() => {
+    disposeBinding();
     const chart = chartRef.current;
     const graphs = graphRefs.current;
     graphRefs.current = [];
@@ -302,8 +359,7 @@ export function GonioMeter(props: GonioMeterProps) {
     gradDisposeRef.current = null;
     if (chart && !chart.isDestructed?.()) {
       for (const graph of graphs) {
-        if (!graph)
-          continue;
+        if (!graph) continue;
         try {
           chart.removeGraph(graph);
         } catch {
@@ -311,7 +367,7 @@ export function GonioMeter(props: GonioMeterProps) {
         }
       }
     }
-  }, []);
+  }, [disposeBinding]);
 
   const widgetRef = useCallback(
     (w: AuxChartInstance | null) => {
@@ -326,13 +382,15 @@ export function GonioMeter(props: GonioMeterProps) {
 
   useEffect(() => () => detach(), [detach]);
 
+  // drawMode / samples$ identity: re-bind or re-paint trail without React viz state.
   useEffect(() => {
-    pushDots(historyRef.current[0] ?? [], false);
-  }, [drawMode, pushDots]);
-
-  useEffect(() => {
-    pushDots(samples);
-  }, [samples, pushDots]);
+    if (!chartRef.current || !graphRefs.current.length) return;
+    attachBinding();
+    if (!samples$) {
+      historyRef.current = [EMPTY_SAMPLES, EMPTY_SAMPLES, EMPTY_SAMPLES];
+      renderHistory(historyRef.current);
+    }
+  }, [drawMode, samples$, attachBinding, renderHistory]);
 
   const cls = ['GonioMeter', `mode-${drawMode}`, className ?? '']
     .filter(Boolean)

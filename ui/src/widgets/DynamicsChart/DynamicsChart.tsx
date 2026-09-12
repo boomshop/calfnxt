@@ -5,6 +5,9 @@ import {
   Expander as AuxExpander,
 } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
+import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
+import { map } from '@deutschesoft/awml/src/operators/map.js';
+import { bindAuxOptions } from '../../utils/aux_bindings';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { expanderResponseDots } from '../../dsp/expanderCurve';
 import { composeInteractingOnSet, type AuxOnSet } from '../editGesture';
@@ -129,13 +132,32 @@ export function DynamicsChart(props: DynamicsChartProps) {
   const range = useDynamicValueReadonly(range$, -60);
   const releaseThreshold = useDynamicValueReadonly(releaseThreshold$, -32);
   const relThreshActive = useDynamicValueReadonly(relThreshActive$, false);
-  const point = useDynamicValueReadonly(point$, [-60, -60]);
+  // point$ is high-rate viz — AWML Bindings, not React state.
+  const pointX$ = useMemo(
+    () =>
+      point$
+        ? map(point$, (pt: number[]) =>
+            Array.isArray(pt) && pt.length >= 1 ? pt[0]! : -60,
+          )
+        : null,
+    [point$],
+  );
+  const pointY$ = useMemo(
+    () =>
+      point$
+        ? map(point$, (pt: number[]) =>
+            Array.isArray(pt) && pt.length >= 2 ? pt[1]! : -60,
+          )
+        : null,
+    [point$],
+  );
 
   const composedOnSet = composeInteractingOnSet({ beginEdit, endEdit }, onSet);
   const relThreshActiveRef = useRef(false);
 
   const chartInstRef = useRef<AuxDynamicsInstance | null>(null);
   const pointHandleRef = useRef<AuxHandle | null>(null);
+  const pointBindingsRef = useRef<Bindings | null>(null);
   const relHandleRef = useRef<AuxHandle | null>(null);
   /** Native AUX handle.set — bypasses our drag wrapper (avoids sync loops). */
   const relOrigSetRef = useRef<((k: string, v: unknown) => void) | null>(null);
@@ -262,6 +284,8 @@ export function DynamicsChart(props: DynamicsChartProps) {
   const detachOverlays = useCallback(() => {
     pointUnsubRef.current?.();
     pointUnsubRef.current = null;
+    pointBindingsRef.current?.dispose();
+    pointBindingsRef.current = null;
 
     const w = chartInstRef.current;
     const alive = w && !w.isDestructed();
@@ -363,9 +387,11 @@ export function DynamicsChart(props: DynamicsChartProps) {
 
   const bindOperatingPoint = useCallback(
     (w: AuxDynamicsInstance) => {
-      if (!point$) return;
+      if (!point$ || !pointX$ || !pointY$) return;
       pointUnsubRef.current?.();
       pointUnsubRef.current = null;
+      pointBindingsRef.current?.dispose();
+      pointBindingsRef.current = null;
 
       if (!pointHandleRef.current && typeof w.addHandle === 'function') {
         pointHandleRef.current = w.addHandle({
@@ -385,8 +411,18 @@ export function DynamicsChart(props: DynamicsChartProps) {
 
       const h = pointHandleRef.current;
       if (!h) return;
+
+      const bindings = bindAuxOptions(h, [
+        { name: 'x', backendValue: pointX$, readonly: true },
+        { name: 'y', backendValue: pointY$, readonly: true },
+      ]);
+      pointBindingsRef.current = bindings;
+      pointUnsubRef.current = () => {
+        bindings.dispose();
+        pointBindingsRef.current = null;
+      };
     },
-    [point$],
+    [point$, pointX$, pointY$],
   );
 
   /** Stable — must not depend on relThreshActive or sync callbacks (avoids overlay leaks). */
@@ -426,15 +462,6 @@ export function DynamicsChart(props: DynamicsChartProps) {
   useEffect(() => {
     pointHandleRef.current?.toBack?.();
   }, [chart]);
-
-  useEffect(() => {
-    const h = pointHandleRef.current;
-    if (!h || !Array.isArray(point) || point.length < 2)
-      return;
-    h.set('x', point[0]);
-    h.set('y', point[1]);
-    reassertRef.current();
-  }, [point, chart]);
 
   useEffect(() => {
     if (!chart || chart.isDestructed()) return;

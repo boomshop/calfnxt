@@ -1,12 +1,15 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import {
   sampleCrushResponse,
   type CrushPt,
 } from '../../dsp/bitreduction';
+import { useVizPaint } from '../../utils/viz_paint';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import './CrusherChart.scss';
+
+const EMPTY_VIZ: number[] = [0];
 
 export interface CrusherChartProps {
   className?: string;
@@ -73,24 +76,32 @@ function multiPath(
 }
 
 /**
- * Calf sine Response + Harmonics-style heat/zone:
- * probe sine (dry faint, wet crushed), density painted where live amplitude
- * lands on the dry sine, active zone = |dry| ≤ zoneAmp.
+ * Calf sine Response + Harmonics-style heat/zone.
+ * Params → React curves; live `viz$` → imperative heat/zone (no React on viz ticks).
  */
 export function CrusherChart(props: CrusherChartProps) {
   const { className, bits$, morph$, mode$, dc$, aa$, viz$ } = props;
   const svgRef = useRef<SVGSVGElement>(null);
+  const heatLayerRef = useRef<SVGGElement | null>(null);
+  const zonePathRef = useRef<SVGPathElement | null>(null);
   const blurId = `crusher-heat-blur-${useId().replace(/:/g, '')}`;
   const [svg, setSvg] = useState<SVGSVGElement | null>(null);
   const [curveEl, setCurveEl] = useState<SVGPathElement | null>(null);
-  const [zoneEl, setZoneEl] = useState<SVGPathElement | null>(null);
   const [size, setSize] = useState({ w: 1, h: 1 });
   const bits = useDynamicValueReadonly(bits$, 0);
   const morph = useDynamicValueReadonly(morph$, 0);
   const mode = useDynamicValueReadonly(mode$, 0);
   const dc = useDynamicValueReadonly(dc$, 0);
   const aa = useDynamicValueReadonly(aa$, 0);
-  const viz = useDynamicValueReadonly(viz$, [0]);
+
+  const curves = useMemo(
+    () => sampleCrushResponse(bits, morph, mode, dc, aa, 280),
+    [bits, morph, mode, dc, aa],
+  );
+  const curvesRef = useRef(curves);
+  curvesRef.current = curves;
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
 
   useEffect(() => {
     const el = svgRef.current;
@@ -110,9 +121,9 @@ export function CrusherChart(props: CrusherChartProps) {
   const gradTargets = useMemo(() => {
     const t: SVGElement[] = [];
     if (curveEl) t.push(curveEl);
-    if (zoneEl) t.push(zoneEl);
+    if (zonePathRef.current) t.push(zonePathRef.current);
     return t;
-  }, [curveEl, zoneEl]);
+  }, [curveEl, size.w, size.h]);
 
   useChartGradient({
     svg,
@@ -121,68 +132,91 @@ export function CrusherChart(props: CrusherChartProps) {
     paint: 'stroke',
   });
 
-  const curves = useMemo(
-    () => sampleCrushResponse(bits, morph, mode, dc, aa, 280),
-    [bits, morph, mode, dc, aa],
-  );
-
-  const zone = Math.max(0, Math.min(1, viz[0] ?? 0));
-  const bins = useMemo(() => viz.slice(1), [viz]);
-
-  useEffect(() => {
-    if (zone < 0.02) setZoneEl(null);
-  }, [zone]);
-
   const { w, h } = size;
   const padX = 4;
   const padY = 8;
-  const toX = (x: number) => padX + x * (w - padX * 2);
-  const toY = (y: number) => {
-    const mid = h * 0.5;
+  const toX = (x: number, ww: number) => padX + x * (ww - padX * 2);
+  const toY = (y: number, hh: number) => {
+    const mid = hh * 0.5;
     const amp = Math.max(1, mid - padY);
     return mid - y * amp;
   };
 
-  const pathDry = pathThrough(curves.dry, toX, toY);
-  const pathWet = pathThrough(curves.wet, toX, toY);
-  const midY = toY(0);
+  const pathDry = pathThrough(
+    curves.dry,
+    (x) => toX(x, w),
+    (y) => toY(y, h),
+  );
+  const pathWet = pathThrough(
+    curves.wet,
+    (x) => toX(x, w),
+    (y) => toY(y, h),
+  );
+  const midY = toY(0, h);
 
-  const zonePath =
-    zone > 0.02
-      ? multiPath(
-          wetSegsByDryAmp(curves.dry, curves.wet, -zone, zone),
-          toX,
-          toY,
-        )
-      : '';
+  const paintViz = useCallback((viz: number[]) => {
+    const heat = heatLayerRef.current;
+    const zoneEl = zonePathRef.current;
+    if (!heat) return;
+    const { dry, wet } = curvesRef.current;
+    const { w: ww, h: hh } = sizeRef.current;
+    const mapX = (x: number) => toX(x, ww);
+    const mapY = (y: number) => toY(y, hh);
 
-  const nBins = Math.max(1, bins.length);
-  const heatSegs = useMemo(() => {
+    const zone = Math.max(0, Math.min(1, viz[0] ?? 0));
+    const bins = viz.length > 1 ? viz.slice(1) : [];
+    const nBins = Math.max(1, bins.length);
+
+    while (heat.firstChild) heat.removeChild(heat.firstChild);
+    const ns = 'http://www.w3.org/2000/svg';
     const smooth = bins.map((d, i) => {
       const a = bins[i - 1] ?? d;
       const b = bins[i + 1] ?? d;
       return 0.25 * (a ?? 0) + 0.5 * (d ?? 0) + 0.25 * (b ?? 0);
     });
-    const segs: { d: string; dens: number }[] = [];
     for (let i = 0; i < nBins; ++i) {
       const dens = smooth[i] ?? 0;
       if (dens < 0.03) continue;
-      // Same binning as DSP hist: amplitude ∈ [−1, 1].
       const padA = 0.35 / nBins;
       const y0 = -1 + (2 * i) / nBins - padA;
       const y1 = -1 + (2 * (i + 1)) / nBins + padA;
       for (const run of wetSegsByDryAmp(
-        curves.dry,
-        curves.wet,
+        dry,
+        wet,
         Math.max(-1, y0),
         Math.min(1, y1),
       )) {
-        const d = pathThrough(run, toX, toY);
-        if (d) segs.push({ d, dens });
+        const d = pathThrough(run, mapX, mapY);
+        if (!d) continue;
+        const path = document.createElementNS(ns, 'path');
+        path.setAttribute('class', 'heat');
+        path.setAttribute('d', d);
+        path.style.strokeWidth = String(1.75 + dens * 18);
+        path.style.opacity = String(0.08 + dens * 0.36);
+        heat.appendChild(path);
       }
     }
-    return segs;
-  }, [bins, nBins, curves, w, h]);
+
+    if (zoneEl) {
+      if (zone > 0.02) {
+        zoneEl.setAttribute(
+          'd',
+          multiPath(wetSegsByDryAmp(dry, wet, -zone, zone), mapX, mapY),
+        );
+        zoneEl.style.display = '';
+      } else {
+        zoneEl.setAttribute('d', '');
+        zoneEl.style.display = 'none';
+      }
+    }
+  }, []);
+
+  useVizPaint(viz$, paintViz, EMPTY_VIZ);
+
+  useEffect(() => {
+    const cur = viz$?.value;
+    paintViz(Array.isArray(cur) && cur.length ? cur : EMPTY_VIZ);
+  }, [curves, w, h, paintViz, viz$]);
 
   return (
     <svg
@@ -207,25 +241,15 @@ export function CrusherChart(props: CrusherChartProps) {
       </defs>
       <line className="axis" x1={padX} y1={midY} x2={w - padX} y2={midY} />
 
-      <g className="heat-layer" filter={`url(#${blurId})`}>
-        {heatSegs.map((s, i) => (
-          <path
-            key={i}
-            className="heat"
-            d={s.d}
-            style={{
-              strokeWidth: 1.75 + s.dens * 18,
-              opacity: 0.08 + s.dens * 0.36,
-            }}
-          />
-        ))}
-      </g>
+      <g
+        ref={heatLayerRef}
+        className="heat-layer"
+        filter={`url(#${blurId})`}
+      />
 
       <path className="wave-dry" d={pathDry} />
       <path ref={setCurveEl} className="curve" d={pathWet} />
-      {zonePath ? (
-        <path ref={setZoneEl} className="zone" d={zonePath} />
-      ) : null}
+      <path ref={zonePathRef} className="zone" d="" style={{ display: 'none' }} />
     </svg>
   );
 }

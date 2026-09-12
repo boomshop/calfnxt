@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import {
@@ -6,7 +6,10 @@ import {
   pulseWidthFromEnum,
   sampleLfoWave,
 } from '../../dsp/simpleLfo';
+import { useVizPaint } from '../../utils/viz_paint';
 import './PulsatorChart.scss';
+
+const EMPTY_LFO: number[] = [0, 0, 0, 0];
 
 export interface PulsatorChartProps {
   className?: string;
@@ -35,7 +38,7 @@ function pathThrough(
 
 /**
  * Dual LFO waveform + live phase dots (Calf Pulsator line-graph).
- * Y: bipolar −1…+1 (amount-scaled), X: one LFO period.
+ * Params → React curves; live `lfo$` → imperative dots (no React on viz ticks).
  */
 export function PulsatorChart(props: PulsatorChartProps) {
   const {
@@ -48,13 +51,26 @@ export function PulsatorChart(props: PulsatorChartProps) {
     lfo$,
   } = props;
   const svgRef = useRef<SVGSVGElement>(null);
+  const dotLRef = useRef<SVGCircleElement | null>(null);
+  const dotRRef = useRef<SVGCircleElement | null>(null);
   const [size, setSize] = useState({ w: 1, h: 1 });
   const mode = useDynamicValueReadonly(mode$, 0);
   const amount = useDynamicValueReadonly(amount$, 0);
   const offsetL = useDynamicValueReadonly(offsetL$, 0);
   const offsetR = useDynamicValueReadonly(offsetR$, 0);
   const pwEnum = useDynamicValueReadonly(pulseWidth$, 0);
-  const lfo = useDynamicValueReadonly(lfo$, [0, 0, 0, 0]);
+
+  const paramsRef = useRef({ mode, amount, offsetL, offsetR, pw: 0.5, w: 1, h: 1 });
+  const pw = pulseWidthFromEnum(pwEnum);
+  paramsRef.current = {
+    mode,
+    amount,
+    offsetL,
+    offsetR,
+    pw,
+    w: size.w,
+    h: size.h,
+  };
 
   useEffect(() => {
     const el = svgRef.current;
@@ -71,7 +87,6 @@ export function PulsatorChart(props: PulsatorChartProps) {
     return () => ro.disconnect();
   }, []);
 
-  const pw = pulseWidthFromEnum(pwEnum);
   const curveL = useMemo(
     () => sampleLfoWave(mode, offsetL, amount, pw, 160),
     [mode, offsetL, amount, pw],
@@ -83,22 +98,49 @@ export function PulsatorChart(props: PulsatorChartProps) {
 
   const padX = 4;
   const padY = 6;
-  const toX = (x: number) => padX + x * (size.w - padX * 2);
-  const toY = (y: number) => {
-    // +1 top, 0 mid, −1 bottom (classic Calf mapping)
-    const mid = size.h * 0.5;
+  const toX = (x: number, w: number) => padX + x * (w - padX * 2);
+  const toY = (y: number, h: number) => {
+    const mid = h * 0.5;
     const amp = Math.max(1, mid - padY);
     return mid - y * amp;
   };
 
-  const pathL = pathThrough(curveL, toX, toY);
-  const pathR = pathThrough(curveR, toX, toY);
-  const midY = toY(0);
-  // Both LFOs share one phase (Calf): same X, Y differs via Offset L/R.
-  const phase = Math.min(1, Math.max(0, lfo[0] ?? lfo[2] ?? 0));
-  const dotX = toX(phase);
-  const dotLY = toY(lfoValueFromPhase(phase, mode, offsetL, amount, pw));
-  const dotRY = toY(lfoValueFromPhase(phase, mode, offsetR, amount, pw));
+  const pathL = pathThrough(
+    curveL,
+    (x) => toX(x, size.w),
+    (y) => toY(y, size.h),
+  );
+  const pathR = pathThrough(
+    curveR,
+    (x) => toX(x, size.w),
+    (y) => toY(y, size.h),
+  );
+  const midY = toY(0, size.h);
+
+  const paintLfo = useCallback((lfo: number[]) => {
+    const p = paramsRef.current;
+    const phase = Math.min(1, Math.max(0, lfo[0] ?? lfo[2] ?? 0));
+    const cx = toX(phase, p.w);
+    const cyL = toY(lfoValueFromPhase(phase, p.mode, p.offsetL, p.amount, p.pw), p.h);
+    const cyR = toY(lfoValueFromPhase(phase, p.mode, p.offsetR, p.amount, p.pw), p.h);
+    const dL = dotLRef.current;
+    const dR = dotRRef.current;
+    if (dL) {
+      dL.setAttribute('cx', String(cx));
+      dL.setAttribute('cy', String(cyL));
+    }
+    if (dR) {
+      dR.setAttribute('cx', String(cx));
+      dR.setAttribute('cy', String(cyR));
+    }
+  }, []);
+
+  useVizPaint(lfo$, paintLfo, EMPTY_LFO);
+
+  useEffect(() => {
+    const cur = lfo$.value;
+    paintLfo(Array.isArray(cur) ? cur : EMPTY_LFO);
+  }, [mode, amount, offsetL, offsetR, pw, size.w, size.h, paintLfo, lfo$]);
 
   return (
     <svg
@@ -110,8 +152,8 @@ export function PulsatorChart(props: PulsatorChartProps) {
       <line className="grid" x1={padX} y1={midY} x2={size.w - padX} y2={midY} />
       <path className="wave wave-l" d={pathL} />
       <path className="wave wave-r" d={pathR} />
-      <circle className="dot dot-l" cx={dotX} cy={dotLY} r={4} />
-      <circle className="dot dot-r" cx={dotX} cy={dotRY} r={4} />
+      <circle ref={dotLRef} className="dot dot-l" cx={0} cy={0} r={4} />
+      <circle ref={dotRRef} className="dot dot-r" cx={0} cy={0} r={4} />
     </svg>
   );
 }

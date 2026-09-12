@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
-import { componentFromWidget, useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
+import { ListValue } from '@deutschesoft/awml';
+import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
+import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
+import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import './EnvelopeChart.scss';
@@ -81,6 +84,47 @@ function linToDb(lin: number): number {
   return lin > 1e-10 ? 20 * Math.log10(lin) : DB_MIN;
 }
 
+function resultChannelForView(view: number): number {
+  const v = Math.round(view);
+  if (v === 0) return CH_OUTPUT;
+  if (v === 1) return CH_ENVELOPE;
+  if (v === 2) return CH_ATTACK;
+  return CH_RELEASE;
+}
+
+type EnvDot = { x: number; y: number };
+
+/** Unpack phase + build one channel’s dots (or null). */
+function envelopeChannelDots(
+  buf: Float32Array | null,
+  channel: number,
+  windowMs: number,
+): EnvDot[] | null {
+  if (!buf || buf.length < ENV_CHANNELS) return null;
+
+  let phase = 0;
+  let data = buf;
+  if (buf.length % ENV_CHANNELS === 1) {
+    phase = buf[buf.length - 1] ?? 0;
+    data = buf.subarray(0, buf.length - 1);
+  }
+
+  const slots = Math.floor(data.length / ENV_CHANNELS);
+  if (slots < 1) return null;
+
+  const slotMs = slots > 1 ? windowMs / (slots - 1) : windowMs;
+  const phaseShift = phase * slotMs;
+  const pts: EnvDot[] = [];
+  for (let i = 0; i < slots; ++i) {
+    const age = i === slots - 1 ? 0 : slotMs * (slots - 1 - i) + phaseShift;
+    pts.push({
+      x: age,
+      y: linToDb(data[i * ENV_CHANNELS + channel] ?? 0),
+    });
+  }
+  return pts;
+}
+
 export type EnvelopeView = 0 | 1 | 2 | 3;
 
 export interface EnvelopeChartProps {
@@ -116,22 +160,17 @@ type Graphs = {
  * Scrolling envelope display for the transient shaper.
  *
  * Graphs: original (blue, back), filtered detector (white), result overlay
- * (Output / Envelope / Attack / Release via `view$`).
+ * (Output / Envelope / Attack / Release via `view$`). Paint via AWML Bindings.
  */
 export function EnvelopeChart(props: EnvelopeChartProps) {
   const { data$, view$, vizId = 'env', className } = props;
-  const data = useDynamicValueReadonly(data$, null);
-  const view = useDynamicValueReadonly(view$, 0);
-  const dataLatestRef = useRef(data);
-  const viewLatestRef = useRef(view);
-  dataLatestRef.current = data;
-  viewLatestRef.current = view;
   const chartRef = useRef<AuxChartInstance | null>(null);
   const graphsRef = useRef<Graphs>({
     original: null,
     filtered: null,
     result: null,
   });
+  const graphBindingsRef = useRef<Bindings[]>([]);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
   const [resultPath, setResultPath] = useState<SVGElement | null>(null);
@@ -145,71 +184,13 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
     targets: curveTargets,
     paint: 'stroke',
   });
+  const reassertRef = useRef(reassertGradStroke);
+  reassertRef.current = reassertGradStroke;
 
-  const buildPoints = useCallback(
-    (buf: Float32Array | null, view: number) => {
-      const { original, filtered, result } = graphsRef.current;
-      if (!buf || buf.length < ENV_CHANNELS) {
-        original?.set('dots', null);
-        filtered?.set('dots', null);
-        result?.set('dots', null);
-        return;
-      }
-
-      let phase = 0;
-      let data = buf;
-      if (buf.length % ENV_CHANNELS === 1) {
-        phase = buf[buf.length - 1] ?? 0;
-        data = buf.subarray(0, buf.length - 1);
-      }
-
-      const slots = Math.floor(data.length / ENV_CHANNELS);
-      if (slots < 1) {
-        original?.set('dots', null);
-        filtered?.set('dots', null);
-        result?.set('dots', null);
-        return;
-      }
-
-      const resultChannel =
-        Math.round(view) === 0
-          ? CH_OUTPUT
-          : Math.round(view) === 1
-            ? CH_ENVELOPE
-            : Math.round(view) === 2
-              ? CH_ATTACK
-              : CH_RELEASE;
-
-      const displayMs = ENVELOPE_WINDOW_MS;
-      const slotMs = slots > 1 ? displayMs / (slots - 1) : displayMs;
-      const phaseShift = phase * slotMs;
-      const origPts: { x: number; y: number }[] = [];
-      const filtPts: { x: number; y: number }[] = [];
-      const resPts: { x: number; y: number }[] = [];
-      for (let i = 0; i < slots; ++i) {
-        const age =
-          i === slots - 1 ? 0 : slotMs * (slots - 1 - i) + phaseShift;
-        const base = i * ENV_CHANNELS;
-        origPts.push({
-          x: age,
-          y: linToDb(data[base + CH_ORIGINAL] ?? 0),
-        });
-        filtPts.push({
-          x: age,
-          y: linToDb(data[base + CH_FILTERED] ?? 0),
-        });
-        resPts.push({
-          x: age,
-          y: linToDb(data[base + resultChannel] ?? 0),
-        });
-      }
-      original?.set('dots', origPts);
-      filtered?.set('dots', filtPts);
-      result?.set('dots', resPts);
-      // Do not toFront() here — DOM reordering every frame causes flicker.
-      reassertGradStroke();
-    },
-    [reassertGradStroke],
+  /** data$ × view$ for the result-channel Binding. */
+  const resultSource$ = useMemo(
+    () => new ListValue<[Float32Array | null, number]>([data$, view$]),
+    [data$, view$],
   );
 
   const sendVizBins = useCallback(
@@ -224,6 +205,8 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
   const detach = useCallback(() => {
     resizeRoRef.current?.disconnect();
     resizeRoRef.current = null;
+    for (const b of graphBindingsRef.current) b.dispose();
+    graphBindingsRef.current = [];
     const chart = chartRef.current;
     const { original, filtered, result } = graphsRef.current;
     graphsRef.current = { original: null, filtered: null, result: null };
@@ -240,6 +223,9 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
     (chart: AuxChartInstance) => {
       chartRef.current = chart;
       if (chart.isDestructed?.()) return;
+
+      for (const b of graphBindingsRef.current) b.dispose();
+      graphBindingsRef.current = [];
 
       chart.set('range_x', {
         min: 0,
@@ -279,7 +265,6 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
         g.element?.classList.add('env-result-graph');
         graphsRef.current.result = g;
       }
-      // One-shot stack: blue back, white mid, gradient front.
       graphsRef.current.original?.element?.parentElement?.appendChild(
         graphsRef.current.original.element,
       );
@@ -289,9 +274,67 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
       graphsRef.current.result?.element?.parentElement?.appendChild(
         graphsRef.current.result.element,
       );
+
+      const { original, filtered, result } = graphsRef.current;
+      const bindings: Bindings[] = [];
+      if (original) {
+        bindings.push(
+          bindAuxOptions(original, [
+            {
+              name: 'dots',
+              backendValue: data$,
+              readonly: true,
+              transformReceive: (buf: unknown) =>
+                envelopeChannelDots(
+                  buf as Float32Array | null,
+                  CH_ORIGINAL,
+                  ENVELOPE_WINDOW_MS,
+                ),
+            },
+          ]),
+        );
+      }
+      if (filtered) {
+        bindings.push(
+          bindAuxOptions(filtered, [
+            {
+              name: 'dots',
+              backendValue: data$,
+              readonly: true,
+              transformReceive: (buf: unknown) =>
+                envelopeChannelDots(
+                  buf as Float32Array | null,
+                  CH_FILTERED,
+                  ENVELOPE_WINDOW_MS,
+                ),
+            },
+          ]),
+        );
+      }
+      if (result) {
+        bindings.push(
+          bindAuxOptions(result, [
+            {
+              name: 'dots',
+              backendValue: resultSource$,
+              readonly: true,
+              transformReceive: (pair: unknown) => {
+                const [buf, view] = pair as [Float32Array | null, number];
+                return envelopeChannelDots(
+                  buf,
+                  resultChannelForView(view ?? 0),
+                  ENVELOPE_WINDOW_MS,
+                );
+              },
+            },
+          ]),
+        );
+      }
+      graphBindingsRef.current = bindings;
+
       setChartSvg(chart.svg ?? null);
       setResultPath(graphsRef.current.result?.element ?? null);
-      buildPoints(dataLatestRef.current, viewLatestRef.current);
+      queueMicrotask(() => reassertRef.current());
 
       const el = chart.element ?? chart.svg;
       if (el) {
@@ -305,7 +348,7 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
         resizeRoRef.current = ro;
       }
     },
-    [buildPoints, sendVizBins],
+    [data$, resultSource$, sendVizBins],
   );
 
   const widgetRef = useCallback(
@@ -318,21 +361,6 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
     },
     [attach, detach],
   );
-
-  useEffect(() => {
-    let raf = 0;
-    const sync = () => {
-      if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        buildPoints(data, view);
-      });
-    };
-    sync();
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [buildPoints, data, view]);
 
   useEffect(() => () => detach(), [detach]);
 

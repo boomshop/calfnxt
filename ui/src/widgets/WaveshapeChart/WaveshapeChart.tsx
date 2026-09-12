@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import {
@@ -6,8 +6,11 @@ import {
   sampleTransferCurve,
   shapeStatic,
 } from '../../dsp/tapDistortion';
+import { useVizPaint } from '../../utils/viz_paint';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import './WaveshapeChart.scss';
+
+const EMPTY_VIZ: number[] = [0];
 
 export interface WaveshapeChartProps {
   className?: string;
@@ -39,7 +42,12 @@ function pathThrough(
 }
 
 /** Curve points with x in [x0, x1], plus interpolated endpoints. */
-function sliceCurve(curve: Pt[], x0: number, x1: number, coeffs: ReturnType<typeof makeTapCoeffs>): Pt[] {
+function sliceCurve(
+  curve: Pt[],
+  x0: number,
+  x1: number,
+  coeffs: ReturnType<typeof makeTapCoeffs>,
+): Pt[] {
   const lo = Math.min(x0, x1);
   const hi = Math.max(x0, x1);
   if (hi - lo < 1e-6) return [];
@@ -53,21 +61,36 @@ function sliceCurve(curve: Pt[], x0: number, x1: number, coeffs: ReturnType<type
 }
 
 /**
- * Transfer curve + live send visualization:
- * soft heatmap density along the curve, active zone (−A…+A) on top.
+ * Transfer curve + live send visualization.
+ * Params → React curve; live `viz$` → imperative heat/zone (no React on viz ticks).
  */
 export function WaveshapeChart(props: WaveshapeChartProps) {
   const { className, drive$, blend$, asymmetry$, viz$ } = props;
   const svgRef = useRef<SVGSVGElement>(null);
+  const heatLayerRef = useRef<SVGGElement | null>(null);
+  const zonePathRef = useRef<SVGPathElement | null>(null);
   const blurId = `waveshape-heat-blur-${useId().replace(/:/g, '')}`;
   const [svg, setSvg] = useState<SVGSVGElement | null>(null);
   const [curveEl, setCurveEl] = useState<SVGPathElement | null>(null);
-  const [zoneEl, setZoneEl] = useState<SVGPathElement | null>(null);
   const [size, setSize] = useState({ w: 1, h: 1 });
   const drive = useDynamicValueReadonly(drive$, 0);
   const blend = useDynamicValueReadonly(blend$, 0);
   const asymmetry = useDynamicValueReadonly(asymmetry$, 0);
-  const viz = useDynamicValueReadonly(viz$, [0]);
+
+  const coeffs = useMemo(
+    () => makeTapCoeffs(blend, drive, asymmetry),
+    [blend, drive, asymmetry],
+  );
+  const curve = useMemo(
+    () => sampleTransferCurve(blend, drive, 161, asymmetry),
+    [blend, drive, asymmetry],
+  );
+  const curveRef = useRef(curve);
+  const coeffsRef = useRef(coeffs);
+  const sizeRef = useRef(size);
+  curveRef.current = curve;
+  coeffsRef.current = coeffs;
+  sizeRef.current = size;
 
   useEffect(() => {
     const el = svgRef.current;
@@ -87,9 +110,9 @@ export function WaveshapeChart(props: WaveshapeChartProps) {
   const gradTargets = useMemo(() => {
     const t: SVGElement[] = [];
     if (curveEl) t.push(curveEl);
-    if (zoneEl) t.push(zoneEl);
+    if (zonePathRef.current) t.push(zonePathRef.current);
     return t;
-  }, [curveEl, zoneEl]);
+  }, [curveEl, size.w, size.h]);
 
   useChartGradient({
     svg,
@@ -98,57 +121,78 @@ export function WaveshapeChart(props: WaveshapeChartProps) {
     paint: 'stroke',
   });
 
-  const coeffs = useMemo(
-    () => makeTapCoeffs(blend, drive, asymmetry),
-    [blend, drive, asymmetry],
-  );
-  const curve = useMemo(
-    () => sampleTransferCurve(blend, drive, 161, asymmetry),
-    [blend, drive, asymmetry],
-  );
-
-  const zone = Math.max(0, Math.min(1, viz[0] ?? 0));
-  const bins = useMemo(() => viz.slice(1), [viz]);
-
-  useEffect(() => {
-    if (zone < 0.02) setZoneEl(null);
-  }, [zone]);
   const { w, h } = size;
   const pad = 8;
-  const toX = (x: number) => pad + ((x + 1) / 2) * (w - 2 * pad);
-  const toY = (y: number) => pad + ((1 - y) / 2) * (h - 2 * pad);
+  const toX = (x: number, ww: number) => pad + ((x + 1) / 2) * (ww - 2 * pad);
+  const toY = (y: number, hh: number) => pad + ((1 - y) / 2) * (hh - 2 * pad);
 
-  const basePath = pathThrough(curve, toX, toY);
-  const zonePath =
-    zone > 0.02
-      ? pathThrough(sliceCurve(curve, -zone, zone, coeffs), toX, toY)
-      : '';
+  const basePath = pathThrough(
+    curve,
+    (x) => toX(x, w),
+    (y) => toY(y, h),
+  );
 
-  const nBins = Math.max(1, bins.length);
-  const heatSegs = useMemo(() => {
-    // Neighbor blend so adjacent bin widths don't jump into "bubbles".
+  const paintViz = useCallback((viz: number[]) => {
+    const heat = heatLayerRef.current;
+    const zoneEl = zonePathRef.current;
+    if (!heat) return;
+    const c = curveRef.current;
+    const cf = coeffsRef.current;
+    const { w: ww, h: hh } = sizeRef.current;
+    const mapX = (x: number) => toX(x, ww);
+    const mapY = (y: number) => toY(y, hh);
+
+    const zone = Math.max(0, Math.min(1, viz[0] ?? 0));
+    const bins = viz.length > 1 ? viz.slice(1) : [];
+    const nBins = Math.max(1, bins.length);
+
+    while (heat.firstChild) heat.removeChild(heat.firstChild);
+    const ns = 'http://www.w3.org/2000/svg';
     const smooth = bins.map((d, i) => {
       const a = bins[i - 1] ?? d;
       const b = bins[i + 1] ?? d;
       return 0.25 * (a ?? 0) + 0.5 * (d ?? 0) + 0.25 * (b ?? 0);
     });
-    const segs: { d: string; dens: number }[] = [];
     for (let i = 0; i < nBins; ++i) {
       const dens = smooth[i] ?? 0;
       if (dens < 0.03) continue;
-      // Slight x-overlap so soft caps blend between bins.
       const padX = 0.35 / nBins;
       const x0 = -1 + (2 * i) / nBins - padX;
       const x1 = -1 + (2 * (i + 1)) / nBins + padX;
       const d = pathThrough(
-        sliceCurve(curve, Math.max(-1, x0), Math.min(1, x1), coeffs),
-        toX,
-        toY,
+        sliceCurve(c, Math.max(-1, x0), Math.min(1, x1), cf),
+        mapX,
+        mapY,
       );
-      if (d) segs.push({ d, dens });
+      if (!d) continue;
+      const path = document.createElementNS(ns, 'path');
+      path.setAttribute('class', 'heat');
+      path.setAttribute('d', d);
+      path.style.strokeWidth = String(1.75 + dens * 18);
+      path.style.opacity = String(0.08 + dens * 0.36);
+      heat.appendChild(path);
     }
-    return segs;
-  }, [bins, nBins, curve, coeffs, w, h]);
+
+    if (zoneEl) {
+      if (zone > 0.02) {
+        zoneEl.setAttribute(
+          'd',
+          pathThrough(sliceCurve(c, -zone, zone, cf), mapX, mapY),
+        );
+        zoneEl.style.display = '';
+      } else {
+        zoneEl.setAttribute('d', '');
+        zoneEl.style.display = 'none';
+      }
+    }
+  }, []);
+
+  useVizPaint(viz$, paintViz, EMPTY_VIZ);
+
+  useEffect(() => {
+    const cur = viz$?.value;
+    paintViz(Array.isArray(cur) && cur.length ? cur : EMPTY_VIZ);
+  }, [curve, coeffs, w, h, paintViz, viz$]);
 
   const cls = ['WaveshapeChart', className ?? ''].filter(Boolean).join(' ');
 
@@ -176,38 +220,31 @@ export function WaveshapeChart(props: WaveshapeChartProps) {
       </defs>
       <line
         className="axis"
-        x1={toX(0)}
+        x1={toX(0, w)}
         y1={pad}
-        x2={toX(0)}
+        x2={toX(0, w)}
         y2={h - pad}
       />
       <line
         className="axis"
         x1={pad}
-        y1={toY(0)}
+        y1={toY(0, h)}
         x2={w - pad}
-        y2={toY(0)}
+        y2={toY(0, h)}
       />
-      <path className="unity" d={`M${toX(-1)},${toY(-1)} L${toX(1)},${toY(1)}`} />
+      <path
+        className="unity"
+        d={`M${toX(-1, w)},${toY(-1, h)} L${toX(1, w)},${toY(1, h)}`}
+      />
 
-      <g className="heat-layer" filter={`url(#${blurId})`}>
-        {heatSegs.map((s, i) => (
-          <path
-            key={i}
-            className="heat"
-            d={s.d}
-            style={{
-              strokeWidth: 1.75 + s.dens * 18,
-              opacity: 0.08 + s.dens * 0.36,
-            }}
-          />
-        ))}
-      </g>
+      <g
+        ref={heatLayerRef}
+        className="heat-layer"
+        filter={`url(#${blurId})`}
+      />
 
       <path ref={setCurveEl} className="curve" d={basePath} />
-      {zonePath ? (
-        <path ref={setZoneEl} className="zone" d={zonePath} />
-      ) : null}
+      <path ref={zonePathRef} className="zone" d="" style={{ display: 'none' }} />
     </svg>
   );
 }

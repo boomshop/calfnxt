@@ -135,6 +135,15 @@ Do **not** call `restartComponent` / begin/perform/end from `setComponentHandler
 
 **Intent:** meters/analyzers are **not** VST parameters. Every plugin exposes **in** and **out** level streams.
 
+**React vs AUX (hard rule):** High-rate viz / meter / chart telemetry must **never** drive React
+re-renders. Prefer AWML **Bindings** (`backendValue` + `transformReceive` / `map`) on AUX
+widget options via `use-aux-widgets` / `bindAuxOptions` (see `Knob` `value$`, EQ band
+bindings, History/EQ spectrum `dots`). Custom SVG/canvas charts use `useVizPaint`
+(`data$`/`lfo$`/`viz$` → imperative DOM attrs) — never `useDynamicValueReadonly` on a
+~30 Hz stream. Manual `DynamicValue.subscribe` → paint is OK when Bindings cannot attach
+(canvas Piano-roll / Spectralizer). OK to use React state for rare user/params (spectrum
+mode Off/Linear, selected band, etc.).
+
 - Shared `Dsp::IoStage` (`io_stage.h`): `begin()` = in_gain + input peaks; plugin DSP in-place on outs; `end()` = out_gain + output peaks.
 - Tap points: **in** after `in_gain`, **out** after processing + `out_gain`.
 - Plugin implements `Ui::IVizSource` (usually forwards to `io_`); `EffectBase::createView` → `WebEditor::setVizSource`.
@@ -214,7 +223,8 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 - Replies: **German**.
 - Repo docs/comments: **English** (`.cursor/rules/english-comments.mdc`).
 - Do not commit unless asked.
-- Prefer AUX widgets; match Pan Acoustics pan-control-px patterns where useful.
+- Prefer AUX widgets and AWML Bindings (`value$`, `transformReceive`) over React for live UI.
+- High-rate viz must not re-render React — AUX/AWML only (see Viz section).
 - Avoid drive-by refactors; no fake “cleanup” of the real param/viz/HiDPI fixes above.
 - **Widget infos** (`*Info.ts`): detailed, musician/producer tone (effect + sound + when/pitfalls) — see `.cursor/rules/ui-infos-and-mix-filters.mdc` and `transientsInfo.ts` / `compressorInfo.ts`.
 - **Dry+filtered Mix**: cancellation-free / complementary LP↔HP (even-order 12/24/48) by default — same rule file; do not ship comb-prone naive dry blend as the Mix default.
