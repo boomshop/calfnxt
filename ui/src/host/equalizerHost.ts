@@ -29,7 +29,6 @@ import {
   postBegin,
   postEnd,
 } from '../utils/bind_param';
-
 /** UI / Select filter type ids (numeric = VST plain type param). */
 export type EqFilterType =
   | 'parametric'
@@ -473,23 +472,26 @@ export function createBoundEqualizerBands(): {
   }
 
   // DSP viz owns curve gains only while a band is actively doing DynEQ.
-  // Otherwise curves follow the static gain knob (avoids stale GR in graphs).
+  // Otherwise curves follow the static gain knob (gain$ → effectiveGain$ above).
+  // Critical: do NOT call effectiveGain$.set every viz tick for static bands —
+  // DynamicValue.set always notifies, which redraws all 16 AUX ghost curves ~30 Hz.
   const gainsBuf$ = DynamicValue.fromConstant<number[]>(
     bands.map((b) => b.effectiveGain$.value),
   );
   disposers.push(
     gainsBuf$.subscribe((arr) => {
       for (let i = 0; i < bands.length && i < arr.length; ++i) {
-        const band = bands[i];
-        const g = arr[i];
+        const band = bands[i]!;
+        const g = arr[i]!;
         if (typeof g !== 'number' || !Number.isFinite(g)) continue;
-        if (
+        const dynLive =
           band.active$.value &&
           band.dyn$.value &&
-          bandSupportsDyn(band.type$.value)
-        )
-          band.effectiveGain$.set(g);
-        else band.effectiveGain$.set(band.gain$.value);
+          bandSupportsDyn(band.type$.value);
+        if (!dynLive) continue;
+        // Skip no-op updates (same dB) — still notifies AUX otherwise.
+        if (Math.abs(band.effectiveGain$.value - g) < 0.02) continue;
+        band.effectiveGain$.set(g);
       }
     }, false),
   );
