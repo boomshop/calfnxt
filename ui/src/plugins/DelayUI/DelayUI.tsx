@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { DynamicValue } from '@deutschesoft/awml';
 import { Header } from '../../components';
@@ -101,6 +101,35 @@ function useTapTempo(
 }
 
 /**
+ * Host tempo as React primitives — only re-render when valid/bpm actually change.
+ * (bindVizTempo also dedupes; this guards the Delay root against array identity.)
+ */
+function useHostTempo(tempo$: DynamicValue<number[]>) {
+  const read = () => {
+    const v = tempo$.value;
+    const valid = (v?.[0] ?? 0) >= 0.5;
+    const bpmRaw = v?.[1];
+    const bpm =
+      typeof bpmRaw === 'number' && Number.isFinite(bpmRaw) ? bpmRaw : 120;
+    return { valid, bpm };
+  };
+  const [snap, setSnap] = useState(read);
+  useEffect(() => {
+    return tempo$.subscribe((arr) => {
+      const valid = (arr?.[0] ?? 0) >= 0.5;
+      const bpmRaw = arr?.[1];
+      const bpm =
+        typeof bpmRaw === 'number' && Number.isFinite(bpmRaw) ? bpmRaw : 120;
+      setSnap((prev) => {
+        if (prev.valid === valid && Math.abs(prev.bpm - bpm) < 1e-3) return prev;
+        return { valid, bpm };
+      });
+    }, true);
+  }, [tempo$]);
+  return snap;
+}
+
+/**
  * Display DV for bpm/ms: follows host params unless sync locks to host tempo
  * (then knobs are disabled and show host BPM without writing presets).
  */
@@ -141,9 +170,7 @@ export function DelayUI(props: DelayUIProps) {
 
   const sync = useDynamicValueReadonly(host.sync$, false);
   const mixMode = useDynamicValueReadonly(host.mixMode$, 1);
-  const hostTempo = useDynamicValueReadonly(host.hostTempo$, [0, 120]);
-  const hostValid = (hostTempo[0] ?? 0) >= 0.5;
-  const hostBpm = hostTempo[1] ?? 120;
+  const { valid: hostValid, bpm: hostBpm } = useHostTempo(host.hostTempo$);
   const timingLocked = sync && hostValid;
 
   const bpmView$ = useTimingView(host.bpm$, timingLocked, hostBpm);

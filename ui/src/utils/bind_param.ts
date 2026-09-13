@@ -341,8 +341,19 @@ export function bindVizTempo(dv: DynamicValue<number[]>, id: string): () => void
   ensureHostWire();
   vizTempoApplies.set(id, (v) => {
     const valid = v[0] >= 0.5 ? 1 : 0;
-    const bpm = typeof v[1] === "number" && Number.isFinite(v[1]) ? v[1] : 120;
-    dv.set([valid, Math.min(300, Math.max(30, bpm))]);
+    const bpmRaw = typeof v[1] === "number" && Number.isFinite(v[1]) ? v[1] : 120;
+    const bpm = Math.min(300, Math.max(30, bpmRaw));
+    // Skip no-op sets — DynamicValue always notifies, and a fresh `[valid,bpm]`
+    // array would re-render Delay/Pulsator via useDynamicValueReadonly every viz tick.
+    const cur = dv.value;
+    if (
+      Array.isArray(cur) &&
+      cur.length >= 2 &&
+      (cur[0]! >= 0.5 ? 1 : 0) === valid &&
+      nearlyEqual(cur[1]!, bpm)
+    )
+      return;
+    dv.set([valid, bpm]);
   });
   return () => {
     vizTempoApplies.delete(id);
