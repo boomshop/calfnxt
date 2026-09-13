@@ -3,8 +3,8 @@
  *
  * Spawned by the VST3 module (no GTK in the host process). Speaks mixed
  * messages on an inherited Unix socket FD:
- *   plugin → host: newline JS one-liners, {"t":"_size",…}, or binary CNXV
- *                  viz frames (see viz_bin.h) injected as Float32Array
+ *   plugin → host: newline JS one-liners, {"t":"_size",…}, or binary CNXV /
+ *                  CNXB (batched) viz frames (see viz_bin.h) → Float32Array
  *   host → plugin: UI JSON from calfnxtNative.post, {"t":"_ready"},
  *                  {"t":"_socket","w","h"}, or {"t":"_visible","v":0|1}
  */
@@ -842,6 +842,129 @@ void injectVizBin(const calfNXT::Ui::VizBin::Decoded& dec)
   g_variant_unref(args);
 }
 
+/** Append one decoded CNXV into a JS-side pack (id/kind/fmt/scale/bias/count/payload). */
+void appendVizPackItem(std::vector<std::uint8_t>& pack, const calfNXT::Ui::VizBin::Decoded& dec)
+{
+  namespace VB = calfNXT::Ui::VizBin;
+  const auto idLen = static_cast<std::uint8_t>(std::min(dec.id.size(), VB::kMaxIdLen));
+  const auto kindLen = static_cast<std::uint8_t>(std::min(dec.kind.size(), VB::kMaxKindLen));
+  const std::size_t bps = VB::bytesPerSample(dec.fmt);
+  const std::size_t payload = static_cast<std::size_t>(std::max(0, dec.count)) * bps;
+
+  const std::size_t at = pack.size();
+  pack.resize(at + 1 + idLen + 1 + kindLen + 1 + 4 + 4 + 4 + payload);
+  std::uint8_t* p = pack.data() + at;
+  *p++ = idLen;
+  if (idLen)
+    std::memcpy(p, dec.id.data(), idLen);
+  p += idLen;
+  *p++ = kindLen;
+  if (kindLen)
+    std::memcpy(p, dec.kind.data(), kindLen);
+  p += kindLen;
+  *p++ = static_cast<std::uint8_t>(dec.fmt);
+  auto writeF32 = [](std::uint8_t* d, float v) {
+    static_assert(sizeof(float) == 4, "float");
+    std::memcpy(d, &v, 4);
+  };
+  auto writeU32 = [](std::uint8_t* d, std::uint32_t v) {
+    d[0] = static_cast<std::uint8_t>(v);
+    d[1] = static_cast<std::uint8_t>(v >> 8);
+    d[2] = static_cast<std::uint8_t>(v >> 16);
+    d[3] = static_cast<std::uint8_t>(v >> 24);
+  };
+  writeF32(p, dec.scale);
+  p += 4;
+  writeF32(p, dec.bias);
+  p += 4;
+  writeU32(p, static_cast<std::uint32_t>(std::max(0, dec.count)));
+  p += 4;
+  if (payload && dec.payload)
+    std::memcpy(p, dec.payload, payload);
+}
+
+/** One WebKit round-trip for many CNXV frames (CNXB batch). */
+void injectVizBinBatch(const std::vector<calfNXT::Ui::VizBin::Decoded>& frames)
+{
+  if (!g.webview || frames.empty())
+    return;
+  if (frames.size() == 1)
+  {
+    injectVizBin(frames[0]);
+    return;
+  }
+
+  std::vector<std::uint8_t> pack;
+  pack.reserve(4096);
+  // u32 little-endian item count
+  pack.resize(4);
+  const auto nItems = static_cast<std::uint32_t>(frames.size());
+  pack[0] = static_cast<std::uint8_t>(nItems);
+  pack[1] = static_cast<std::uint8_t>(nItems >> 8);
+  pack[2] = static_cast<std::uint8_t>(nItems >> 16);
+  pack[3] = static_cast<std::uint8_t>(nItems >> 24);
+  for (const auto& fr : frames)
+    appendVizPackItem(pack, fr);
+
+  gchar* b64 = g_base64_encode(pack.data(), pack.size());
+  if (!b64)
+    return;
+
+  GVariantDict dict;
+  g_variant_dict_init(&dict, nullptr);
+  g_variant_dict_insert(&dict, "b64", "s", b64);
+  GVariant* args = g_variant_ref_sink(g_variant_dict_end(&dict));
+  g_free(b64);
+
+  // One atob → N viz messages (DataView avoids TypedArray alignment traps).
+  static const char body[] =
+    "const s=atob(b64);"
+    "const u8=new Uint8Array(s.length);"
+    "for(let i=0;i<s.length;++i)u8[i]=s.charCodeAt(i);"
+    "const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);"
+    "let o=0;"
+    "const nItems=dv.getUint32(o,true);o+=4;"
+    "const deliver=function(id,kind,v){"
+    "const m={t:'viz',id:id,kind:kind,v:v};"
+    "if(window.__calfnxtVizDump)window.__calfnxtVizDump[String(id)+':'+String(kind)]=v;"
+    "if(window.__calfnxtOnHost)window.__calfnxtOnHost(m);"
+    "else{(window.__calfnxtHostQ=window.__calfnxtHostQ||[]).push(m);}"
+    "};"
+    "for(let fi=0;fi<nItems;++fi){"
+    "const idLen=u8[o++];"
+    "let id='';for(let i=0;i<idLen;++i)id+=String.fromCharCode(u8[o++]);"
+    "const kindLen=u8[o++];"
+    "let kind='';for(let i=0;i<kindLen;++i)kind+=String.fromCharCode(u8[o++]);"
+    "const f=u8[o++];"
+    "const sc=dv.getFloat32(o,true);o+=4;"
+    "const bi=dv.getFloat32(o,true);o+=4;"
+    "const cn=dv.getUint32(o,true);o+=4;"
+    "const v=new Float32Array(cn);"
+    "if(f===0){for(let i=0;i<cn;++i){v[i]=dv.getFloat32(o,true);o+=4;}}"
+    "else if(f===1){for(let i=0;i<cn;++i){v[i]=dv.getInt16(o,true)*sc+bi;o+=2;}}"
+    "else if(f===3){for(let i=0;i<cn;++i){v[i]=dv.getInt8(o)*sc+bi;o+=1;}}"
+    "else{for(let i=0;i<cn;++i){v[i]=u8[o++]*sc+bi;}}"
+    "deliver(id,kind,v);"
+    "}";
+
+  webkit_web_view_call_async_javascript_function(
+    g.webview, body, -1, args, nullptr, nullptr, nullptr,
+    +[](GObject* object, GAsyncResult* result, gpointer) {
+      GError* error = nullptr;
+      JSCValue* value =
+        webkit_web_view_call_async_javascript_function_finish(WEBKIT_WEB_VIEW(object), result, &error);
+      if (error)
+      {
+        logEvalJsError(error->message);
+        g_error_free(error);
+      }
+      if (value)
+        g_object_unref(value);
+    },
+    nullptr);
+  g_variant_unref(args);
+}
+
 /** Probe DOM/CSS sizes after load — distinguishes layout-0 vs paint/compositing hole. */
 void probeJsSize(const char* why)
 {
@@ -1111,6 +1234,47 @@ gboolean onSocketReadable(gint /*fd*/, GIOCondition condition, gpointer)
     g.readBuf.append(chunk, static_cast<size_t>(n));
     for (;;)
     {
+      if (calfNXT::Ui::VizBin::looksLikeBatchMagic(g.readBuf.data(), g.readBuf.size()))
+      {
+        std::uint32_t frameCount = 0;
+        const char* payload = nullptr;
+        std::size_t payloadBytes = 0;
+        std::size_t batchBytes = 0;
+        bool corrupt = false;
+        if (!calfNXT::Ui::VizBin::tryDecodeBatch(g.readBuf.data(), g.readBuf.size(), frameCount,
+                                                 payload, payloadBytes, batchBytes, corrupt))
+        {
+          if (corrupt)
+          {
+            g.readBuf.erase(0, 1);
+            continue;
+          }
+          break; // incomplete batch
+        }
+
+        std::vector<calfNXT::Ui::VizBin::Decoded> frames;
+        frames.reserve(frameCount);
+        std::size_t off = 0;
+        bool ok = true;
+        for (std::uint32_t i = 0; i < frameCount; ++i)
+        {
+          calfNXT::Ui::VizBin::Decoded dec;
+          bool frameCorrupt = false;
+          if (!calfNXT::Ui::VizBin::tryDecode(payload + off, payloadBytes - off, dec, frameCorrupt)
+              || frameCorrupt)
+          {
+            ok = false;
+            break;
+          }
+          frames.push_back(dec);
+          off += dec.frameBytes;
+        }
+        if (ok)
+          injectVizBinBatch(frames);
+        g.readBuf.erase(0, batchBytes);
+        continue;
+      }
+
       if (calfNXT::Ui::VizBin::looksLikeMagic(g.readBuf.data(), g.readBuf.size()))
       {
         calfNXT::Ui::VizBin::Decoded dec;

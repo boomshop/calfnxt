@@ -980,6 +980,51 @@ void WebEditor::flushVizLevels(const char* streamId, float* levels, int n)
   flushVizArray(streamId, "levels", levels, n);
 }
 
+void WebEditor::beginVizBatch()
+{
+  vizBatchOpen_ = true;
+  vizBatchCount_ = 0;
+  vizBatchFrames_.clear();
+  vizBatchFrames_.reserve(4096);
+}
+
+void WebEditor::endVizBatch()
+{
+  if (!vizBatchOpen_)
+    return;
+  vizBatchOpen_ = false;
+  if (vizBatchCount_ == 0 || vizBatchFrames_.empty())
+  {
+    vizBatchFrames_.clear();
+    vizBatchCount_ = 0;
+    return;
+  }
+
+  // Single stream: keep plain CNXV (Delay meters, etc.).
+  if (vizBatchCount_ == 1)
+  {
+    sendBytes(vizBatchFrames_.data(), vizBatchFrames_.size());
+    vizBatchFrames_.clear();
+    vizBatchCount_ = 0;
+    return;
+  }
+
+  thread_local std::vector<char> batch;
+  batch.clear();
+  if (!VizBin::encodeBatch(batch, vizBatchFrames_.data(), vizBatchFrames_.size(),
+                           vizBatchCount_))
+  {
+    // Fallback: send concatenated CNXV frames (helper still accepts singles).
+    sendBytes(vizBatchFrames_.data(), vizBatchFrames_.size());
+  }
+  else
+  {
+    sendBytes(batch.data(), batch.size());
+  }
+  vizBatchFrames_.clear();
+  vizBatchCount_ = 0;
+}
+
 void WebEditor::flushVizArray(const char* streamId, const char* kind, float* values, int n)
 {
   if (sock_ < 0 || !streamId || !kind || n < 0)
@@ -990,6 +1035,12 @@ void WebEditor::flushVizArray(const char* streamId, const char* kind, float* val
   frame.clear();
   if (!VizBin::encode(frame, streamId, kind, values, n))
     return;
+  if (vizBatchOpen_)
+  {
+    vizBatchFrames_.insert(vizBatchFrames_.end(), frame.begin(), frame.end());
+    ++vizBatchCount_;
+    return;
+  }
   sendBytes(frame.data(), frame.size());
 }
 
@@ -997,6 +1048,8 @@ void WebEditor::flushViz()
 {
   if (!vizSource_ || sock_ < 0)
     return;
+
+  beginVizBatch();
 
   using clock = std::chrono::steady_clock;
   const auto now = clock::now();
@@ -1053,7 +1106,10 @@ void WebEditor::flushViz()
   if (lastVizFlush_.time_since_epoch().count() != 0)
   {
     if (now - lastVizFlush_ < minGap)
+    {
+      endVizBatch();
       return;
+    }
   }
   lastVizFlush_ = now;
 
@@ -1382,6 +1438,8 @@ void WebEditor::flushViz()
       ++n;
     }
   }
+
+  endVizBatch();
 }
 
 void WebEditor::pushAllParams()

@@ -3,7 +3,7 @@
 /**
  * Binary viz frames on the plugin→web-host socket (mixed with newline JS).
  *
- * Layout (little-endian), version 2:
+ * Single frame (little-endian), version 2:
  *   magic[4]  = 'C','N','X','V'
  *   version   = u8 (2)
  *   idLen     = u8
@@ -16,9 +16,15 @@
  *   kind[kindLen] ASCII
  *   payload[count * bytesPerSample(fmt)]
  *
- * Web-host base64-passes the raw payload into JS; the page expands to
- * Float32Array (no JS number-literal parse). Display kinds use u8/i16;
- * mixed layouts (pitch/wave/comb) stay f32.
+ * Batch (one WebKit inject per flush tick), version 1:
+ *   magic[4]  = 'C','N','X','B'
+ *   version   = u8 (1)
+ *   reserved[3] = 0
+ *   count     = u32 number of CNXV frames that follow
+ *   frame[0] … frame[count-1]  (raw CNXV blobs)
+ *
+ * Web-host base64-passes payloads into JS; the page expands to Float32Array.
+ * Display kinds use u8/i16; mixed layouts (pitch/wave/comb) stay f32.
  */
 
 #include <algorithm>
@@ -37,11 +43,15 @@ inline constexpr char kMagic0 = 'C';
 inline constexpr char kMagic1 = 'N';
 inline constexpr char kMagic2 = 'X';
 inline constexpr char kMagic3 = 'V';
+inline constexpr char kBatchMagic3 = 'B';
 inline constexpr std::uint8_t kVersion = 2;
+inline constexpr std::uint8_t kBatchVersion = 1;
 inline constexpr std::size_t kHeaderSize = 20;
+inline constexpr std::size_t kBatchHeaderSize = 12;
 inline constexpr std::size_t kMaxIdLen = 64;
 inline constexpr std::size_t kMaxKindLen = 32;
 inline constexpr std::size_t kMaxSamples = 6 * (512 * 3) + 1; // mbcomp envelope worst case
+inline constexpr std::uint32_t kMaxBatchFrames = 64;
 
 enum class Fmt : std::uint8_t
 {
@@ -61,6 +71,12 @@ struct Profile
 inline bool looksLikeMagic(const char* p, std::size_t n)
 {
   return n >= 4 && p[0] == kMagic0 && p[1] == kMagic1 && p[2] == kMagic2 && p[3] == kMagic3;
+}
+
+inline bool looksLikeBatchMagic(const char* p, std::size_t n)
+{
+  return n >= 4 && p[0] == kMagic0 && p[1] == kMagic1 && p[2] == kMagic2
+         && p[3] == kBatchMagic3;
 }
 
 inline std::size_t bytesPerSample(Fmt fmt)
@@ -306,6 +322,93 @@ inline bool tryDecode(const char* buf, std::size_t len, Decoded& out, bool& corr
   out.count = static_cast<int>(count);
   out.payload = count ? (p + kHeaderSize + idLen + kindLen) : nullptr;
   out.frameBytes = need;
+  return true;
+}
+
+/**
+ * Wrap already-encoded CNXV frames into one CNXB batch (appended to `out`).
+ * `frames` are contiguous CNXV blobs; `frameCount` must match.
+ */
+inline bool encodeBatch(std::vector<char>& out, const char* frames, std::size_t framesBytes,
+                        std::uint32_t frameCount)
+{
+  if (frameCount == 0 || frameCount > kMaxBatchFrames)
+    return false;
+  if (framesBytes > 0 && !frames)
+    return false;
+
+  const std::size_t at = out.size();
+  out.resize(at + kBatchHeaderSize + framesBytes);
+  auto* p = reinterpret_cast<std::uint8_t*>(out.data() + at);
+  p[0] = static_cast<std::uint8_t>(kMagic0);
+  p[1] = static_cast<std::uint8_t>(kMagic1);
+  p[2] = static_cast<std::uint8_t>(kMagic2);
+  p[3] = static_cast<std::uint8_t>(kBatchMagic3);
+  p[4] = kBatchVersion;
+  p[5] = 0;
+  p[6] = 0;
+  p[7] = 0;
+  writeU32Le(p + 8, frameCount);
+  if (framesBytes > 0)
+    std::memcpy(p + kBatchHeaderSize, frames, framesBytes);
+  return true;
+}
+
+/**
+ * Try to decode one complete CNXB batch at the front of `buf`.
+ * On success, `payload` points at the concatenated CNXV region and
+ * `frameCount` / `frameBytes` (total batch size) are set.
+ */
+inline bool tryDecodeBatch(const char* buf, std::size_t len, std::uint32_t& frameCount,
+                           const char*& payload, std::size_t& payloadBytes,
+                           std::size_t& batchBytes, bool& corrupt)
+{
+  corrupt = false;
+  frameCount = 0;
+  payload = nullptr;
+  payloadBytes = 0;
+  batchBytes = 0;
+  if (!looksLikeBatchMagic(buf, len))
+    return false;
+  if (len < kBatchHeaderSize)
+    return false;
+
+  const auto* p = reinterpret_cast<const std::uint8_t*>(buf);
+  if (p[4] != kBatchVersion)
+  {
+    corrupt = true;
+    return false;
+  }
+  frameCount = readU32Le(p + 8);
+  if (frameCount == 0 || frameCount > kMaxBatchFrames)
+  {
+    corrupt = true;
+    return false;
+  }
+
+  // Walk CNXV frames to learn total size (and validate).
+  std::size_t off = kBatchHeaderSize;
+  for (std::uint32_t i = 0; i < frameCount; ++i)
+  {
+    if (off >= len)
+      return false;
+    Decoded dec;
+    bool frameCorrupt = false;
+    if (!tryDecode(buf + off, len - off, dec, frameCorrupt))
+    {
+      if (frameCorrupt)
+      {
+        corrupt = true;
+        return false;
+      }
+      return false; // incomplete
+    }
+    off += dec.frameBytes;
+  }
+
+  payload = buf + kBatchHeaderSize;
+  payloadBytes = off - kBatchHeaderSize;
+  batchBytes = off;
   return true;
 }
 

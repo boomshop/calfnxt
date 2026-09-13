@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <string>
 #include <sys/types.h>
+#include <vector>
 
 namespace calfNXT {
 namespace Ui {
@@ -79,6 +80,8 @@ private:
   void flushViz();
   void flushVizLevels(const char* streamId, float* levels, int n);
   void flushVizArray(const char* streamId, const char* kind, float* values, int n);
+  void beginVizBatch();
+  void endVizBatch();
   int queryBusChannelCount(Steinberg::Vst::BusDirection dir, int busIndex) const;
   int queryIoChannelCount() const;
 
@@ -117,6 +120,10 @@ private:
   std::string readBuf_;
   std::chrono::steady_clock::time_point lastVizFlush_ {};
   std::chrono::steady_clock::time_point lastEnvVizFlush_ {};
+  /** Accumulates CNXV frames during one flushViz() for a single CNXB send. */
+  std::vector<char> vizBatchFrames_;
+  std::uint32_t vizBatchCount_ = 0;
+  bool vizBatchOpen_ = false;
 
   Steinberg::int32 designWidth_ = 360;
   Steinberg::int32 designHeight_ = 420;
