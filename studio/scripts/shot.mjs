@@ -21,10 +21,13 @@ function useInstalledPlaywrightBrowsers() {
   if (!envPath) return;
   let hasBrowser = false;
   try {
-    hasBrowser = fs.readdirSync(envPath).some(
-      (name) =>
-        name.startsWith('chromium') || name.startsWith('chromium_headless_shell'),
-    );
+    hasBrowser = fs
+      .readdirSync(envPath)
+      .some(
+        (name) =>
+          name.startsWith('chromium') ||
+          name.startsWith('chromium_headless_shell'),
+      );
   } catch {
     hasBrowser = false;
   }
@@ -133,7 +136,9 @@ function runNpm(args) {
       stdio: 'inherit',
     });
     p.on('exit', (code) =>
-      code === 0 ? resolve() : reject(new Error(`npm ${args.join(' ')} → ${code}`)),
+      code === 0
+        ? resolve()
+        : reject(new Error(`npm ${args.join(' ')} → ${code}`)),
     );
   });
 }
@@ -191,16 +196,20 @@ async function shotPlugin(browser, id) {
     const root = document.documentElement;
     root.classList.add('calfnxt-widget-info-off');
     for (const c of ['day', 'night']) root.classList.toggle(c, c === 'night');
-    for (const c of ['calfnxt', 'lime', 'fire', 'sea'])
+    for (const c of ['calfnxt', 'lime', 'fire', 'sea', 'slick'])
       root.classList.toggle(c, c === 'calfnxt');
   });
   // Extra settle for AUX SVG layouts + theme paint refresh
   await wait(200);
 
   const out = path.join(OUT_DIR, `${id}.png`);
-  await page.locator('[data-studio-frame]').screenshot({ path: out, type: 'png' });
+  await page
+    .locator('[data-studio-frame]')
+    .screenshot({ path: out, type: 'png' });
   await page.close();
-  console.log(`    wrote ${out}  (${Math.round(box.width)}×${Math.round(box.height)} @${dpr.toFixed(2)}x)`);
+  console.log(
+    `    wrote ${out}  (${Math.round(box.width)}×${Math.round(box.height)} @${dpr.toFixed(2)}x)`,
+  );
 }
 
 async function main() {
@@ -240,7 +249,10 @@ async function main() {
 
 main().catch((err) => {
   const msg = String(err?.message ?? err);
-  if (msg.includes("Executable doesn't exist") || msg.includes('playwright install')) {
+  if (
+    msg.includes("Executable doesn't exist") ||
+    msg.includes('playwright install')
+  ) {
     console.error(`
 Playwright Chromium is missing (or outdated after a playwright upgrade).
 From the studio/ folder run:

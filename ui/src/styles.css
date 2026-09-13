@@ -82,8 +82,8 @@
 }
 
 :root.lime {
-  --color-accent: #00cc00;
-  --contrast-accent: #000000;
+  --color-accent: #009d34;
+  --contrast-accent: #ffffff;
   --color-accent-h: 120;
   --color-accent-s: 100%;
   --color-accent-l: 37%;
@@ -106,7 +106,7 @@
 }
 
 :root.sea {
-  --color-accent: #0033cc;
+  --color-accent: #0032a7;
   --contrast-accent: #ffffff;
   --color-accent-h: 240;
   --color-accent-s: 100%;
@@ -114,7 +114,19 @@
 
   --color-warn: #00ccff;
   --contrast-warn: #000000;
-  --color-hot: #0088ff;
+  --color-hot: #b700ff;
+}
+
+:root.slick {
+  --color-accent: hsl(223.73 32.6% 35.49%);
+  --contrast-accent: #ffffff;
+  --color-accent-h: 224;
+  --color-accent-s: 33%;
+  --color-accent-l: 35%;
+
+  --color-warn: #5f78bd;
+  --contrast-warn: #000000;
+  --color-hot: #ff7300;
 }
 
 /* Kill UA focus, apply ours only for keyboard / :focus-visible. */

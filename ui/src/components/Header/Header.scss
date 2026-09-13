@@ -160,6 +160,9 @@
         &.accent-sea > .aux-icon::before {
           background-image: linear-gradient(to top right, #0033cc, #00ccff);
         }
+        &.accent-slick > .aux-icon::before {
+          background-image: linear-gradient(to top right, #3d4d78, #5f78bd);
+        }
       }
     }
   }

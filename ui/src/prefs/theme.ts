@@ -1,15 +1,21 @@
 import { DynamicValue } from '@deutschesoft/awml';
 
-/** Appearance prefs: day/night surfaces + accent pair (calfnxt / lime / fire / sea). */
+/** Appearance prefs: day/night surfaces + accent pair (calfnxt / lime / fire / sea / slick). */
 
 export const THEME_MODE_KEY = 'calfnxt.themeMode';
 export const THEME_ACCENT_KEY = 'calfnxt.themeAccent';
 
 export type ThemeMode = 'day' | 'night';
-export type ThemeAccent = 'calfnxt' | 'lime' | 'fire' | 'sea';
+export type ThemeAccent = 'calfnxt' | 'lime' | 'fire' | 'sea' | 'slick';
 
 const MODE_CLASSES: ThemeMode[] = ['day', 'night'];
-export const ACCENT_CLASSES: ThemeAccent[] = ['calfnxt', 'lime', 'fire', 'sea'];
+export const ACCENT_CLASSES: ThemeAccent[] = [
+  'calfnxt',
+  'lime',
+  'fire',
+  'sea',
+  'slick',
+];
 
 function preferBrowserMode(): ThemeMode {
   try {
@@ -37,7 +43,11 @@ function readMode(): ThemeMode {
 
 function isAccent(v: string | null): v is ThemeAccent {
   return (
-    v === 'calfnxt' || v === 'lime' || v === 'fire' || v === 'sea'
+    v === 'calfnxt' ||
+    v === 'lime' ||
+    v === 'fire' ||
+    v === 'sea' ||
+    v === 'slick'
   );
 }
 
@@ -76,7 +86,8 @@ function applyRootClasses(mode: ThemeMode, accent: ThemeAccent): void {
 }
 
 export const themeMode$ = DynamicValue.fromConstant<ThemeMode>(readMode());
-export const themeAccent$ = DynamicValue.fromConstant<ThemeAccent>(readAccent());
+export const themeAccent$ =
+  DynamicValue.fromConstant<ThemeAccent>(readAccent());
 
 applyRootClasses(themeMode$.value, themeAccent$.value);
 
