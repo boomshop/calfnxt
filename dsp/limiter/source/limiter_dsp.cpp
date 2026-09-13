@@ -350,6 +350,7 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
     && lastOutPeak_ < Dsp::IoStage::kQuietPeak;
 
   // Keep bypassOld_ in sync even on idle so a later wake starts a clean xfade.
+  // Host still clocks audio: advance history with silence so the chart keeps scrolling.
   if (quietIn && drained)
   {
     bypassOld_ = bypass;
@@ -358,6 +359,11 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
     resamplerR_.sanitize();
     cleanResamplerL_.sanitize();
     cleanResamplerR_.sanitize();
+    {
+      const int32 n = data.numSamples;
+      for (int32 i = 0; i < n; ++i)
+        histFeedSample(0.f, 1.f);
+    }
     publishHistSnapshot();
     io_.end(data);
     return kResultOk;

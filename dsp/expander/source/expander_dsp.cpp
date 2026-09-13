@@ -336,9 +336,16 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
   const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
 
   // Idle only when main is quiet AND expansion settled; ext SC keeps us awake.
+  // Host still clocks audio: advance history with silence so the chart keeps scrolling.
   if (quietIn && gx_.isIdle() && !scBusActive)
   {
     grMeter_.forceZero();
+    if (hasHostAudio)
+    {
+      const int32 n = data.numSamples;
+      for (int32 i = 0; i < n; ++i)
+        histFeedSample(0.f, 0.f, 1.f);
+    }
     publishHistSnapshot();
     if (hasHostAudio)
       io_.end(data);

@@ -343,9 +343,16 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
 
   // Idle only when main (and ext SC if used) is quiet AND GR envelopes settled.
   // External sidechain can still move GR on a silent main — keep processing then.
+  // Host still clocks audio: advance history with silence so the chart keeps scrolling.
   if (quietIn && gr_.isIdle() && !scBusActive)
   {
     grMeter_.forceZero();
+    if (hasHostAudio)
+    {
+      const int32 n = data.numSamples;
+      for (int32 i = 0; i < n; ++i)
+        histFeedSample(0.f, 0.f, 1.f);
+    }
     publishHistSnapshot();
     if (hasHostAudio)
       io_.end(data);

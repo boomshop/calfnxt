@@ -707,6 +707,7 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
   const bool drained = allSleeping && !xfadeBusy
     && lastOutPeak_ < Dsp::IoStage::kQuietPeak;
 
+  // Host still clocks audio: advance history with silence so the chart keeps scrolling.
   if (quietIn && drained)
   {
     bypassOld_ = bypass;
@@ -715,6 +716,14 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
     bbMeter_.forceZero();
     overallMeter_.forceZero();
     idleSanitize(0);
+    {
+      const int32 n = data.numSamples;
+      for (int32 i = 0; i < n; ++i)
+      {
+        for (int b = 0; b < bands; ++b)
+          histFeedSample(b, 0.f, 0.f, 1.f);
+      }
+    }
     publishHistSnapshot();
     io_.end(data);
     return kResultOk;

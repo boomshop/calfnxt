@@ -298,9 +298,16 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
   const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
 
   // Idle only when input is quiet AND de-esser GR is settled.
+  // Host still clocks audio: advance history with silence so the chart keeps scrolling.
   if (quietIn && gr_.isIdle())
   {
     grMeter_.forceZero();
+    if (hasHostAudio)
+    {
+      const int32 n = data.numSamples;
+      for (int32 i = 0; i < n; ++i)
+        histFeedSample(0.f, 0.f, 1.f);
+    }
     publishHistSnapshot();
     if (hasHostAudio)
       io_.end(data);

@@ -357,8 +357,18 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     {
       for (int b = 0; b < kMaxBands; ++b)
         grMeter_[b].forceZero();
+      // Host still clocks audio: advance history with silence (skip full DSP).
       if (hasHostAudio)
+      {
+        const int n = data.numSamples;
+        for (int i = 0; i < n; ++i)
+        {
+          for (int b = 0; b < bands; ++b)
+            histFeedSample(b, 0.f, 0.f, 1.f);
+        }
+        publishHistSnapshot();
         io_.end(data);
+      }
       return kResultOk;
     }
   }
