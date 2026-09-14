@@ -297,6 +297,8 @@ Example: `CALFNXT_WEB_DEBUG=1 carla …`.
 | `CALFNXT_XWAYLAND_NUDGE`   | non-empty          | Opt-in GNOME/Mutter + Ardour on Wayland workaround. **Off by default.** See [Editor black or frozen on GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland).                |
 | `CALFNXT_KEEP_HOST_LDPATH` | non-empty          | Copy the host `LD_LIBRARY_PATH` into the helper’s spawn `envp`. Default: omit it **for the child only** (Mixbus/Ardour bundled glib). Never touches the DAW’s own environment. |
 
+Lean WebKit defaults (always on, not env-gated): `WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER`, media/WebRTC/WebAudio/page-cache off; HTML5 **localStorage** stays on for Header prefs.
+
 Related (not calfNXT-owned):
 
 | Variable                          | Notes                                                            |

@@ -1379,7 +1379,10 @@ int main(int argc, char** argv)
   hostLog("[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d\n",
           static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width, g.height);
 
+  // Non-ephemeral: Header prefs (UI Hz, theme) need HTML5 localStorage.
+  // DOCUMENT_VIEWER: no browser-sized resource cache — local calfnxt:// SPA only.
   g.ctx = webkit_web_context_new();
+  webkit_web_context_set_cache_model(g.ctx, WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER);
   webkit_web_context_register_uri_scheme(g.ctx, "calfnxt", onUriScheme, nullptr, nullptr);
   auto* sec = webkit_web_context_get_security_manager(g.ctx);
   webkit_security_manager_register_uri_scheme_as_local(sec, "calfnxt");
@@ -1453,12 +1456,26 @@ int main(int argc, char** argv)
     settings,
     noGpu ? WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER
           : WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
+
+  // Trim unused browser subsystems (plugin UI is a single local SPA + canvas/SVG).
+  // Keep HTML5 localStorage for Header prefs; leave JS / WebGL for charts.
+  webkit_settings_set_enable_page_cache(settings, FALSE);
+  webkit_settings_set_enable_html5_database(settings, FALSE);
+  webkit_settings_set_enable_media(settings, FALSE);
+  webkit_settings_set_enable_media_stream(settings, FALSE);
+  webkit_settings_set_enable_mediasource(settings, FALSE);
+  webkit_settings_set_enable_encrypted_media(settings, FALSE);
+  webkit_settings_set_enable_media_capabilities(settings, FALSE);
+  webkit_settings_set_enable_webrtc(settings, FALSE);
+  webkit_settings_set_enable_webaudio(settings, FALSE);
+  webkit_settings_set_enable_html5_local_storage(settings, TRUE);
+
   const bool webDebug = envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR");
   webkit_settings_set_enable_developer_extras(settings, webDebug ? TRUE : FALSE);
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=nudge-opt-1 hw-accel=%s xwayland_nudge=%s\n",
+  hostLog("[calfnxt-web-host] build=nudge-opt-1 hw-accel=%s cache=document-viewer xwayland_nudge=%s\n",
           noGpu ? "never" : "always", envFlag("CALFNXT_XWAYLAND_NUDGE") ? "1" : "(unset)");
   if (envFlag("CALFNXT_WEB_DEBUG"))
   {

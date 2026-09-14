@@ -167,7 +167,8 @@ mode Off/Linear, selected band, etc.).
 
 `WebEditor` (proxy): IRunLoop ~16 ms pumps the socket + param/viz flush.
 `calfnxt-web-host`: HW accel **on** by default (`ALWAYS`); force software with
-`CALFNXT_WEB_NO_GPU=1` if the embed paints blank/transparent. Opt-in XWayland
+`CALFNXT_WEB_NO_GPU=1` if the embed paints blank/transparent. Lean WebKit defaults:
+`DOCUMENT_VIEWER` cache + media/WebRTC/WebAudio/page-cache off (localStorage kept). Opt-in XWayland
 Configure nudge: `CALFNXT_XWAYLAND_NUDGE=1` (4× start burst + 33 ms loop;
 off by default). Diagnostics always
 append to `/tmp/calfnxt-ui.log` (URI misses, JS errors; 512 KiB cap then truncate). Env reference: `README.md`.
