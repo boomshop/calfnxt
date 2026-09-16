@@ -540,14 +540,15 @@ export function applyEqualizerDemo(
       const idx = typeof rec.index === 'number' ? rec.index : -1;
       const band = host.bands[idx];
       if (!band) continue;
+      if (typeof rec.type === 'string')
+        band.type$.set(rec.type as typeof band.type$.value);
       setBool(band.active$, rec.active);
+      setBool(band.dyn$, rec.dyn);
       setNum(band.frequency$, rec.frequency);
       setNum(band.gain$, rec.gain);
       setNum(band.q$, rec.q);
       if (typeof rec.slope === 'number')
         band.slope$.set(rec.slope as 12 | 24 | 36 | 48);
-      if (typeof rec.type === 'string')
-        band.type$.set(rec.type as typeof band.type$.value);
       if (typeof rec.gain === 'number')
         band.effectiveGain$.set(rec.gain);
     }
