@@ -614,9 +614,9 @@ bool WebEditor::openHelper(void* x11Parent)
   logBoth("[calfnxt] spawned web-host pid=%d\n", static_cast<int>(pid));
 
   // Catch immediate helper failure (missing libs / gtk_init / bad DISPLAY) before
-  // the host paints an empty embed forever. Dynamic-linker errors go to the child's
-  // stderr (same terminal); we only see the exit here.
-  for (int i = 0; i < 10; ++i)
+  // the host paints an empty embed forever. Keep this short — later exits surface
+  // via the 16 ms pump / zombie reap. Dynamic-linker errors go to the child's stderr.
+  for (int i = 0; i < 2; ++i)
   {
     int status = 0;
     const pid_t r = waitpid(helperPid_, &status, WNOHANG);
@@ -640,7 +640,7 @@ bool WebEditor::openHelper(void* x11Parent)
     }
     if (r < 0 && errno == ECHILD)
       break;
-    usleep(10 * 1000);
+    usleep(5 * 1000);
   }
   return true;
 }
@@ -946,6 +946,16 @@ void WebEditor::pollParamsFromController()
 
 void WebEditor::flushPendingParams()
 {
+  // One socket line / one WebKit eval for all dirty params (EQ ~195). On write
+  // failure leave dirty bits set so the next timer tick retries — same contract
+  // as the previous per-param sendLine loop.
+  thread_local std::string js;
+  thread_local std::vector<std::pair<std::uint32_t, double>> flushed;
+  js.clear();
+  flushed.clear();
+  js.reserve(16384);
+  js += "(function(){var h=window.__calfnxtOnHost;if(!h)return;";
+
   for (std::uint32_t id = 0; id < kMaxQueuedParams; ++id)
   {
     if (!pendingParamDirty_[id].load(std::memory_order_acquire))
@@ -960,15 +970,23 @@ void WebEditor::flushPendingParams()
       continue;
     }
     *endp = '\0';
-    char js[256];
-    std::snprintf(js, sizeof js,
-                  "window.__calfnxtOnHost && window.__calfnxtOnHost({t:\"param\",id:%u,v:%s});",
-                  id, num);
-    // Only clear dirty / record last-flushed after a successful write. A full
-    // push (EQ has ~195 params) can fill the socket; failed sends must retry
-    // on the next timer tick instead of being silently dropped forever.
-    if (!sendLine(js))
-      break;
+    js += "h({t:\"param\",id:";
+    js += std::to_string(id);
+    js += ",v:";
+    js.append(num, static_cast<size_t>(endp - num));
+    js += "});";
+    flushed.emplace_back(id, plain);
+  }
+
+  if (flushed.empty())
+    return;
+
+  js += "})();";
+  if (!sendLine(js.c_str()))
+    return;
+
+  for (const auto& [id, plain] : flushed)
+  {
     pendingParamDirty_[id].store(false, std::memory_order_release);
     lastFlushedPlain_[id] = plain;
     lastFlushedValid_[id] = true;

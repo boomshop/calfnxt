@@ -1538,13 +1538,6 @@ int main(int argc, char** argv)
                    }),
                    nullptr);
 
-  gtk_widget_show_all(g.plug);
-  syncNativeSize();
-  if (gtkAllocTiny())
-    scheduleForceAlloc();
-  // Start ASAP: tester never becomes Viewable without an explicit map.
-  startMapPoll();
-
   g_signal_connect(g.webview, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
   g_signal_connect(g.webview, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
   g_signal_connect(g.webview, "load-failed",
@@ -1557,10 +1550,18 @@ int main(int argc, char** argv)
                    }),
                    nullptr);
 
+  // Start SPA load before show/map so WebProcess overlaps XEmbed mapping.
   char uri[512];
   std::snprintf(uri, sizeof uri, "calfnxt://bundle/%s", g.entryHtml);
   hostLog("[calfnxt-web-host] load %s\n", uri);
   webkit_web_view_load_uri(g.webview, uri);
+
+  gtk_widget_show_all(g.plug);
+  syncNativeSize();
+  if (gtkAllocTiny())
+    scheduleForceAlloc();
+  // Start ASAP: tester never becomes Viewable without an explicit map.
+  startMapPoll();
 
   if (envFlag("CALFNXT_WEB_INSPECTOR"))
   {
