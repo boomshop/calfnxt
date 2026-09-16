@@ -27,7 +27,7 @@
   );
 
   --border-radius: 3px;
-
+  --transition: 0.3s;
   --gap: 8px;
 
   --font-size-tiny: 9px;
@@ -289,6 +289,9 @@ textarea::selection {
 .aux-button {
   border-radius: var(--border-radius);
   background: var(--background-lesser);
+  transition:
+    color var(--transition),
+    background var(--transition);
 
   &.aux-active {
     background: var(--color-accent);
