@@ -1488,6 +1488,22 @@ int main(int argc, char** argv)
             envFlag("CALFNXT_XWAYLAND_NUDGE") ? "1" : "(unset)");
   }
 
+  // Kill the XEmbed/GTK white flash before WebKit paints the SPA.
+  {
+    auto* provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(
+      provider,
+      "window, plug, webkitwebview, * {"
+      "  background-color: #000000;"
+      "  background-image: none;"
+      "}",
+      -1, nullptr);
+    gtk_style_context_add_provider_for_screen(
+      gdk_screen_get_default(), GTK_STYLE_PROVIDER(provider),
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(provider);
+  }
+
   // Opaque WebView clear color (does not fix XEmbed present; helps if paint works).
   {
     GdkRGBA bg {0.0, 0.0, 0.0, 1.0};
@@ -1499,6 +1515,17 @@ int main(int argc, char** argv)
   gtk_container_add(GTK_CONTAINER(g.plug), GTK_WIDGET(g.webview));
   gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
   gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
+
+  auto paintBlackOnRealize = +[](GtkWidget* widget, gpointer) {
+    GdkWindow* win = gtk_widget_get_window(widget);
+    if (!win)
+      return;
+    GdkRGBA bg {0.0, 0.0, 0.0, 1.0};
+    gdk_window_set_background_rgba(win, &bg);
+    gtk_widget_queue_draw(widget);
+  };
+  g_signal_connect(g.plug, "realize", G_CALLBACK(paintBlackOnRealize), nullptr);
+  g_signal_connect(g.webview, "realize", G_CALLBACK(paintBlackOnRealize), nullptr);
 
   // If the socket keeps handing us 1×1, re-apply Gdk-sized allocation on idle.
   g_signal_connect(g.plug, "size-allocate",

@@ -79,6 +79,25 @@ function flattenAssetUrls(html) {
     .replace(/<link[^>]*rel="modulepreload"[^>]*>\s*/gi, '');
 }
 
+/** First paint is black before the SPA CSS/JS arrives (avoids white flash). */
+function ensureBlackSplash(html) {
+  let out = html;
+  if (!/html,body\{[^}]*background\s*:\s*#000/i.test(out)) {
+    out = out.replace(
+      /<head(\s[^>]*)?>/i,
+      (m) =>
+        `${m}<style>html,body{background:#000;margin:0}#root{background:#000;min-height:100%}</style>`,
+    );
+  }
+  if (!/<div id="root"[^>]*style=/i.test(out)) {
+    out = out.replace(
+      /<div id="root"><\/div>/i,
+      '<div id="root" style="background:#000;min-height:100%"></div>',
+    );
+  }
+  return out;
+}
+
 function findBuiltHtml(pluginDist, id) {
   const candidates = [
     path.join(pluginDist, 'src', 'html', `${id}.html`),
@@ -94,7 +113,7 @@ function findBuiltHtml(pluginDist, id) {
 function flattenPluginDir(id) {
   const pluginDist = path.join(dist, 'plugins', id);
   const htmlSrc = findBuiltHtml(pluginDist, id);
-  const html = flattenAssetUrls(fs.readFileSync(htmlSrc, 'utf8'));
+  const html = ensureBlackSplash(flattenAssetUrls(fs.readFileSync(htmlSrc, 'utf8')));
   fs.writeFileSync(path.join(pluginDist, 'index.html'), html);
 
   // Drop Vite's nested HTML path if present.
