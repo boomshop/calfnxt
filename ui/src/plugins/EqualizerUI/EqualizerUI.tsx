@@ -138,13 +138,6 @@ function BandRow(props: {
       ]
         .filter(Boolean)
         .join(' ')}>
-      <Icon
-        icon={filterType}
-        size={20}
-        className="band-type"
-        title={filterType}
-        onClick={() => onSelect(band.id)}
-      />
       <button
         type="button"
         className={['mini', dynActive && 'dyn', listen && 'listen']
@@ -163,6 +156,7 @@ function BandRow(props: {
         state$={band.active$}
         label={String(index + 1)}
         className="band-active"
+        icon={filterType}
       />
     </div>
   );
@@ -244,16 +238,9 @@ function BandControls(props: { band: IEqualizerBand }) {
             }}
           />
         </WithInfo>
-        <WithInfo title={equalizerInfo.active}>
+        <WithInfo title={equalizerInfo.active} className="power">
           <Toggle state$={band.active$} icon="power" />
         </WithInfo>
-        <div className="label">Band {band.index + 1}</div>
-        <Icon
-          icon={filterType}
-          size={32}
-          className="band-type"
-          title={filterType}
-        />
       </div>
       {canDyn ? (
         <div className="block dyn">
@@ -261,7 +248,51 @@ function BandControls(props: { band: IEqualizerBand }) {
           <WithInfo title={equalizerInfo.dyn}>
             <Toggle state$={band.dyn$} icon="power" />
           </WithInfo>
-          <WithInfo title={equalizerInfo.dynAttack}>
+
+          <WithInfo title={equalizerInfo.dynThresh} className="thresh">
+            <Knob
+              value$={band.dynThreshold$}
+              min={EQ_DYN_THRESH_MIN}
+              max={EQ_DYN_THRESH_MAX}
+              reset={band.defaults.dynThreshold}
+              label="Thresh"
+              base={0}
+              dots={EQ_DYN_THRESH_DOTS}
+              labels={EQ_DYN_THRESH_LABELS}
+              enabled$={band.dyn$}
+              {...{
+                'value.format': (v: number) => v.toFixed(1),
+              }}
+            />
+          </WithInfo>
+          <WithInfo title={equalizerInfo.dynRatio} className="ratio">
+            <Knob
+              value$={band.dynRatio$}
+              min={EQ_DYN_RATIO_MIN}
+              max={EQ_DYN_RATIO_MAX}
+              reset={band.defaults.dynRatio}
+              label="Ratio"
+              scale="log2"
+              log_factor={4}
+              dots={EQ_DYN_RATIO_DOTS}
+              labels={EQ_DYN_RATIO_LABELS}
+              enabled$={band.dyn$}
+              {...{
+                'value.format': (v: number) => `${v.toFixed(1)}:1`,
+              }}
+            />
+          </WithInfo>
+
+          <WithInfo title={equalizerInfo.listen} className="listen">
+            <Toggle
+              state$={band.listen$}
+              icon="headphones"
+              className="warn"
+              enabled$={band.dyn$}
+            />
+          </WithInfo>
+
+          <WithInfo title={equalizerInfo.dynAttack} className="attack">
             <Knob
               value$={band.dynAttack$}
               min={EQ_DYN_ATTACK_MIN}
@@ -279,7 +310,7 @@ function BandControls(props: { band: IEqualizerBand }) {
               }}
             />
           </WithInfo>
-          <WithInfo title={equalizerInfo.dynRelease}>
+          <WithInfo title={equalizerInfo.dynRelease} className="release">
             <Knob
               value$={band.dynRelease$}
               min={EQ_DYN_RELEASE_MIN}
@@ -294,49 +325,6 @@ function BandControls(props: { band: IEqualizerBand }) {
               enabled$={band.dyn$}
               {...{
                 'value.format': (v: number) => `${v.toFixed(0)}`,
-              }}
-            />
-          </WithInfo>
-          <WithInfo title={equalizerInfo.listen}>
-            <Toggle
-              state$={band.listen$}
-              icon="headphones"
-              className="warn"
-              enabled$={band.dyn$}
-            />
-          </WithInfo>
-          <WithInfo title={equalizerInfo.dynThresh}>
-            <Knob
-              value$={band.dynThreshold$}
-              min={EQ_DYN_THRESH_MIN}
-              max={EQ_DYN_THRESH_MAX}
-              reset={band.defaults.dynThreshold}
-              label="Thresh"
-              size="small"
-              base={0}
-              dots={EQ_DYN_THRESH_DOTS}
-              labels={EQ_DYN_THRESH_LABELS}
-              enabled$={band.dyn$}
-              {...{
-                'value.format': (v: number) => v.toFixed(1),
-              }}
-            />
-          </WithInfo>
-          <WithInfo title={equalizerInfo.dynRatio}>
-            <Knob
-              value$={band.dynRatio$}
-              min={EQ_DYN_RATIO_MIN}
-              max={EQ_DYN_RATIO_MAX}
-              reset={band.defaults.dynRatio}
-              label="Ratio"
-              size="small"
-              scale="log2"
-              log_factor={4}
-              dots={EQ_DYN_RATIO_DOTS}
-              labels={EQ_DYN_RATIO_LABELS}
-              enabled$={band.dyn$}
-              {...{
-                'value.format': (v: number) => `${v.toFixed(1)}:1`,
               }}
             />
           </WithInfo>
