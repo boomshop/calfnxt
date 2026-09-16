@@ -109,9 +109,6 @@ export function CompressorUI(props: CompressorUIProps) {
   return (
     <div className="CompressorUI PluginUI">
       <Header title="Compressor">
-        <WithInfo title={compressorInfo.sidechainActive}>
-          <Toggle state$={host.sidechainActive$} icon="sidechain" className="warn" />
-        </WithInfo>
         <WithInfo title={compressorInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>
@@ -144,28 +141,39 @@ export function CompressorUI(props: CompressorUIProps) {
           lopassEdit={edit(paramIds.lopass)}
         />
         <div className="selects">
-          <WithInfo title={compressorInfo.mode} className="info-block">
-            <Buttons
-              entries={COMPRESSOR_MODE_ENTRIES}
-              value={mode}
-              onChange={(v) => {
-                host.beginEdit(paramIds.mode);
-                host.mode$.set(v);
-                host.endEdit(paramIds.mode);
-              }}
+          <WithInfo
+            title={compressorInfo.sidechainActive}
+            className="sc-toggle">
+            <Toggle
+              state$={host.sidechainActive$}
+              icon="sidechain"
+              className="warn"
             />
           </WithInfo>
-          <WithInfo title={compressorInfo.link} className="info-block">
-            <Buttons
-              entries={COMPRESSOR_LINK_ENTRIES}
-              value={link}
-              onChange={(v) => {
-                host.beginEdit(paramIds.link);
-                host.link$.set(v);
-                host.endEdit(paramIds.link);
-              }}
-            />
-          </WithInfo>
+          <div className="select-buttons">
+            <WithInfo title={compressorInfo.mode} className="info-block">
+              <Buttons
+                entries={COMPRESSOR_MODE_ENTRIES}
+                value={mode}
+                onChange={(v) => {
+                  host.beginEdit(paramIds.mode);
+                  host.mode$.set(v);
+                  host.endEdit(paramIds.mode);
+                }}
+              />
+            </WithInfo>
+            <WithInfo title={compressorInfo.link} className="info-block">
+              <Buttons
+                entries={COMPRESSOR_LINK_ENTRIES}
+                value={link}
+                onChange={(v) => {
+                  host.beginEdit(paramIds.link);
+                  host.link$.set(v);
+                  host.endEdit(paramIds.link);
+                }}
+              />
+            </WithInfo>
+          </div>
         </div>
       </div>
 
