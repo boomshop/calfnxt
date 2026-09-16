@@ -40,6 +40,20 @@ function history3ch(slots, audioDbFn, filtDbFn, grDbFn) {
   return out;
 }
 
+/** Expander: [audio, detector, grLin, inhibitDesire] × slots + phase. */
+function history4ch(slots, audioDbFn, filtDbFn, grDbFn, inhibitFn = () => 0) {
+  const out = new Array(slots * 4 + 1);
+  for (let i = 0; i < slots; ++i) {
+    const t = i / (slots - 1);
+    out[i * 4] = dbToLin(audioDbFn(t));
+    out[i * 4 + 1] = dbToLin(filtDbFn(t));
+    out[i * 4 + 2] = dbToLin(grDbFn(t));
+    out[i * 4 + 3] = Math.min(1, Math.max(0, inhibitFn(t)));
+  }
+  out[slots * 4] = 0;
+  return out;
+}
+
 /**
  * Mbcomp: per band [full, band, grLin] × slots + shared phase.
  * Prefer seeding from fixtures/compressor/viz.json when present.
@@ -226,7 +240,8 @@ const packs = {
     levelsOut: [-14, -14.6],
     gr: 8.0,
     point: [-40, -52],
-    envelope: history3ch(
+    // 4ch: audio / detector / GR / inhibit (0 when Inv disarmed).
+    envelope: history4ch(
       slots,
       (t) => -8 - 18 * Math.abs(Math.sin(t * Math.PI * 5)) - 4 * t,
       (t) => -12 - 16 * Math.abs(Math.sin(t * Math.PI * 5 + 0.3)) - 3 * t,

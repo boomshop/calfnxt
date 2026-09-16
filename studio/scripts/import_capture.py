@@ -33,6 +33,26 @@ def expand_comp_envelope_2ch_to_3ch(env: list) -> list:
     return out
 
 
+def expand_exp_envelope_3ch_to_4ch(env: list) -> list:
+    """Pre-Inv captures were [audio, det, gr]×slots(+phase); DSP now adds inhibit."""
+    if not env:
+        return env
+    phase = None
+    data = list(env)
+    if len(data) % 3 == 1:
+        phase = data.pop()
+    if len(data) % 3 != 0:
+        return env
+    out: list[float] = []
+    for i in range(0, len(data), 3):
+        out.extend(
+            [float(data[i]), float(data[i + 1]), float(data[i + 2]), 0.0]
+        )
+    if phase is not None:
+        out.append(float(phase))
+    return out
+
+
 def to_viz(d: dict, plugin: str = "") -> dict:
     viz: dict = {}
     if "in:levels" in d:
@@ -74,6 +94,11 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         # 2ch live capture → 3ch (full, filtered, gr).
         if body_len % 2 == 0 and body_len % 3 != 0:
             viz["envelope"] = expand_comp_envelope_2ch_to_3ch(env)
+    if plugin == "expander" and isinstance(env, list) and env:
+        body_len = len(env) - 1 if len(env) % 3 == 1 else len(env)
+        # 3ch live capture → 4ch (full, detector, gr, inhibit).
+        if body_len % 3 == 0 and body_len % 4 != 0:
+            viz["envelope"] = expand_exp_envelope_3ch_to_4ch(env)
 
     # Near-silence meter snapshots look empty in studio shots — keep readable demo levels.
     for key, fallback in (("levelsIn", [-12.0, -12.5]), ("levelsOut", [-13.0, -13.4])):
@@ -108,7 +133,7 @@ def main() -> int:
         else:
             print(f"  {k}: {v}")
     env = viz.get("envelope")
-    n_ch = {"compressor": 3, "deesser": 3, "expander": 3, "tuner": 5, "octaver": 5}.get(
+    n_ch = {"compressor": 3, "deesser": 3, "expander": 4, "tuner": 5, "octaver": 5}.get(
         args.plugin
     )
     if isinstance(env, list) and n_ch:
