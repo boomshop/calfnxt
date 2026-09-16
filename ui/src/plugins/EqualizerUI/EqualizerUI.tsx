@@ -120,6 +120,7 @@ function BandRow(props: {
 }) {
   const { band, index, selected, onSelect } = props;
   const active = useDynamicValueReadonly(band.active$, false);
+  const freq = useDynamicValueReadonly(band.frequency$, 0);
   const filterType = useDynamicValueReadonly<EqFilterType>(
     band.type$,
     'parametric',
@@ -145,6 +146,7 @@ function BandRow(props: {
           .join(' ')}
         onClick={() => onSelect(band.id)}
         aria-label={`Select band ${index + 1}`}>
+        <span className="freq">{freq.toFixed(2)}</span>
         <EQChart
           bands={[band]}
           size="mini"
