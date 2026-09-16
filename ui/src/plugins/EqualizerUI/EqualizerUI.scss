@@ -125,6 +125,10 @@
       &.selected {
         border-color: var(--color-accent);
 
+        > .aux-button {
+          border-radius: 0;
+        }
+
         > .mini {
           > .aux-chart {
             > svg {
