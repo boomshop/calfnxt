@@ -136,6 +136,7 @@ function makeFilterBands(
       dynRelease$: DynamicValue.fromConstant(200),
       dynThreshold$: DynamicValue.fromConstant(-36),
       dynRatio$: DynamicValue.fromConstant(2),
+      dynMode$: DynamicValue.fromConstant(0),
       listen$: DynamicValue.fromConstant(false),
       defaults: {
         gain: gain$.value,

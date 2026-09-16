@@ -40,6 +40,9 @@ export const equalizerInfo = {
   dynRatio:
     'How strongly dynamics move the band gain above threshold. Higher = more compression/expansion of that boost/cut. Start gentle; deep ratios can sound like a band-limited compressor pumping.',
 
+  dynMode:
+    'How the band detector “hears” level. Peak = reacts to sharp spikes (esses, cymbals, plosives) — punchy, can grab. RMS = follows average energy in that band — smoother leveling on vocals and buses. Opto = softer, program-dependent feel — often the most musical on complex material.',
+
   listen:
     'Solos this band’s detector into the output so you can tune Dyn (and the band focus) by ear. While listening, the normal EQ audio path is bypassed for that solo — you’re hearing what triggers the dynamics, not the final mix.',
 

@@ -29,6 +29,8 @@ import {
   postBegin,
   postEnd,
 } from '../utils/bind_param';
+import { COMPRESSOR_MODE_ENTRIES } from './compressorHost';
+
 /** UI / Select filter type ids (numeric = VST plain type param). */
 export type EqFilterType =
   | 'parametric'
@@ -134,6 +136,9 @@ export const EQ_PASS_SLOPE_ENTRIES: { label: string; value: EqPassSlope }[] = [
   { label: '48 dB', value: 48 },
 ];
 
+/** Peak / RMS / Opto — same detector as Compressor. Default Peak (heritage DynEQ). */
+export const EQ_DYN_MODE_ENTRIES = COMPRESSOR_MODE_ENTRIES;
+
 export const EQ_MAX_BANDS = EQ_BAND_COUNT;
 export const EQ_FREQ_MIN = 20;
 export const EQ_FREQ_MAX = 20000;
@@ -176,6 +181,8 @@ export interface IEqualizerBand {
   dynRelease$: DynamicValue<number>;
   dynThreshold$: DynamicValue<number>;
   dynRatio$: DynamicValue<number>;
+  /** 0 Peak / 1 RMS / 2 Opto (GainReduction detector). */
+  dynMode$: DynamicValue<number>;
   /** Solo detector / sidechain into the plugin output. */
   listen$: DynamicValue<boolean>;
   /** Optional chart handle title (EQ defaults to B1…). */
@@ -383,6 +390,9 @@ export function createBoundEqualizerBands(): {
     const dynRelease$ = DynamicValue.fromConstant(dynReleaseDefault);
     const dynThreshold$ = DynamicValue.fromConstant(dynThresholdDefault);
     const dynRatio$ = DynamicValue.fromConstant(dynRatioDefault);
+    const dynMode$ = DynamicValue.fromConstant(
+      paramDefault(bandParamId(i, EQ_BAND_OFFSET.dyn_mode), 0),
+    );
     const listen$ = DynamicValue.fromConstant(
       paramDefault(bandParamId(i, EQ_BAND_OFFSET.dyn_listen), 0) >= 0.5,
     );
@@ -426,6 +436,9 @@ export function createBoundEqualizerBands(): {
       bindParamToHost(dynRatio$, bandParamId(i, EQ_BAND_OFFSET.dyn_ratio)),
     );
     disposers.push(
+      bindParamToHost(dynMode$, bandParamId(i, EQ_BAND_OFFSET.dyn_mode)),
+    );
+    disposers.push(
       bindBoolParamToHost(listen$, bandParamId(i, EQ_BAND_OFFSET.dyn_listen)),
     );
 
@@ -445,6 +458,7 @@ export function createBoundEqualizerBands(): {
       dynRelease$,
       dynThreshold$,
       dynRatio$,
+      dynMode$,
       listen$,
       defaults: {
         frequency: freqDefault,

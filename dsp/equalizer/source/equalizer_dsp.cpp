@@ -13,9 +13,24 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5845u; // 'CNXE'
-constexpr uint32 kStateVersion = 4;         // + mono (trailing)
-constexpr uint32 kStateVersionSpectrum = 3; // + spectrum
+constexpr uint32 kStateVersion = 5;              // + per-band dyn_mode
+constexpr uint32 kStateVersionMono = 4;          // + mono (trailing)
+constexpr uint32 kStateVersionSpectrum = 3;      // + spectrum
 constexpr uint32 kStateVersionBandsOnly = 2;
+constexpr int32 kLegacyParamsPerBand = 12;
+
+Dsp::DetectorMode detectorModeFromPlain(float v)
+{
+  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
+  {
+    case 1:
+      return Dsp::DetectorMode::Rms;
+    case 2:
+      return Dsp::DetectorMode::Opto;
+    default:
+      return Dsp::DetectorMode::Peak;
+  }
+}
 } // namespace
 
 EqualizerPlugin::EqualizerPlugin()
@@ -109,7 +124,8 @@ void EqualizerPlugin::applyBandTargetsFromParams()
     const float release = params_[bandParam(b, kBandDynRelease)];
     const float thresh = params_[bandParam(b, kBandDynThreshold)];
     const float ratio = params_[bandParam(b, kBandDynRatio)];
-    bands_[b].setDynParams(dyn, attack, release, thresh, ratio);
+    const auto mode = detectorModeFromPlain(params_[bandParam(b, kBandDynMode)]);
+    bands_[b].setDynParams(dyn, attack, release, thresh, ratio, mode);
     // Listen = dyn sidechain audition; needs the band on + dyn (never solo from stale state).
     bands_[b].setListen(active && dyn &&
                         params_[bandParam(b, kBandDynListen)] >= 0.5f);
@@ -299,7 +315,7 @@ tresult PLUGIN_API EqualizerPlugin::setState(IBStream* state)
   IBStreamer streamer(state, kLittleEndian);
 
   // Versioned chunk — refuse unversioned/legacy blobs (param layout shifted when
-  // dyn_listen was added; byte-stream restore would scramble every band).
+  // dyn_listen / dyn_mode were added; byte-stream restore would scramble bands).
   uint32 magic = 0;
   uint32 version = 0;
   int32 count = 0;
@@ -310,22 +326,52 @@ tresult PLUGIN_API EqualizerPlugin::setState(IBStream* state)
   if (!streamer.readInt32(count) || count <= 0)
     return kResultFalse;
 
-  // v2: bands only. v3: + spectrum. v4: + mono.
-  const int32 expect =
-    version == kStateVersion             ? kParamCount
-    : version == kStateVersionSpectrum   ? kParamCount - 1
-    : version == kStateVersionBandsOnly  ? kParamCount - 2
-                                         : -1;
-  if (expect < 0 || count != expect)
-    return kResultFalse;
-
   float plains[kParamCount] {};
-  for (int i = 0; i < count; ++i)
+  if (version == kStateVersion)
   {
-    if (!streamer.readFloat(plains[i]))
+    if (count != kParamCount)
       return kResultFalse;
+    for (int i = 0; i < count; ++i)
+    {
+      if (!streamer.readFloat(plains[i]))
+        return kResultFalse;
+    }
   }
-  // New trailing params keep their registered defaults when loading older state.
+  else if (version >= kStateVersionBandsOnly && version <= kStateVersionMono)
+  {
+    const int32 oldBandFloats = kEqBandCount * kLegacyParamsPerBand;
+    const int32 oldCount =
+      version == kStateVersionMono       ? 3 + oldBandFloats + 2
+      : version == kStateVersionSpectrum ? 3 + oldBandFloats + 1
+                                         : 3 + oldBandFloats;
+    if (count != oldCount)
+      return kResultFalse;
+    float oldPlains[256] {};
+    for (int i = 0; i < count; ++i)
+    {
+      if (!streamer.readFloat(oldPlains[i]))
+        return kResultFalse;
+    }
+    for (int i = 0; i < 3; ++i)
+      plains[i] = oldPlains[i];
+    for (int b = 0; b < kEqBandCount; ++b)
+    {
+      for (int o = 0; o < kLegacyParamsPerBand; ++o)
+        plains[bandParam(b, o)] = oldPlains[3 + b * kLegacyParamsPerBand + o];
+    }
+    const int oldTrail = 3 + oldBandFloats;
+    const int newTrail =
+      static_cast<int>(kParamBandBase) + kEqBandCount * kParamsPerBand;
+    if (version >= kStateVersionSpectrum && oldTrail < count)
+      plains[newTrail] = oldPlains[oldTrail];
+    if (version >= kStateVersionMono && oldTrail + 1 < count)
+      plains[newTrail + 1] = oldPlains[oldTrail + 1];
+  }
+  else
+  {
+    return kResultFalse;
+  }
+
   for (int i = 0; i < kParamCount; ++i)
   {
     if (auto* p = getParameterObject(static_cast<ParamID>(i)))

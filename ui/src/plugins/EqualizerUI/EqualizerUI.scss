@@ -28,31 +28,39 @@
 
     > .dyn {
       flex: 1 1 auto;
-      display: grid;
-      grid-template-columns: auto auto auto auto;
-      grid-template-areas: 'power thresh ratio attack' 'listen thresh ratio release';
-      align-content: space-evenly;
-      justify-content: space-evenly;
-      align-items: center;
+      display: flex;
+      align-items: stretch;
       gap: var(--gap) 16px;
 
-      > .ratio {
-        grid-area: ratio;
+      > .left {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-evenly;
       }
-      > .thresh {
-        grid-area: thresh;
+
+      > .center {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+
+        > .mode {
+          grid-column: 1 / 3;
+
+          > .Buttons {
+            > .Button {
+              flex: 1;
+              height: auto;
+            }
+          }
+        }
       }
-      > .attack {
-        grid-area: attack;
-      }
-      > .release {
-        grid-area: release;
-      }
-      > .listen {
-        grid-area: listen;
-      }
-      > .power {
-        grid-area: power;
+
+      > .right {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
       }
     }
   }

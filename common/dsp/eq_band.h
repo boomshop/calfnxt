@@ -109,12 +109,12 @@ public:
   }
 
   void setDynParams(bool enabled, float attackMs, float releaseMs, float thresholdDb,
-                    float ratio)
+                    float ratio, DetectorMode mode = DetectorMode::Peak)
   {
     if (dynEnabled_ && !enabled)
       needsCoeffs_ = true; // restore static gain coeffs
     dynEnabled_ = enabled;
-    gr_.setParams(attackMs, releaseMs, thresholdDb, ratio);
+    gr_.setParams(attackMs, releaseMs, thresholdDb, ratio, 6.f, mode);
   }
 
   void setListen(bool listen)

@@ -177,6 +177,17 @@
         "default": 0.0,
         "scale": "linear",
         "precision": 0
+      },
+      {
+        "id": "dyn_mode",
+        "name": "Dyn Mode",
+        "type": "float",
+        "unit": "",
+        "min": 0.0,
+        "max": 2.0,
+        "default": 0.0,
+        "scale": "linear",
+        "precision": 0
       }
     ],
     "defaults": [

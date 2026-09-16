@@ -124,6 +124,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
       const dynRelease$ = DynamicValue.fromConstant(0);
       const dynThreshold$ = DynamicValue.fromConstant(0);
       const dynRatio$ = DynamicValue.fromConstant(1);
+      const dynMode$ = DynamicValue.fromConstant(0);
       const bandListen$ = DynamicValue.fromConstant(false);
       const unsub = mode$.subscribe((v: number) => {
         active$.set(v > 0);
@@ -149,6 +150,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
         dynRelease$,
         dynThreshold$,
         dynRatio$,
+        dynMode$,
         listen$: bandListen$,
         defaults: {
           frequency: freqDefault,
