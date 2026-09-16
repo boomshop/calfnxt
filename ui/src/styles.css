@@ -54,6 +54,8 @@
   --color-less: #333333;
   --color-lesser: #555555;
   --color-least: #777777;
+
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
 }
 
 :root.night {
@@ -66,6 +68,8 @@
   --color-less: #dddddd;
   --color-lesser: #bbbbbb;
   --color-least: #999999;
+
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
 }
 
 /* Accent pairs (independent of day/night). */

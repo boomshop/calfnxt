@@ -4,6 +4,9 @@
   gap: var(--gap);
   padding: 0 10px 0 16px;
   align-items: center;
+  box-shadow: var(--shadow);
+  position: relative;
+  z-index: 10;
 
   > .logo {
     height: 32px;
