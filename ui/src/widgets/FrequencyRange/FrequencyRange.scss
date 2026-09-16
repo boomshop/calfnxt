@@ -4,10 +4,16 @@
   &.vertical {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    /* Chart fills leftover height (WebKit flex needs an explicit 1fr row). */
+    grid-template-rows: minmax(0, 1fr) auto;
     gap: 0 16px;
+    height: 100%;
+    min-height: 0;
 
     > .EQChart {
       grid-column: span 2;
+      min-height: 0;
+      height: 100%;
     }
 
     > .left {

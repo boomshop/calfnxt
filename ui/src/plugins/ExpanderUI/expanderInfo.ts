@@ -22,4 +22,22 @@ export const expanderInfo = {
   gr: 'How many dB the expander is currently turning the signal down. Spikes on quiet gaps are normal; a meter stuck deep means you’re continuously gating the body.',
   relThreshActive:
     'Whether to use the release threshold as the close threshold. If disabled, the threshold is used as the close threshold.',
+  panelDetector:
+    'Main open detector: filters, Peak/RMS/Opto, stereo link, and the external Sidechain key switch. This is what tries to open the gate.',
+  panelInv1:
+    'Inverse sidechain 1 — forces the gate closed only when this key is louder than the main detector (relative). Snare bleed on a quiet tom → closed; real tom (or tom+snare together) → stays open. LED = armed; tab turns warn while actually holding shut.',
+  panelInv2:
+    'Inverse sidechain 2 — second relative inhibit key (e.g. kick). Same law as Inv 1: closes only when this bus outranks the main detector.',
+  invActive:
+    'Arms this inverse sidechain. When on, the Inhibit input can force the expander toward Range — but only when that key is stronger than the main detector. Host must route audio to Inhibit 1 / Inhibit 2. Tab turns warn while this path is holding the gate shut; the dashed history trace shows the same over time.',
+  invGain:
+    'Makeup/cut on the inhibit key before its filters and the relative compare. Raise to make this key win more easily against the main; lower if it closes on real hits.',
+  invThreshold:
+    'Absolute floor on the inhibit key before it can compete. Below this, Inv is ignored (noise floor). Above it, closing still needs the key to be louder than the main detector — equal/louder main keeps the gate open (simultaneous tom+snare).',
+  invHold:
+    'Keeps a winning inhibit closed for this long after the relative desire falls. Useful so a kick or snare body keeps a quiet tom gate shut for the whole hit.',
+  invRelease:
+    'How fast the force-closed amount fades after Hold. Short = gate can reopen quickly; longer = smoother hand-off back to the main detector.',
+  invListen:
+    'Solos this inhibit path (post filter / gain) so you can tune HP/LP and threshold by ear. Exclusive with the main Sidechain Listen and the other Inv Listen.',
 };

@@ -26,6 +26,16 @@
         "name": "Sidechain",
         "channels": 2,
         "type": "aux"
+      },
+      {
+        "name": "Inhibit 1",
+        "channels": 2,
+        "type": "aux"
+      },
+      {
+        "name": "Inhibit 2",
+        "channels": 2,
+        "type": "aux"
       }
     ],
     "audio_outputs": [
@@ -226,6 +236,226 @@
     {
       "id": "rel_thresh_active",
       "name": "Rel Thresh Active",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "inv1_active",
+      "name": "Inv 1 Active",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "inv1_gain",
+      "name": "Inv 1 Gain",
+      "type": "float",
+      "unit": "dB",
+      "min": -24.0,
+      "max": 24.0,
+      "default": 0.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "inv1_threshold",
+      "name": "Inv 1 Thresh",
+      "type": "float",
+      "unit": "dB",
+      "min": -60.0,
+      "max": 0.0,
+      "default": -24.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "inv1_hold",
+      "name": "Inv 1 Hold",
+      "type": "float",
+      "unit": "ms",
+      "min": 0.0,
+      "max": 500.0,
+      "default": 50.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "inv1_release",
+      "name": "Inv 1 Release",
+      "type": "float",
+      "unit": "ms",
+      "min": 1.0,
+      "max": 2000.0,
+      "default": 120.0,
+      "scale": "log",
+      "precision": 0
+    },
+    {
+      "id": "inv1_hipass",
+      "name": "Inv 1 Highpass",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 20.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "inv1_lopass",
+      "name": "Inv 1 Lowpass",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 20000.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "inv1_hp_mode",
+      "name": "Inv 1 HP Mode",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "inv1_lp_mode",
+      "name": "Inv 1 LP Mode",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "inv1_listen",
+      "name": "Inv 1 Listen",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "inv2_active",
+      "name": "Inv 2 Active",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "inv2_gain",
+      "name": "Inv 2 Gain",
+      "type": "float",
+      "unit": "dB",
+      "min": -24.0,
+      "max": 24.0,
+      "default": 0.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "inv2_threshold",
+      "name": "Inv 2 Thresh",
+      "type": "float",
+      "unit": "dB",
+      "min": -60.0,
+      "max": 0.0,
+      "default": -24.0,
+      "scale": "dB",
+      "precision": 1
+    },
+    {
+      "id": "inv2_hold",
+      "name": "Inv 2 Hold",
+      "type": "float",
+      "unit": "ms",
+      "min": 0.0,
+      "max": 500.0,
+      "default": 50.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "inv2_release",
+      "name": "Inv 2 Release",
+      "type": "float",
+      "unit": "ms",
+      "min": 1.0,
+      "max": 2000.0,
+      "default": 120.0,
+      "scale": "log",
+      "precision": 0
+    },
+    {
+      "id": "inv2_hipass",
+      "name": "Inv 2 Highpass",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 20.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "inv2_lopass",
+      "name": "Inv 2 Lowpass",
+      "type": "float",
+      "unit": "Hz",
+      "min": 20.0,
+      "max": 20000.0,
+      "default": 20000.0,
+      "scale": "log",
+      "precision": 1
+    },
+    {
+      "id": "inv2_hp_mode",
+      "name": "Inv 2 HP Mode",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "inv2_lp_mode",
+      "name": "Inv 2 LP Mode",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "inv2_listen",
+      "name": "Inv 2 Listen",
       "type": "float",
       "unit": "",
       "min": 0.0,

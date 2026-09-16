@@ -1,12 +1,16 @@
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
+import type { DynamicValue } from '@deutschesoft/awml';
 import { Header } from '../../components';
 import {
+  Button,
   Buttons,
   DynamicsChart,
   FrequencyRange,
   HistoryChart,
   Knob,
   LevelMeter,
+  State,
   Toggle,
   WithInfo,
 } from '../../widgets';
@@ -15,7 +19,9 @@ import {
   EXPANDER_LINK_ENTRIES,
   EXPANDER_MODE_ENTRIES,
   expanderParamDefault,
+  type ExpanderPanelId,
   type IExpanderHost,
+  type IExpanderInhibitHost,
 } from '../../host/expanderHost';
 import '../PluginUI.scss';
 import './ExpanderUI.scss';
@@ -88,6 +94,152 @@ const RANGE_LABELS = [
   { pos: 0, label: '0' },
 ];
 
+const GAIN_DOTS = [-24, -12, -6, 0, 6, 12, 24];
+const GAIN_LABELS = [
+  { pos: -24, label: '−24' },
+  { pos: -12, label: '−12' },
+  { pos: 0, label: '0' },
+  { pos: 12, label: '12' },
+  { pos: 24, label: '24' },
+];
+
+/** Toggle `.inhibit-fire` on the AUX button from a 0…1 viz stream — no React re-render. */
+function useFiringWarnClass(
+  wrapRef: RefObject<HTMLElement | null>,
+  amount$: DynamicValue<number> | undefined,
+) {
+  useEffect(() => {
+    if (!amount$) return;
+    const apply = (v: number) => {
+      const btn =
+        wrapRef.current?.querySelector<HTMLElement>('.aux-button') ?? null;
+      btn?.classList.toggle('inhibit-fire', v > 0.05);
+    };
+    apply(amount$.value ?? 0);
+    return amount$.subscribe(apply);
+  }, [amount$, wrapRef]);
+}
+
+function PanelTab(props: {
+  label: string;
+  selected: boolean;
+  onSelect: () => void;
+  info: string;
+  led$?: DynamicValue<boolean>;
+  firing$?: DynamicValue<number>;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useFiringWarnClass(wrapRef, props.firing$);
+
+  return (
+    <WithInfo title={props.info} className="panel-tab-info">
+      <div className="panel-tab" ref={wrapRef}>
+        {props.led$ ? (
+          <State
+            state$={props.led$}
+            className="tab-led"
+            color="var(--color-accent)"
+          />
+        ) : null}
+        <Button
+          label={props.label}
+          state={props.selected}
+          onClick={props.onSelect}
+        />
+      </div>
+    </WithInfo>
+  );
+}
+
+function InhibitControls(props: {
+  host: IExpanderHost;
+  inv: IExpanderInhibitHost;
+  prefix: 'inv1' | 'inv2';
+}) {
+  const { host, inv, prefix } = props;
+  const edit = (id: number) => ({
+    beginEdit: () => host.beginEdit(id),
+    endEdit: () => host.endEdit(id),
+  });
+
+  return (
+    <div className="inhibit-controls">
+      <WithInfo title={expanderInfo.invActive}>
+        <Toggle
+          state$={inv.active$}
+          icon="power"
+          {...edit(paramIds[`${prefix}_active`])}
+          className="warn"
+        />
+      </WithInfo>
+      <WithInfo title={expanderInfo.invGain}>
+        <Knob
+          label="Gain"
+          value$={inv.gain$}
+          min={-24}
+          max={24}
+          reset={expanderParamDefault(`${prefix}_gain`)}
+          base={0}
+          dots={GAIN_DOTS}
+          labels={GAIN_LABELS}
+          size="small"
+          scale="decibel"
+          log_factor={2}
+          {...edit(paramIds[`${prefix}_gain`])}
+        />
+      </WithInfo>
+      <WithInfo title={expanderInfo.invThreshold}>
+        <Knob
+          label="Thresh"
+          value$={inv.threshold$}
+          min={-60}
+          max={0}
+          reset={expanderParamDefault(`${prefix}_threshold`)}
+          base={0}
+          dots={THRESH_DOTS}
+          labels={THRESH_LABELS}
+          size="small"
+          scale="decibel"
+          log_factor={3}
+          {...edit(paramIds[`${prefix}_threshold`])}
+        />
+      </WithInfo>
+      <WithInfo title={expanderInfo.invHold}>
+        <Knob
+          label="Hold"
+          value$={inv.hold$}
+          min={0}
+          max={500}
+          reset={expanderParamDefault(`${prefix}_hold`)}
+          dots={HOLD_DOTS}
+          labels={HOLD_LABELS}
+          size="small"
+          scale="log2"
+          log_factor={3}
+          {...{ 'value.format': (v: number) => `${v.toFixed(0)}` }}
+          {...edit(paramIds[`${prefix}_hold`])}
+        />
+      </WithInfo>
+      <WithInfo title={expanderInfo.invRelease}>
+        <Knob
+          label="Release"
+          value$={inv.release$}
+          min={1}
+          max={2000}
+          reset={expanderParamDefault(`${prefix}_release`)}
+          scale="log2"
+          log_factor={4}
+          dots={RELEASE_DOTS}
+          labels={RELEASE_LABELS}
+          size="small"
+          {...{ 'value.format': (v: number) => `${v.toFixed(0)}` }}
+          {...edit(paramIds[`${prefix}_release`])}
+        />
+      </WithInfo>
+    </div>
+  );
+}
+
 export function ExpanderUI(props: ExpanderUIProps) {
   const { host } = props;
   const edit = (id: number) => ({
@@ -97,13 +249,15 @@ export function ExpanderUI(props: ExpanderUIProps) {
   const mode = useDynamicValueReadonly(host.mode$, 0);
   const link = useDynamicValueReadonly(host.link$, 0);
   const openThresh = useDynamicValueReadonly(host.threshold$, -32);
+  const [panel, setPanel] = useState<ExpanderPanelId>('detector');
+
+  const isDetector = panel === 'detector';
+  const invPrefix = panel === 'inv2' ? 'inv2' : 'inv1';
+  const inv = panel === 'inv2' ? host.inv2 : host.inv1;
 
   return (
     <div className="ExpanderUI PluginUI">
       <Header title="Expander">
-        <WithInfo title={expanderInfo.sidechainActive}>
-          <Toggle state$={host.sidechainActive$} icon="sidechain" className="warn" />
-        </WithInfo>
         <WithInfo title={expanderInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>
@@ -122,47 +276,103 @@ export function ExpanderUI(props: ExpanderUIProps) {
               toFront: true,
               gradient: true,
             },
+            {
+              className: 'hist-inhibit',
+              mode: 'line',
+              toFront: true,
+              visible$: host.inhibitHistVisible$,
+            },
           ]}
         />
       </div>
 
-      <div className="block detector">
-        <div className="title">Detector</div>
-        <FrequencyRange
-          title="Sidechain"
-          hipass$={host.hipass$}
-          lopass$={host.lopass$}
-          hpMode$={host.hpMode$}
-          lpMode$={host.lpMode$}
-          listen$={host.listen$}
-          hipassDefault={expanderParamDefault('hipass')}
-          lopassDefault={expanderParamDefault('lopass')}
-          hipassEdit={edit(paramIds.hipass)}
-          lopassEdit={edit(paramIds.lopass)}
-        />
-        <div className="selects">
-          <WithInfo title={expanderInfo.mode} className="info-block">
-            <Buttons
-              entries={EXPANDER_MODE_ENTRIES}
-              value={mode}
-              onChange={(v) => {
-                host.beginEdit(paramIds.mode);
-                host.mode$.set(v);
-                host.endEdit(paramIds.mode);
-              }}
-            />
-          </WithInfo>
-          <WithInfo title={expanderInfo.link} className="info-block">
-            <Buttons
-              entries={EXPANDER_LINK_ENTRIES}
-              value={link}
-              onChange={(v) => {
-                host.beginEdit(paramIds.link);
-                host.link$.set(v);
-                host.endEdit(paramIds.link);
-              }}
-            />
-          </WithInfo>
+      <div className={`block panel panel-${panel}`}>
+        <div className="panel-nav">
+          <PanelTab
+            label="Detector"
+            selected={panel === 'detector'}
+            onSelect={() => setPanel('detector')}
+            info={expanderInfo.panelDetector}
+          />
+          <PanelTab
+            label="Inv 1"
+            selected={panel === 'inv1'}
+            onSelect={() => setPanel('inv1')}
+            info={expanderInfo.panelInv1}
+            led$={host.inv1.active$}
+            firing$={host.inv1.amount$}
+          />
+          <PanelTab
+            label="Inv 2"
+            selected={panel === 'inv2'}
+            onSelect={() => setPanel('inv2')}
+            info={expanderInfo.panelInv2}
+            led$={host.inv2.active$}
+            firing$={host.inv2.amount$}
+          />
+        </div>
+
+        <div className="panel-content">
+          <FrequencyRange
+            hipass$={isDetector ? host.hipass$ : inv.hipass$}
+            lopass$={isDetector ? host.lopass$ : inv.lopass$}
+            hpMode$={isDetector ? host.hpMode$ : inv.hpMode$}
+            lpMode$={isDetector ? host.lpMode$ : inv.lpMode$}
+            listen$={isDetector ? host.listen$ : inv.listen$}
+            listenInfo={isDetector ? undefined : expanderInfo.invListen}
+            hipassDefault={expanderParamDefault(
+              isDetector ? 'hipass' : `${invPrefix}_hipass`,
+            )}
+            lopassDefault={expanderParamDefault(
+              isDetector ? 'lopass' : `${invPrefix}_lopass`,
+            )}
+            hipassEdit={edit(
+              isDetector ? paramIds.hipass : paramIds[`${invPrefix}_hipass`],
+            )}
+            lopassEdit={edit(
+              isDetector ? paramIds.lopass : paramIds[`${invPrefix}_lopass`],
+            )}
+          />
+
+          {isDetector ? (
+            <div className="selects">
+              <WithInfo
+                title={expanderInfo.sidechainActive}
+                className="sc-toggle">
+                <Toggle
+                  state$={host.sidechainActive$}
+                  icon="sidechain"
+                  className="warn"
+                />
+              </WithInfo>
+              <div className="select-buttons">
+                <WithInfo title={expanderInfo.mode} className="info-block">
+                  <Buttons
+                    entries={EXPANDER_MODE_ENTRIES}
+                    value={mode}
+                    onChange={(v) => {
+                      host.beginEdit(paramIds.mode);
+                      host.mode$.set(v);
+                      host.endEdit(paramIds.mode);
+                    }}
+                  />
+                </WithInfo>
+                <WithInfo title={expanderInfo.link} className="info-block">
+                  <Buttons
+                    entries={EXPANDER_LINK_ENTRIES}
+                    value={link}
+                    onChange={(v) => {
+                      host.beginEdit(paramIds.link);
+                      host.link$.set(v);
+                      host.endEdit(paramIds.link);
+                    }}
+                  />
+                </WithInfo>
+              </div>
+            </div>
+          ) : (
+            <InhibitControls host={host} inv={inv} prefix={invPrefix} />
+          )}
         </div>
       </div>
 

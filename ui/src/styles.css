@@ -231,11 +231,52 @@ textarea::selection {
   align-items: stretch;
 
   > .panel-nav {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+
+    > .Button,
+    > .panel-tab-info {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
     > .Button {
       border-radius: 0;
       height: auto;
       min-height: 0;
-      flex: 1 1 auto;
+    }
+
+    > .panel-tab-info {
+      display: flex;
+
+      > .panel-tab {
+        flex: 1;
+        display: flex;
+        align-items: stretch;
+        position: relative;
+        min-width: 0;
+
+        > .tab-led {
+          position: absolute;
+          top: 50%;
+          left: var(--gap);
+          transform: translateY(-50%);
+          z-index: 1;
+          pointer-events: none;
+          --aux-state-width: 12px;
+          --aux-state-height: 12px;
+          --color-accent: var(--color-warn);
+        }
+
+        > .Button {
+          flex: 1;
+          border-radius: 0;
+          height: auto;
+          min-height: 0;
+          width: 100%;
+        }
+      }
     }
   }
 
@@ -257,6 +298,12 @@ textarea::selection {
       background: var(--color-warn) !important;
       color: var(--contrast-warn);
     }
+  }
+
+  /* Inverse-SC tab while holding the gate closed (selected or not). */
+  &.inhibit-fire {
+    background: var(--color-warn) !important;
+    color: var(--contrast-warn);
   }
 
   > .aux-icon {

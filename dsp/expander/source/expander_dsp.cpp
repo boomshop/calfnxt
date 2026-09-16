@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <utility>
 
 namespace calfNXT {
 namespace Expander {
@@ -24,6 +25,19 @@ float linToDbSafe(float lin)
   if (!(lin > 1.0e-12f))
     return -96.f;
   return 20.f * std::log10(lin);
+}
+
+/** Inv closes only when louder than main. Equal levels → 0 (main wins). Soft ~6 dB. */
+float relativeInhibitDesire(float invLin, float mainLin, float threshDb)
+{
+  const float thr = Dsp::dbToLin(std::clamp(threshDb, -120.f, 0.f));
+  if (!(invLin >= thr))
+    return 0.f;
+  constexpr float kSoftDb = 6.f;
+  const float dom = linToDbSafe(invLin) - linToDbSafe(mainLin);
+  if (dom <= 0.f)
+    return 0.f;
+  return std::clamp(dom / kSoftDb, 0.f, 1.f);
 }
 
 Dsp::DetectorMode detectorModeFromPlain(float v)
@@ -51,6 +65,31 @@ Dsp::StereoLink stereoLinkFromPlain(float v)
       return Dsp::StereoLink::Max;
   }
 }
+
+std::pair<float, float> busAt(ProcessData& data, int32 bus, int32 i, float fallbackL,
+                              float fallbackR)
+{
+  if (bus < 0 || bus >= data.numInputs || !data.inputs)
+    return {fallbackL, fallbackR};
+  if (data.symbolicSampleSize == kSample32)
+  {
+    const auto& in = data.inputs[bus];
+    if (!in.channelBuffers32 || !in.channelBuffers32[0])
+      return {fallbackL, fallbackR};
+    const float L = in.channelBuffers32[0][i];
+    const float R =
+      in.numChannels > 1 && in.channelBuffers32[1] ? in.channelBuffers32[1][i] : L;
+    return {L, R};
+  }
+  const auto& in = data.inputs[bus];
+  if (!in.channelBuffers64 || !in.channelBuffers64[0])
+    return {fallbackL, fallbackR};
+  const float L = static_cast<float>(in.channelBuffers64[0][i]);
+  const float R = in.numChannels > 1 && in.channelBuffers64[1]
+                    ? static_cast<float>(in.channelBuffers64[1][i])
+                    : L;
+  return {L, R};
+}
 } // namespace
 
 ExpanderPlugin::ExpanderPlugin()
@@ -65,6 +104,8 @@ tresult PLUGIN_API ExpanderPlugin::initialize(FUnknown* context)
     return result;
 
   addStereoWithSidechainIO();
+  addAudioInput(STR16("Inhibit 1"), SpeakerArr::kStereo, kAux, 0);
+  addAudioInput(STR16("Inhibit 2"), SpeakerArr::kStereo, kAux, 0);
   registerParameters(parameters);
   readParamPlains(params_, kParamCount);
   return kResultOk;
@@ -76,6 +117,13 @@ void ExpanderPlugin::resetProcessing()
   gx_.reset();
   sc_.setSampleRate(static_cast<float>(sampleRate_));
   sc_.reset();
+  for (int i = 0; i < kInhibitCount; ++i)
+  {
+    invSc_[i].setSampleRate(static_cast<float>(sampleRate_));
+    invSc_[i].reset();
+    invEnv_[i].reset();
+    invAmount_[i] = 0.f;
+  }
   grMeter_.reset(static_cast<float>(sampleRate_));
   {
     std::lock_guard<std::mutex> lock(vizMutex_);
@@ -118,10 +166,28 @@ ExpanderPlugin::BlockState ExpanderPlugin::makeBlockState() const
   state.listen = params_[kParamListen] >= 0.5f;
   state.sidechainActive = params_[kParamSidechainActive] >= 0.5f;
   state.link = stereoLinkFromPlain(params_[kParamLink]);
+
+  const ParamID activeId[kInhibitCount] = {kParamInv1Active, kParamInv2Active};
+  const ParamID listenId[kInhibitCount] = {kParamInv1Listen, kParamInv2Listen};
+  const ParamID gainId[kInhibitCount] = {kParamInv1Gain, kParamInv2Gain};
+  const ParamID threshId[kInhibitCount] = {kParamInv1Threshold, kParamInv2Threshold};
+  const ParamID holdId[kInhibitCount] = {kParamInv1Hold, kParamInv2Hold};
+  const ParamID releaseId[kInhibitCount] = {kParamInv1Release, kParamInv2Release};
+
+  for (int i = 0; i < kInhibitCount; ++i)
+  {
+    state.invActive[i] = params_[activeId[i]] >= 0.5f;
+    state.invListen[i] = params_[listenId[i]] >= 0.5f;
+    state.invGainLin[i] = Dsp::dbToLin(params_[gainId[i]]);
+    state.invThreshDb[i] = params_[threshId[i]];
+    state.invHoldMs[i] = params_[holdId[i]];
+    state.invReleaseMs[i] = params_[releaseId[i]];
+  }
   return state;
 }
 
-void ExpanderPlugin::histFeedSample(float audioPeakLin, float detPeakLin, float grLin)
+void ExpanderPlugin::histFeedSample(float audioPeakLin, float detPeakLin, float grLin,
+                                    float inhibitLin)
 {
   if (!vizConsumerActive())
     return;
@@ -132,6 +198,7 @@ void ExpanderPlugin::histFeedSample(float audioPeakLin, float detPeakLin, float 
     histBuf_[pos + 2] = grLin;
   else
     histBuf_[pos + 2] = std::min(grLin, histBuf_[pos + 2]);
+  histBuf_[pos + 3] = std::max(inhibitLin, histBuf_[pos + 3]);
 
   histSampleCount_ += 1;
   if (histSampleCount_ >= histSamplesPerSlot_)
@@ -141,6 +208,7 @@ void ExpanderPlugin::histFeedSample(float audioPeakLin, float detPeakLin, float 
     histBuf_[histPos_ + 0] = audioPeakLin;
     histBuf_[histPos_ + 1] = detPeakLin;
     histBuf_[histPos_ + 2] = grLin;
+    histBuf_[histPos_ + 3] = inhibitLin;
   }
 }
 
@@ -154,12 +222,15 @@ void ExpanderPlugin::publishHistSnapshot()
 }
 
 void ExpanderPlugin::processSample(const BlockState& state, float& L, float& R, float scL,
-                                   float scR)
+                                   float scR, float inv1L, float inv1R, float inv2L,
+                                   float inv2R)
 {
   const float dryL = L;
   const float dryR = R;
   const float audioPeak = std::max(std::fabs(dryL), std::fabs(dryR));
+  const float sr = static_cast<float>(sampleRate_);
 
+  // Main open-detector first — relative inhibit compares against this.
   float detL = scL;
   float detR = scR;
   if (state.link == Dsp::StereoLink::Mid)
@@ -173,25 +244,83 @@ void ExpanderPlugin::processSample(const BlockState& state, float& L, float& R, 
     detL = sc_.processChannel(0, scL);
     detR = sc_.processChannel(1, scR);
   }
+  const float mainPeak = std::max(std::fabs(detL), std::fabs(detR));
+  const float detPeak = mainPeak;
+
+  const float invInL[kInhibitCount] = {inv1L, inv2L};
+  const float invInR[kInhibitCount] = {inv1R, inv2R};
+  float invDetL[kInhibitCount] {};
+  float invDetR[kInhibitCount] {};
+  float inhibitCombined = 0.f;
+
+  for (int i = 0; i < kInhibitCount; ++i)
+  {
+    // Always filter when armed or listening so Listen can tune before arming.
+    if (!state.invActive[i] && !state.invListen[i])
+    {
+      invEnv_[i].reset();
+      invAmount_[i] = 0.f;
+      continue;
+    }
+
+    const float g = state.invGainLin[i];
+    float iL = invInL[i] * g;
+    float iR = invInR[i] * g;
+    iL = invSc_[i].processChannel(0, iL);
+    iR = invSc_[i].processChannel(1, iR);
+    invDetL[i] = iL;
+    invDetR[i] = iR;
+
+    if (state.invActive[i])
+    {
+      const float invPeak = std::max(std::fabs(iL), std::fabs(iR));
+      // Absolute thresh arms the key; relative vs main decides who wins:
+      // main↑ inv↓ → open; main↓ inv↑ → close; both↑ → open.
+      const float desire =
+        relativeInhibitDesire(invPeak, mainPeak, state.invThreshDb[i]);
+      invAmount_[i] =
+        invEnv_[i].processDesire(desire, state.invHoldMs[i], state.invReleaseMs[i], sr);
+      inhibitCombined = std::max(inhibitCombined, invAmount_[i]);
+    }
+    else
+    {
+      invEnv_[i].reset();
+      invAmount_[i] = 0.f;
+    }
+  }
+
+  // Exclusive listen: Inv1 > Inv2 > main sidechain detector.
+  if (!state.bypass)
+  {
+    for (int i = 0; i < kInhibitCount; ++i)
+    {
+      if (state.invListen[i])
+      {
+        L = invDetL[i];
+        R = invDetR[i];
+        const float gr = gx_.processDetector(detL, detR);
+        grMeter_.process(gr);
+        histFeedSample(audioPeak, detPeak, gr, inhibitCombined);
+        return;
+      }
+    }
+  }
 
   if (state.listen && !state.bypass)
   {
     L = detL;
     R = detR;
     const float gr = gx_.processDetector(detL, detR);
-    const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
     grMeter_.process(gr);
-    histFeedSample(audioPeak, detPeak, gr);
+    histFeedSample(audioPeak, detPeak, gr, inhibitCombined);
     return;
   }
-
-  const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
 
   if (state.bypass)
   {
     gx_.processDetector(detL, detR);
     grMeter_.forceZero();
-    histFeedSample(audioPeak, detPeak, 1.f);
+    histFeedSample(audioPeak, detPeak, 1.f, inhibitCombined);
     {
       std::lock_guard<std::mutex> lock(vizMutex_);
       const float inDb = linToDbSafe(gx_.lastDetectorLin());
@@ -201,17 +330,28 @@ void ExpanderPlugin::processSample(const BlockState& state, float& L, float& R, 
     return;
   }
 
-  const float gr = gx_.processDetector(detL, detR);
+  float gr = gx_.processDetector(detL, detR);
+  // Transfer-chart point follows the expander law only (stays on the curve).
+  // Inhibit can pull GR deeper than the law — that belongs on GR meter / Block /
+  // dashed history, not as a floating off-curve operating point.
+  const float grLaw = gr;
+  if (inhibitCombined > 0.f)
+  {
+    const float closed = Dsp::dbToLin(params_[kParamRange]);
+    const float forced = 1.f + inhibitCombined * (closed - 1.f);
+    gr = std::min(gr, forced);
+  }
+
   const float det = gx_.lastDetectorLin();
   grMeter_.process(gr);
-  histFeedSample(audioPeak, detPeak, gr);
+  histFeedSample(audioPeak, detPeak, gr, inhibitCombined);
 
   const float inDb = linToDbSafe(det);
-  const float grDb = linToDbSafe(gr);
+  const float grLawDb = linToDbSafe(grLaw);
   {
     std::lock_guard<std::mutex> lock(vizMutex_);
     pointInDb_ = inDb;
-    pointOutDb_ = inDb + grDb;
+    pointOutDb_ = inDb + grLawDb;
   }
 
   L = dryL * gr;
@@ -224,6 +364,15 @@ int ExpanderPlugin::takeGainReductionDb(float* out, int maxOut)
     return 0;
   out[0] = grMeter_.takeDb();
   return 1;
+}
+
+int ExpanderPlugin::takeLfoActivity(float* out, int maxOut)
+{
+  if (!out || maxOut < 2)
+    return 0;
+  out[0] = invAmount_[0];
+  out[1] = invAmount_[1];
+  return 2;
 }
 
 int ExpanderPlugin::takeDynamicsPoint(float* out, int maxOut)
@@ -259,6 +408,8 @@ int ExpanderPlugin::takeEnvelopeDisplay(float* out, int maxOut)
       if (!(gr > 0.f))
         gr = 1.f;
       out[i * kHistChannels + 2] = std::clamp(gr, 1.0e-6f, 1.f);
+      out[i * kHistChannels + 3] =
+        std::clamp(std::fabs(histSnapshot_[srcIdx + 3]), 0.f, 1.f);
     }
   }
   out[outCount] = std::clamp(phase, 0.f, 1.f);
@@ -286,9 +437,25 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
     Dsp::filterModeToStages(params_[kParamHpMode]),
     Dsp::filterModeToStages(params_[kParamLpMode]));
 
+  const ParamID invHp[kInhibitCount] = {kParamInv1Hipass, kParamInv2Hipass};
+  const ParamID invLp[kInhibitCount] = {kParamInv1Lopass, kParamInv2Lopass};
+  const ParamID invHpMode[kInhibitCount] = {kParamInv1HpMode, kParamInv2HpMode};
+  const ParamID invLpMode[kInhibitCount] = {kParamInv1LpMode, kParamInv2LpMode};
+  for (int i = 0; i < kInhibitCount; ++i)
+  {
+    invSc_[i].setSampleRate(static_cast<float>(sampleRate_));
+    invSc_[i].setParams(
+      params_[invHp[i]],
+      params_[invLp[i]],
+      Dsp::filterModeToStages(params_[invHpMode[i]]),
+      Dsp::filterModeToStages(params_[invLpMode[i]]));
+  }
+
   const float openThresh = params_[kParamThreshold];
   const bool relThreshActive = params_[kParamRelThreshActive] >= 0.5f;
-  const float relThresh = std::min(relThreshActive ? params_[kParamReleaseThreshold] : params_[kParamThreshold], openThresh);
+  const float relThresh =
+    std::min(relThreshActive ? params_[kParamReleaseThreshold] : params_[kParamThreshold],
+             openThresh);
 
   gx_.setSampleRate(static_cast<float>(sampleRate_));
   gx_.setParams(
@@ -314,37 +481,44 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
 
   const bool wantExtSc = state.sidechainActive && data.numInputs >= 2;
   const bool scBusActive = wantExtSc && isAudioInputActive(1);
+  const bool inv1WantBus =
+    (state.invActive[0] || state.invListen[0]) && data.numInputs >= 3
+    && isAudioInputActive(2);
+  const bool inv2WantBus =
+    (state.invActive[1] || state.invListen[1]) && data.numInputs >= 4
+    && isAudioInputActive(3);
+  const bool anyInvWork =
+    state.invActive[0] || state.invActive[1] || state.invListen[0]
+    || state.invListen[1];
 
   auto sidechainAt = [&](int32 i, float mainL, float mainR) {
     if (!scBusActive)
       return std::pair<float, float>(mainL, mainR);
-    if (data.symbolicSampleSize == kSample32)
-    {
-      const auto& in = data.inputs[1];
-      const float scL = in.channelBuffers32[0][i];
-      const float scR = in.numChannels > 1 ? in.channelBuffers32[1][i] : scL;
-      return std::pair<float, float>(scL, scR);
-    }
-    const auto& in = data.inputs[1];
-    const float scL = static_cast<float>(in.channelBuffers64[0][i]);
-    const float scR =
-      in.numChannels > 1 ? static_cast<float>(in.channelBuffers64[1][i]) : scL;
-    return std::pair<float, float>(scL, scR);
+    return busAt(data, 1, i, mainL, mainR);
+  };
+
+  auto inhibitAt = [&](int slot, int32 i) -> std::pair<float, float> {
+    const int bus = 2 + slot;
+    const bool active = slot == 0 ? inv1WantBus : inv2WantBus;
+    if (!active)
+      return {0.f, 0.f};
+    return busAt(data, bus, i, 0.f, 0.f);
   };
 
   const bool hasHostAudio = io_.begin(data);
   const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
 
-  // Idle only when main is quiet AND expansion settled; ext SC keeps us awake.
-  // Host still clocks audio: advance history with silence so the chart keeps scrolling.
-  if (quietIn && gx_.isIdle() && !scBusActive)
+  // Idle only when main is quiet, expansion settled, and no key/inhibit work.
+  if (quietIn && gx_.isIdle() && !scBusActive && !anyInvWork)
   {
     grMeter_.forceZero();
+    invAmount_[0] = 0.f;
+    invAmount_[1] = 0.f;
     if (hasHostAudio)
     {
       const int32 n = data.numSamples;
       for (int32 i = 0; i < n; ++i)
-        histFeedSample(0.f, 0.f, 1.f);
+        histFeedSample(0.f, 0.f, 1.f, 0.f);
     }
     publishHistSnapshot();
     if (hasHostAudio)
@@ -353,6 +527,13 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
   }
 
   const int32 nFrames = data.numSamples;
+
+  auto runFrame = [&](int32 i, float& L, float& R) {
+    const auto [scL, scR] = sidechainAt(i, L, R);
+    const auto [i1L, i1R] = inhibitAt(0, i);
+    const auto [i2L, i2R] = inhibitAt(1, i);
+    processSample(state, L, R, scL, scR, i1L, i1R, i2L, i2R);
+  };
 
   if (!hasHostAudio)
   {
@@ -363,8 +544,7 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
       {
         float L = 0.f;
         float R = 0.f;
-        const auto [scL, scR] = sidechainAt(i, L, R);
-        processSample(state, L, R, scL, scR);
+        runFrame(i, L, R);
         if (canWrite && nCh > 0)
           out[0][i] = L;
         if (canWrite && nCh > 1)
@@ -389,8 +569,7 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
     {
       float L = nCh > 0 ? out[0][i] : 0.f;
       float R = nCh > 1 ? out[1][i] : L;
-      const auto [scL, scR] = sidechainAt(i, L, R);
-      processSample(state, L, R, scL, scR);
+      runFrame(i, L, R);
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)
@@ -405,8 +584,7 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
     {
       float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
       float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
-      const auto [scL, scR] = sidechainAt(i, L, R);
-      processSample(state, L, R, scL, scR);
+      runFrame(i, L, R);
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)
@@ -416,6 +594,8 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
 
   publishHistSnapshot();
   sc_.sanitize();
+  for (int i = 0; i < kInhibitCount; ++i)
+    invSc_[i].sanitize();
   io_.end(data);
   return kResultOk;
 }
@@ -433,7 +613,7 @@ tresult PLUGIN_API ExpanderPlugin::setState(IBStream* state)
     return kResultFalse;
   if (!streamer.readInt32u(version) || version != kStateVersion)
     return kResultFalse;
-  // Append-only params (e.g. rel_thresh_active): older saves may have fewer plains.
+  // Append-only params: older saves may have fewer plains.
   if (!streamer.readInt32(count) || count <= 0 || count > kParamCount)
     return kResultFalse;
 

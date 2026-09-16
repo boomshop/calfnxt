@@ -8,28 +8,85 @@
     grid-column: 1 / 4;
   }
 
-  > .detector {
-    flex-direction: column;
-
-    > .selects {
+  > .panel {
+    > .panel-content {
       display: flex;
       flex-direction: column;
       gap: var(--gap);
-      align-items: stretch;
+      min-height: 0;
 
-      > .Buttons,
-      > .WithInfo:has(> .Buttons) {
-        .Button {
-          flex: 1;
-          height: auto;
-          min-height: 0;
+      > .FrequencyRange {
+        flex: 1 1 0;
+        min-height: 0;
+      }
+
+      /* Shared bottom strip height → chart area stable Detector ↔ Inv. */
+      > .selects,
+      > .inhibit-controls {
+        flex: 0 0 auto;
+        min-height: 72px;
+      }
+
+      > .selects {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: var(--gap);
+        align-items: stretch;
+
+        /* WithInfo defaults to inline-flex — override for WebKit square sizing. */
+        > .sc-toggle {
+          grid-row: 1 / -1;
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          align-self: stretch;
+          height: 100%;
+          width: auto;
+          aspect-ratio: 1 / 1;
+          box-sizing: border-box;
+
+          > .Toggle {
+            flex: 1 1 auto;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            box-sizing: border-box;
+          }
+        }
+
+        > .select-buttons {
+          grid-column: 2;
+          grid-row: 1 / -1;
+          display: grid;
+          grid-template-rows: 1fr 1fr;
+          gap: var(--gap);
+          min-width: 0;
+
+          > .Buttons,
+          > .WithInfo:has(> .Buttons) {
+            min-height: 0;
+
+            .Button {
+              flex: 1;
+              height: auto;
+              min-height: 0;
+            }
+          }
         }
       }
-    }
 
-    > .FrequencyRange {
-      flex: 1;
-      margin-bottom: var(--gap);
+      > .inhibit-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-evenly;
+        gap: var(--gap);
+
+        .Toggle {
+          padding: 4px;
+          height: auto;
+        }
+      }
     }
   }
 

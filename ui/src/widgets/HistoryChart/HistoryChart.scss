@@ -30,4 +30,19 @@
     stroke-width: 1.75px;
     stroke-opacity: 1;
   }
+
+  /* Inverse-sidechain hold amount — dashed foreground (Tuner/Octaver 2/2). */
+  .hist-inhibit {
+    fill: none;
+    stroke: var(--color-warn);
+    stroke-width: 1.5px;
+    stroke-opacity: 0.5;
+    // stroke-dasharray: 3 3;
+  }
+
+  .hist-hidden {
+    opacity: 0 !important;
+    stroke-opacity: 0 !important;
+    fill-opacity: 0 !important;
+  }
 }

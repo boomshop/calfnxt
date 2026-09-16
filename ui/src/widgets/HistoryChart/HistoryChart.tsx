@@ -99,6 +99,11 @@ export type HistoryGraphSpec = {
    * on the SVG). Style with `stroke: var(--chart-level-stroke)` in CSS.
    */
   gradient?: boolean;
+  /**
+   * When false, series is hidden (CSS) and dots forced to the floor so AUX
+   * does not leave a ghost path. Driven via DynamicValue — no React.
+   */
+  visible$?: DynamicValue<boolean>;
 };
 
 export interface HistoryChartProps {
@@ -163,7 +168,10 @@ export function HistoryChart(props: HistoryChartProps) {
   } = props;
 
   const graphsKey = graphs
-    .map((g) => `${g.className}:${g.mode ?? 'line'}:${!!g.gradient}`)
+    .map(
+      (g) =>
+        `${g.className}:${g.mode ?? 'line'}:${!!g.gradient}:${!!g.visible$}`,
+    )
     .join('|');
 
   const graphsSpecRef = useRef(graphs);
@@ -173,6 +181,7 @@ export function HistoryChart(props: HistoryChartProps) {
   const chartRef = useRef<AuxChartInstance | null>(null);
   const auxGraphsRef = useRef<AuxGraph[]>([]);
   const graphBindingsRef = useRef<Bindings[]>([]);
+  const visibleUnsubsRef = useRef<Array<() => void>>([]);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
   const [gradTargets, setGradTargets] = useState<SVGElement[]>([]);
@@ -199,6 +208,8 @@ export function HistoryChart(props: HistoryChartProps) {
   const detach = useCallback(() => {
     resizeRoRef.current?.disconnect();
     resizeRoRef.current = null;
+    for (const u of visibleUnsubsRef.current) u();
+    visibleUnsubsRef.current = [];
     for (const b of graphBindingsRef.current) b.dispose();
     graphBindingsRef.current = [];
     const chart = chartRef.current;
@@ -208,7 +219,11 @@ export function HistoryChart(props: HistoryChartProps) {
     setChartSvg(null);
     setGradTargets([]);
     if (!chart || chart.isDestructed?.()) return;
-    for (const g of aux) chart.removeGraph(g);
+    for (const g of aux) {
+      // Clear path before remove — AUX otherwise keeps the last stroke.
+      g.set('dots', null);
+      chart.removeGraph(g);
+    }
   }, []);
 
   const attach = useCallback(
@@ -224,6 +239,7 @@ export function HistoryChart(props: HistoryChartProps) {
       const aux: AuxGraph[] = [];
       const grads: SVGElement[] = [];
       const bindingsList: Bindings[] = [];
+      const visibleUnsubs: Array<() => void> = [];
 
       for (let c = 0; c < nCh; ++c) {
         const spec = specs[c]!;
@@ -239,26 +255,55 @@ export function HistoryChart(props: HistoryChartProps) {
 
         const channel = c;
         const toDb = spec.toDb ?? historyLinToDb;
+        const visible$ = spec.visible$;
+
+        const dotsFromBuf = (buf: unknown): HistDot[] | null => {
+          const visible = visible$ ? !!visible$.value : true;
+          g.element?.classList.toggle('hist-hidden', !visible);
+          if (!visible) {
+            // Floor line (not null) so AUX replaces the previous path.
+            const base = historyChannelDots(
+              buf as Float32Array | null,
+              channel,
+              nCh,
+              windowMsRef.current,
+              () => DB_MIN,
+            );
+            return base;
+          }
+          return historyChannelDots(
+            buf as Float32Array | null,
+            channel,
+            nCh,
+            windowMsRef.current,
+            toDb,
+          );
+        };
+
         const bindings = bindAuxOptions(g, [
           {
             name: 'dots',
             backendValue: data$,
             readonly: true,
-            transformReceive: (buf: unknown) =>
-              historyChannelDots(
-                buf as Float32Array | null,
-                channel,
-                nCh,
-                windowMsRef.current,
-                toDb,
-              ),
+            transformReceive: dotsFromBuf,
           },
         ]);
         bindingsList.push(bindings);
+
+        if (visible$) {
+          visibleUnsubs.push(
+            visible$.subscribe(() => {
+              g.set('dots', dotsFromBuf(data$.value));
+            }),
+          );
+          // Initial hide state before first viz tick.
+          g.element?.classList.toggle('hist-hidden', !visible$.value);
+        }
       }
 
       auxGraphsRef.current = aux;
       graphBindingsRef.current = bindingsList;
+      visibleUnsubsRef.current = visibleUnsubs;
       for (const spec of specs) {
         if (spec.toFront) {
           const i = specs.indexOf(spec);

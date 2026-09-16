@@ -1,9 +1,10 @@
 #pragma once
 
 #include "effect_base.h"
-#include "io_stage.h"
 #include "expander.h"
+#include "gain_util.h"
 #include "gr_meter.h"
+#include "io_stage.h"
 #include "sidechain_filter.h"
 #include "viz_source.h"
 
@@ -40,6 +41,9 @@ public:
   const char* vizDynamicsId() const override { return "exp"; }
   int takeEnvelopeDisplay(float* out, int maxOut) override;
   const char* vizEnvelopeId() const override { return "exp"; }
+  /** Inhibit 1/2 hold amount 0…1 (tab warn / activity). */
+  int takeLfoActivity(float* out, int maxOut) override;
+  const char* vizLfoActivityId() const override { return "exp"; }
   void configureVizBins(const char* id, int bins) override;
 
   OBJ_METHODS(ExpanderPlugin, Plugin::EffectBase)
@@ -51,23 +55,76 @@ protected:
   const char* editorHtml() const override { return kEditorHtml; }
 
 private:
-  static constexpr int kHistChannels = 3;
+  static constexpr int kInhibitCount = 2;
+  static constexpr int kHistChannels = 4; // audio, det, gr, inhibit
   static constexpr int kHistSlots = 512;
   static constexpr int kHistMinSlots = 48;
   static constexpr int kHistBufSize = kHistSlots * kHistChannels;
+
+  /**
+   * Inhibit envelope on a 0…1 desire (relative main-vs-inv), not absolute peak.
+   * Instant attack to desire, hold after desire falls, then release.
+   */
+  struct InhibitEnv
+  {
+    float env = 0.f;
+    int holdLeft = 0;
+
+    void reset()
+    {
+      env = 0.f;
+      holdLeft = 0;
+    }
+
+    float processDesire(float desire, float holdMs, float releaseMs, float sampleRate)
+    {
+      desire = std::clamp(desire, 0.f, 1.f);
+      const int holdSamples =
+        static_cast<int>(std::max(0.f, holdMs) * sampleRate * 0.001f + 0.5f);
+      const float releaseMsClamped = std::max(1.f, releaseMs);
+      const float relCoeff =
+        1.f - std::exp(-1.f / (releaseMsClamped * 0.001f * sampleRate));
+
+      if (desire > 1.0e-3f)
+      {
+        if (desire >= env)
+          env = desire;
+        holdLeft = holdSamples;
+      }
+      else if (holdLeft > 0)
+      {
+        --holdLeft;
+      }
+      else if (env > 0.f)
+      {
+        env += (0.f - env) * relCoeff;
+        if (env < 1.0e-4f)
+          env = 0.f;
+      }
+      return env;
+    }
+  };
 
   struct BlockState
   {
     bool bypass = false;
     bool listen = false;
     bool sidechainActive = false;
+    bool invActive[kInhibitCount] {};
+    bool invListen[kInhibitCount] {};
+    float invGainLin[kInhibitCount] {1.f, 1.f};
+    float invThreshDb[kInhibitCount] {-24.f, -24.f};
+    float invHoldMs[kInhibitCount] {};
+    float invReleaseMs[kInhibitCount] {120.f, 120.f};
     Dsp::StereoLink link = Dsp::StereoLink::Max;
   };
 
   BlockState makeBlockState() const;
-  void processSample(const BlockState& state, float& L, float& R, float scL, float scR);
+  void processSample(const BlockState& state, float& L, float& R, float scL, float scR,
+                     float inv1L, float inv1R, float inv2L, float inv2R);
   void resetProcessing();
-  void histFeedSample(float audioPeakLin, float detPeakLin, float grLin);
+  void histFeedSample(float audioPeakLin, float detPeakLin, float grLin,
+                      float inhibitLin);
   void publishHistSnapshot();
 
   float params_[kParamCount] {};
@@ -75,6 +132,9 @@ private:
   double sampleRate_ = 44100.0;
   Dsp::GainExpansion gx_;
   Dsp::SidechainFilter sc_;
+  Dsp::SidechainFilter invSc_[kInhibitCount];
+  InhibitEnv invEnv_[kInhibitCount];
+  float invAmount_[kInhibitCount] {};
   Dsp::GrMeter grMeter_;
   std::mutex vizMutex_;
   float pointInDb_ = -96.f;
