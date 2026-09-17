@@ -4,6 +4,14 @@
 
   > svg {
     > .aux-graphs {
+      // CSS var from useChartGradient — survives AUX path redraws that clear
+      // inline stroke (two FrequencyRange charts fight over layout/size).
+      > .aux-baseline {
+        fill: none;
+        stroke: var(--chart-level-stroke, var(--color-accent));
+        stroke-width: 1.75px;
+      }
+
       > .aux-graph {
         fill: var(--color);
         fill-opacity: 0.05;

@@ -80,8 +80,11 @@ export function useChartGradient(
       svg.insertBefore(defs, svg.firstChild);
     }
 
+    // `:scope >` — a bare `#id` selector can hit another SVG in the same
+    // document (two FrequencyRange charts). Cleanup would then remove the
+    // other chart's gradient and both baselines fall back to solid accent.
     let grad = defs.querySelector(
-      `#${CSS.escape(gradId)}`,
+      `:scope > #${CSS.escape(gradId)}`,
     ) as SVGLinearGradientElement | null;
     let stopCut: SVGStopElement;
     let stopBoost: SVGStopElement;

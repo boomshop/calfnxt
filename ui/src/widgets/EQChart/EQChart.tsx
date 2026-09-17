@@ -170,9 +170,8 @@ export function EQChart(props: EQChartProps) {
     [eq],
   );
   const getEqHeight = useCallback(
-    (svg: SVGSVGElement) =>
-      eq?.range_y?.options?.basis || svg.clientHeight || 1,
-    [eq],
+    (svg: SVGSVGElement) => svg.clientHeight || 1,
+    [],
   );
   const reassertGradStroke = useChartGradient({
     svg: eq?.svg,
