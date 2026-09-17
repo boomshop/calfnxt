@@ -219,16 +219,28 @@ int clampPx(int v, int lo, int hi)
   return std::max(lo, std::min(hi, v));
 }
 
+/** True if `entry` is `KEY=…` for a host-only env we must not pass to GTK3/WebKit. */
+bool isHostOnlyEnv(const char* entry)
+{
+  // Mixbus/Ardour launchers prepend $INSTALL_DIR/lib (older glib) — breaks
+  // system WebKit (exit 127 / black editor).
+  if (std::strncmp(entry, "LD_LIBRARY_PATH=", 16) == 0)
+    return !envFlag("CALFNXT_KEEP_HOST_LDPATH");
+  // Ardour sets GTK_PATH to its GTK2 tree (/etc/ardour9, libgtkmm2ext). The
+  // helper is GTK3+WebKit — inheriting that path makes gtk_init_check fail
+  // before any hostLog line (empty editor, socket reset).
+  if (std::strncmp(entry, "GTK_PATH=", 9) == 0)
+    return true;
+  if (std::strncmp(entry, "GTK2_RC_FILES=", 14) == 0)
+    return true;
+  return false;
+}
+
 /**
- * Child environ for calfnxt-web-host: omit LD_LIBRARY_PATH from spawn envp.
+ * Child environ for calfnxt-web-host: drop host-only library/GTK paths.
  *
- * Mixbus/Ardour launchers prepend $INSTALL_DIR/lib (older glib). The helper is
- * a system WebKitGTK binary; inheriting that path → symbol lookup failure
- * (exit 127, black editor). Omitting LD_LIBRARY_PATH in the child's envp is
- * enough — the helper does not need host JACK/custom paths.
- *
- * Does not unsetenv/setenv the host process. Ardour control surfaces and later
- * dlopen still see the original LD_LIBRARY_PATH. Opt out: CALFNXT_KEEP_HOST_LDPATH.
+ * Does not unsetenv/setenv the host process. Opt out of LD_LIBRARY_PATH
+ * stripping only: CALFNXT_KEEP_HOST_LDPATH (GTK_PATH is always cleared).
  *
  * Returns true if `ptrs` is a replacement environ (storage must stay alive
  * until posix_spawn returns). False → use the process `environ`.
@@ -237,25 +249,45 @@ bool buildWebHostEnviron(std::vector<std::string>& storage, std::vector<char*>& 
 {
   storage.clear();
   ptrs.clear();
-  if (envFlag("CALFNXT_KEEP_HOST_LDPATH"))
-  {
-    logBoth("[calfnxt] helper env: LD_LIBRARY_PATH kept (CALFNXT_KEEP_HOST_LDPATH)\n");
-    return false;
-  }
-  if (!std::getenv("LD_LIBRARY_PATH"))
-    return false;
 
+  bool needSanitize = false;
   for (char** e = environ; e && *e; ++e)
   {
-    if (std::strncmp(*e, "LD_LIBRARY_PATH=", 16) == 0)
+    if (isHostOnlyEnv(*e))
+    {
+      needSanitize = true;
+      break;
+    }
+  }
+  if (!needSanitize)
+    return false;
+
+  bool clearedLd = false;
+  bool clearedGtk = false;
+  for (char** e = environ; e && *e; ++e)
+  {
+    if (isHostOnlyEnv(*e))
+    {
+      if (std::strncmp(*e, "LD_LIBRARY_PATH=", 16) == 0)
+        clearedLd = true;
+      else
+        clearedGtk = true;
       continue;
+    }
     storage.emplace_back(*e);
   }
   ptrs.reserve(storage.size() + 1);
   for (auto& s : storage)
     ptrs.push_back(s.data());
   ptrs.push_back(nullptr);
-  logBoth("[calfnxt] helper env: LD_LIBRARY_PATH cleared for web-host\n");
+  if (envFlag("CALFNXT_KEEP_HOST_LDPATH") && !clearedLd && clearedGtk)
+    logBoth("[calfnxt] helper env: GTK_PATH cleared (LD_LIBRARY_PATH kept)\n");
+  else if (clearedLd && clearedGtk)
+    logBoth("[calfnxt] helper env: LD_LIBRARY_PATH + GTK_PATH cleared for web-host\n");
+  else if (clearedLd)
+    logBoth("[calfnxt] helper env: LD_LIBRARY_PATH cleared for web-host\n");
+  else
+    logBoth("[calfnxt] helper env: GTK_PATH cleared for web-host\n");
   return true;
 }
 
@@ -614,9 +646,9 @@ bool WebEditor::openHelper(void* x11Parent)
   logBoth("[calfnxt] spawned web-host pid=%d\n", static_cast<int>(pid));
 
   // Catch immediate helper failure (missing libs / gtk_init / bad DISPLAY) before
-  // the host paints an empty embed forever. Keep this short — later exits surface
-  // via the 16 ms pump / zombie reap. Dynamic-linker errors go to the child's stderr.
-  for (int i = 0; i < 2; ++i)
+  // the host paints an empty embed forever. gtk_init under Ardour often takes
+  // >10 ms before exit(1) — give it ~50 ms, then assume the child is healthy.
+  for (int i = 0; i < 8; ++i)
   {
     int status = 0;
     const pid_t r = waitpid(helperPid_, &status, WNOHANG);
@@ -625,8 +657,8 @@ bool WebEditor::openHelper(void* x11Parent)
       if (WIFEXITED(status))
       {
         logBoth("[calfnxt] web-host exited immediately (code=%d) — check deps "
-                "(webkit2gtk-4.1, gtk-3), DISPLAY/X11, and host LD_LIBRARY_PATH "
-                "(Mixbus/Ardour bundled glib); try: %s --help\n",
+                "(webkit2gtk-4.1, gtk-3), DISPLAY/X11, host LD_LIBRARY_PATH / "
+                "GTK_PATH (Ardour); try: %s --help\n",
                 WEXITSTATUS(status), helperPath);
       }
       else if (WIFSIGNALED(status))
@@ -640,7 +672,9 @@ bool WebEditor::openHelper(void* x11Parent)
     }
     if (r < 0 && errno == ECHILD)
       break;
-    usleep(5 * 1000);
+    if (i >= 4)
+      return true;
+    usleep(10 * 1000);
   }
   return true;
 }

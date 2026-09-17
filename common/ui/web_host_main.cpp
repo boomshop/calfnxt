@@ -1372,7 +1372,14 @@ int main(int argc, char** argv)
   gdk_set_allowed_backends("x11");
   if (!gtk_init_check(&argc, &argv))
   {
-    std::fprintf(stderr, "[calfnxt-web-host] gtk_init_check failed\n");
+    // Must hit the file log — Ardour swallows helper stderr.
+    hostLog("[calfnxt-web-host] gtk_init_check failed (DISPLAY=%s GDK_BACKEND=%s "
+            "GTK_PATH=%s LD_LIBRARY_PATH=%s)\n",
+            std::getenv("DISPLAY") ? std::getenv("DISPLAY") : "(unset)",
+            std::getenv("GDK_BACKEND") ? std::getenv("GDK_BACKEND") : "(unset)",
+            std::getenv("GTK_PATH") ? std::getenv("GTK_PATH") : "(unset)",
+            std::getenv("LD_LIBRARY_PATH") ? std::getenv("LD_LIBRARY_PATH")
+                                            : "(unset)");
     return 1;
   }
 

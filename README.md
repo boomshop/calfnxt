@@ -538,10 +538,12 @@ runtime under Mixbus.
 Confirm in `/tmp/calfnxt-ui.log`:
 
 ```text
-[calfnxt] helper env: LD_LIBRARY_PATH cleared for web-host
+[calfnxt] helper env: LD_LIBRARY_PATH + GTK_PATH cleared for web-host
 [calfnxt] spawned web-host pid=…
 ```
 
-without a following `exited immediately (code=127)`. Opt out:
-`CALFNXT_KEEP_HOST_LDPATH=1` (helper inherits the host path; Mixbus will typically
-fail again).
+without a following `exited immediately`. Ardour’s launcher also sets `GTK_PATH` to
+its GTK2 tree; the helper is GTK3+WebKit and must not inherit that (otherwise
+`gtk_init_check` fails and the editor stays empty). Opt out of LD stripping only:
+`CALFNXT_KEEP_HOST_LDPATH=1` (GTK_PATH is still cleared; Mixbus may still fail on
+bundled glib).
