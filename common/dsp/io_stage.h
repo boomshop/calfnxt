@@ -104,7 +104,13 @@ public:
     return true;
   }
 
-  /** Prepare outputs with in_gain + input metering. false = host silence / no audio. */
+  /** Prepare outputs with in_gain + input metering. false = host silence / no audio.
+   *
+   * Hosts may renegotiate mono-in / stereo-out (EffectBase allows it). Always
+   * fill every output channel — duplicate the last input when nOut > nIn —
+   * otherwise the unused right buffer stays garbage/NaN and stereo DSP reads
+   * it as hard digital trash (mute after denormal scrub, wild GR spikes).
+   */
   bool begin(Steinberg::Vst::ProcessData& data)
   {
     using namespace Steinberg;
@@ -121,16 +127,24 @@ public:
     data.outputs[0].silenceFlags = 0;
 
     const float gIn = bypassGains_ ? 1.f : dbToLin(inGainDb_);
-    const int32 nCh = data.inputs[0].numChannels;
+    const int32 nIn = data.inputs[0].numChannels;
+    const int32 nOut = data.outputs[0].numChannels;
     const int32 nFrames = data.numSamples;
+    if (nIn < 1 || nOut < 1)
+      return false;
     float peak = 0.f;
 
     if (data.symbolicSampleSize == kSample32)
     {
       auto** in = data.inputs[0].channelBuffers32;
       auto** out = data.outputs[0].channelBuffers32;
-      for (int32 ch = 0; ch < nCh; ++ch)
+      if (!in || !out)
+        return false;
+      const int32 nCopy = nIn < nOut ? nIn : nOut;
+      for (int32 ch = 0; ch < nCopy; ++ch)
       {
+        if (!in[ch] || !out[ch])
+          return false;
         for (int32 i = 0; i < nFrames; ++i)
         {
           const float y = in[ch][i] * gIn;
@@ -141,14 +155,36 @@ public:
             peak = a;
         }
       }
+      // Pad missing outs (typical: mono in → stereo out).
+      if (nOut > nCopy)
+      {
+        float* src = out[nCopy - 1];
+        for (int32 ch = nCopy; ch < nOut; ++ch)
+        {
+          if (!out[ch])
+            return false;
+          if (out[ch] != src)
+          {
+            for (int32 i = 0; i < nFrames; ++i)
+              out[ch][i] = src[i];
+          }
+          for (int32 i = 0; i < nFrames; ++i)
+            peakIn_.accumulate(ch, src[i]);
+        }
+      }
     }
     else
     {
       auto** in = data.inputs[0].channelBuffers64;
       auto** out = data.outputs[0].channelBuffers64;
+      if (!in || !out)
+        return false;
       const double g = static_cast<double>(gIn);
-      for (int32 ch = 0; ch < nCh; ++ch)
+      const int32 nCopy = nIn < nOut ? nIn : nOut;
+      for (int32 ch = 0; ch < nCopy; ++ch)
       {
+        if (!in[ch] || !out[ch])
+          return false;
         for (int32 i = 0; i < nFrames; ++i)
         {
           const double y = in[ch][i] * g;
@@ -157,6 +193,22 @@ public:
           const float a = std::fabs(static_cast<float>(y));
           if (a > peak)
             peak = a;
+        }
+      }
+      if (nOut > nCopy)
+      {
+        double* src = out[nCopy - 1];
+        for (int32 ch = nCopy; ch < nOut; ++ch)
+        {
+          if (!out[ch])
+            return false;
+          if (out[ch] != src)
+          {
+            for (int32 i = 0; i < nFrames; ++i)
+              out[ch][i] = src[i];
+          }
+          for (int32 i = 0; i < nFrames; ++i)
+            peakIn_.accumulate(ch, static_cast<float>(src[i]));
         }
       }
     }
