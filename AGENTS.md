@@ -128,6 +128,10 @@ Do **not** call `restartComponent` / begin/perform/end from `setComponentHandler
 - Editor HiDPI: enlarge via host/css when XEmbed socket ≈ design; if socket already > design (Qtractor), skip enlarge and fill helper to socket (`CALFNXT_UI_SCALE` override)
 - DSP hygiene: keep silence-flag passthrough correct, add denormal sanitizing for stateful filters/meters,
   and prefer idle/block fast-paths over per-sample recomputation when parameters are unchanged
+- **Cancellation-free split/sum + Mix:** never ship cascaded band splits or dry+filtered Mix that
+  notch when recombined — `BandSplitter` allpass compensation + complementary LP↔HP only
+  (see User preferences / `.cursor/rules/ui-infos-and-mix-filters.mdc`;
+  `./tools/run_band_splitter_flatness.sh`)
 
 ---
 
@@ -230,7 +234,14 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 - High-rate viz must not re-render React — AUX/AWML only (see Viz section).
 - Avoid drive-by refactors; no fake “cleanup” of the real param/viz/HiDPI fixes above.
 - **Widget infos** (`*Info.ts`): detailed, musician/producer tone (effect + sound + when/pitfalls) — see `.cursor/rules/ui-infos-and-mix-filters.mdc` and `transientsInfo.ts` / `compressorInfo.ts`.
-- **Dry+filtered Mix**: cancellation-free / complementary LP↔HP (even-order 12/24/48) by default — same rule file; do not ship comb-prone naive dry blend as the Mix default.
+- **Cancellation-free split/sum + Mix (hard suite rule):** any band split that is later
+  summed, or filtered path mixed with dry, must recombine without spectral notches.
+  Cascaded `BandSplitter` uses LR even-order + allpass (LP+HP) compensation on earlier
+  bands (`common/dsp/band_splitter.h`). Dry+filtered Mix uses complementary LP↔HP
+  (`complementary_band_filter.h` / multimode LP/HP). Never ship uncompensated cascade
+  crossovers or naive resonant dry blend — this was the classic Calf failure mode
+  (Deesser / multiband). Regression: `./tools/run_band_splitter_flatness.sh`.
+  Full rule: `.cursor/rules/ui-infos-and-mix-filters.mdc`.
 
 ---
 

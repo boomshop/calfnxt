@@ -46,6 +46,12 @@ Hand-written: DSP algorithm + React layout (`ui/src/plugins/<Name>UI/`).
 Stereo I/O, float32/64, `createView` → WebEditor, param helpers, host default-value notify.
 Optional `vizSource()` for non-parameter telemetry (peak meters).
 
+**Cancellation-free recombination (hard invariant):** any split that is later summed
+(`BandSplitter`: LR even-order + allpass compensation on earlier bands) or filtered
+path mixed with dry (`complementary_band_filter.h`, multimode LP/HP) must stay
+magnitude-flat — no comb notches. Classic Calf failure mode; do not regress.
+Regression: `./tools/run_band_splitter_flatness.sh`.
+
 ### `common/ui` — `WebEditor` + `calfnxt-web-host`
 
 Host-process **proxy** (`WebEditor`): VST3 `IPlugView`, spawn helper, Unix-socket JSON bridge, IRunLoop timer.
