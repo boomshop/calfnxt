@@ -1,10 +1,12 @@
 #pragma once
 
 // Linkwitz-Riley band splitter (max 8 bands).
-// Cascaded LR splits: summing all bands ≈ allpass(input) — flat magnitude,
-// no cancellation notches at the crossover frequencies (unlike one-pole x−lp).
-// Residual phase warp is expected for zero-latency IIR.
-// Crossover frequencies glide in log space (same as EQ) to avoid zipper noise.
+// Cascaded LR splits with allpass phase compensation on earlier bands so
+// summing all bands ≈ allpass(input) — flat magnitude, no cancellation
+// notches at the crossovers. Without compensation, LP0 + AP1(HP0) ≠ AP0
+// and steep multi-way splits dig deep comb notches (metallic / “crushed”
+// on a full-range master). Residual phase warp is expected for zero-latency
+// IIR. Crossover frequencies glide in log space (same as EQ) to avoid zipper.
 
 #include "biquad.h"
 #include "dsp_math.h"
@@ -44,6 +46,14 @@ public:
       {
         lp_[i][s].reset();
         hp_[i][s].reset();
+      }
+      for (int j = 0; j < kMaxSplits; ++j)
+      {
+        for (int s = 0; s < kMaxStages; ++s)
+        {
+          apLp_[i][j][s].reset();
+          apHp_[i][j][s].reset();
+        }
       }
     }
   }
@@ -179,6 +189,21 @@ public:
         hi = hp_[i][s].process(hi);
       }
       bandsOut[i] = static_cast<float>(lo);
+
+      // Phase-align earlier bands with this split's LR allpass (LP+HP).
+      // Without this, sum = LP0 + AP1(HP0) ≠ AP0 → notches at every xover.
+      for (int j = 0; j < i; ++j)
+      {
+        double apLo = bandsOut[j];
+        double apHi = bandsOut[j];
+        for (int s = 0; s < stages; ++s)
+        {
+          apLo = apLp_[i][j][s].process(apLo);
+          apHi = apHp_[i][j][s].process(apHi);
+        }
+        bandsOut[j] = static_cast<float>(apLo + apHi);
+      }
+
       remaining = static_cast<float>(hi);
     }
     bandsOut[bands_ - 1] = remaining;
@@ -195,6 +220,14 @@ public:
       {
         lp_[i][s].sanitize();
         hp_[i][s].sanitize();
+      }
+      for (int j = 0; j < i; ++j)
+      {
+        for (int s = 0; s < stages; ++s)
+        {
+          apLp_[i][j][s].sanitize();
+          apHp_[i][j][s].sanitize();
+        }
       }
     }
   }
@@ -242,11 +275,16 @@ private:
   {
     const float ny = sr_ * 0.45f;
     const int nSplit = splits();
+    // Minimum ~½-octave spacing. A host briefly stomping every xover to the
+    // log-param floor (20 Hz) used to leave splits at 20/21/23 Hz — lower band
+    // curves vanish on the chart and high-order LR cascades sit on top of each
+    // other. 1.5× keeps bands drawable and numerically sane.
+    constexpr float kMinRatio = 1.5f;
     float prev = 20.f;
     for (int i = 0; i < nSplit; ++i)
     {
       float f = std::clamp(freqs[i], 20.f, ny);
-      f = std::max(f, prev * 1.06f);
+      f = std::max(f, prev * kMinRatio);
       f = std::min(f, ny);
       freqs[i] = f;
       prev = f;
@@ -299,12 +337,32 @@ private:
         lp_[i][s].reset();
         hp_[i][s].reset();
       }
+
+      // Matching allpass state for every earlier band at this split.
+      for (int j = 0; j < i; ++j)
+      {
+        for (int s = 0; s < stages; ++s)
+        {
+          apLp_[i][j][s].copyCoeffs(lp_[i][s]);
+          apHp_[i][j][s].copyCoeffs(hp_[i][s]);
+        }
+        for (int s = stages; s < kMaxStages; ++s)
+        {
+          apLp_[i][j][s].setNull();
+          apHp_[i][j][s].setNull();
+          apLp_[i][j][s].reset();
+          apHp_[i][j][s].reset();
+        }
+      }
     }
     dirty_ = false;
   }
 
   BiquadD1 lp_[kMaxSplits][kMaxStages];
   BiquadD1 hp_[kMaxSplits][kMaxStages];
+  /** ap*[split][earlierBand] — LR allpass (LP+HP) applied to prior bands. */
+  BiquadD1 apLp_[kMaxSplits][kMaxSplits][kMaxStages];
+  BiquadD1 apHp_[kMaxSplits][kMaxSplits][kMaxStages];
   float freqTgt_[kMaxSplits] = { 200.f, 500.f, 1000.f, 2000.f, 4000.f, 8000.f, 12000.f };
   float freqCur_[kMaxSplits] = { 200.f, 500.f, 1000.f, 2000.f, 4000.f, 8000.f, 12000.f };
   float sr_ = 44100.f;
