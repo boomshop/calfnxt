@@ -25,6 +25,13 @@ float linToDbSafe(float lin)
   return 20.f * std::log10(lin);
 }
 
+/** Kill NaN/Inf and absurd peaks so a host anti-blast (Reaper automute) cannot latch. */
+void hardenSample(float& x)
+{
+  if (!std::isfinite(x) || std::fabs(x) > 8.f)
+    x = 0.f;
+}
+
 Dsp::DetectorMode detectorModeFromPlain(float v)
 {
   switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
@@ -377,28 +384,66 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     quietDrained_ = false;
   }
 
-  if (!data.outputs || !data.outputs[0].channelBuffers32 || data.outputs[0].numChannels < 2)
+  if (!data.outputs || data.outputs[0].numChannels < 2)
   {
     if (hasHostAudio)
       io_.end(data);
     return kResultOk;
   }
 
-  float* outL = data.outputs[0].channelBuffers32[0];
-  float* outR = data.outputs[0].channelBuffers32[1];
-  if (!outL || !outR)
+  const bool is32 = data.symbolicSampleSize == kSample32;
+  float* outL32 = is32 && data.outputs[0].channelBuffers32
+                    ? data.outputs[0].channelBuffers32[0]
+                    : nullptr;
+  float* outR32 = is32 && data.outputs[0].channelBuffers32
+                    ? data.outputs[0].channelBuffers32[1]
+                    : nullptr;
+  double* outL64 = !is32 && data.outputs[0].channelBuffers64
+                     ? data.outputs[0].channelBuffers64[0]
+                     : nullptr;
+  double* outR64 = !is32 && data.outputs[0].channelBuffers64
+                     ? data.outputs[0].channelBuffers64[1]
+                     : nullptr;
+  if ((is32 && (!outL32 || !outR32)) || (!is32 && (!outL64 || !outR64)))
   {
     if (hasHostAudio)
       io_.end(data);
     return kResultOk;
   }
+
+  auto readLR = [&](int i, float& L, float& R) {
+    if (is32)
+    {
+      L = outL32[i];
+      R = outR32[i];
+    }
+    else
+    {
+      L = static_cast<float>(outL64[i]);
+      R = static_cast<float>(outR64[i]);
+    }
+  };
+  auto writeLR = [&](int i, float L, float R) {
+    hardenSample(L);
+    hardenSample(R);
+    if (is32)
+    {
+      outL32[i] = L;
+      outR32[i] = R;
+    }
+    else
+    {
+      outL64[i] = L;
+      outR64[i] = R;
+    }
+  };
 
   // Host silenceFlags: outs not filled — drain crossovers / GR into buffers.
   if (!hasHostAudio)
   {
     data.outputs[0].silenceFlags = 0;
-    std::memset(outL, 0, static_cast<size_t>(nSamples) * sizeof(float));
-    std::memset(outR, 0, static_cast<size_t>(nSamples) * sizeof(float));
+    for (int i = 0; i < nSamples; ++i)
+      writeLR(i, 0.f, 0.f);
   }
 
   // Global bypass: dry I/O already in outs. Still run crossovers so history
@@ -427,23 +472,27 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     float bandsR[kMaxBands];
     for (int i = 0; i < nSamples; ++i)
     {
+      float L = 0.f;
+      float R = 0.f;
+      readLR(i, L, R);
       if (mono)
-        outR[i] = outL[i];
-      const float fullPeak = std::max(std::fabs(outL[i]), std::fabs(outR[i]));
-      splitL_.process(outL[i], bandsL);
+        R = L;
+      const float fullPeak = std::max(std::fabs(L), std::fabs(R));
+      splitL_.process(L, bandsL);
       if (mono)
       {
         for (int b = 0; b < bands; ++b)
           bandsR[b] = bandsL[b];
       }
       else
-        splitR_.process(outR[i], bandsR);
+        splitR_.process(R, bandsR);
       for (int b = 0; b < bands; ++b)
       {
         const float bandPeak =
           std::max(std::fabs(bandsL[b]), std::fabs(bandsR[b]));
         histFeedSample(b, fullPeak, bandPeak, 1.f);
       }
+      writeLR(i, L, mono ? L : R);
     }
     for (int b = 0; b < bands; ++b)
     {
@@ -488,8 +537,11 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
 
   for (int i = 0; i < nSamples; ++i)
   {
-    float L = outL[i];
-    float R = mono ? L : outR[i];
+    float L = 0.f;
+    float R = 0.f;
+    readLR(i, L, R);
+    if (mono)
+      R = L;
     const float fullPeak = std::max(std::fabs(L), std::fabs(R));
 
     splitL_.process(L, bandsL);
@@ -513,6 +565,8 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
       float bR = bandsR[b];
       Dsp::sanitizeDenormal(bL);
       Dsp::sanitizeDenormal(bR);
+      hardenSample(bL);
+      hardenSample(bR);
       const float bandPeak = std::max(std::fabs(bL), std::fabs(bR));
       bandInHold_[b].accumulate(0, bandPeak);
 
@@ -540,6 +594,8 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
           bL = st.dry * bL + st.mix * wetL;
           bR = bL;
           Dsp::sanitizeDenormal(bL);
+          hardenSample(bL);
+          bR = bL;
         }
         else
         {
@@ -549,6 +605,8 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
           bR = st.dry * bR + st.mix * wetR;
           Dsp::sanitizeDenormal(bL);
           Dsp::sanitizeDenormal(bR);
+          hardenSample(bL);
+          hardenSample(bR);
         }
 
         const float grDb = linToDbSafe(grLin);
@@ -590,17 +648,13 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
 
     Dsp::sanitizeDenormal(sumL);
     Dsp::sanitizeDenormal(sumR);
+    hardenSample(sumL);
+    hardenSample(sumR);
 
     if (anyListen)
-    {
-      outL[i] = listenL;
-      outR[i] = mono ? listenL : listenR;
-    }
+      writeLR(i, listenL, mono ? listenL : listenR);
     else
-    {
-      outL[i] = sumL;
-      outR[i] = mono ? sumL : sumR;
-    }
+      writeLR(i, sumL, mono ? sumL : sumR);
   }
 
   publishHistSnapshot();
