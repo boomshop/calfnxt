@@ -61,6 +61,11 @@ const EqualizerWidget = componentFromWidget(
 export interface EQChartProps {
   bands: IEqualizerBand[];
   yRange?: { min: number; max: number };
+  /**
+   * Q axis for scroll-wheel on handles. Pin min===max (e.g. FrequencyRange
+   * Butterworth Q) to disable Q gestures — they have no DSP effect there.
+   */
+  zRange?: { min: number; max: number; step?: number };
   dbGrid?: number;
   /** Full editor chart vs single-band miniature. */
   size?: 'normal' | 'mini';
@@ -126,6 +131,7 @@ export function EQChart(props: EQChartProps) {
   const {
     bands: bandModels,
     yRange = { min: EQ_GAIN_MIN, max: EQ_GAIN_MAX },
+    zRange = { min: EQ_Q_MIN, max: EQ_Q_MAX, step: 0.1 },
     dbGrid = 6,
     size = 'normal',
     interactive = size !== 'mini',
@@ -136,6 +142,7 @@ export function EQChart(props: EQChartProps) {
     spectrum$,
     spectrumMode = 0,
   } = props;
+  const qLocked = zRange.min === zRange.max;
 
   const [eqWidget, setEqWidget] = useState<unknown>(null);
   const isMini = size === 'mini';
@@ -164,6 +171,15 @@ export function EQChart(props: EQChartProps) {
     eq.set('range_y', { min: yRange.min, max: yRange.max });
     eq.set('db_grid', dbGrid);
   }, [dbGrid, eq, isMini, yRange.max, yRange.min]);
+
+  useEffect(() => {
+    if (!eq) return;
+    eq.set('range_z', {
+      min: zRange.min,
+      max: zRange.max,
+      step: zRange.step ?? 0.1,
+    });
+  }, [eq, zRange.max, zRange.min, zRange.step]);
 
   const baselineTargets = useMemo(
     () => (eq?.baseline?.element ? [eq.baseline.element] : []),
@@ -226,11 +242,13 @@ export function EQChart(props: EQChartProps) {
     () =>
       bandModels.map((band) => {
         const fromModel = interactive ? {} : { readonly: true };
+        const qFromModel =
+          interactive && !qLocked ? {} : { readonly: true as const };
         const active$ = interactive ? band.active$ : alwaysOn$;
         return [
           { name: 'gain', backendValue: band.gain$, ...fromModel },
           { name: 'freq', backendValue: band.frequency$, ...fromModel },
-          { name: 'q', backendValue: band.q$, ...fromModel },
+          { name: 'q', backendValue: band.q$, ...qFromModel },
           { name: 'active', backendValue: active$, ...fromModel },
           {
             name: 'type',
@@ -246,7 +264,7 @@ export function EQChart(props: EQChartProps) {
           },
         ];
       }),
-    [bandModels, interactive, alwaysOn$],
+    [bandModels, interactive, alwaysOn$, qLocked],
   );
 
   const ghostBindings = useMemo(
@@ -578,6 +596,7 @@ export function EQChart(props: EQChartProps) {
       show_grid={!isMini}
       show_handles={isMini || interactive}
       range_y={yRange}
+      range_z={zRange}
       db_grid={dbGrid}
     />
   );

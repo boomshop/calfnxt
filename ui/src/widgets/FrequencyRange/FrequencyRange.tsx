@@ -43,6 +43,10 @@ const HP_LP_LABELS = [
 /** Stable y-range object — inline literals re-trigger AUX range_y sets every render. */
 const FREQ_RANGE_Y = { min: -60, max: 6 };
 
+/** Chart-only Q (DSP slopes ignore resonance). Lock z so scroll cannot change it. */
+const FREQ_RANGE_Q = 0.707;
+const FREQ_RANGE_Z = { min: FREQ_RANGE_Q, max: FREQ_RANGE_Q };
+
 /** Map DSP mode 0…4 → chart slope (mode 0 unused while inactive). */
 function slopeFromMode(mode: number): EqPassSlope {
   if (mode >= 4) return 48;
@@ -109,7 +113,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
     ) => {
       const gain$ = DynamicValue.fromConstant(0);
       const effectiveGain$ = DynamicValue.fromConstant(0);
-      const q$ = DynamicValue.fromConstant(0.707);
+      const q$ = DynamicValue.fromConstant(FREQ_RANGE_Q);
       const type$ = DynamicValue.fromConstant(type);
       const initialMode = mode$.value;
       const slope$ = DynamicValue.fromConstant<EqPassSlope>(
@@ -155,7 +159,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
         defaults: {
           frequency: freqDefault,
           gain: 0,
-          q: 0.707,
+          q: FREQ_RANGE_Q,
           dynAttack: 0,
           dynRelease: 0,
           dynThreshold: 0,
@@ -195,6 +199,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
         interactive
         showLabels={false}
         yRange={FREQ_RANGE_Y}
+        zRange={FREQ_RANGE_Z}
         dbGrid={12}
       />
 
