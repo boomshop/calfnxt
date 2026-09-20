@@ -126,8 +126,10 @@ void TransientsPlugin::updateLatency(bool bypass, int lookaheadSamples)
     bypass ? 0u : static_cast<uint32>(std::clamp(lookaheadSamples, 0, Dsp::Transients::kMaxLookaheadSamples));
   if (want == latencySamples_)
     return;
+  const bool had = latencySamples_ > 0;
   latencySamples_ = want;
-  if (componentHandler)
+  // Same Ableton setActive ping-pong as Bender: never notify on 0<->N.
+  if (had && componentHandler)
     componentHandler->restartComponent(kLatencyChanged);
 }
 

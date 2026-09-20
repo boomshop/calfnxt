@@ -375,8 +375,9 @@ void ImpulsePlugin::updateLatency()
                         : 0u;
   if (want == latencySamples_)
     return;
-  const bool had = latencySamples_ > 0 || want > 0;
+  const bool had = latencySamples_ > 0;
   latencySamples_ = want;
+  // Same Ableton setActive ping-pong as Bender: never notify on 0<->N.
   if (had && componentHandler)
     componentHandler->restartComponent(kLatencyChanged);
 }

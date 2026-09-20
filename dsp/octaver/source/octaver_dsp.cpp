@@ -116,7 +116,8 @@ void OctaverPlugin::updateLatency(const BlockState& state, bool forceZero)
     return;
   const bool had = latencySamples_ > 0;
   latencySamples_ = want;
-  if (had && componentHandler)
+  // Same Ableton setActive ping-pong as Bender: never notify on 0<->N.
+  if (!forceZero && had && componentHandler)
     componentHandler->restartComponent(kLatencyChanged);
 }
 

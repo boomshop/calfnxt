@@ -91,9 +91,10 @@ void TunerPlugin::updateLatency(const BlockState& state, bool forceZero)
     return;
   const bool had = latencySamples_ > 0;
   latencySamples_ = want;
-  // Do not restart from setup/reset (validator / Qtractor re-entrancy).
-  // Notify only when an already-running latency actually changes (Quality / Low).
-  if (had && componentHandler)
+  // Do not call restartComponent from setActive: Ableton re-enters immediately
+  // (forceZero on deactivate) and ping-pongs. Quality/Low notify only while
+  // running, never on 0<->N.
+  if (!forceZero && had && componentHandler)
     componentHandler->restartComponent(kLatencyChanged);
 }
 

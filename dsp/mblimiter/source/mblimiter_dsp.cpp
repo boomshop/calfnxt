@@ -210,8 +210,9 @@ void MblimiterPlugin::updateLatency(bool forceZero)
   if (want == latencySamples_)
     return;
   latencySamples_ = want;
-  if (componentHandler)
-    componentHandler->restartComponent(kLatencyChanged);
+  // Constant max-look PDC (wet is padded). Do not call restartComponent:
+  // Ableton re-enters setActive on 0<->N and ping-pongs (hang). The host
+  // re-queries getLatencySamples on activate; OS adds only a few samples.
 }
 
 uint32 PLUGIN_API MblimiterPlugin::getLatencySamples()
