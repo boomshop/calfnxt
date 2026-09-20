@@ -14,6 +14,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <cstdint>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -103,10 +104,13 @@ private:
   void appendTreeUiFieldsLocked(std::string& json);
   void ensureAncestorsOpenLocked();
   void setStatus(const std::string& msg);
-  void publishPendingConv(std::shared_ptr<Dsp::PartitionedStereoConvolver> eng);
+  void publishPendingConv(std::unique_ptr<Dsp::PartitionedStereoConvolver> eng);
   void takePendingConv(bool bypass);
+  void retireConv(std::unique_ptr<Dsp::PartitionedStereoConvolver>&& eng);
+  void drainRetiredConvs();
   void enterBypass();
-  void ensureScratch(int n);
+  /** Grow scratch off the audio thread (setupProcessing). */
+  void prepareScratch(int n);
   static std::string lastLibraryPath();
   static void saveLastLibraryPath(const std::string& root);
 
@@ -121,20 +125,39 @@ private:
   Dsp::SmoothGain dryGain_;
   Dsp::SmoothGain wetGain_;
 
-  std::shared_ptr<Dsp::PartitionedStereoConvolver> conv_;
-  std::shared_ptr<Dsp::PartitionedStereoConvolver> convPrev_;
-  std::shared_ptr<Dsp::PartitionedStereoConvolver> convPending_;
-  std::atomic<bool> convReady_ {false};
+  /* conv_ / convPrev_ are owned by the audio thread (process) — no other
+   * thread may touch them. The worker hands over freshly built convolvers
+   * through pendingConv_ (raw-pointer atomic exchange); the audio thread
+   * adopts them as unique_ptr (no shared_ptr control-block alloc on RT). */
+  std::unique_ptr<Dsp::PartitionedStereoConvolver> conv_;
+  std::unique_ptr<Dsp::PartitionedStereoConvolver> convPrev_;
+  std::atomic<Dsp::PartitionedStereoConvolver*> pendingConv_ {nullptr};
   int xfadeLeft_ = 0;
   int xfadeLen_ = 0;
   bool bypassLatched_ = false;
   int dryFlushLeft_ = 0;
+
+  /* Audio→worker retire ring (SPSC). A convolver the audio thread replaced
+   * must not be freed on the realtime path (its destructor releases FFT
+   * buffers), so the audio thread move-assigns it into a ring slot and the
+   * worker pops + destroys it. A slot is always null when the producer writes
+   * it (the consumer cleared it before advancing the tail), so the
+   * move-assignment never runs a deleter on the audio thread.
+   * retireOverflow_ (audio thread only) holds at most one convolver if the
+   * ring is momentarily full; it is retried on the next block. */
+  static constexpr int kRetireCap = 16;
+  std::unique_ptr<Dsp::PartitionedStereoConvolver> retireBuf_[kRetireCap] {};
+  std::atomic<unsigned> retireHead_ {0};
+  std::atomic<unsigned> retireTail_ {0};
+  std::unique_ptr<Dsp::PartitionedStereoConvolver> retireOverflow_;
 
   std::vector<float> scratchWetL_;
   std::vector<float> scratchWetR_;
   std::vector<float> scratchPrevL_;
   std::vector<float> scratchPrevR_;
 
+  /* dataMutex_ is only ever taken by the worker and UI threads (library tree,
+   * IR buffers, status) — never by process(). */
   std::mutex dataMutex_;
   Dsp::IrBuffer rawIr_;
   Dsp::IrBuffer preparedIr_;
@@ -145,8 +168,15 @@ private:
   std::string status_;
   std::vector<std::string> openDirs_;
   int treeScroll_ = 0;
-  float origLengthMs_ = 0.f;
-  std::vector<float> waveDb_;
+  std::atomic<float> origLengthMs_ {0.f};
+  /* Waveform display: fixed-cap buffer published under a seqlock (odd =
+   * write in progress, even = stable — same pattern as the compressor's
+   * histSeq_). Writers (worker rebuild / UI re-bin) hold dataMutex_ against
+   * each other; the UI poll in takeIrWaveform() reads lock-free. */
+  static constexpr int kMaxWaveBins = 1024;
+  std::atomic<uint32_t> waveSeq_ {0};
+  float waveDb_[kMaxWaveBins] {};
+  int waveDbSize_ = 0;
   std::atomic<int> waveBins_ {256};
   std::atomic<bool> waveDirty_ {true};
   bool haveIr_ = false;
@@ -159,9 +189,14 @@ private:
     JobKind kind = JobKind::None;
     std::string path;
   };
+  /* jobMutex_/jobCv_/jobs_ are only touched by the UI and worker threads
+   * (Scan / Load requests). The audio thread requests a Rebuild through the
+   * lock-free rebuildRequested_ flag; the worker polls it with a bounded
+   * wait_for, so process() never locks and never signals the condvar. */
   std::mutex jobMutex_;
   std::condition_variable jobCv_;
   std::deque<Job> jobs_;
+  std::atomic<bool> rebuildRequested_ {false};
   std::atomic<bool> workerRun_ {false};
   std::thread worker_;
 

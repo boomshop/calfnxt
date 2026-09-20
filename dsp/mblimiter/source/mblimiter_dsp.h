@@ -15,7 +15,6 @@
 #include <atomic>
 #include <cstdint>
 #include <cstring>
-#include <mutex>
 #include <vector>
 
 namespace calfNXT {
@@ -157,7 +156,10 @@ private:
   int histPos_[kMaxBands] {};
   int histSampleCount_[kMaxBands] {};
   int histSamplesPerSlot_ = 1;
-  std::mutex histMutex_;
+  /* Snapshot published once per block from the audio thread, read on the UI
+   * poll. Seqlock (odd/even sequence) — the audio thread never blocks; the
+   * reader retries on a torn read. */
+  std::atomic<uint32_t> histSeq_ {0};
   float histSnapshot_[kMaxBands][kHistBufSize] {};
   int histSnapshotPos_[kMaxBands] {};
   int histSnapshotSampleCount_[kMaxBands] {};

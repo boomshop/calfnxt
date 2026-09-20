@@ -92,13 +92,12 @@ void TransientsPlugin::resetProcessing()
   envSlotMaxEnv_ = 0.f;
   envSlotMaxAtt_ = 0.f;
   envSlotMaxRel_ = 0.f;
-  {
-    std::lock_guard<std::mutex> lock(envMutex_);
-    std::memset(envSnapshot_, 0, sizeof(envSnapshot_));
-    envSnapshotPos_ = 0;
-    envSnapshotSampleCount_ = 0;
-    envSnapshotSamplesPerSlot_ = 1;
-  }
+  envSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  std::memset(envSnapshot_, 0, sizeof(envSnapshot_));
+  envSnapshotPos_ = 0;
+  envSnapshotSampleCount_ = 0;
+  envSnapshotSamplesPerSlot_ = 1;
+  envSeq_.fetch_add(1, std::memory_order_release); // even: stable
 }
 
 tresult PLUGIN_API TransientsPlugin::setActive(TBool state)
@@ -212,11 +211,14 @@ void TransientsPlugin::envBufFeedSample(float dryPeak, float filteredPeak, float
 
 void TransientsPlugin::publishEnvSnapshot()
 {
-  std::lock_guard<std::mutex> lock(envMutex_);
+  if (!vizConsumerActive())
+    return;
+  envSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
   std::memcpy(envSnapshot_, envBuf_, sizeof(envBuf_));
   envSnapshotPos_ = envPos_;
   envSnapshotSampleCount_ = envSampleCount_;
   envSnapshotSamplesPerSlot_ = envSamplesPerSlot_;
+  envSeq_.fetch_add(1, std::memory_order_release); // even: stable
 }
 
 void TransientsPlugin::processSample(const BlockState& state, float& L, float& R)
@@ -322,8 +324,12 @@ int TransientsPlugin::takeEnvelopeDisplay(float* out, int maxOut)
     return 0;
 
   float phase = 0.f;
+  // Seqlock read: retry while the audio thread is mid-publish.
+  for (int attempt = 0; attempt < 8; ++attempt)
   {
-    std::lock_guard<std::mutex> lock(envMutex_);
+    const uint32_t s0 = envSeq_.load(std::memory_order_acquire);
+    if (s0 & 1u)
+      continue; // write in progress
     const int startPos =
       (kEnvBufSize + envSnapshotPos_ - (slots - 1) * kEnvChannels) % kEnvBufSize;
     const int sps = std::max(1, envSnapshotSamplesPerSlot_);
@@ -334,9 +340,14 @@ int TransientsPlugin::takeEnvelopeDisplay(float* out, int maxOut)
       for (int c = 0; c < kEnvChannels; ++c)
         out[i * kEnvChannels + c] = std::fabs(envSnapshot_[srcIdx + c]);
     }
+    const uint32_t s1 = envSeq_.load(std::memory_order_acquire);
+    if (s0 == s1)
+    {
+      out[outCount] = std::clamp(phase, 0.f, 1.f);
+      return outCount + 1;
+    }
   }
-  out[outCount] = std::clamp(phase, 0.f, 1.f);
-  return outCount + 1;
+  return 0; // contended; skip this frame
 }
 
 void TransientsPlugin::configureVizBins(const char* id, int bins)

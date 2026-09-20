@@ -9,8 +9,8 @@
 
 #include "transients_params.h"
 
+#include <atomic>
 #include <cstring>
-#include <mutex>
 
 namespace calfNXT {
 namespace Transients {
@@ -98,7 +98,10 @@ private:
   float envSlotMaxEnv_ = 0.f;
   float envSlotMaxAtt_ = 0.f;
   float envSlotMaxRel_ = 0.f;
-  std::mutex envMutex_;
+  /* Snapshot published once per block from the audio thread, read on the UI
+   * poll. Seqlock (odd/even sequence) — the audio thread never blocks; the
+   * reader retries on a torn read. */
+  std::atomic<uint32_t> envSeq_ {0};
   float envSnapshot_[kEnvBufSize] {};
   int envSnapshotPos_ = 0;
   int envSnapshotSampleCount_ = 0;

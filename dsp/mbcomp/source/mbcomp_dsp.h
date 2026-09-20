@@ -10,8 +10,8 @@
 
 #include "mbcomp_params.h"
 
+#include <atomic>
 #include <cstring>
-#include <mutex>
 
 namespace calfNXT {
 namespace Mbcomp {
@@ -79,6 +79,7 @@ private:
   void resetProcessing();
   void histFeedSample(int band, float fullPeak, float bandPeak, float grLin);
   void publishHistSnapshot();
+  void publishDynamicsPoints();
   int numBands() const;
 
   float params_[kParamCount] {};
@@ -92,16 +93,21 @@ private:
   Viz::LevelPeakHold bandInHold_[kMaxBands];
   Viz::LevelPeakHold bandOutHold_[kMaxBands];
 
-  std::mutex vizMutex_;
-  float pointInDb_[kMaxBands] {};
-  float pointOutDb_[kMaxBands] {};
+  /* Operating points: plains per sample, atomics once per process(). */
+  float pointInDbPlain_[kMaxBands] {};
+  float pointOutDbPlain_[kMaxBands] {};
+  std::atomic<float> pointInDb_[kMaxBands] {};
+  std::atomic<float> pointOutDb_[kMaxBands] {};
   float lastGrDb_[kMaxBands] {};
 
   float histBuf_[kMaxBands][kHistBufSize] {};
   int histPos_[kMaxBands] {};
   int histSampleCount_[kMaxBands] {};
   int histSamplesPerSlot_ = 1;
-  std::mutex histMutex_;
+  /* Snapshot published once per block from the audio thread, read on the UI
+   * poll. Seqlock (odd/even sequence) — the audio thread never blocks; the
+   * reader retries on a torn read. */
+  std::atomic<uint32_t> histSeq_ {0};
   float histSnapshot_[kMaxBands][kHistBufSize] {};
   int histSnapshotPos_[kMaxBands] {};
   int histSnapshotSampleCount_[kMaxBands] {};

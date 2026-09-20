@@ -13,7 +13,6 @@
 #include <atomic>
 #include <cstdint>
 #include <cstring>
-#include <mutex>
 
 namespace calfNXT {
 namespace Tuner {
@@ -120,7 +119,10 @@ private:
   int leapHold_ = 0;
   int dryHops_ = 0;
 
-  std::mutex histMutex_;
+  /* Snapshot published per completed slot / per block from the audio thread,
+   * read on the UI poll. Seqlock (odd/even sequence) — the audio thread never
+   * blocks; the reader retries on a torn read. */
+  std::atomic<uint32_t> histSeq_ {0};
   float histBuf_[kHistBufSize] {};
   int histPos_ = 0;
   int histSampleCount_ = 0;

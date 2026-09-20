@@ -5,6 +5,7 @@
 #include "gain_util.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -172,6 +173,9 @@ ImpulsePlugin::ImpulsePlugin()
 ImpulsePlugin::~ImpulsePlugin()
 {
   stopWorker();
+  /* A convolver still waiting for the audio thread to adopt it is freed here,
+   * on the main thread. */
+  delete pendingConv_.exchange(nullptr, std::memory_order_acq_rel);
 }
 
 void ImpulsePlugin::startWorker()
@@ -191,10 +195,22 @@ void ImpulsePlugin::stopWorker()
   jobCv_.notify_all();
   if (worker_.joinable())
     worker_.join();
+  /* Worker is gone and the host has stopped processing: free whatever the
+   * audio thread retired last. */
+  drainRetiredConvs();
 }
 
 void ImpulsePlugin::queueJob(JobKind kind, std::string path)
 {
+  if (kind == JobKind::Rebuild)
+  {
+    /* Lock-free path — process() requests rebuilds from the audio thread.
+     * The worker polls this flag on a bounded 25 ms wait, so there is no
+     * mutex and no condvar signal here. Repeated requests coalesce (rebuilds
+     * are idempotent). */
+    rebuildRequested_.store(true, std::memory_order_release);
+    return;
+  }
   {
     std::lock_guard<std::mutex> lock(jobMutex_);
     jobs_.push_back(Job{kind, std::move(path)});
@@ -207,22 +223,32 @@ void ImpulsePlugin::workerLoop()
   while (true)
   {
     Job job;
+    bool rebuild = false;
     {
       std::unique_lock<std::mutex> lock(jobMutex_);
-      jobCv_.wait(lock, [&] { return !workerRun_.load() || !jobs_.empty(); });
+      jobCv_.wait_for(lock, std::chrono::milliseconds(25), [&] {
+        return !workerRun_.load() || !jobs_.empty()
+               || rebuildRequested_.load(std::memory_order_acquire);
+      });
       if (!workerRun_.load() && jobs_.empty())
         return;
-      if (jobs_.empty())
-        continue;
-      job = std::move(jobs_.front());
-      jobs_.pop_front();
+      if (rebuildRequested_.exchange(false, std::memory_order_acq_rel))
+        rebuild = true;
+      if (!jobs_.empty())
+      {
+        job = std::move(jobs_.front());
+        jobs_.pop_front();
+      }
     }
+    /* Free convolvers the audio thread retired — deallocation stays off the
+     * realtime path. */
+    drainRetiredConvs();
+    if (rebuild)
+      runRebuild();
     if (job.kind == JobKind::Scan)
       runScan(job.path);
     else if (job.kind == JobKind::Load)
       runLoad(job.path);
-    else if (job.kind == JobKind::Rebuild)
-      runRebuild();
   }
 }
 
@@ -238,35 +264,38 @@ void ImpulsePlugin::setStatus(const std::string& msg)
   status_ = msg;
 }
 
-void ImpulsePlugin::publishPendingConv(std::shared_ptr<Dsp::PartitionedStereoConvolver> eng)
+void ImpulsePlugin::publishPendingConv(std::unique_ptr<Dsp::PartitionedStereoConvolver> eng)
 {
-  std::lock_guard<std::mutex> lock(dataMutex_);
-  convPending_ = std::move(eng);
-  convReady_.store(true, std::memory_order_release);
+  /* Worker thread (or setState on the UI thread). Publish the raw pointer
+   * with one atomic exchange — the audio thread adopts it in
+   * takePendingConv(). A previously published convolver the audio thread
+   * never consumed comes back from the exchange and is deleted here, off the
+   * realtime path. */
+  delete pendingConv_.exchange(eng.release(), std::memory_order_acq_rel);
 }
 
 void ImpulsePlugin::takePendingConv(bool bypass)
 {
-  if (!convReady_.load(std::memory_order_acquire))
-    return;
-  std::shared_ptr<Dsp::PartitionedStereoConvolver> pend;
-  {
-    std::lock_guard<std::mutex> lock(dataMutex_);
-    pend.swap(convPending_);
-    convReady_.store(false, std::memory_order_relaxed);
-  }
+  /* Audio thread. Lock-free: one atomic exchange, no mutex, no heap. */
+  if (retireOverflow_)
+    retireConv(std::move(retireOverflow_));
+  Dsp::PartitionedStereoConvolver* pend =
+    pendingConv_.exchange(nullptr, std::memory_order_acq_rel);
   if (!pend)
     return;
+  std::unique_ptr<Dsp::PartitionedStereoConvolver> next(pend);
   if (bypass)
   {
-    convPrev_.reset();
-    conv_ = std::move(pend);
+    retireConv(std::move(convPrev_));
+    retireConv(std::move(conv_));
+    conv_ = std::move(next);
     xfadeLeft_ = 0;
   }
   else
   {
-    convPrev_ = conv_;
-    conv_ = std::move(pend);
+    retireConv(std::move(convPrev_));
+    convPrev_ = std::move(conv_);
+    conv_ = std::move(next);
     const float sr = static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0);
     xfadeLen_ = std::max(64, static_cast<int>(sr * (kXfadeMs * 0.001f)));
     xfadeLeft_ = convPrev_ ? xfadeLen_ : 0;
@@ -274,17 +303,62 @@ void ImpulsePlugin::takePendingConv(bool bypass)
   updateLatency();
 }
 
+void ImpulsePlugin::retireConv(std::unique_ptr<Dsp::PartitionedStereoConvolver>&& eng)
+{
+  /* Audio thread. Move the old convolver into the SPSC retire ring; the
+   * worker destroys it. Never free FFT buffers here. */
+  if (!eng)
+    return;
+  const unsigned h = retireHead_.load(std::memory_order_relaxed);
+  const unsigned t = retireTail_.load(std::memory_order_acquire);
+  if (h - t < static_cast<unsigned>(kRetireCap))
+  {
+    /* The slot is null (consumer cleared it before publishing the tail), so
+     * this move-assignment runs no deleter. */
+    retireBuf_[h % kRetireCap] = std::move(eng);
+    retireHead_.store(h + 1, std::memory_order_release);
+    return;
+  }
+  if (!retireOverflow_)
+  {
+    /* Ring momentarily full (worker has not drained yet): hold and retry on
+     * the next block. */
+    retireOverflow_ = std::move(eng);
+    return;
+  }
+  if (&eng == &retireOverflow_)
+    return; // overflow retry with the ring still full — keep holding it
+  /* Unreachable while the worker drains each loop iteration (retirements only
+   * ever follow worker publishes, at most two per process block). Leak a
+   * heap-owned unique_ptr holder rather than free FFT buffers on the
+   * realtime thread (tiny alloc vs FFT teardown). */
+  new std::unique_ptr<Dsp::PartitionedStereoConvolver>(std::move(eng));
+}
+
+void ImpulsePlugin::drainRetiredConvs()
+{
+  /* Worker / shutdown thread only: destroy what the audio thread retired. */
+  unsigned t = retireTail_.load(std::memory_order_relaxed);
+  const unsigned h = retireHead_.load(std::memory_order_acquire);
+  while (t != h)
+  {
+    retireBuf_[t % kRetireCap].reset();
+    ++t;
+  }
+  retireTail_.store(t, std::memory_order_release);
+}
+
 void ImpulsePlugin::enterBypass()
 {
   if (conv_)
     conv_->reset();
-  convPrev_.reset();
+  retireConv(std::move(convPrev_));
   xfadeLeft_ = 0;
   tone_.reset();
   wetPredelay_.reset();
 }
 
-void ImpulsePlugin::ensureScratch(int n)
+void ImpulsePlugin::prepareScratch(int n)
 {
   const size_t s = static_cast<size_t>(std::max(0, n));
   if (scratchWetL_.size() < s)
@@ -397,6 +471,9 @@ tresult PLUGIN_API ImpulsePlugin::setActive(TBool state)
 tresult PLUGIN_API ImpulsePlugin::setupProcessing(ProcessSetup& newSetup)
 {
   sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  /* Pre-allocate scratch for the largest block the host may deliver — the
+   * audio thread must never resize these buffers. */
+  prepareScratch(std::max(static_cast<int>(newSetup.maxSamplesPerBlock), 8192));
   resetProcessing();
   {
     std::lock_guard<std::mutex> lock(dataMutex_);
@@ -432,14 +509,19 @@ void ImpulsePlugin::rebuildPreparedLocked()
   const float sr = static_cast<float>(workerSr_.load(std::memory_order_relaxed));
   Dsp::resampleIr(preparedIr_, sr > 0.f ? sr : 44100.f);
   Dsp::normalizeIr(preparedIr_, 0.5f);
-  origLengthMs_ = preparedIr_.frames > 0 && preparedIr_.sampleRate > 0.f
-                    ? 1000.f * static_cast<float>(preparedIr_.frames) / preparedIr_.sampleRate
-                    : 0.f;
+  origLengthMs_.store(preparedIr_.frames > 0 && preparedIr_.sampleRate > 0.f
+                        ? 1000.f * static_cast<float>(preparedIr_.frames) / preparedIr_.sampleRate
+                        : 0.f,
+                      std::memory_order_relaxed);
   const bool rev = reverseFlag_.load(std::memory_order_relaxed) != 0;
   displayIr_ = preparedIr_;
-  const int bins = std::clamp(waveBins_.load(std::memory_order_relaxed), 48, 1024);
-  waveDb_.assign(static_cast<size_t>(bins), -90.f);
-  Dsp::irEnvelopeDb(displayIr_, waveDb_.data(), bins);
+  const int bins = std::clamp(waveBins_.load(std::memory_order_relaxed), 48, kMaxWaveBins);
+  /* Seqlock publish (dataMutex_ is held against other writers; the UI reader
+   * never locks). irEnvelopeDb fills every bin. */
+  waveSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  waveDbSize_ = bins;
+  Dsp::irEnvelopeDb(displayIr_, waveDb_, bins);
+  waveSeq_.fetch_add(1, std::memory_order_release); // even: stable
   Dsp::applyDecay(preparedIr_, decayPlain_.load(std::memory_order_relaxed),
                   shapePlain_.load(std::memory_order_relaxed));
   if (rev)
@@ -565,7 +647,7 @@ void ImpulsePlugin::runLoad(const std::string& relOrAbs)
     rebuildPreparedLocked();
     prep = preparedIr_;
   }
-  auto eng = std::make_shared<Dsp::PartitionedStereoConvolver>();
+  auto eng = std::make_unique<Dsp::PartitionedStereoConvolver>();
   eng->setIr(prep.interleaved.data(), prep.frames, prep.channels);
   {
     std::lock_guard<std::mutex> lock(dataMutex_);
@@ -593,7 +675,7 @@ void ImpulsePlugin::runRebuild()
     rebuildPreparedLocked();
     prep = preparedIr_;
   }
-  auto eng = std::make_shared<Dsp::PartitionedStereoConvolver>();
+  auto eng = std::make_unique<Dsp::PartitionedStereoConvolver>();
   eng->setIr(prep.interleaved.data(), prep.frames, prep.channels);
   publishPendingConv(std::move(eng));
 }
@@ -684,36 +766,52 @@ int ImpulsePlugin::takeIrWaveform(float* out, int maxOut)
     return 0;
   if (!waveDirty_.load(std::memory_order_relaxed))
     return 0;
-  std::lock_guard<std::mutex> lock(dataMutex_);
-  if (!waveDirty_.exchange(false, std::memory_order_relaxed))
-    return 0;
-  const float used = origLengthMs_ * decayPlain_.load(std::memory_order_relaxed);
-  const int bins = static_cast<int>(waveDb_.size());
-  if (bins < 1 || maxOut < 3 + bins)
+  /* Seqlock read (same pattern as the compressor's takeEnvelopeDisplay):
+   * retry while a writer is mid-publish, never take dataMutex_ — the worker
+   * may hold it for a whole IR rebuild. */
+  for (int attempt = 0; attempt < 8; ++attempt)
   {
-    out[0] = 0.f;
-    out[1] = origLengthMs_;
+    const uint32_t s0 = waveSeq_.load(std::memory_order_acquire);
+    if (s0 & 1u)
+      continue; // write in progress
+    const int bins = waveDbSize_;
+    const float origMs = origLengthMs_.load(std::memory_order_relaxed);
+    const float used = origMs * decayPlain_.load(std::memory_order_relaxed);
+    int n = 3;
+    if (bins >= 1 && maxOut >= 3 + bins)
+    {
+      out[0] = static_cast<float>(bins);
+      std::memcpy(out + 3, waveDb_, sizeof(float) * static_cast<size_t>(bins));
+      n = 3 + bins;
+    }
+    else
+    {
+      out[0] = 0.f;
+    }
+    out[1] = origMs;
     out[2] = used;
-    return 3;
+    const uint32_t s1 = waveSeq_.load(std::memory_order_acquire);
+    if (s0 == s1)
+    {
+      waveDirty_.store(false, std::memory_order_relaxed);
+      return n;
+    }
   }
-  out[0] = static_cast<float>(bins);
-  out[1] = origLengthMs_;
-  out[2] = used;
-  std::memcpy(out + 3, waveDb_.data(), sizeof(float) * static_cast<size_t>(bins));
-  return 3 + bins;
+  return 0; // contended; the next poll retries
 }
 
 void ImpulsePlugin::configureVizBins(const char* id, int bins)
 {
   if (!id || std::strcmp(id, "impulse") != 0)
     return;
-  bins = std::clamp(bins, 48, 1024);
+  bins = std::clamp(bins, 48, kMaxWaveBins);
   if (waveBins_.exchange(bins) == bins)
     return;
   std::lock_guard<std::mutex> lock(dataMutex_);
-  waveDb_.assign(static_cast<size_t>(bins), -90.f);
-  if (displayIr_.frames > 0)
-    Dsp::irEnvelopeDb(displayIr_, waveDb_.data(), bins);
+  waveSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  waveDbSize_ = bins;
+  Dsp::irEnvelopeDb(displayIr_, waveDb_, bins); // fills dbMin when no IR
+  waveSeq_.fetch_add(1, std::memory_order_release); // even: stable
   waveDirty_.store(true);
 }
 
@@ -808,7 +906,9 @@ tresult PLUGIN_API ImpulsePlugin::process(ProcessData& data)
   }
 
   auto runWet = [&](auto** out) {
-    ensureScratch(nFrames);
+    /* Host exceeded setupProcessing maxSamplesPerBlock — refuse to alloc. */
+    if (static_cast<int>(scratchWetL_.size()) < nFrames)
+      return;
     float* wetL = scratchWetL_.data();
     float* wetR = scratchWetR_.data();
     const bool foldMono =
@@ -860,7 +960,7 @@ tresult PLUGIN_API ImpulsePlugin::process(ProcessData& data)
         wetL[i] = pL[i] * b + wetL[i] * a;
         wetR[i] = pR[i] * b + wetR[i] * a;
         if (--xfadeLeft_ <= 0)
-          convPrev_.reset();
+          retireConv(std::move(convPrev_));
       }
     }
 
@@ -983,6 +1083,7 @@ tresult PLUGIN_API ImpulsePlugin::setState(IBStream* state)
     }
   }
 
+  bool clearConv = false;
   {
     std::lock_guard<std::mutex> lock(dataMutex_);
     libraryRoot_ = root;
@@ -1002,13 +1103,16 @@ tresult PLUGIN_API ImpulsePlugin::setState(IBStream* state)
       preparedIr_ = {};
       displayIr_ = {};
       haveIr_ = false;
-      waveDb_.clear();
-      origLengthMs_ = 0.f;
+      waveSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+      waveDbSize_ = 0;
+      waveSeq_.fetch_add(1, std::memory_order_release); // even: stable
+      origLengthMs_.store(0.f, std::memory_order_relaxed);
       waveDirty_.store(true);
-      convPending_ = std::make_shared<Dsp::PartitionedStereoConvolver>();
-      convReady_.store(true, std::memory_order_release);
+      clearConv = true;
     }
   }
+  if (clearConv)
+    publishPendingConv(std::make_unique<Dsp::PartitionedStereoConvolver>());
   if (!root.empty())
     queueJob(JobKind::Scan, root);
   if (haveIr_)

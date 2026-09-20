@@ -120,12 +120,11 @@ void TunerPlugin::resetProcessing()
   std::memset(histBuf_, 0, sizeof(histBuf_));
   histPos_ = 0;
   histSampleCount_ = 0;
-  {
-    std::lock_guard<std::mutex> lock(histMutex_);
-    std::memset(histSnapshot_, 0, sizeof(histSnapshot_));
-    histSnapshotPos_ = 0;
-    histSnapshotSampleCount_ = 0;
-  }
+  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  std::memset(histSnapshot_, 0, sizeof(histSnapshot_));
+  histSnapshotPos_ = 0;
+  histSnapshotSampleCount_ = 0;
+  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
   const BlockState st = makeBlockState();
   const float sr = static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0);
   hopSize_ = std::max(64, static_cast<int>(sr * 0.008));
@@ -215,17 +214,16 @@ void TunerPlugin::histFeed(float inMidi, float tgtMidi, float conf, float flags,
   if (histSampleCount_ >= histSamplesPerSlot_)
   {
     histSampleCount_ = 0;
-    {
-      std::lock_guard<std::mutex> lock(histMutex_);
-      histSnapshot_[pos + 0] = inMidi;
-      histSnapshot_[pos + 1] = tgtMidi;
-      histSnapshot_[pos + 2] = conf;
-      histSnapshot_[pos + 3] = flags;
-      histSnapshot_[pos + 4] = corrCents;
-      histSnapshotPos_ = pos;
-      histSnapshotSampleCount_ = 0;
-      histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
-    }
+    histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+    histSnapshot_[pos + 0] = inMidi;
+    histSnapshot_[pos + 1] = tgtMidi;
+    histSnapshot_[pos + 2] = conf;
+    histSnapshot_[pos + 3] = flags;
+    histSnapshot_[pos + 4] = corrCents;
+    histSnapshotPos_ = pos;
+    histSnapshotSampleCount_ = 0;
+    histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
+    histSeq_.fetch_add(1, std::memory_order_release); // even: stable
     histPos_ = (histPos_ + kHistChannels) % kHistBufSize;
     histBuf_[histPos_ + 0] = inMidi;
     histBuf_[histPos_ + 1] = tgtMidi;
@@ -238,11 +236,14 @@ void TunerPlugin::histFeed(float inMidi, float tgtMidi, float conf, float flags,
 void TunerPlugin::publishHistSnapshot()
 {
   // Kept for reset / full sync — UI path uses per-slot publish in histFeed.
-  std::lock_guard<std::mutex> lock(histMutex_);
+  if (!vizConsumerActive())
+    return;
+  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
   std::memcpy(histSnapshot_, histBuf_, sizeof(histBuf_));
   histSnapshotPos_ = histPos_;
   histSnapshotSampleCount_ = histSampleCount_;
   histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
+  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
 }
 
 int TunerPlugin::takePitchHistory(float* out, int maxOut)
@@ -253,8 +254,12 @@ int TunerPlugin::takePitchHistory(float* out, int maxOut)
     return 0;
 
   float phase = 0.f;
+  // Seqlock read: retry while the audio thread is mid-publish.
+  for (int attempt = 0; attempt < 8; ++attempt)
   {
-    std::lock_guard<std::mutex> lock(histMutex_);
+    const uint32_t s0 = histSeq_.load(std::memory_order_acquire);
+    if (s0 & 1u)
+      continue; // write in progress
     const int startPos =
       (kHistBufSize + histSnapshotPos_ - (slots - 1) * kHistChannels) % kHistBufSize;
     const int sps = std::max(1, histSnapshotSamplesPerSlot_);
@@ -268,9 +273,14 @@ int TunerPlugin::takePitchHistory(float* out, int maxOut)
       out[i * kHistChannels + 3] = histSnapshot_[srcIdx + 3];
       out[i * kHistChannels + 4] = histSnapshot_[srcIdx + 4];
     }
+    const uint32_t s1 = histSeq_.load(std::memory_order_acquire);
+    if (s0 == s1)
+    {
+      out[outCount] = std::clamp(phase, 0.f, 1.f);
+      return outCount + 1;
+    }
   }
-  out[outCount] = std::clamp(phase, 0.f, 1.f);
-  return outCount + 1;
+  return 0; // contended; skip this frame
 }
 
 void TunerPlugin::configureVizBins(const char* id, int bins)

@@ -13,7 +13,6 @@
 #include <atomic>
 #include <cstdint>
 #include <cstring>
-#include <mutex>
 
 namespace calfNXT {
 namespace Limiter {
@@ -110,7 +109,10 @@ private:
   int histPos_ = 0;
   int histSampleCount_ = 0;
   int histSamplesPerSlot_ = 1;
-  std::mutex histMutex_;
+  /* Snapshot published once per block from the audio thread, read on the UI
+   * poll. Seqlock (odd/even sequence) — the audio thread never blocks; the
+   * reader retries on a torn read. */
+  std::atomic<uint32_t> histSeq_ {0};
   float histSnapshot_[kHistBufSize] {};
   int histSnapshotPos_ = 0;
   int histSnapshotSampleCount_ = 0;

@@ -103,24 +103,22 @@ void MbcompPlugin::resetProcessing()
   }
   histSamplesPerSlot_ = 1;
   histVisibleSlots_ = 160;
+  for (int b = 0; b < kMaxBands; ++b)
   {
-    std::lock_guard<std::mutex> lock(vizMutex_);
-    for (int b = 0; b < kMaxBands; ++b)
-    {
-      pointInDb_[b] = -96.f;
-      pointOutDb_[b] = -96.f;
-    }
+    pointInDbPlain_[b] = -96.f;
+    pointOutDbPlain_[b] = -96.f;
+    pointInDb_[b].store(-96.f, std::memory_order_relaxed);
+    pointOutDb_[b].store(-96.f, std::memory_order_relaxed);
   }
+  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  for (int b = 0; b < kMaxBands; ++b)
   {
-    std::lock_guard<std::mutex> lock(histMutex_);
-    for (int b = 0; b < kMaxBands; ++b)
-    {
-      std::memset(histSnapshot_[b], 0, sizeof(histSnapshot_[b]));
-      histSnapshotPos_[b] = 0;
-      histSnapshotSampleCount_[b] = 0;
-    }
-    histSnapshotSamplesPerSlot_ = 1;
+    std::memset(histSnapshot_[b], 0, sizeof(histSnapshot_[b]));
+    histSnapshotPos_[b] = 0;
+    histSnapshotSampleCount_[b] = 0;
   }
+  histSnapshotSamplesPerSlot_ = 1;
+  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
 }
 
 tresult PLUGIN_API MbcompPlugin::setActive(TBool state)
@@ -168,7 +166,9 @@ void MbcompPlugin::histFeedSample(int band, float fullPeak, float bandPeak, floa
 
 void MbcompPlugin::publishHistSnapshot()
 {
-  std::lock_guard<std::mutex> lock(histMutex_);
+  if (!vizConsumerActive())
+    return;
+  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
   for (int b = 0; b < kMaxBands; ++b)
   {
     std::memcpy(histSnapshot_[b], histBuf_[b], sizeof(histBuf_[b]));
@@ -176,6 +176,16 @@ void MbcompPlugin::publishHistSnapshot()
     histSnapshotSampleCount_[b] = histSampleCount_[b];
   }
   histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
+  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
+}
+
+void MbcompPlugin::publishDynamicsPoints()
+{
+  for (int b = 0; b < kMaxBands; ++b)
+  {
+    pointInDb_[b].store(pointInDbPlain_[b], std::memory_order_relaxed);
+    pointOutDb_[b].store(pointOutDbPlain_[b], std::memory_order_relaxed);
+  }
 }
 
 int MbcompPlugin::takeGainReductionDb(float* out, int maxOut)
@@ -227,11 +237,10 @@ int MbcompPlugin::takeDynamicsPoint(float* out, int maxOut)
   const int n = numBands();
   if (maxOut < n * 2)
     return 0;
-  std::lock_guard<std::mutex> lock(vizMutex_);
   for (int b = 0; b < n; ++b)
   {
-    out[b * 2 + 0] = pointInDb_[b];
-    out[b * 2 + 1] = pointOutDb_[b];
+    out[b * 2 + 0] = pointInDb_[b].load(std::memory_order_relaxed);
+    out[b * 2 + 1] = pointOutDb_[b].load(std::memory_order_relaxed);
   }
   return n * 2;
 }
@@ -247,8 +256,12 @@ int MbcompPlugin::takeEnvelopeDisplay(float* out, int maxOut)
     return 0;
 
   float phase = 0.f;
+  // Seqlock read: retry while the audio thread is mid-publish.
+  for (int attempt = 0; attempt < 8; ++attempt)
   {
-    std::lock_guard<std::mutex> lock(histMutex_);
+    const uint32_t s0 = histSeq_.load(std::memory_order_acquire);
+    if (s0 & 1u)
+      continue; // write in progress
     const int sps = std::max(1, histSnapshotSamplesPerSlot_);
     phase = static_cast<float>(histSnapshotSampleCount_[0]) / static_cast<float>(sps);
     for (int b = 0; b < bands; ++b)
@@ -267,9 +280,14 @@ int MbcompPlugin::takeEnvelopeDisplay(float* out, int maxOut)
         dst[i * kHistChannels + 2] = std::clamp(gr, 1.0e-6f, 1.f);
       }
     }
+    const uint32_t s1 = histSeq_.load(std::memory_order_acquire);
+    if (s0 == s1)
+    {
+      out[outCount - 1] = std::clamp(phase, 0.f, 1.f);
+      return outCount;
+    }
   }
-  out[outCount - 1] = std::clamp(phase, 0.f, 1.f);
-  return outCount;
+  return 0; // contended; skip this frame
 }
 
 void MbcompPlugin::configureVizBins(const char* id, int bins)
@@ -374,6 +392,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
             histFeedSample(b, 0.f, 0.f, 1.f);
         }
         publishHistSnapshot();
+        publishDynamicsPoints();
         io_.end(data);
       }
       return kResultOk;
@@ -499,15 +518,13 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
       lastGrDb_[b] = 0.f;
       grMeter_[b].forceZero();
     }
+    for (int b = 0; b < bands; ++b)
     {
-      std::lock_guard<std::mutex> lock(vizMutex_);
-      for (int b = 0; b < bands; ++b)
-      {
-        pointInDb_[b] = -96.f;
-        pointOutDb_[b] = -96.f;
-      }
+      pointInDbPlain_[b] = -96.f;
+      pointOutDbPlain_[b] = -96.f;
     }
     publishHistSnapshot();
+    publishDynamicsPoints();
     io_.end(data);
     return kResultOk;
   }
@@ -613,13 +630,11 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
         grMeter_[b].process(grLin);
         lastGrDb_[b] = grDb;
         // Curve GR (not lagged audio GR) — keeps the point on the transfer line.
-        {
-          const float inDb = linToDbSafe(gr_[b].lastDetectorLin());
-          const float outDb =
-            inDb + linToDbSafe(gr_[b].lastCurveGain()) + st.makeupDb;
-          pointInDb_[b] = inDb;
-          pointOutDb_[b] = outDb;
-        }
+        const float inDb = linToDbSafe(gr_[b].lastDetectorLin());
+        const float outDb =
+          inDb + linToDbSafe(gr_[b].lastCurveGain()) + st.makeupDb;
+        pointInDbPlain_[b] = inDb;
+        pointOutDbPlain_[b] = outDb;
       }
       else
       {
@@ -629,8 +644,8 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
         grMeter_[b].forceZero();
         lastGrDb_[b] = 0.f;
         const float inDb = linToDbSafe(bandPeak);
-        pointInDb_[b] = inDb;
-        pointOutDb_[b] = inDb;
+        pointInDbPlain_[b] = inDb;
+        pointOutDbPlain_[b] = inDb;
       }
 
       bandOutHold_[b].accumulate(0, std::max(std::fabs(bL), std::fabs(bR)));
@@ -658,6 +673,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
   }
 
   publishHistSnapshot();
+  publishDynamicsPoints();
   if (quietIn && allGrIdle)
     quietDrained_ = true;
   splitL_.sanitize();

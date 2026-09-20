@@ -9,6 +9,7 @@
 
 #include "compressor_params.h"
 
+#include <atomic>
 #include <cstring>
 #include <mutex>
 
@@ -74,6 +75,7 @@ private:
   void resetProcessing();
   void histFeedSample(float audioPeakLin, float detPeakLin, float grLin);
   void publishHistSnapshot();
+  void publishDynamicsPoint();
 
   float params_[kParamCount] {};
   Dsp::IoStage io_;
@@ -81,15 +83,21 @@ private:
   Dsp::GainReduction gr_;
   Dsp::SidechainFilter sc_;
   Dsp::GrMeter grMeter_;
-  std::mutex vizMutex_;
-  float pointInDb_ = -96.f;
-  float pointOutDb_ = -96.f;
+  /* Operating point: audio thread writes plains per sample, publishes to
+   * atomics once per process() for the UI poll — never takes a mutex. */
+  float pointInDbPlain_ = -96.f;
+  float pointOutDbPlain_ = -96.f;
+  std::atomic<float> pointInDb_ {-96.f};
+  std::atomic<float> pointOutDb_ {-96.f};
 
   float histBuf_[kHistBufSize] {};
   int histPos_ = 0;
   int histSampleCount_ = 0;
   int histSamplesPerSlot_ = 1;
-  std::mutex histMutex_;
+  /* Snapshot published once per block from the audio thread, read on the UI
+   * poll. Seqlock (odd/even sequence) — the audio thread never blocks; the
+   * reader retries on a torn read. */
+  std::atomic<uint32_t> histSeq_ {0};
   float histSnapshot_[kHistBufSize] {};
   int histSnapshotPos_ = 0;
   int histSnapshotSampleCount_ = 0;

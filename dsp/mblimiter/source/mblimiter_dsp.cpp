@@ -312,16 +312,15 @@ void MblimiterPlugin::resetProcessing()
   histSamplesPerSlot_ = 1;
   histVisibleSlots_ = 160;
 
+  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  for (int b = 0; b < kMaxBands; ++b)
   {
-    std::lock_guard<std::mutex> lock(histMutex_);
-    for (int b = 0; b < kMaxBands; ++b)
-    {
-      std::memset(histSnapshot_[b], 0, sizeof(histSnapshot_[b]));
-      histSnapshotPos_[b] = 0;
-      histSnapshotSampleCount_[b] = 0;
-    }
-    histSnapshotSamplesPerSlot_ = 1;
+    std::memset(histSnapshot_[b], 0, sizeof(histSnapshot_[b]));
+    histSnapshotPos_[b] = 0;
+    histSnapshotSampleCount_[b] = 0;
   }
+  histSnapshotSamplesPerSlot_ = 1;
+  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
 
   ensureMultiBuffer();
   applyParams(true);
@@ -533,7 +532,9 @@ void MblimiterPlugin::histFeedSample(int band, float fullPeak, float bandPeak, f
 
 void MblimiterPlugin::publishHistSnapshot()
 {
-  std::lock_guard<std::mutex> lock(histMutex_);
+  if (!vizConsumerActive())
+    return;
+  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
   for (int b = 0; b < kMaxBands; ++b)
   {
     std::memcpy(histSnapshot_[b], histBuf_[b], sizeof(histBuf_[b]));
@@ -541,6 +542,7 @@ void MblimiterPlugin::publishHistSnapshot()
     histSnapshotSampleCount_[b] = histSampleCount_[b];
   }
   histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
+  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
 }
 
 int MblimiterPlugin::takeGainReductionDb(float* out, int maxOut)
@@ -596,8 +598,12 @@ int MblimiterPlugin::takeEnvelopeDisplay(float* out, int maxOut)
     return 0;
 
   float phase = 0.f;
+  // Seqlock read: retry while the audio thread is mid-publish.
+  for (int attempt = 0; attempt < 8; ++attempt)
   {
-    std::lock_guard<std::mutex> lock(histMutex_);
+    const uint32_t s0 = histSeq_.load(std::memory_order_acquire);
+    if (s0 & 1u)
+      continue; // write in progress
     const int sps = std::max(1, histSnapshotSamplesPerSlot_);
     phase = static_cast<float>(histSnapshotSampleCount_[0]) / static_cast<float>(sps);
     for (int b = 0; b < bands; ++b)
@@ -616,9 +622,14 @@ int MblimiterPlugin::takeEnvelopeDisplay(float* out, int maxOut)
         dst[i * kHistChannels + 2] = std::clamp(gr, 1.0e-6f, 1.f);
       }
     }
+    const uint32_t s1 = histSeq_.load(std::memory_order_acquire);
+    if (s0 == s1)
+    {
+      out[outCount - 1] = std::clamp(phase, 0.f, 1.f);
+      return outCount;
+    }
   }
-  out[outCount - 1] = std::clamp(phase, 0.f, 1.f);
-  return outCount;
+  return 0; // contended; skip this frame
 }
 
 void MblimiterPlugin::configureVizBins(const char* id, int bins)

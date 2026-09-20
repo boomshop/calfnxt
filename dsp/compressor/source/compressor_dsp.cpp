@@ -78,24 +78,22 @@ void CompressorPlugin::resetProcessing()
   sc_.setSampleRate(static_cast<float>(sampleRate_));
   sc_.reset();
   grMeter_.reset(static_cast<float>(sampleRate_));
-  {
-    std::lock_guard<std::mutex> lock(vizMutex_);
-    pointInDb_ = -96.f;
-    pointOutDb_ = -96.f;
-  }
+  pointInDbPlain_ = -96.f;
+  pointOutDbPlain_ = -96.f;
+  pointInDb_.store(-96.f, std::memory_order_relaxed);
+  pointOutDb_.store(-96.f, std::memory_order_relaxed);
 
   std::memset(histBuf_, 0, sizeof(histBuf_));
   histPos_ = 0;
   histSampleCount_ = 0;
   histSamplesPerSlot_ = 1;
   histVisibleSlots_ = 160;
-  {
-    std::lock_guard<std::mutex> lock(histMutex_);
-    std::memset(histSnapshot_, 0, sizeof(histSnapshot_));
-    histSnapshotPos_ = 0;
-    histSnapshotSampleCount_ = 0;
-    histSnapshotSamplesPerSlot_ = 1;
-  }
+  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  std::memset(histSnapshot_, 0, sizeof(histSnapshot_));
+  histSnapshotPos_ = 0;
+  histSnapshotSampleCount_ = 0;
+  histSnapshotSamplesPerSlot_ = 1;
+  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
 }
 
 tresult PLUGIN_API CompressorPlugin::setActive(TBool state)
@@ -152,11 +150,20 @@ void CompressorPlugin::histFeedSample(float audioPeakLin, float detPeakLin, floa
 
 void CompressorPlugin::publishHistSnapshot()
 {
-  std::lock_guard<std::mutex> lock(histMutex_);
+  if (!vizConsumerActive())
+    return;
+  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
   std::memcpy(histSnapshot_, histBuf_, sizeof(histBuf_));
   histSnapshotPos_ = histPos_;
   histSnapshotSampleCount_ = histSampleCount_;
   histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
+  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
+}
+
+void CompressorPlugin::publishDynamicsPoint()
+{
+  pointInDb_.store(pointInDbPlain_, std::memory_order_relaxed);
+  pointOutDb_.store(pointOutDbPlain_, std::memory_order_relaxed);
 }
 
 void CompressorPlugin::processSample(const BlockState& state, float& L, float& R, float scL,
@@ -199,12 +206,9 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
     gr_.processDetector(detL, detR); // keep detector state continuous
     grMeter_.forceZero();
     histFeedSample(audioPeak, detPeak, 1.f);
-    {
-      std::lock_guard<std::mutex> lock(vizMutex_);
-      const float inDb = linToDbSafe(gr_.lastDetectorLin());
-      pointInDb_ = inDb;
-      pointOutDb_ = inDb;
-    }
+    const float inDb = linToDbSafe(gr_.lastDetectorLin());
+    pointInDbPlain_ = inDb;
+    pointOutDbPlain_ = inDb;
     return;
   }
 
@@ -217,11 +221,8 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
   const float inDb = linToDbSafe(det);
   const float outDb =
     inDb + linToDbSafe(gr_.lastCurveGain()) + state.makeupDb;
-  {
-    std::lock_guard<std::mutex> lock(vizMutex_);
-    pointInDb_ = inDb;
-    pointOutDb_ = outDb;
-  }
+  pointInDbPlain_ = inDb;
+  pointOutDbPlain_ = outDb;
 
   const float wetL = dryL * gr * state.makeupLin;
   const float wetR = dryR * gr * state.makeupLin;
@@ -242,9 +243,8 @@ int CompressorPlugin::takeDynamicsPoint(float* out, int maxOut)
 {
   if (!out || maxOut < 2)
     return 0;
-  std::lock_guard<std::mutex> lock(vizMutex_);
-  out[0] = pointInDb_;
-  out[1] = pointOutDb_;
+  out[0] = pointInDb_.load(std::memory_order_relaxed);
+  out[1] = pointOutDb_.load(std::memory_order_relaxed);
   return 2;
 }
 
@@ -256,8 +256,12 @@ int CompressorPlugin::takeEnvelopeDisplay(float* out, int maxOut)
     return 0;
 
   float phase = 0.f;
+  // Seqlock read: retry while the audio thread is mid-publish.
+  for (int attempt = 0; attempt < 8; ++attempt)
   {
-    std::lock_guard<std::mutex> lock(histMutex_);
+    const uint32_t s0 = histSeq_.load(std::memory_order_acquire);
+    if (s0 & 1u)
+      continue; // write in progress
     const int startPos =
       (kHistBufSize + histSnapshotPos_ - (slots - 1) * kHistChannels) % kHistBufSize;
     const int sps = std::max(1, histSnapshotSamplesPerSlot_);
@@ -272,9 +276,14 @@ int CompressorPlugin::takeEnvelopeDisplay(float* out, int maxOut)
         gr = 1.f;
       out[i * kHistChannels + 2] = std::clamp(gr, 1.0e-6f, 1.f);
     }
+    const uint32_t s1 = histSeq_.load(std::memory_order_acquire);
+    if (s0 == s1)
+    {
+      out[outCount] = std::clamp(phase, 0.f, 1.f);
+      return outCount + 1;
+    }
   }
-  out[outCount] = std::clamp(phase, 0.f, 1.f);
-  return outCount + 1;
+  return 0; // contended; skip this frame
 }
 
 void CompressorPlugin::configureVizBins(const char* id, int bins)
@@ -354,6 +363,7 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
         histFeedSample(0.f, 0.f, 1.f);
     }
     publishHistSnapshot();
+    publishDynamicsPoint();
     if (hasHostAudio)
       io_.end(data);
     return kResultOk;
@@ -384,6 +394,7 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
     else
       drain(data.outputs[0].channelBuffers64, data.outputs[0].numChannels);
     publishHistSnapshot();
+    publishDynamicsPoint();
     if (data.outputs[0].channelBuffers32 || data.outputs[0].channelBuffers64)
       io_.end(data);
     return kResultOk;
@@ -424,6 +435,7 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
   }
 
   publishHistSnapshot();
+  publishDynamicsPoint();
   sc_.sanitize();
   io_.end(data);
   return kResultOk;
