@@ -229,8 +229,8 @@ export function ImpulseUI(props: ImpulseUIProps) {
             }}
           />
         </WithInfo>
-        <WithInfo title={impulseInfo.bypass}>
-          <Toggle state$={host.bypass$} icon="power" className="active" />
+        <WithInfo title={impulseInfo.active}>
+          <Toggle state$={host.active$} icon="power" className="active" />
         </WithInfo>
       </Header>
 

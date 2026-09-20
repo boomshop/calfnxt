@@ -19,7 +19,8 @@ export const IMPULSE_QUALITY_ENTRIES = [
 
 export type IImpulseHost = {
   meta: typeof pluginMeta;
-  bypass$: DynamicValue<boolean>;
+  /** Power: true = convolution on. Host param stays `bypass` (inverted). */
+  active$: DynamicValue<boolean>;
   decay$: DynamicValue<number>;
   predelay$: DynamicValue<number>;
   hipass$: DynamicValue<number>;
@@ -68,6 +69,13 @@ function bindNum(name: keyof typeof paramIds, fallback = 0): DynamicValue<number
 function bindBool(name: keyof typeof paramIds): DynamicValue<boolean> {
   const dv = DynamicValue.fromConstant(paramDefault(name, 0) >= 0.5);
   bindBoolParamToHost(dv, paramIds[name]);
+  return dv;
+}
+
+/** Power UI ↔ host `bypass` (lit = processing = bypass off). */
+function bindActiveFromBypass(): DynamicValue<boolean> {
+  const dv = DynamicValue.fromConstant(!(paramDefault('bypass', 0) >= 0.5));
+  bindBoolParamToHost(dv, paramIds.bypass, { invert: true });
   return dv;
 }
 
@@ -120,7 +128,7 @@ export function createBoundImpulseHost(): IImpulseHost {
   };
   return {
     meta: pluginMeta,
-    bypass$: bindBool('bypass'),
+    active$: bindActiveFromBypass(),
     decay$: bindNum('decay', 1),
     predelay$: bindNum('predelay', 0),
     hipass$: bindNum('hipass', 60),

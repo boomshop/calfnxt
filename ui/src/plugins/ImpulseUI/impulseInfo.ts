@@ -1,6 +1,6 @@
 export const impulseInfo = {
-  bypass:
-    'Turns the convolution path off so you hear dry only (In/Out gains still apply). Latency stays reported while an IR is loaded so the host graph does not jump. A/B the room without unloading the file.',
+  active:
+    'Power for the convolution path. On = wet IR at the Wet level (Dry still applies). Off = dry only — instant mute of the room without unloading the file. Latency stays reported while an IR is loaded so the host graph does not jump. Same idea as Reverb/Delay power, not a compressor-style bypass icon.',
 
   source:
     'What feeds the IR — dry stays the original stereo so an insert does not collapse the source. Stereo = L and R independently (true-stereo files use all four paths). L or R = that channel into both convolver inputs: a mono send from one side, or a true-stereo hall “from the left/right speaker.” L+R = (L+R)/2 into both — the usual vocal/bus mono-into-the-room without a 6 dB bump when the sides agree. On a send you will often want L+R even on a stereo track so the image of the dry is not baked into the wet twice. Stereo IRs still come back as stereo from a mono feed; they just share one source.',

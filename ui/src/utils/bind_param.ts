@@ -558,18 +558,23 @@ export function postEnd(id: number): void {
   postToHost({ t: "end", id });
 }
 
-/** Wire a boolean DynamicValue to a 0/1 host parameter. */
+/**
+ * Wire a boolean DynamicValue to a 0/1 host parameter.
+ * `invert`: UI true maps to host 0 (and vice versa) — e.g. Power on ↔ bypass off.
+ */
 export function bindBoolParamToHost(
   dv: DynamicValue<boolean>,
   id: number,
+  opts?: { invert?: boolean },
 ): () => void {
+  const invert = opts?.invert === true;
   let fromHost = false;
   let lastSent: number | undefined;
 
   const unsub = dv.subscribe((on) => {
     if (fromHost)
       return;
-    const v = on ? 1 : 0;
+    const v = (invert ? !on : on) ? 1 : 0;
     if (lastSent !== undefined && nearlyEqual(lastSent, v))
       return;
     lastSent = v;
@@ -577,8 +582,9 @@ export function bindBoolParamToHost(
   }, false);
 
   const apply = (v: number) => {
-    const on = v >= 0.5;
-    const norm = on ? 1 : 0;
+    const paramOn = v >= 0.5;
+    const on = invert ? !paramOn : paramOn;
+    const norm = paramOn ? 1 : 0;
     if (lastSent !== undefined && nearlyEqual(lastSent, norm) && dv.value === on)
       return;
     fromHost = true;
