@@ -73,6 +73,8 @@ private:
   Dsp::SpectralTamer tamer_;
   double sampleRate_ = 44100.0;
   Steinberg::uint32 latencySamples_ = 0;
+  /** Samples left to drain wet/OLA after input goes quiet before parking STFT. */
+  int flushLeft_ = 0;
 };
 
 } // namespace Tamer

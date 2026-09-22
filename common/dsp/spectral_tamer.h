@@ -11,6 +11,9 @@
 //
 // Reconstruction: sqrt-Hann analysis/synthesis, hop = N/4, shift-OLA.
 // Latency = N − hop. Buffers preallocated to kMaxFft (no RT heap).
+// Fastpath: park STFT only when the editor is hidden and (no audio work, or
+// quiet-after-flush). Open UI keeps the STFT on silence/Bypass/Depth=0 so the
+// chart decays live (same FFT as processing — no cheaper analyzer path).
 //
 // Viz: log-binned spectrum (SpectrumTap layout) + GR response [N, L×N, R×N].
 
@@ -131,6 +134,7 @@ public:
     dryWrite_ = 0;
     outRead_ = 0;
     outWrite_ = 0;
+    stftActive_ = false;
     // Prefill wet FIFO with one latency worth of silence so read never underruns.
     const int lat = static_cast<int>(latencySamples());
     for (int i = 0; i < lat; ++i)
@@ -147,14 +151,36 @@ public:
   }
 
   /**
-   * Process in-place stereo. When bypass: latency-matched dry.
-   * When diffListen: delayed dry − wet (what was removed).
+   * Process in-place stereo. When STFT parked: latency-matched dry only.
+   * Bypass with live STFT: GR→0 on the wet OLA (no dry↔wet cut). Diff Listen:
+   * delayed dry − wet.
+   * `runStft`: false skips analysis/OLA (CPU fastpath).
    */
-  void process(float* left, float* right, int n, bool bypass, bool diffListen)
+  void process(float* left, float* right, int n, bool bypass, bool diffListen,
+               bool runStft)
   {
     if (!left || n <= 0)
       return;
     applyPendingSizes();
+
+    if (runStft && !stftActive_)
+    {
+      resetStftEngine();
+      stftActive_ = true;
+    }
+    else if (!runStft && stftActive_)
+    {
+      parkStft();
+      stftActive_ = false;
+    }
+
+    if (!runStft)
+    {
+      processDryOnly(left, right, n, bypass, diffListen);
+      return;
+    }
+
+    bypassActive_ = bypass;
 
     const int nChR = right ? 1 : 0;
     const int nFft = fftSize_;
@@ -204,14 +230,8 @@ public:
         outRead_ = (outRead_ + 1) & outMask;
       }
 
-      if (bypass)
-      {
-        left[i] = dryOutL;
-        if (nChR)
-          right[i] = dryOutR;
-        continue;
-      }
-
+      // Bypass stays on the wet OLA path with GR forced to 0 — no dry↔wet
+      // switch (that hard cut clicked when GR was mid-flight).
       if (diffListen)
       {
         left[i] = dryOutL - wetL;
@@ -223,6 +243,43 @@ public:
         left[i] = wetL;
         if (nChR)
           right[i] = wetR;
+      }
+    }
+  }
+
+  /** Latency-matched dry only — used while STFT is parked. */
+  void processDryOnly(float* left, float* right, int n, bool /*bypass*/,
+                      bool diffListen)
+  {
+    const int nChR = right ? 1 : 0;
+    const int dryMask = dryMask_;
+    const int lat = static_cast<int>(latencySamples());
+    for (int i = 0; i < n; ++i)
+    {
+      float inL = left[i];
+      float inR = nChR ? right[i] : inL;
+      sanitizeDenormal(inL);
+      sanitizeDenormal(inR);
+
+      dryL_[static_cast<size_t>(dryWrite_)] = inL;
+      dryR_[static_cast<size_t>(dryWrite_)] = inR;
+      const int dryRead = (dryWrite_ - lat) & dryMask;
+      const float dryOutL = dryL_[static_cast<size_t>(dryRead)];
+      const float dryOutR = dryR_[static_cast<size_t>(dryRead)];
+      dryWrite_ = (dryWrite_ + 1) & dryMask;
+
+      // Diff with STFT parked: nothing was removed.
+      if (diffListen)
+      {
+        left[i] = 0.f;
+        if (nChR)
+          right[i] = 0.f;
+      }
+      else
+      {
+        left[i] = dryOutL;
+        if (nChR)
+          right[i] = dryOutR;
       }
     }
   }
@@ -515,6 +572,38 @@ private:
     emaSpec_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.1 * hopsPerSec)));
   }
 
+  /** Clear analysis/OLA/wet FIFO; leave dry delay untouched (PDC continuity). */
+  void resetStftEngine()
+  {
+    std::fill(inL_.begin(), inL_.end(), 0.f);
+    std::fill(inR_.begin(), inR_.end(), 0.f);
+    std::fill(olaL_.begin(), olaL_.end(), 0.f);
+    std::fill(olaR_.begin(), olaR_.end(), 0.f);
+    std::fill(outL_.begin(), outL_.end(), 0.f);
+    std::fill(outR_.begin(), outR_.end(), 0.f);
+    std::fill(grDb_.begin(), grDb_.end(), 0.f);
+    std::fill(grTarget_.begin(), grTarget_.end(), 0.f);
+    std::fill(envDb_.begin(), envDb_.end(), kFloorDb);
+    writePos_ = 0;
+    hopCount_ = 0;
+    filled_ = 0;
+    outRead_ = 0;
+    outWrite_ = 0;
+    const int lat = static_cast<int>(latencySamples());
+    for (int i = 0; i < lat; ++i)
+    {
+      outL_[static_cast<size_t>(outWrite_)] = 0.f;
+      outR_[static_cast<size_t>(outWrite_)] = 0.f;
+      outWrite_ = (outWrite_ + 1) & outMask_;
+    }
+    std::fill(grDisp_.begin(), grDisp_.end(), 0.f);
+  }
+
+  void parkStft()
+  {
+    resetStftEngine();
+  }
+
   static float magToDb(float mag, float norm, float ceilDb)
   {
     const float lin = mag * norm;
@@ -566,35 +655,39 @@ private:
 
     updateDisplaySpectrum();
 
-    // Slow spectral floor on the *filtered* detector spectrum.
-    const float a = 0.94f;
-    scratch_[0] = detectDb_[0];
-    for (int k = 1; k <= half; ++k)
-      scratch_[static_cast<size_t>(k)] =
-        a * scratch_[static_cast<size_t>(k - 1)]
-        + (1.f - a) * detectDb_[static_cast<size_t>(k)];
-    float back = scratch_[static_cast<size_t>(half)];
-    for (int k = half; k >= 0; --k)
-    {
-      back = a * back + (1.f - a) * scratch_[static_cast<size_t>(k)];
-      float& e = envDb_[static_cast<size_t>(k)];
-      e += envCoeff_ * (back - e);
-      sanitizeDenormal(e);
-    }
+    // Bypass / Depth=0: no new cuts — GR releases to 0, wet OLA keeps running
+    // so engaging Bypass never hard-switches dry↔wet (click).
+    std::fill(grTarget_.begin(),
+              grTarget_.begin() + static_cast<size_t>(half) + 1, 0.f);
 
-    const float depth = depthDb_;
-    // Detection threshold (0…24 dB). Soft knee width tracks it so high Thresh
-    // is both pickier and gentler toward Depth.
-    const float thresh = thresholdDb_;
-    const float soft = 3.f + 0.5f * thresh; // ~3…15 dB
-    // Depth only *drives* past ~12 dB (steeper climb to the ceiling).
-    const float drive =
-      1.f + std::max(0.f, (depth - 12.f) / 12.f); // 1…2
-    const float softEff = soft / drive;
-    std::fill(grTarget_.begin(), grTarget_.begin() + static_cast<size_t>(half) + 1, 0.f);
-
-    if (depth > 0.f && kHi_ >= kLo_)
+    if (!bypassActive_ && depthDb_ > 0.f && kHi_ >= kLo_)
     {
+      // Slow spectral floor on the *filtered* detector spectrum.
+      const float a = 0.94f;
+      scratch_[0] = detectDb_[0];
+      for (int k = 1; k <= half; ++k)
+        scratch_[static_cast<size_t>(k)] =
+          a * scratch_[static_cast<size_t>(k - 1)]
+          + (1.f - a) * detectDb_[static_cast<size_t>(k)];
+      float back = scratch_[static_cast<size_t>(half)];
+      for (int k = half; k >= 0; --k)
+      {
+        back = a * back + (1.f - a) * scratch_[static_cast<size_t>(k)];
+        float& e = envDb_[static_cast<size_t>(k)];
+        e += envCoeff_ * (back - e);
+        sanitizeDenormal(e);
+      }
+
+      const float depth = depthDb_;
+      // Detection threshold (0…24 dB). Soft knee width tracks it so high Thresh
+      // is both pickier and gentler toward Depth.
+      const float thresh = thresholdDb_;
+      const float soft = 3.f + 0.5f * thresh; // ~3…15 dB
+      // Depth only *drives* past ~12 dB (steeper climb to the ceiling).
+      const float drive =
+        1.f + std::max(0.f, (depth - 12.f) / 12.f); // 1…2
+      const float softEff = soft / drive;
+
       // Resonance = local max that sticks out above the strongest nearby bin
       // outside ±1 (neighbouring partial / formant shoulder). A harmonic series
       // has peers of similar height → prominence ≈ 0. A whistle above the
@@ -650,11 +743,11 @@ private:
         const float amt = depth * (1.f - std::exp(-excess / softEff));
         grTarget_[static_cast<size_t>(k)] = -std::min(depth, amt);
       }
-    }
 
-    blurGrByOctaves();
-    // Filter curve gates Depth: 0 dB → full, −24 dB → none (linear in dB).
-    applySearchMaskToGr();
+      blurGrByOctaves();
+      // Filter curve gates Depth: 0 dB → full, −24 dB → none (linear in dB).
+      applySearchMaskToGr();
+    }
 
     for (int k = 0; k <= half; ++k)
     {
@@ -870,6 +963,9 @@ private:
   int bins_ = 0;
   int kLo_ = 1;
   int kHi_ = 1;
+  bool stftActive_ = false;
+  /** When true, hops skip detection (GR→0) but keep wet OLA running. */
+  bool bypassActive_ = false;
 
   float fLoHz_ = 200.f;
   float fHiHz_ = 5000.f;

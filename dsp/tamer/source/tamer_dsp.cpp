@@ -50,6 +50,7 @@ int TamerPlugin::qualityToFft(int quality)
 void TamerPlugin::resetProcessing()
 {
   tamer_.reset();
+  flushLeft_ = 0;
   applyBlockState(makeBlockState());
   updateLatency();
 }
@@ -142,15 +143,31 @@ tresult PLUGIN_API TamerPlugin::process(ProcessData& data)
   float* left = outs[0];
   float* right = (nCh > 1 && outs[1]) ? outs[1] : nullptr;
 
-  if (io_.inputWasQuiet() && state.bypass)
+  const bool quiet = io_.inputWasQuiet();
+  const bool depthOn = state.depth > 1.0e-3f;
+  const bool wantViz = vizConsumerActive();
+  // Spectrum/GR share the processing STFT. Keep it running whenever the editor
+  // is open (Bypass, Depth=0, host stop / quiet) so curves decay instead of
+  // freezing. Park only with the UI hidden after the wet path has flushed.
+  if (quiet)
+    flushLeft_ = std::max(0, flushLeft_ - nFrames);
+  else
+    flushLeft_ =
+      static_cast<int>(tamer_.latencySamples()) + tamer_.hopSize();
+
+  const bool flushed = flushLeft_ <= 0;
+  const bool needAudioStft = !state.bypass && depthOn;
+  const bool runStft = wantViz || (needAudioStft && !(quiet && flushed));
+
+  if (!runStft && quiet && flushed)
   {
     io_.end(data);
     return kResultOk;
   }
 
-  tamer_.process(left, right, nFrames, state.bypass, state.diffListen);
+  tamer_.process(left, right, nFrames, state.bypass, state.diffListen, runStft);
 
-  if (vizConsumerActive())
+  if (wantViz)
     tamer_.publish();
 
   io_.end(data);
