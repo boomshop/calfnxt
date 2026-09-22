@@ -60,6 +60,20 @@ def to_viz(d: dict, plugin: str = "") -> dict:
     if "out:levels" in d:
         viz["levelsOut"] = d["out:levels"]
 
+    if "fft:spectrum" in d:
+        viz["spectrum"] = d["fft:spectrum"]
+    if "tamer:response" in d:
+        viz["response"] = d["tamer:response"]
+    # Generic response / spectrum aliases used by some plugins.
+    for src, dst in (
+        ("mod:response", "response"),
+        ("phaser:response", "response"),
+        ("flanger:response", "response"),
+        ("chorus:response", "response"),
+    ):
+        if src in d and dst not in viz:
+            viz[dst] = d[src]
+
     for env_key in (
         "env:envelope",
         "comp:envelope",

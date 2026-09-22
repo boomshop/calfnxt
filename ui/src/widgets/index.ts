@@ -17,6 +17,7 @@ export * from "./PitchRollChart";
 export * from "./DelayEchoChart";
 export * from "./ReverbChart";
 export * from "./SpectrumChart";
+export * from "./TamerChart";
 export * from "./ModulationChart";
 export * from "./ChorusChart";
 export * from "./ImpulseChart";

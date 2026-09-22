@@ -63,6 +63,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 | **Multiband Limiter**    | `calfNXTMblimiter.vst3`  | 2–6 band lookahead limiter + broadband stage |
 | **DeEsser**              | `calfNXTDeesser.vst3`    | Sibilance / rumble dynamics                  |
 | **Transients**           | `calfNXTTransients.vst3` | Attack / sustain envelope shaper             |
+| **Tamer**                | `calfNXTTamer.vst3`      | Spectral resonance suppressor (STFT)         |
 
 ### EQ & filter
 
@@ -251,7 +252,7 @@ re-embedded (the install script does that). Plugin ids for the script / Vite:
 `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay`
 `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter`
 `ringmod` `pulsator` `crusher` `phaser` `flanger` `chorus` `split` `tuner`
-`octaver` `bender` `impulse`.
+`octaver` `bender` `impulse` `tamer`.
 
 Codegen is part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++
 params + `ui/src/generated/`).

@@ -71,6 +71,7 @@ add_subdirectory(dsp/tuner)
 add_subdirectory(dsp/octaver)
 add_subdirectory(dsp/bender)
 add_subdirectory(dsp/impulse)
+add_subdirectory(dsp/tamer)
 add_subdirectory(tools/offline)
 
 # After every plugin registered via calfnxt_copy_web_host: refresh helpers whenever
@@ -92,7 +93,7 @@ add_custom_target(calfnxt-web-host-bundles
 )
 
 # UI build needs generated models from every plugin descriptor
-add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen expander_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen limiter_codegen mblimiter_codegen harmonics_codegen analyzer_codegen filter_codegen ringmod_codegen pulsator_codegen crusher_codegen phaser_codegen flanger_codegen chorus_codegen split_codegen tuner_codegen octaver_codegen bender_codegen impulse_codegen)
+add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen expander_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen limiter_codegen mblimiter_codegen harmonics_codegen analyzer_codegen filter_codegen ringmod_codegen pulsator_codegen crusher_codegen phaser_codegen flanger_codegen chorus_codegen split_codegen tuner_codegen octaver_codegen bender_codegen impulse_codegen tamer_codegen)
 
 # Meta-target: all plugins + embedded UI packs (add new plugins here).
 add_custom_target(calfnxt-plugins
@@ -147,6 +148,8 @@ add_custom_target(calfnxt-plugins
     calfnxt-bender-resources
     calfnxt-impulse
     calfnxt-impulse-resources
+    calfnxt-tamer
+    calfnxt-tamer-resources
     calfnxt-web-host
     calfnxt-web-host-bundles
   COMMENT "Build all calfNXT VST3 plugins (+ embedded UI + web-host)"

@@ -25,6 +25,7 @@ import type {
   IOctaverHost,
   IBenderHost,
   IImpulseHost,
+  ITamerHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -997,6 +998,35 @@ export function applyImpulseDemo(
   applySharedViz(viz);
 }
 
+export function applyTamerDemo(
+  host: ITamerHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.fLo$, params.f_lo);
+  setNum(host.fHi$, params.f_hi);
+  setNum(host.hpSlope$, params.hp_slope);
+  setNum(host.lpSlope$, params.lp_slope);
+  setNum(host.depth$, params.depth);
+  setNum(host.sharpness$, params.sharpness);
+  setNum(host.threshold$, params.threshold);
+  setNum(host.attack$, params.attack);
+  setNum(host.release$, params.release);
+  setNum(host.quality$, params.quality);
+  setNum(host.spectrum$, params.spectrum);
+  setBool(host.diffListen$, params.diff_listen);
+  applySharedViz(viz);
+  if (viz.spectrum) {
+    host.spectrumData$.set(viz.spectrum);
+    pushViz('fft', 'spectrum', viz.spectrum);
+  }
+  if (viz.response) {
+    host.grResponse$.set(viz.response);
+    pushViz('tamer', 'response', viz.response);
+  }
+}
+
 export type DemoApplier = (
   host: unknown,
   params: Record<string, unknown>,
@@ -1029,4 +1059,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   octaver: applyOctaverDemo as DemoApplier,
   bender: applyBenderDemo as DemoApplier,
   impulse: applyImpulseDemo as DemoApplier,
+  tamer: applyTamerDemo as DemoApplier,
 };

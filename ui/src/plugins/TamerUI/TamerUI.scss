@@ -1,0 +1,54 @@
+.TamerUI {
+  display: grid;
+  grid-template-columns: 1fr 2.5fr 1fr;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'chart chart chart'
+    'quality process tilt'
+    'search process timing';
+  align-items: stretch;
+  gap: var(--gap);
+
+  > .TamerChart {
+    grid-area: chart;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  > .quality {
+    grid-area: quality;
+  }
+
+  > .process {
+    grid-area: process;
+  }
+
+  > .tilt {
+    grid-area: tilt;
+  }
+
+  > .search {
+    grid-area: search;
+
+    display: grid;
+    grid-template-rows: auto auto;
+    grid-auto-flow: column;
+    justify-content: space-evenly !important;
+  }
+
+  > .timing {
+    grid-area: timing;
+  }
+
+  > .block {
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+
+    > .info-block > .Buttons {
+      > .Button {
+        flex: 1;
+      }
+    }
+  }
+}

@@ -45,6 +45,7 @@ const ALL_PLUGINS = [
   'octaver',
   'bender',
   'impulse',
+  'tamer',
 ];
 
 const rawArgs = process.argv.slice(2);

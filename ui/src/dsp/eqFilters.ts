@@ -111,6 +111,36 @@ export function highPassRbj(O: EqFilterOpts) {
   };
 }
 
+/** First-order LP — matches BiquadCoeffs::setLp1. */
+export function lowPass1(O: EqFilterOpts) {
+  const K = Math.tan((Math.PI * O.freq) / O.sample_rate);
+  const a0 = K / (1 + K);
+  return {
+    b0: a0,
+    b1: a0,
+    b2: 0,
+    a0: 1,
+    a1: (K - 1) / (K + 1),
+    a2: 0,
+    sample_rate: O.sample_rate,
+  };
+}
+
+/** First-order HP — matches BiquadCoeffs::setHp1. */
+export function highPass1(O: EqFilterOpts) {
+  const K = Math.tan((Math.PI * O.freq) / O.sample_rate);
+  const a0 = 1 / (1 + K);
+  return {
+    b0: a0,
+    b1: -a0,
+    b2: 0,
+    a0: 1,
+    a1: (K - 1) / (K + 1),
+    a2: 0,
+    sample_rate: O.sample_rate,
+  };
+}
+
 /**
  * Constant-skirt band-pass — matches setBpRbj.
  * Gain (dB) scales peak amplitude like the DSP `peak` argument.
@@ -200,6 +230,7 @@ export const auxNotch36 = biquadFilter(
   withDrawSr(notchRbj),
 );
 export const auxAllpassFlat = biquadFilter(withDrawSr(allpassFlatRbj));
+export const auxLowpass6 = biquadFilter(withDrawSr(lowPass1));
 export const auxLowpass12 = biquadFilter(withDrawSr(lowPassRbj));
 export const auxLowpass24 = biquadFilter(withDrawSr(lowPassRbj), withDrawSr(lowPassRbj));
 export const auxLowpass36 = biquadFilter(
@@ -207,6 +238,7 @@ export const auxLowpass36 = biquadFilter(
   withDrawSr(lowPassRbj),
   withDrawSr(lowPassRbj),
 );
+export const auxHighpass6 = biquadFilter(withDrawSr(highPass1));
 export const auxHighpass12 = biquadFilter(withDrawSr(highPassRbj));
 export const auxHighpass24 = biquadFilter(
   withDrawSr(highPassRbj),

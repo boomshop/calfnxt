@@ -58,6 +58,51 @@ public:
     b2 = (1.0 - alpha) * inv;
   }
 
+  /** First-order (6 dB/oct) low-pass — bilinear, unity DC. */
+  void setLp1(float fc, float sr)
+  {
+    const double K = std::tan(M_PI * static_cast<double>(fc) / static_cast<double>(sr));
+    const double inv = 1.0 / (1.0 + K);
+    a0 = a1 = K * inv;
+    a2 = 0.0;
+    b1 = (K - 1.0) * inv;
+    b2 = 0.0;
+  }
+
+  /** First-order (6 dB/oct) high-pass — bilinear, unity Nyquist. */
+  void setHp1(float fc, float sr)
+  {
+    const double K = std::tan(M_PI * static_cast<double>(fc) / static_cast<double>(sr));
+    const double inv = 1.0 / (1.0 + K);
+    a0 = inv;
+    a1 = -inv;
+    a2 = 0.0;
+    b1 = (K - 1.0) * inv;
+    b2 = 0.0;
+  }
+
+  /** Magnitude response in dB at `freqHz` (sample rate `sr`). */
+  float responseDb(float freqHz, float sr) const
+  {
+    const double w =
+      2.0 * M_PI * static_cast<double>(freqHz) / static_cast<double>(sr);
+    const double cw = std::cos(w);
+    const double sw = std::sin(w);
+    const double c2 = std::cos(2.0 * w);
+    const double s2 = std::sin(2.0 * w);
+    const double nr = a0 + a1 * cw + a2 * c2;
+    const double ni = -(a1 * sw + a2 * s2);
+    const double dr = 1.0 + b1 * cw + b2 * c2;
+    const double di = -(b1 * sw + b2 * s2);
+    const double den = dr * dr + di * di;
+    if (!(den > 1.0e-30))
+      return -240.f;
+    const double mag2 = (nr * nr + ni * ni) / den;
+    if (!(mag2 > 1.0e-30))
+      return -240.f;
+    return static_cast<float>(10.0 * std::log10(mag2));
+  }
+
   void setBpRbj(double fc, double q, double sr, double gain = 1.0)
   {
     const double omega = 2.0 * M_PI * fc / sr;

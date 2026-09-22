@@ -43,6 +43,7 @@ const knownPlugins = [
   "octaver",
   "bender",
   "impulse",
+  "tamer",
 ] as const;
 
 export default defineConfig(({ command }) => {

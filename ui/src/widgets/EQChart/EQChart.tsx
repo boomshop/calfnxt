@@ -36,6 +36,8 @@ import {
   SPECTRUM_DB_MIN,
   SPECTRUM_VIZ_ID,
   binToHz,
+  smoothSeriesY,
+  spectrumPxPerBin,
   parseSpectrumPayload,
   tiltDb,
 } from '../SpectrumChart/SpectrumChart';
@@ -110,16 +112,23 @@ function spectrumSeriesDots(
   yMin: number,
   yMax: number,
   slope: number,
+  pxPerBin = 1,
 ): { x: number; y: number }[] {
   if (bins < 1) return [];
-  const pts: { x: number; y: number }[] = [];
+  const ys: number[] = [];
+  const hz: number[] = [];
   for (let i = 0; i < bins; ++i) {
-    const hz = binToHz(i, bins);
-    if (hz < EQ_FREQ_MIN || hz > EQ_FREQ_MAX) continue;
+    const f = binToHz(i, bins);
+    if (f < EQ_FREQ_MIN || f > EQ_FREQ_MAX) continue;
     const raw = data[i] ?? SPECTRUM_DB_MIN;
-    const db = tiltDb(raw, hz, slope);
-    pts.push({ x: hz, y: spectrumDbToEqY(db, yMin, yMax) });
+    const db = tiltDb(raw, f, slope);
+    hz.push(f);
+    ys.push(spectrumDbToEqY(db, yMin, yMax));
   }
+  const smoothed = smoothSeriesY(ys, hz, pxPerBin);
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i < smoothed.length; ++i)
+    pts.push({ x: hz[i]!, y: smoothed[i]! });
   return pts;
 }
 
@@ -156,6 +165,7 @@ export function EQChart(props: EQChartProps) {
   const spectrumModeRef = useRef(spectrumMode);
   const yRangeRef = useRef(yRange);
   const spectrumLastRawRef = useRef<number[] | null>(null);
+  const spectrumWidthRef = useRef(128);
   spectrumModeRef.current = spectrumMode;
   yRangeRef.current = yRange;
 
@@ -478,7 +488,7 @@ export function EQChart(props: EQChartProps) {
     if (!spectrumGraphRef.current) {
       const g = eq.addGraph({
         dots: null,
-        type: 'H2',
+        type: 'L',
         mode: 'bottom',
         class: 'eq-spectrum',
       });
@@ -510,6 +520,7 @@ export function EQChart(props: EQChartProps) {
             yr.min,
             yr.max,
             spectrumSlope(spectrumModeRef.current),
+            spectrumPxPerBin(spectrumWidthRef.current, payload.bins),
           );
         },
       },
@@ -522,6 +533,7 @@ export function EQChart(props: EQChartProps) {
     if (el) {
       const sendBins = () => {
         const width = Math.round(el.getBoundingClientRect().width);
+        spectrumWidthRef.current = Math.max(1, width);
         const next = Math.max(32, Math.min(256, width));
         postToHost({ t: 'vizcfg', id: SPECTRUM_VIZ_ID, bins: next });
       };
@@ -565,6 +577,7 @@ export function EQChart(props: EQChartProps) {
         yr.min,
         yr.max,
         spectrumSlope(spectrumMode),
+        spectrumPxPerBin(spectrumWidthRef.current, payload.bins),
       ),
     );
   }, [spectrumMode, spectrumOn, yRange.min, yRange.max]);

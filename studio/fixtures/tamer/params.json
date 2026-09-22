@@ -1,0 +1,15 @@
+{
+  "bypass": false,
+  "f_lo": 200,
+  "f_hi": 5000,
+  "hp_slope": 2,
+  "lp_slope": 2,
+  "depth": 6,
+  "sharpness": 0.0833333,
+  "threshold": 6,
+  "attack": 5,
+  "release": 80,
+  "quality": 1,
+  "spectrum": 1,
+  "diff_listen": false
+}

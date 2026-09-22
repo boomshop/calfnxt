@@ -71,6 +71,7 @@ const ALL = [
   'octaver',
   'bender',
   'impulse',
+  'tamer',
 ];
 
 function parsePlugins(argv) {

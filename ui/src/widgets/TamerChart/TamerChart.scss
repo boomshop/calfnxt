@@ -1,0 +1,70 @@
+.TamerChart {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+
+  > .tamer-chart-aux {
+    width: 100%;
+    height: 100%;
+
+    // Input analyzer — accent blue fill + outline (Compressor hist-audio).
+    .tamer-in {
+      fill: var(--color-accent);
+      fill-opacity: 0.25;
+      stroke: var(--color-accent);
+      stroke-width: 1px;
+      stroke-opacity: 0.66;
+    }
+
+    // Out = input + GR (UI-side) — foreground white (Compressor hist-audio-filtered).
+    .tamer-out {
+      fill: var(--color);
+      fill-opacity: 0.25;
+      stroke: var(--color);
+      stroke-width: 1.75px;
+      stroke-opacity: 0.66;
+    }
+
+    // GR line — reverse level gradient (top blue → bottom pink), like hist-gr.
+    .tamer-gr {
+      fill: none;
+      stroke: var(--chart-level-stroke, var(--color-warn));
+      stroke-width: 1.75px;
+      stroke-opacity: 1;
+    }
+
+    // Detection search filter (HP+LP) — white for now.
+    .tamer-search-eq {
+      fill: none;
+      stroke: #fff;
+      stroke-width: 1.5px;
+      stroke-opacity: 0.9;
+    }
+
+    > svg > .aux-handles > .aux-charthandle {
+      &.tamer-search-lo,
+      &.tamer-search-hi {
+        > .aux-handle {
+          fill: var(--color-accent);
+          fill-opacity: 0.18;
+        }
+
+        &.aux-active > .aux-handle {
+          fill-opacity: 0.35;
+        }
+
+        > .aux-line1,
+        > .aux-line2 {
+          stroke: var(--color-accent);
+          stroke-opacity: 0.85;
+        }
+
+        > .aux-label {
+          fill-opacity: 0.75;
+        }
+      }
+    }
+  }
+}

@@ -62,6 +62,38 @@ export function binToHz(i: number, bins: number): number {
   return F_MIN * Math.pow(F_MAX / F_MIN, t);
 }
 
+/**
+ * Upsample a polyline (legacy / rare use). Prefer Y-smooth alone for spectrum
+ * strokes — densifying past ~1 px/segment + AUX SVGRound makes steep flanks grainy.
+ */
+export function densifyPolyline(
+  pts: { x: number; y: number }[],
+  subdivisions = 4,
+  xSpace: 'linear' | 'log' = 'linear',
+): { x: number; y: number }[] {
+  if (pts.length < 2 || subdivisions < 2) return pts;
+  const out: { x: number; y: number }[] = [];
+  for (let i = 0; i < pts.length - 1; ++i) {
+    const a = pts[i]!;
+    const b = pts[i + 1]!;
+    out.push(a);
+    const useLog = xSpace === 'log' && a.x > 0 && b.x > 0;
+    const x0 = useLog ? Math.log(a.x) : a.x;
+    const x1 = useLog ? Math.log(b.x) : b.x;
+    for (let s = 1; s < subdivisions; ++s) {
+      const u = s / subdivisions;
+      const uu = u * u * (3 - 2 * u); // smoothstep on Y
+      const x = x0 + (x1 - x0) * u;
+      out.push({
+        x: useLog ? Math.exp(x) : x,
+        y: a.y + (b.y - a.y) * uu,
+      });
+    }
+  }
+  out.push(pts[pts.length - 1]!);
+  return out;
+}
+
 /** SPAN-style tilt: add slope·log2(f/1k) so pink looks flat. */
 export function tiltDb(db: number, freqHz: number, slopePerOct: number): number {
   if (!(slopePerOct > 0) || !(freqHz > 0)) return db;
@@ -188,30 +220,87 @@ export function parseSpectrumPayload(v: number[] | null | undefined): SpectrumPa
 /** Extra bin-units past [0, bins] so mode=bottom vertical closers are clipped. */
 const SERIES_EDGE_PAD = 1.25;
 
+/**
+ * Display-only soften of log-bin stairs.
+ *
+ * DSP sends N log bins (N ≈ min(chartCssWidth, 256)). Chart X is linear in bin
+ * index → px/bin = width/N. When that is ~1, each bin is already pixel-accurate
+ * → no smooth. When the 256-cap makes bins span multiple pixels, smooth more.
+ *
+ * Locally, weight fades out toward 5 kHz (same 20…20k map as DSP): below that,
+ * FFT support per log band is thinner so stairs show; above, leave detail raw.
+ */
+export function smoothSeriesY(
+  ys: number[],
+  hz?: readonly number[],
+  pxPerBin = 1,
+): number[] {
+  if (ys.length < 3) return ys;
+  // ~1 DSP log-bin per CSS pixel → keep values as published.
+  if (!(pxPerBin > 1.15)) return ys;
+
+  const banded = hz != null && hz.length === ys.length;
+  // Global polish from undersampling (1px→0 … ~4px→1).
+  const sparse = Math.min(1, (pxPerBin - 1) / 3);
+  const logHi = Math.log(5000 / F_MIN);
+  const passes = 1 + Math.round(sparse * 2);
+  let cur = ys.slice();
+  for (let p = 0; p < passes; ++p) {
+    const next = cur.slice();
+    for (let i = 1; i < cur.length - 1; ++i) {
+      let w = sparse;
+      if (banded) {
+        const f = hz![i]!;
+        if (!(f < 5000)) continue;
+        // More smooth where log-bands sit on fewer Hz (LF); 0 at 5 kHz.
+        const t = Math.log(Math.max(f, F_MIN) / F_MIN) / logHi;
+        w *= (1 - t) * (1 - t);
+      }
+      if (!(w > 0.02)) continue;
+      const avg = 0.25 * cur[i - 1]! + 0.5 * cur[i]! + 0.25 * cur[i + 1]!;
+      next[i] = cur[i]! * (1 - w) + avg * w;
+    }
+    cur = next;
+  }
+  return cur;
+}
+
+/** CSS pixels per DSP log-bin (1 = pixel-accurate). */
+export function spectrumPxPerBin(cssWidth: number, bins: number): number {
+  const w = Math.max(1, cssWidth);
+  const n = Math.max(1, bins);
+  return w / n;
+}
+
 function seriesDots(
   data: Float32Array,
   bins: number,
   yMin = SPECTRUM_DB_MIN,
   yMax = SPECTRUM_DB_MAX,
   slope = 0,
+  pxPerBin = 1,
 ): { x: number; y: number }[] {
   if (bins < 1) return [];
   const ys: number[] = [];
+  const hz: number[] = [];
   for (let i = 0; i < bins; ++i) {
+    const f = binToHz(i, bins);
     const raw = data[i] ?? SPECTRUM_DSP_FLOOR_DB;
-    const y = tiltDb(raw, binToHz(i, bins), slope);
+    const y = tiltDb(raw, f, slope);
+    hz.push(f);
     ys.push(Math.min(yMax, Math.max(yMin, y)));
   }
-  const first = ys[0]!;
-  const last = ys[bins - 1]!;
-  const pts: { x: number; y: number }[] = [
-    // Hang past the plot so AUX bottom-fill vertical edges are off-screen.
-    { x: -SERIES_EDGE_PAD, y: first },
-  ];
+  const smoothed = smoothSeriesY(ys, hz, pxPerBin);
+  const first = smoothed[0]!;
+  const last = smoothed[bins - 1]!;
+  const mid: { x: number; y: number }[] = [];
   for (let i = 0; i < bins; ++i)
-    pts.push({ x: i + 0.5, y: ys[i]! });
-  pts.push({ x: bins + SERIES_EDGE_PAD, y: last });
-  return pts;
+    mid.push({ x: i + 0.5, y: smoothed[i]! });
+  return [
+    { x: -SERIES_EDGE_PAD, y: first },
+    ...mid,
+    { x: bins + SERIES_EDGE_PAD, y: last },
+  ];
 }
 
 /** Midband mean (200 Hz…2 kHz) of tilted curve — corridor center. */
@@ -297,6 +386,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
   const holdRef = useRef(hold);
   const scaleRef = useRef(scale);
   const binsRef = useRef(128);
+  const chartWidthRef = useRef(128);
   const diffSmoothRef = useRef<Float32Array | null>(null);
   modeRef.current = mode;
   holdRef.current = hold;
@@ -327,6 +417,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
   const sendVizBins = useCallback(
     (el: Element) => {
       const width = Math.round(el.getBoundingClientRect().width);
+      chartWidthRef.current = Math.max(1, width);
       const next = Math.max(32, Math.min(256, width));
       postToHost({ t: 'vizcfg', id: vizId, bins: next });
     },
@@ -441,17 +532,23 @@ export function SpectrumChart(props: SpectrumChartProps) {
       g1?.set('dots', null);
       gHold?.set('dots', null);
 
+      const px = spectrumPxPerBin(chartWidthRef.current, payload.bins);
+      const dots = (
+        data: Float32Array,
+        yMin = SPECTRUM_DB_MIN,
+        yMax = SPECTRUM_DB_MAX,
+        s = slope,
+      ) => seriesDots(data, payload.bins, yMin, yMax, s, px);
+
       if (m === SPECTRUM_MODE.Average) {
-        primary = seriesDots(payload.avg, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope);
-        if (showHold)
-          gHold?.set('dots', seriesDots(payload.max, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope));
+        primary = dots(payload.avg);
+        if (showHold) gHold?.set('dots', dots(payload.max));
       } else if (m === SPECTRUM_MODE.Max) {
-        primary = seriesDots(payload.max, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope);
+        primary = dots(payload.max);
       } else if (m === SPECTRUM_MODE.Stereo) {
-        primary = seriesDots(payload.L, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope);
-        g1?.set('dots', seriesDots(payload.R, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope));
-        if (showHold)
-          gHold?.set('dots', seriesDots(payload.max, payload.bins, SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, slope));
+        primary = dots(payload.L);
+        g1?.set('dots', dots(payload.R));
+        if (showHold) gHold?.set('dots', dots(payload.max));
       } else if (m === SPECTRUM_MODE.Difference) {
         let smooth = diffSmoothRef.current;
         if (!smooth || smooth.length !== payload.bins) {
@@ -462,7 +559,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
           const d = (payload.L[i] ?? SPECTRUM_DSP_FLOOR_DB) - (payload.R[i] ?? SPECTRUM_DSP_FLOOR_DB);
           smooth[i] = DIFF_EMA * smooth[i]! + (1 - DIFF_EMA) * d;
         }
-        gHold?.set('dots', seriesDots(smooth, payload.bins, -24, 24, 0));
+        gHold?.set('dots', dots(smooth, -24, 24, 0));
         gHold?.element?.classList.add('spec-diff');
         primary = null;
       }
@@ -545,10 +642,10 @@ export function SpectrumChart(props: SpectrumChartProps) {
       // identity changes, without nulling the old ref — never double-add.
       if (graphsRef.current.length === 0) {
         const specs = [
-          // H2 = horizontal smooth (no vertical overshoot); softer than L polylines.
-          { className: 'spec-primary', mode: 'bottom' as const, gradient: true, type: 'H2' },
-          { className: 'spec-secondary', mode: 'bottom' as const, gradient: false, type: 'H2' },
-          { className: 'spec-hold', mode: 'line' as const, gradient: false, type: 'H2' },
+          // L + Y-smooth + densify. AUX T (quadratic Bézier) grain/rings on dense dots.
+          { className: 'spec-primary', mode: 'bottom' as const, gradient: true, type: 'L' },
+          { className: 'spec-secondary', mode: 'bottom' as const, gradient: false, type: 'L' },
+          { className: 'spec-hold', mode: 'line' as const, gradient: false, type: 'L' },
         ];
         const aux: AuxGraph[] = [];
         const grads: SVGElement[] = [];
