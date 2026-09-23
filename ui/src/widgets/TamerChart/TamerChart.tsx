@@ -208,16 +208,11 @@ export function TamerChart(props: TamerChartProps) {
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
   const [gradTargets, setGradTargets] = useState<SVGElement[]>([]);
 
-  // Keep lo < hi while dragging either edge.
-  const fMinConst$ = useMemo(() => DynamicValue.fromConstant(F_MIN), []);
-  const fMaxConst$ = useMemo(() => DynamicValue.fromConstant(F_MAX), []);
+  // Keep lo < hi while dragging either edge (only these limits change).
   const loMax$ = useMemo(() => DynamicValue.fromConstant(F_MAX), []);
   const hiMin$ = useMemo(() => DynamicValue.fromConstant(F_MIN), []);
-  const gain0$ = useMemo(() => DynamicValue.fromConstant(0), []);
-  const qConst$ = useMemo(() => DynamicValue.fromConstant(SEARCH_Q), []);
-  const activeOn$ = useMemo(() => DynamicValue.fromConstant(true), []);
-  const hpMode$ = useMemo(() => DynamicValue.fromConstant('block-left'), []);
-  const lpMode$ = useMemo(() => DynamicValue.fromConstant('block-right'), []);
+  // Slope → EqBand filter factory (EQ curve). Gain/Q stay as static options;
+  // mode is also bound (see handleBindings) because AUX can overwrite it.
   const hpType$ = useMemo(
     () =>
       DynamicValue.fromConstant(
@@ -283,43 +278,62 @@ export function TamerChart(props: TamerChartProps) {
     postToHost({ t: 'vizcfg', id: TAMER_VIZ_ID, bins: next });
   }, []);
 
+  // Constant modes: AUX EqBand.initialize defaults type to string "parametric",
+  // which forces mode→circular, then "restores" via this.get('mode') (already
+  // circular). Seed a function type so that path is skipped; bind mode after
+  // type like EQChart so any later string type cannot stick circular.
+  const hpMode$ = useMemo(
+    () => DynamicValue.fromConstant('block-left'),
+    [],
+  );
+  const lpMode$ = useMemo(
+    () => DynamicValue.fromConstant('block-right'),
+    [],
+  );
+
   const handleOptions = useMemo(
     () => [
       {
         mode: 'block-left',
+        // Function type at create — avoids AUX string type_to_mode overwrite.
+        type: tamerAuxHpType(tamerSlopeDbFromPlain(hpSlope$.value ?? 2)),
         class: 'tamer-search-lo',
         label: 'Low',
         format_label: (_l: string, x: number) => formatFreq(x),
         preferences: ['right', 'left'],
         gain: 0,
         q: SEARCH_Q,
+        active: true,
         y_min: TAMER_DB_MIN,
         y_max: TAMER_DB_MAX,
         freq: fLo$.value ?? 200,
-        freq_min: F_MIN,
-        freq_max: F_MAX,
+        x_min: F_MIN,
+        x_max: F_MAX,
         show_axis: false,
         min_size: 16,
         max_size: 48,
       },
       {
         mode: 'block-right',
+        type: tamerAuxLpType(tamerSlopeDbFromPlain(lpSlope$.value ?? 2)),
         class: 'tamer-search-hi',
         label: 'High',
         format_label: (_l: string, x: number) => formatFreq(x),
         preferences: ['left', 'right'],
         gain: 0,
         q: SEARCH_Q,
+        active: true,
         y_min: TAMER_DB_MIN,
         y_max: TAMER_DB_MAX,
         freq: fHi$.value ?? 5000,
-        freq_min: F_MIN,
-        freq_max: F_MAX,
+        x_min: F_MIN,
+        x_max: F_MAX,
         show_axis: false,
         min_size: 16,
         max_size: 48,
       },
     ],
+    // Create-time type only (bindings update slope); do not remount on slope.
     [fLo$, fHi$],
   );
 
@@ -327,40 +341,18 @@ export function TamerChart(props: TamerChartProps) {
     () => [
       [
         { name: 'freq', backendValue: fLo$ },
-        { name: 'x_min', backendValue: fMinConst$, readonly: true },
         { name: 'x_max', backendValue: loMax$, readonly: true },
-        { name: 'gain', backendValue: gain0$, readonly: true },
-        { name: 'q', backendValue: qConst$, readonly: true },
         { name: 'type', backendValue: hpType$, readonly: true },
         { name: 'mode', backendValue: hpMode$, readonly: true },
-        { name: 'active', backendValue: activeOn$, readonly: true },
       ],
       [
         { name: 'freq', backendValue: fHi$ },
         { name: 'x_min', backendValue: hiMin$, readonly: true },
-        { name: 'x_max', backendValue: fMaxConst$, readonly: true },
-        { name: 'gain', backendValue: gain0$, readonly: true },
-        { name: 'q', backendValue: qConst$, readonly: true },
         { name: 'type', backendValue: lpType$, readonly: true },
         { name: 'mode', backendValue: lpMode$, readonly: true },
-        { name: 'active', backendValue: activeOn$, readonly: true },
       ],
     ],
-    [
-      fLo$,
-      fHi$,
-      loMax$,
-      hiMin$,
-      fMinConst$,
-      fMaxConst$,
-      gain0$,
-      qConst$,
-      hpType$,
-      lpType$,
-      hpMode$,
-      lpMode$,
-      activeOn$,
-    ],
+    [fLo$, fHi$, loMax$, hiMin$, hpType$, lpType$, hpMode$, lpMode$],
   );
 
   const handleEvents = useMemo(
@@ -394,6 +386,7 @@ export function TamerChart(props: TamerChartProps) {
         bands: handles,
         mode: 'line',
         class: 'tamer-search-eq',
+        active: true,
         accuracy: 1,
         oversampling: 8,
         threshold: 3,
@@ -402,16 +395,7 @@ export function TamerChart(props: TamerChartProps) {
     [handles],
   );
 
-  const eqGraphBindings = useMemo(
-    () => [[{ name: 'active', backendValue: activeOn$, readonly: true }]],
-    [activeOn$],
-  );
-
-  const eqGraphs = useWidgetsWithBindingsAndEvents(
-    AuxEqualizerGraph,
-    eqGraphOptions,
-    eqGraphBindings,
-  );
+  const eqGraphs = useWidgetsWithBindingsAndEvents(AuxEqualizerGraph, eqGraphOptions);
 
   useEffect(() => {
     for (const g of eqGraphs) {
