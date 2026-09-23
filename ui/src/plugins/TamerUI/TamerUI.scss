@@ -1,6 +1,6 @@
 .TamerUI {
   display: grid;
-  grid-template-columns: 1fr 2.5fr 1fr;
+  grid-template-columns: 1fr 2fr 1fr;
   grid-template-rows: minmax(0, 1fr) auto auto;
   grid-template-areas:
     'chart chart chart'
