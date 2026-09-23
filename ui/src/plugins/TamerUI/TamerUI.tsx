@@ -228,7 +228,9 @@ export function TamerUI(props: TamerUIProps) {
               dots={[0, 0.25, 0.5, 0.75, 1]}
               labels={[
                 { pos: 0, label: '0' },
+                { pos: 0.25, label: '25' },
                 { pos: 0.5, label: '50' },
+                { pos: 0.75, label: '75' },
                 { pos: 1, label: '100' },
               ]}
               size="medium"
