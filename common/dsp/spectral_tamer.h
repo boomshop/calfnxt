@@ -8,6 +8,8 @@
 // Search: FrequencyRange-style HP→LP (6…48 dB) shapes the detector spectrum
 // and scales Depth linearly in dB (0 dB → full, −24 dB → none). FFT work is
 // limited to bins where |H| ≥ −24 dB (same floor as the GR chart axis).
+// Harmonics (0…1): among Depth GR tips, walk F0 ladders (≥3 hits at 1·2·3·F0).
+// Soft-keep by level vs siblings; overlap = max GR (min keep).
 //
 // Reconstruction: sqrt-Hann analysis/synthesis, hop = N/4, shift-OLA.
 // Latency = N − hop. Buffers preallocated to kMaxFft (no RT heap).
@@ -99,7 +101,8 @@ public:
 
   void setParams(float fLoHz, float fHiHz, float depthDb, float sharpnessOct,
                  float thresholdDb, float attackMs, float releaseMs,
-                 float hpSlopePlain = 2.f, float lpSlopePlain = 2.f)
+                 float hpSlopePlain = 2.f, float lpSlopePlain = 2.f,
+                 float harmonics = 0.f)
   {
     if (fLoHz > fHiHz)
       std::swap(fLoHz, fHiHz);
@@ -112,6 +115,7 @@ public:
     releaseMs_ = std::clamp(releaseMs, 1.f, 2000.f);
     hpSlopeDb_ = slopeDbFromPlain(hpSlopePlain);
     lpSlopeDb_ = slopeDbFromPlain(lpSlopePlain);
+    harmonics_ = std::clamp(harmonics, 0.f, 1.f);
     updateTimeCoeffs();
     updateDetectFilter();
   }
@@ -148,6 +152,8 @@ public:
     std::fill(lDb_.begin(), lDb_.end(), kFloorDb);
     std::fill(rDb_.begin(), rDb_.end(), kFloorDb);
     std::fill(grDisp_.begin(), grDisp_.end(), 0.f);
+    ladderN_ = 0;
+    ladderKeep_ = 0.f;
   }
 
   /**
@@ -323,6 +329,27 @@ public:
     return need;
   }
 
+  /**
+   * Harmonic protect guides for the chart (empty until protect logic returns).
+   * Layout: [n, keep01, (centerHz, halfWidthHz)×n]. Returns float count, or 0.
+   */
+  int takeHarmonicGuides(float* out, int maxOut)
+  {
+    if (!out || maxOut < 2)
+      return 0;
+    std::lock_guard<std::mutex> lock(mutex_);
+    const int n = std::clamp(pubLadderN_, 0, kMaxLadderRungs);
+    const int need = 2 + 2 * n;
+    if (maxOut < need)
+      return 0;
+    out[0] = static_cast<float>(n);
+    out[1] = pubLadderKeep_;
+    if (n > 0)
+      std::memcpy(out + 2, pubLadder_.data(),
+                  sizeof(float) * static_cast<size_t>(2 * n));
+    return need;
+  }
+
   void publish()
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -331,9 +358,28 @@ public:
     pubL_ = lDb_;
     pubR_ = rDb_;
     pubGr_ = grDisp_;
+    pubLadderN_ = ladderN_;
+    pubLadderKeep_ = ladderKeep_;
+    if (ladderN_ > 0)
+      pubLadder_.assign(ladder_.begin(),
+                        ladder_.begin() + static_cast<size_t>(2 * ladderN_));
+    else
+      pubLadder_.clear();
   }
 
 private:
+  static constexpr int kMaxLadderRungs = 48;
+  static constexpr int kMaxPeaks = 64;
+
+  struct PeakTip
+  {
+    float hz = 0.f;
+    float db = 0.f;
+    float res = 0.f; // detect − env — tip quality / ranking
+    int k = 0;
+  };
+
+
   void allocMax()
   {
     const size_t n = static_cast<size_t>(kMaxFft);
@@ -354,6 +400,12 @@ private:
     grDb_.assign(half, 0.f);
     grTarget_.assign(half, 0.f);
     scratch_.assign(half, 0.f);
+    ladder_.assign(static_cast<size_t>(2 * kMaxLadderRungs), 0.f);
+    pubLadder_.clear();
+    ladderN_ = 0;
+    pubLadderN_ = 0;
+    ladderKeep_ = 0.f;
+    pubLadderKeep_ = 0.f;
 
     // Dry / out rings: power-of-two ≥ max latency + block headroom
     int ringNeed = kMaxFft + 8192;
@@ -660,6 +712,9 @@ private:
     std::fill(grTarget_.begin(),
               grTarget_.begin() + static_cast<size_t>(half) + 1, 0.f);
 
+    ladderN_ = 0;
+    ladderKeep_ = 0.f;
+
     if (!bypassActive_ && depthDb_ > 0.f && kHi_ >= kLo_)
     {
       // Slow spectral floor on the *filtered* detector spectrum.
@@ -688,11 +743,55 @@ private:
         1.f + std::max(0.f, (depth - 12.f) / 12.f); // 1…2
       const float softEff = soft / drive;
 
-      // Resonance = local max that sticks out above the strongest nearby bin
-      // outside ±1 (neighbouring partial / formant shoulder). A harmonic series
-      // has peers of similar height → prominence ≈ 0. A whistle above the
-      // partials → large prominence. (Topographic “valley” prominence wrongly
-      // flags every partial.)
+      // Peak list for Harmonics = same tips that qualify for Depth GR
+      // (local max + peer prominence above Threshold) — not every envelope bump.
+      PeakTip peaks[kMaxPeaks];
+      int nPeaks = 0;
+      const float nyquist = static_cast<float>(sampleRate_ * 0.5);
+      const float mergeHz =
+        std::max(25.f, 1.5f * (nyquist / static_cast<float>(half)));
+
+      auto considerTip = [&](float f, float m, float res, int kBin) {
+        if (!(f >= 40.f && f < nyquist * 0.98f))
+          return;
+        for (int i = 0; i < nPeaks; ++i)
+        {
+          if (std::fabs(peaks[i].hz - f) <= mergeHz)
+          {
+            if (res > peaks[i].res)
+            {
+              peaks[i].hz = f;
+              peaks[i].db = m;
+              peaks[i].res = res;
+              peaks[i].k = kBin;
+            }
+            return;
+          }
+        }
+        if (nPeaks < kMaxPeaks)
+        {
+          peaks[nPeaks].hz = f;
+          peaks[nPeaks].db = m;
+          peaks[nPeaks].res = res;
+          peaks[nPeaks].k = kBin;
+          ++nPeaks;
+          return;
+        }
+        int weak = 0;
+        for (int i = 1; i < nPeaks; ++i)
+        {
+          if (peaks[i].res < peaks[weak].res)
+            weak = i;
+        }
+        if (res > peaks[weak].res)
+        {
+          peaks[weak].hz = f;
+          peaks[weak].db = m;
+          peaks[weak].res = res;
+          peaks[weak].k = kBin;
+        }
+      };
+
       for (int k = kLo_; k <= kHi_; ++k)
       {
         if (k <= 1 || k >= half - 1)
@@ -702,16 +801,16 @@ private:
               && m >= detectDb_[static_cast<size_t>(k + 1)]))
           continue;
 
-        // Window must reach neighbouring partials (~≥200 Hz), else the
-        // fundamental’s peers are only valleys and every low partial looks
-        // like a resonance.
+        const float f =
+          (static_cast<float>(k) / static_cast<float>(half)) * nyquist;
+        const float res = m - envDb_[static_cast<size_t>(k)];
+
+        // Prominence window (~≥200 Hz) so harmonic peers count as neighbours.
         int R = std::max(4, static_cast<int>(0.2f * static_cast<float>(k) + 0.5f));
-        const float nyquist = static_cast<float>(sampleRate_ * 0.5);
         const int Rhz =
           std::max(4, static_cast<int>(220.f / nyquist * static_cast<float>(half) + 0.5f));
         R = std::max(R, Rhz);
         const float detectOct = std::max(sharpnessOct_, 1.f / 6.f);
-        const float f = (static_cast<float>(k) / static_cast<float>(half)) * nyquist;
         if (f > 20.f)
         {
           const float fHalf = f * (std::pow(2.f, 0.5f * detectOct) - 1.f);
@@ -721,10 +820,6 @@ private:
         }
         R = std::min(R, half / 3);
 
-        // Compare residual above the slow envelope so 1/f tilt does not make
-        // low partials look more “resonant” than high ones.
-        const float self =
-          detectDb_[static_cast<size_t>(k)] - envDb_[static_cast<size_t>(k)];
         float peer = -240.f;
         const int lo = std::max(1, k - R);
         const int hi = std::min(half - 1, k + R);
@@ -736,13 +831,31 @@ private:
             detectDb_[static_cast<size_t>(j)] - envDb_[static_cast<size_t>(j)];
           peer = std::max(peer, rj);
         }
-        const float excess = self - peer - thresh;
+        const float excess = res - peer - thresh;
         if (excess <= 0.f)
           continue;
-        // Soft approach to Depth — never jumps to full Depth on the first dB over Thresh.
+
+        // Same tip that Depth will cut — only these enter Harmonics ladders.
+        considerTip(f, m, res, k);
+
         const float amt = depth * (1.f - std::exp(-excess / softEff));
         grTarget_[static_cast<size_t>(k)] = -std::min(depth, amt);
       }
+
+      // Peak list must be sorted by Hz for the low→high F0 walk.
+      for (int i = 1; i < nPeaks; ++i)
+      {
+        PeakTip key = peaks[i];
+        int j = i - 1;
+        while (j >= 0 && peaks[j].hz > key.hz)
+        {
+          peaks[j + 1] = peaks[j];
+          --j;
+        }
+        peaks[j + 1] = key;
+      }
+
+      applyHarmonicsProtect(peaks, nPeaks);
 
       blurGrByOctaves();
       // Filter curve gates Depth: 0 dB → full, −24 dB → none (linear in dB).
@@ -814,6 +927,338 @@ private:
     std::fill(olaR_.begin() + keep, olaR_.begin() + n, 0.f);
 
     updateDisplayGr();
+  }
+
+  /**
+   * Peak-list Harmonics: walk Depth GR tips low→high. Tips already in a
+   * ladder are not used as a new F0 start. Free tip → try F0 = tip, tip/2…/4
+   * (≥3 consecutive hits). Soft-keep + n·F0 grid; boom only if louder than
+   * all other rungs by Threshold. Overlap: min keep (max GR).
+   */
+  void applyHarmonicsProtect(const PeakTip* peaks, int nPeaks)
+  {
+    ladderN_ = 0;
+    ladderKeep_ = 0.f;
+    if (!peaks || nPeaks < 3 || harmonics_ < 1.0e-3f)
+      return;
+
+    const int half = fftSize_ / 2;
+    const float nyquist = static_cast<float>(sampleRate_ * 0.5);
+    if (half < 8 || !(nyquist > 20.f))
+      return;
+
+    const float binHz = nyquist / static_cast<float>(half);
+    constexpr float kF0Min = 70.f;
+    constexpr float kF0Max = 800.f;
+    constexpr float kGridFrac = 0.08f;
+    constexpr int kMaxHarm = 24;
+    constexpr int kMaxLadders = 12;
+    constexpr int kMaxMembers = 16;
+
+    auto findNear = [&](float hzIdeal, float tol, const bool* used) -> int {
+      int best = -1;
+      float bestD = tol + 1.f;
+      for (int p = 0; p < nPeaks; ++p)
+      {
+        if (used && used[p])
+          continue;
+        const float d = std::fabs(peaks[p].hz - hzIdeal);
+        if (d < bestD)
+        {
+          bestD = d;
+          best = p;
+        }
+      }
+      return (best >= 0 && bestD <= tol) ? best : -1;
+    };
+
+    auto addCand = [&](float f, float* cands, int& nC) {
+      if (!(f >= kF0Min && f <= kF0Max))
+        return;
+      for (int i = 0; i < nC; ++i)
+      {
+        if (std::fabs(cands[i] - f) <= f * 0.03f)
+          return;
+      }
+      if (nC < 8)
+        cands[nC++] = f;
+    };
+
+    int ladderMem[kMaxLadders][kMaxMembers];
+    int ladderNMem[kMaxLadders];
+    float ladderF0[kMaxLadders];
+    int nLadders = 0;
+
+    bool inLadder[kMaxPeaks];
+    for (int i = 0; i < kMaxPeaks; ++i)
+      inLadder[i] = false;
+
+    // Walk tips low→high. Already claimed → skip (no new ladder from them).
+    // From a free tip: try F0 = tip, then tip/2…/4 (missing fundamental).
+    for (int i = 0; i < nPeaks; ++i)
+    {
+      if (inLadder[i] || nLadders >= kMaxLadders)
+        continue;
+
+      float cands[8];
+      int nC = 0;
+      for (int div = 1; div <= 4; ++div)
+        addCand(peaks[i].hz / static_cast<float>(div), cands, nC);
+
+      int bestMem[kMaxMembers];
+      int bestNMem = 0;
+      float bestF0 = 0.f;
+      float bestScore = -1.f;
+
+      for (int ci = 0; ci < nC; ++ci)
+      {
+        const float f0 = cands[ci];
+        const float tol = std::max(f0 * kGridFrac, 1.5f * binHz);
+        bool used[kMaxPeaks];
+        for (int u = 0; u < nPeaks; ++u)
+          used[u] = false;
+
+        int peakAt[kMaxHarm + 1];
+        for (int h = 0; h <= kMaxHarm; ++h)
+          peakAt[h] = -1;
+
+        for (int h = 1; h <= kMaxHarm; ++h)
+        {
+          const float hzIdeal = static_cast<float>(h) * f0;
+          if (hzIdeal >= nyquist * 0.98f)
+            break;
+          const int p = findNear(hzIdeal, tol, used);
+          if (p < 0)
+            continue;
+          used[p] = true;
+          peakAt[h] = p;
+        }
+
+        int bestRun = 0;
+        int run = 0;
+        for (int h = 1; h <= kMaxHarm; ++h)
+        {
+          if (peakAt[h] >= 0)
+          {
+            ++run;
+            bestRun = std::max(bestRun, run);
+          }
+          else
+            run = 0;
+        }
+        if (bestRun < 3)
+          continue;
+
+        int members[kMaxMembers];
+        int nMem = 0;
+        float score = 0.f;
+        for (int h = 1; h <= kMaxHarm && nMem < kMaxMembers; ++h)
+        {
+          if (peakAt[h] < 0)
+            continue;
+          members[nMem++] = peakAt[h];
+          score += peaks[peakAt[h]].res;
+        }
+        if (nMem < 3)
+          continue;
+        score += 0.5f * static_cast<float>(nMem);
+        // Prefer tip-as-F0 (div1) when scores are close.
+        if (ci == 0)
+          score += 1.f;
+
+        if (score > bestScore)
+        {
+          bestScore = score;
+          bestF0 = f0;
+          bestNMem = nMem;
+          for (int m = 0; m < nMem; ++m)
+            bestMem[m] = members[m];
+        }
+      }
+
+      if (bestNMem < 3)
+        continue;
+
+      for (int m = 0; m < bestNMem; ++m)
+      {
+        ladderMem[nLadders][m] = bestMem[m];
+        inLadder[bestMem[m]] = true;
+      }
+      ladderNMem[nLadders] = bestNMem;
+      ladderF0[nLadders] = bestF0;
+      ++nLadders;
+    }
+
+    if (nLadders < 1)
+      return;
+
+    // Drop octave/subharmonic duplicates — keep the stronger ladder only.
+    // tip/k often proposes both F0 and 2·F0; overlapping min-keep then chews
+    // shared partials even when none is a real boom.
+    {
+      float score[kMaxLadders];
+      for (int L = 0; L < nLadders; ++L)
+      {
+        float s = 0.f;
+        for (int m = 0; m < ladderNMem[L]; ++m)
+          s += peaks[ladderMem[L][m]].res + 0.25f * peaks[ladderMem[L][m]].db;
+        score[L] = s + 0.5f * static_cast<float>(ladderNMem[L]);
+      }
+      bool kill[kMaxLadders];
+      for (int L = 0; L < nLadders; ++L)
+        kill[L] = false;
+      for (int a = 0; a < nLadders; ++a)
+      {
+        if (kill[a])
+          continue;
+        for (int b = a + 1; b < nLadders; ++b)
+        {
+          if (kill[b])
+            continue;
+          const float ra = ladderF0[a] / ladderF0[b];
+          const bool oct =
+            (ra > 1.85f && ra < 2.15f) || (ra > 0.46f && ra < 0.54f)
+            || (ra > 2.8f && ra < 3.2f) || (ra > 0.31f && ra < 0.36f);
+          if (!oct)
+            continue;
+          if (score[a] >= score[b])
+            kill[b] = true;
+          else
+            kill[a] = true;
+        }
+      }
+      int w = 0;
+      for (int L = 0; L < nLadders; ++L)
+      {
+        if (kill[L])
+          continue;
+        if (w != L)
+        {
+          ladderNMem[w] = ladderNMem[L];
+          ladderF0[w] = ladderF0[L];
+          for (int m = 0; m < ladderNMem[L]; ++m)
+            ladderMem[w][m] = ladderMem[L][m];
+        }
+        ++w;
+      }
+      nLadders = w;
+    }
+    if (nLadders < 1)
+      return;
+
+    float keepPeak[kMaxPeaks];
+    bool claimed[kMaxPeaks];
+    for (int i = 0; i < nPeaks; ++i)
+    {
+      keepPeak[i] = 0.f;
+      claimed[i] = false;
+    }
+
+    // Boom only if louder than every other ladder tip by ≥ Threshold.
+    // Threshold 0 → no boom path (full Harmonics keep on all rungs).
+    for (int L = 0; L < nLadders; ++L)
+    {
+      const int nMem = ladderNMem[L];
+      for (int m = 0; m < nMem; ++m)
+      {
+        const int pi = ladderMem[L][m];
+        float maxOther = -240.f;
+        for (int j = 0; j < nMem; ++j)
+        {
+          if (j == m)
+            continue;
+          maxOther = std::max(maxOther, peaks[ladderMem[L][j]].db);
+        }
+        float keep = harmonics_;
+        if (thresholdDb_ > 1.0e-3f && maxOther > -200.f
+            && peaks[pi].db > maxOther + thresholdDb_)
+        {
+          const float excess = peaks[pi].db - maxOther - thresholdDb_;
+          keep = harmonics_
+                 * std::clamp(1.f - excess / thresholdDb_, 0.f, 1.f);
+        }
+        if (!claimed[pi])
+        {
+          keepPeak[pi] = keep;
+          claimed[pi] = true;
+        }
+        else
+          keepPeak[pi] = std::min(keepPeak[pi], keep);
+      }
+    }
+
+    // Per-bin keep in scratch_ (blur runs after). Overlap → min keep (max GR).
+    for (int k = 0; k <= half; ++k)
+      scratch_[static_cast<size_t>(k)] = 0.f;
+    const float detectOct = std::max(sharpnessOct_, 1.f / 12.f);
+
+    auto splatKeep = [&](float hz, float keep) {
+      if (!(keep > 1.0e-3f) || !(hz > 1.f))
+        return;
+      const float halfW = std::max(
+        hz * (std::pow(2.f, 0.5f * detectOct) - 1.f), 2.f * binHz);
+      for (int k = kLo_; k <= kHi_; ++k)
+      {
+        if (!(grTarget_[static_cast<size_t>(k)] < -1.0e-3f))
+          continue;
+        const float f =
+          (static_cast<float>(k) / static_cast<float>(half)) * nyquist;
+        if (std::fabs(f - hz) <= halfW)
+        {
+          float& bk = scratch_[static_cast<size_t>(k)];
+          bk = (bk < 1.0e-3f) ? keep : std::min(bk, keep);
+        }
+      }
+    };
+
+    for (int i = 0; i < nPeaks; ++i)
+    {
+      if (claimed[i])
+        splatKeep(peaks[i].hz, keepPeak[i]);
+    }
+
+    // Also cover n·F0 grid (skirt below Search Low). Use full Harmonics keep
+    // on virtual slots — averaging in boom tips was pulling skirt protect down.
+    for (int L = 0; L < nLadders; ++L)
+    {
+      const float f0 = ladderF0[L];
+      for (int h = 1; h <= kMaxHarm; ++h)
+      {
+        const float hzIdeal = static_cast<float>(h) * f0;
+        if (hzIdeal < 25.f || hzIdeal >= nyquist * 0.98f)
+          break;
+        splatKeep(hzIdeal, harmonics_);
+      }
+    }
+
+    for (int k = kLo_; k <= kHi_; ++k)
+    {
+      const float keep = scratch_[static_cast<size_t>(k)];
+      if (!(keep > 1.0e-3f))
+        continue;
+      float& g = grTarget_[static_cast<size_t>(k)];
+      if (g < -1.0e-3f)
+        g *= (1.f - keep);
+    }
+
+    ladderKeep_ = harmonics_;
+    if (ladder_.size() < static_cast<size_t>(2 * kMaxLadderRungs))
+      ladder_.assign(static_cast<size_t>(2 * kMaxLadderRungs), 0.f);
+
+    for (int i = 0; i < nPeaks; ++i)
+    {
+      if (!claimed[i] || keepPeak[i] < 1.0e-3f)
+        continue;
+      if (ladderN_ >= kMaxLadderRungs)
+        break;
+      const float hz = peaks[i].hz;
+      const float halfW = std::max(
+        hz * (std::pow(2.f, 0.5f * detectOct) - 1.f), 2.f * binHz);
+      const bool boom = keepPeak[i] < harmonics_ * 0.5f;
+      ladder_[static_cast<size_t>(2 * ladderN_)] = hz;
+      ladder_[static_cast<size_t>(2 * ladderN_ + 1)] = boom ? -halfW : halfW;
+      ++ladderN_;
+    }
   }
 
   void blurGrByOctaves()
@@ -974,6 +1419,7 @@ private:
   float depthDb_ = 6.f;
   float sharpnessOct_ = 1.f / 12.f;
   float thresholdDb_ = 6.f;
+  float harmonics_ = 0.f;
   float attackMs_ = 5.f;
   float releaseMs_ = 80.f;
   float atkCoeff_ = 0.5f;
@@ -984,7 +1430,6 @@ private:
 
   BiquadCoeffs hpCoeff_;
   BiquadCoeffs lpCoeff_;
-
   std::atomic<int> pendingFft_ {2048};
   std::atomic<int> pendingBins_ {128};
 
@@ -993,6 +1438,13 @@ private:
   std::vector<float> magDb_, detectDb_, filtDb_, envDb_, grDb_, grTarget_, scratch_;
   std::vector<float> avgDb_, maxDb_, lDb_, rDb_, grDisp_;
   std::vector<float> pubAvg_, pubMax_, pubL_, pubR_, pubGr_;
+  /** Live guides: interleaved (centerHz, halfWidthHz) × ladderN_. */
+  std::vector<float> ladder_;
+  std::vector<float> pubLadder_;
+  int ladderN_ = 0;
+  int pubLadderN_ = 0;
+  float ladderKeep_ = 0.f;
+  float pubLadderKeep_ = 0.f;
   std::vector<int> binLo_, binHi_, binValid_;
   std::mutex mutex_;
 };

@@ -62,6 +62,15 @@ export function binToHz(i: number, bins: number): number {
   return F_MIN * Math.pow(F_MAX / F_MIN, t);
 }
 
+/** Hz → log-bin index (inverse of binToHz centre mapping). */
+export function hzToBin(hz: number, bins: number): number {
+  const n = Math.max(1, bins);
+  if (!(hz > 0)) return 0;
+  const t = Math.log(Math.min(F_MAX, Math.max(F_MIN, hz)) / F_MIN)
+    / Math.log(F_MAX / F_MIN);
+  return Math.max(0, Math.min(n - 1, Math.floor(t * n)));
+}
+
 /**
  * Upsample a polyline (legacy / rare use). Prefer Y-smooth alone for spectrum
  * strokes — densifying past ~1 px/segment + AUX SVGRound makes steep flanks grainy.

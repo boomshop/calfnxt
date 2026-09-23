@@ -1382,6 +1382,39 @@ void WebEditor::flushViz()
     }
   }
 
+  if (const char* ladderId = vizSource_->vizHarmonicGuidesId())
+  {
+    // Layout: n, keep, (centerHz, halfWidthHz)×n — max 48 rungs
+    constexpr int kMaxRungs = 48;
+    constexpr int kMaxLadder = 2 + 2 * kMaxRungs;
+    float ladder[kMaxLadder];
+    const int nLadder = vizSource_->takeHarmonicGuides(ladder, kMaxLadder);
+    if (nLadder >= 2)
+    {
+      int n = static_cast<int>(std::lround(std::clamp(ladder[0], 0.f, float(kMaxRungs))));
+      const int need = 2 + 2 * n;
+      if (nLadder >= need)
+      {
+        ladder[0] = static_cast<float>(n);
+        if (!std::isfinite(ladder[1]))
+          ladder[1] = 0.f;
+        ladder[1] = std::clamp(ladder[1], 0.f, 1.f);
+        for (int i = 2; i < need; ++i)
+        {
+          float v = ladder[i];
+          if (!std::isfinite(v))
+            v = (i & 1) ? 20.f : 100.f;
+          // Even: center Hz; odd: ±halfWidth Hz (sign = boom vs protect).
+          if (((i - 2) & 1) == 0)
+            ladder[i] = std::clamp(v, 20.f, 20000.f);
+          else
+            ladder[i] = std::clamp(v, -5000.f, 5000.f);
+        }
+        flushVizArray(ladderId, "ladder", ladder, need);
+      }
+    }
+  }
+
   if (const char* filtId = vizSource_->vizFilterCutoffId())
   {
     float fc = 0.f;

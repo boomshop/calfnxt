@@ -35,6 +35,8 @@ public:
   const char* vizSpectrumId() const override { return "fft"; }
   int takeFreqResponse(float* out, int maxOut) override;
   const char* vizFreqResponseId() const override { return "tamer"; }
+  int takeHarmonicGuides(float* out, int maxOut) override;
+  const char* vizHarmonicGuidesId() const override { return "tamer"; }
   void configureVizBins(const char* id, int bins) override;
 
   OBJ_METHODS(TamerPlugin, Plugin::EffectBase)
@@ -57,6 +59,7 @@ private:
     float depth = 6.f;
     float sharpness = 1.f / 12.f;
     float threshold = 6.f;
+    float harmonics = 0.f;
     float attack = 5.f;
     float release = 80.f;
     int quality = 1;

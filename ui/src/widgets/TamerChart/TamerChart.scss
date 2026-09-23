@@ -44,6 +44,21 @@
       stroke-dasharray: 3 3;
     }
 
+    // Harmonic protect zones — AUX Graph paths in Hz×dB (chart transform).
+    .tamer-harmonics {
+      fill: var(--color-warn);
+      fill-opacity: 0.45;
+      stroke: none;
+      pointer-events: none;
+    }
+
+    .tamer-harmonics-boom {
+      fill: var(--color-warn);
+      fill-opacity: 0.18;
+      stroke: none;
+      pointer-events: none;
+    }
+
     > svg > .aux-handles > .aux-charthandle {
       &.tamer-search-lo,
       &.tamer-search-hi {

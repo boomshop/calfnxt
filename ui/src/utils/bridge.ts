@@ -13,7 +13,7 @@ export type calfNXTMsg =
   /** Host→UI: bus channel counts (`ch` = out, legacy; `in`/`out` when they differ). */
   | { t: "io"; ch: number; in?: number; out?: number }
   /** DSP→UI telemetry (meters / charts). `v` is often a Float32Array from binary viz. */
-  | { t: "viz"; id: string; kind: "levels" | "unit" | "spectrum" | "gains" | "corr" | "gonio" | "envelope" | "pitch" | "midi" | "gr" | "bandio" | "point" | "tempo" | "shape" | "hz" | "ctrl" | "lfo" | "response" | "comb" | "wave"; v: number[] | Float32Array }
+  | { t: "viz"; id: string; kind: "levels" | "unit" | "spectrum" | "gains" | "corr" | "gonio" | "envelope" | "pitch" | "midi" | "gr" | "bandio" | "point" | "tempo" | "shape" | "hz" | "ctrl" | "lfo" | "response" | "comb" | "ladder" | "wave"; v: number[] | Float32Array }
   /** UI→host viz config (e.g. FFT bin count from pixel width). */
   | { t: "vizcfg"; id: string; bins?: number }
   /** Editor viz flush rate (Hz), default 30. */

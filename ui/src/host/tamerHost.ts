@@ -15,6 +15,7 @@ import {
 import {
   bindBoolParamToHost,
   bindParamToHost,
+  bindVizLadder,
   bindVizResponse,
   bindVizSpectrum,
   postBegin,
@@ -86,6 +87,7 @@ export type ITamerHost = {
   depth$: DynamicValue<number>;
   sharpness$: DynamicValue<number>;
   threshold$: DynamicValue<number>;
+  harmonics$: DynamicValue<number>;
   attack$: DynamicValue<number>;
   release$: DynamicValue<number>;
   quality$: DynamicValue<number>;
@@ -93,6 +95,8 @@ export type ITamerHost = {
   diffListen$: DynamicValue<boolean>;
   spectrumData$: DynamicValue<number[]>;
   grResponse$: DynamicValue<number[]>;
+  /** Harmonic protect guides [n, keep, (hz, halfW)×n]. */
+  ladder$: DynamicValue<number[]>;
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
 };
@@ -124,8 +128,10 @@ function bindBool(name: keyof typeof paramIds): DynamicValue<boolean> {
 export function createBoundTamerHost(): ITamerHost {
   const spectrumData$ = DynamicValue.fromConstant<number[]>([]);
   const grResponse$ = DynamicValue.fromConstant<number[]>([]);
+  const ladder$ = DynamicValue.fromConstant<number[]>([]);
   bindVizSpectrum(spectrumData$, 'fft');
   bindVizResponse(grResponse$, 'tamer');
+  bindVizLadder(ladder$, 'tamer');
 
   return {
     meta: pluginMeta,
@@ -137,6 +143,7 @@ export function createBoundTamerHost(): ITamerHost {
     depth$: bindNum('depth', 6),
     sharpness$: bindNum('sharpness', 1 / 12),
     threshold$: bindNum('threshold', 6),
+    harmonics$: bindNum('harmonics', 0),
     attack$: bindNum('attack', 5),
     release$: bindNum('release', 80),
     quality$: bindNum('quality', 1),
@@ -144,6 +151,7 @@ export function createBoundTamerHost(): ITamerHost {
     diffListen$: bindBool('diff_listen'),
     spectrumData$,
     grResponse$,
+    ladder$,
     beginEdit: postBegin,
     endEdit: postEnd,
   };

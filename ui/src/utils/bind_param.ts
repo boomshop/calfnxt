@@ -24,6 +24,7 @@ const vizTempoApplies = new Map<string, VizLevelsApply>();
 const vizSpectrumApplies = new Map<string, VizLevelsApply>();
 const vizResponseApplies = new Map<string, VizLevelsApply>();
 const vizCombApplies = new Map<string, VizLevelsApply>();
+const vizLadderApplies = new Map<string, VizLevelsApply>();
 const vizHzApplies = new Map<string, HostApply>();
 const vizCtrlApplies = new Map<string, VizLevelsApply>();
 const vizLfoApplies = new Map<string, VizLevelsApply>();
@@ -113,6 +114,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizResponseApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "comb" && isVizSamples(msg.v))
     vizCombApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "ladder" && isVizSamples(msg.v))
+    vizLadderApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "hz" && isVizSamples(msg.v) && typeof msg.v[0] === "number")
     vizHzApplies.get(msg.id)?.(msg.v[0]);
   if (msg.t === "viz" && msg.kind === "ctrl" && isVizSamples(msg.v))
@@ -471,6 +474,41 @@ export function bindVizComb(dv: DynamicValue<number[]>, id: string): () => void 
   });
   return () => {
     vizCombApplies.delete(id);
+  };
+}
+
+/**
+ * Wire harmonic protect guides (id e.g. "tamer"):
+ * [n, keep01, (centerHz, halfWidthHz)×n].
+ */
+export function bindVizLadder(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizLadderApplies.set(id, (v) => {
+    if (!v.length) {
+      dv.set([]);
+      return;
+    }
+    const n = Math.min(48, Math.max(0, Math.round(Number(v[0]) || 0)));
+    const need = 2 + 2 * n;
+    const clean = new Array<number>(need);
+    clean[0] = n;
+    const keep = Number(v[1]);
+    clean[1] = Number.isFinite(keep) ? Math.min(1, Math.max(0, keep)) : 0;
+    for (let i = 2; i < need; ++i) {
+      const x = Number(v[i]);
+      if (!Number.isFinite(x)) {
+        clean[i] = (i - 2) % 2 === 0 ? 100 : 20;
+        continue;
+      }
+      // Even: center Hz; odd: ±halfWidth (sign marks boom).
+      clean[i] = (i - 2) % 2 === 0
+        ? Math.min(20000, Math.max(20, x))
+        : Math.min(5000, Math.max(-5000, x));
+    }
+    dv.set(clean);
+  });
+  return () => {
+    vizLadderApplies.delete(id);
   };
 }
 

@@ -286,6 +286,21 @@ public:
   virtual const char* vizCombExtremaId() const { return nullptr; }
 
   /**
+   * Harmonic protect guides (Tamer).
+   * Layout: [n, keep01, (centerHz, halfWidthHz)×n]. Returns float count, or 0.
+   * Flushed as {t:"viz", id, kind:"ladder", v:[…]}.
+   */
+  virtual int takeHarmonicGuides(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for harmonic guides (nullptr = do not flush). */
+  virtual const char* vizHarmonicGuidesId() const { return nullptr; }
+
+  /**
    * Pitch-correction history (Tuner).
    * Layout per slot: [inMidi, targetMidi, confidence, flags, corrCents] × N, plus
    * trailing scroll phase in [0,1]. flags: 1=voiced, 2=unvoiced, 4=octave-suspect.

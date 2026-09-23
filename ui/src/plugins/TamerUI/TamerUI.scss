@@ -21,6 +21,13 @@
 
   > .process {
     grid-area: process;
+
+    > .thresh-harm {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
   }
 
   > .tilt {

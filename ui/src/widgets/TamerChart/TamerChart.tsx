@@ -102,6 +102,43 @@ function formatFreq(hz: number): string {
   return `${Math.round(hz)} Hz`;
 }
 
+/**
+ * Ladder viz → per-band AUX Graph dots in chart data space (Hz × dB).
+ * String paths are raw SVG pixels (no transform) — must use point arrays.
+ * Negative half-width marks boom rungs (not soft-kept).
+ */
+const HARM_BAND_GRAPH_COUNT = 24;
+
+type LadderBand = { lo: number; hi: number; boom: boolean };
+
+function parseLadderBands(raw: number[]): { bands: LadderBand[]; amount: number } {
+  const n = Math.max(0, Math.min(48, Math.round(raw[0] ?? 0)));
+  const amount = Math.min(1, Math.max(0, raw[1] ?? 0));
+  if (n < 1 || amount < 1e-3) return { bands: [], amount: 0 };
+
+  const bands: LadderBand[] = [];
+  for (let i = 0; i < n; ++i) {
+    const c = raw[2 + 2 * i] ?? 0;
+    const hwRaw = raw[2 + 2 * i + 1] ?? 0;
+    const hw = Math.abs(hwRaw);
+    if (!(c > 0) || !(hw > 0)) continue;
+    const lo = Math.max(F_MIN, c - hw);
+    const hi = Math.min(F_MAX, c + hw);
+    if (!(hi > lo)) continue;
+    bands.push({ lo, hi, boom: hwRaw < 0 });
+  }
+  return { bands, amount };
+}
+
+function bandDots(lo: number, hi: number): { x: number; y: number }[] {
+  return [
+    { x: lo, y: TAMER_DB_MAX },
+    { x: hi, y: TAMER_DB_MAX },
+    { x: hi, y: TAMER_DB_MIN },
+    { x: lo, y: TAMER_DB_MIN },
+  ];
+}
+
 /** Same decade marks as AUX Equalizer / SpectrumChart (Hz positions). */
 const FREQ_GRID_MARKS: { hz: number; label?: string }[] = [
   { hz: 20, label: '20Hz' },
@@ -163,6 +200,8 @@ function buildDbGridY() {
 export interface TamerChartProps {
   spectrum$: DynamicValue<number[]>;
   gr$: DynamicValue<number[]>;
+  /** Harmonic protect guides [n, keep, (hz, halfW)×n]. */
+  ladder$?: DynamicValue<number[]>;
   /** 0 Linear / 1 −3 / 2 −4.5 */
   spectrumTilt: number;
   fLo$: DynamicValue<number>;
@@ -183,6 +222,7 @@ export function TamerChart(props: TamerChartProps) {
   const {
     spectrum$,
     gr$,
+    ladder$,
     spectrumTilt,
     fLo$,
     fHi$,
@@ -195,6 +235,8 @@ export function TamerChart(props: TamerChartProps) {
 
   const chartRef = useRef<AuxChartInstance | null>(null);
   const graphsRef = useRef<AuxGraph[]>([]);
+  /** One fill-graph per band (AUX transforms Hz×dB dots). Created once. */
+  const harmBandGraphsRef = useRef<AuxGraph[]>([]);
   const bindingsRef = useRef<Bindings[]>([]);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   const tiltRef = useRef(spectrumTilt);
@@ -202,6 +244,7 @@ export function TamerChart(props: TamerChartProps) {
   const chartWidthRef = useRef(128);
   const spectrumLatest = useRef<number[]>(EMPTY);
   const grLatest = useRef<number[]>(EMPTY);
+  const ladderLatest = useRef<number[]>(EMPTY);
   tiltRef.current = spectrumTilt;
 
   const [chart, setChart] = useState<AuxChartInstance | null>(null);
@@ -502,6 +545,30 @@ export function TamerChart(props: TamerChartProps) {
     gOut.set('dots', buildOutDots(spectrumLatest.current, grLatest.current));
   }, [buildOutDots]);
 
+  const paintLadderOverlay = useCallback(() => {
+    const graphs = harmBandGraphsRef.current;
+    if (!graphs.length) return;
+    const { bands, amount } = parseLadderBands(ladderLatest.current);
+    for (let i = 0; i < graphs.length; ++i) {
+      const g = graphs[i]!;
+      const band = bands[i];
+      if (!band) {
+        g.set('dots', null);
+        continue;
+      }
+      g.set('dots', bandDots(band.lo, band.hi));
+      const el = g.element;
+      if (el instanceof SVGElement) {
+        // Opacity tracks Harmonics amount; boom (loudest-vs-siblings, still
+        // tamed) stays dimmer — no falling-series fade by harmonic index.
+        const base = 0.12 + 0.5 * amount;
+        el.style.opacity = String(band.boom ? base * 0.35 : base);
+        el.classList.toggle('tamer-harmonics-boom', band.boom);
+        el.classList.toggle('tamer-harmonics', !band.boom);
+      }
+    }
+  }, []);
+
   const disposeBindings = useCallback(() => {
     for (const b of bindingsRef.current) b.dispose();
     bindingsRef.current = [];
@@ -577,13 +644,15 @@ export function TamerChart(props: TamerChartProps) {
     disposeBindings();
     const c = chartRef.current;
     const graphs = graphsRef.current;
+    const harmBands = harmBandGraphsRef.current;
     graphsRef.current = [];
+    harmBandGraphsRef.current = [];
     chartRef.current = null;
     setChart(null);
     setChartSvg(null);
     setGradTargets([]);
     if (!c || c.isDestructed?.()) return;
-    for (const g of graphs) c.removeGraph(g);
+    for (const g of [...harmBands, ...graphs]) c.removeGraph(g);
   }, [disposeBindings]);
 
   const attach = useCallback(
@@ -598,8 +667,21 @@ export function TamerChart(props: TamerChartProps) {
       inst.set('grid_y', buildDbGridY());
 
       if (graphsRef.current.length === 0) {
-        // Paint order: input (back) → out → GR (front). Styles match
-        // Compressor HistoryChart hist-audio / hist-audio-filtered / hist-gr.
+        // Band fills first (back), then spectrum, GR in front. Graphs created
+        // once — only dots update (Hz×dB arrays so AUX transforms).
+        const harmBands: AuxGraph[] = [];
+        for (let i = 0; i < HARM_BAND_GRAPH_COUNT; ++i) {
+          const g = inst.addGraph({
+            dots: null,
+            type: 'L',
+            mode: 'fill',
+            class: 'tamer-harmonics',
+          });
+          g.element?.classList.add('tamer-harmonics');
+          harmBands.push(g);
+        }
+        harmBandGraphsRef.current = harmBands;
+
         const gIn = inst.addGraph({
           dots: null,
           type: 'L',
@@ -627,6 +709,7 @@ export function TamerChart(props: TamerChartProps) {
 
       setChartSvg(inst.svg ?? null);
       attachBindings();
+      paintLadderOverlay();
 
       if (!resizeRoRef.current) {
         const el = inst.element ?? inst.svg;
@@ -635,14 +718,17 @@ export function TamerChart(props: TamerChartProps) {
           let raf = 0;
           const ro = new ResizeObserver(() => {
             if (raf) cancelAnimationFrame(raf);
-            raf = requestAnimationFrame(() => sendVizBins(el));
+            raf = requestAnimationFrame(() => {
+              sendVizBins(el);
+              paintLadderOverlay();
+            });
           });
           ro.observe(el);
           resizeRoRef.current = ro;
         }
       }
     },
-    [attachBindings, sendVizBins],
+    [attachBindings, sendVizBins, paintLadderOverlay],
   );
 
   useEffect(() => {
@@ -667,6 +753,18 @@ export function TamerChart(props: TamerChartProps) {
       for (const h of handles) inst.removeHandle?.(h);
     };
   }, [chart, handles, eqGraphs]);
+
+  // Ladder guides: reuse fill-graphs; only Hz×dB dots update (AUX transforms).
+  useEffect(() => {
+    if (!ladder$) return;
+    const sync = (raw: unknown) => {
+      ladderLatest.current =
+        Array.isArray(raw) && raw.length ? (raw as number[]) : EMPTY;
+      paintLadderOverlay();
+    };
+    sync(ladder$.value);
+    return ladder$.subscribe(sync, false);
+  }, [ladder$, paintLadderOverlay]);
 
   const widgetRef = useCallback(
     (w: AuxChartInstance | null) => {

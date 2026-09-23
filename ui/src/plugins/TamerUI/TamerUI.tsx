@@ -120,6 +120,7 @@ export function TamerUI(props: TamerUIProps) {
       <TamerChart
         spectrum$={host.spectrumData$}
         gr$={host.grResponse$}
+        ladder$={host.ladder$}
         spectrumTilt={spectrum}
         fLo$={host.fLo$}
         fHi$={host.fHi$}
@@ -201,21 +202,41 @@ export function TamerUI(props: TamerUIProps) {
 
       <div className="block process">
         <div className="title">Process</div>
-        <WithInfo title={tamerInfo.threshold}>
-          <Knob
-            label="Threshold"
-            value$={host.threshold$}
-            min={0}
-            max={24}
-            reset={tamerParamDefault('threshold')}
-            dots={THRESH_DOTS}
-            labels={THRESH_LABELS}
-            size="large"
-            scale="log2"
-            log_factor={2}
-            {...edit(paramIds.threshold)}
-          />
-        </WithInfo>
+        <div className="thresh-harm">
+          <WithInfo title={tamerInfo.threshold}>
+            <Knob
+              label="Threshold"
+              value$={host.threshold$}
+              min={0}
+              max={24}
+              reset={tamerParamDefault('threshold')}
+              dots={THRESH_DOTS}
+              labels={THRESH_LABELS}
+              size="medium"
+              scale="log2"
+              log_factor={2}
+              {...edit(paramIds.threshold)}
+            />
+          </WithInfo>
+          <WithInfo title={tamerInfo.harmonics}>
+            <Knob
+              label="Harmonics"
+              value$={host.harmonics$}
+              min={0}
+              max={1}
+              reset={tamerParamDefault('harmonics')}
+              dots={[0, 0.25, 0.5, 0.75, 1]}
+              labels={[
+                { pos: 0, label: '0' },
+                { pos: 0.5, label: '50' },
+                { pos: 1, label: '100' },
+              ]}
+              size="medium"
+              {...{ 'value.format': (v: number) => `${Math.round(v * 100)}` }}
+              {...edit(paramIds.harmonics)}
+            />
+          </WithInfo>
+        </div>
         <WithInfo title={tamerInfo.depth}>
           <Knob
             label="Depth"

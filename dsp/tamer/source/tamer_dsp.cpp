@@ -98,6 +98,7 @@ TamerPlugin::BlockState TamerPlugin::makeBlockState() const
   s.depth = std::clamp(params_[kParamDepth], 0.f, 24.f);
   s.sharpness = std::clamp(params_[kParamSharpness], 1.f / 24.f, 0.5f);
   s.threshold = std::clamp(params_[kParamThreshold], 0.f, 24.f);
+  s.harmonics = std::clamp(params_[kParamHarmonics], 0.f, 1.f);
   s.attack = std::clamp(params_[kParamAttack], 0.1f, 500.f);
   s.release = std::clamp(params_[kParamRelease], 1.f, 2000.f);
   s.quality = static_cast<int>(std::lround(std::clamp(params_[kParamQuality], 0.f, 2.f)));
@@ -108,7 +109,7 @@ void TamerPlugin::applyBlockState(const BlockState& s)
 {
   tamer_.setFftSize(qualityToFft(s.quality));
   tamer_.setParams(s.fLo, s.fHi, s.depth, s.sharpness, s.threshold, s.attack,
-                   s.release, s.hpSlope, s.lpSlope);
+                   s.release, s.hpSlope, s.lpSlope, s.harmonics);
   updateLatency();
 }
 
@@ -182,6 +183,11 @@ int TamerPlugin::takeSpectrum(float* out, int maxOut)
 int TamerPlugin::takeFreqResponse(float* out, int maxOut)
 {
   return tamer_.takeGrResponse(out, maxOut);
+}
+
+int TamerPlugin::takeHarmonicGuides(float* out, int maxOut)
+{
+  return tamer_.takeHarmonicGuides(out, maxOut);
 }
 
 void TamerPlugin::configureVizBins(const char* id, int bins)
