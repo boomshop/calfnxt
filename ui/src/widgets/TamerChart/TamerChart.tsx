@@ -21,7 +21,10 @@ import {
 import {
   SPECTRUM_DB_MAX,
   SPECTRUM_DB_MIN,
+  SPECTRUM_MAX_BINS,
+  SPECTRUM_MIN_BINS,
   binToHz,
+  catmullRomDensify,
   smoothSeriesY,
   spectrumPxPerBin,
   tiltDb,
@@ -83,14 +86,14 @@ function spectrumToGrY(db: number): number {
 }
 
 function parseSpectrum(v: number[]): { bins: number; avg: Float32Array } {
-  const bins = Math.max(1, Math.min(256, Math.round(v[0] ?? 0)));
+  const bins = Math.max(1, Math.min(SPECTRUM_MAX_BINS, Math.round(v[0] ?? 0)));
   const avg = new Float32Array(bins);
   for (let i = 0; i < bins; ++i) avg[i] = v[2 + i] ?? SPECTRUM_DB_MIN;
   return { bins, avg };
 }
 
 function parseGr(v: number[]): { bins: number; gr: Float32Array } {
-  const bins = Math.max(1, Math.min(512, Math.round(v[0] ?? 0)));
+  const bins = Math.max(1, Math.min(SPECTRUM_MAX_BINS, Math.round(v[0] ?? 0)));
   const gr = new Float32Array(bins);
   for (let i = 0; i < bins; ++i) gr[i] = v[1 + i] ?? 0;
   return { bins, gr };
@@ -241,7 +244,8 @@ export function TamerChart(props: TamerChartProps) {
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   const tiltRef = useRef(spectrumTilt);
   const binsRef = useRef(128);
-  const chartWidthRef = useRef(128);
+  /** 0 = not measured yet (spectrumPxPerBin falls back to design width). */
+  const chartWidthRef = useRef(0);
   const spectrumLatest = useRef<number[]>(EMPTY);
   const grLatest = useRef<number[]>(EMPTY);
   const ladderLatest = useRef<number[]>(EMPTY);
@@ -316,7 +320,7 @@ export function TamerChart(props: TamerChartProps) {
   const sendVizBins = useCallback((el: Element) => {
     const width = Math.round(el.getBoundingClientRect().width);
     chartWidthRef.current = Math.max(1, width);
-    const next = Math.max(32, Math.min(256, width));
+    const next = Math.max(SPECTRUM_MIN_BINS, Math.min(SPECTRUM_MAX_BINS, width));
     postToHost({ t: 'vizcfg', id: SPECTRUM_VIZ_ID, bins: next });
     postToHost({ t: 'vizcfg', id: TAMER_VIZ_ID, bins: next });
   }, []);
@@ -467,7 +471,9 @@ export function TamerChart(props: TamerChartProps) {
       const pts: { x: number; y: number }[] = [];
       for (let i = 0; i < smoothed.length; ++i)
         pts.push({ x: hz[i]!, y: smoothed[i]! });
-      return pts.length ? pts : null;
+      return pts.length
+        ? catmullRomDensify(pts, chartWidthRef.current, 'log')
+        : null;
     },
     [],
   );
@@ -510,7 +516,9 @@ export function TamerChart(props: TamerChartProps) {
       const pts: { x: number; y: number }[] = [];
       for (let i = 0; i < smoothed.length; ++i)
         pts.push({ x: hz[i]!, y: smoothed[i]! });
-      return pts.length ? pts : null;
+      return pts.length
+        ? catmullRomDensify(pts, chartWidthRef.current, 'log')
+        : null;
     },
     [],
   );
@@ -534,7 +542,9 @@ export function TamerChart(props: TamerChartProps) {
       const pts: { x: number; y: number }[] = [];
       for (let i = 0; i < smoothed.length; ++i)
         pts.push({ x: hz[i]!, y: smoothed[i]! });
-      return pts.length ? pts : null;
+      return pts.length
+        ? catmullRomDensify(pts, chartWidthRef.current, 'log')
+        : null;
     },
     [],
   );

@@ -7,7 +7,10 @@ import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { themeColors$ } from '../../theme/themeColors';
+import { SPECTRUM_MAX_BINS, SPECTRUM_MIN_BINS } from '../../utils/spectrum_bins';
 import './SpectrumChart.scss';
+
+export { SPECTRUM_MAX_BINS, SPECTRUM_MIN_BINS } from '../../utils/spectrum_bins';
 
 /** Stable empty default — never inline `[]` in hook deps / subscribe fallbacks. */
 const EMPTY_SPECTRUM: number[] = [];
@@ -72,8 +75,9 @@ export function hzToBin(hz: number, bins: number): number {
 }
 
 /**
- * Upsample a polyline (legacy / rare use). Prefer Y-smooth alone for spectrum
- * strokes — densifying past ~1 px/segment + AUX SVGRound makes steep flanks grainy.
+ * Upsample a polyline with smoothstep Y (legacy). Prefer `catmullRomDensify`
+ * for spectrum — densifying past ~1 px/segment + AUX SVGRound wrinkles steep
+ * flanks (the old “Krigel” look).
  */
 export function densifyPolyline(
   pts: { x: number; y: number }[],
@@ -100,6 +104,82 @@ export function densifyPolyline(
     }
   }
   out.push(pts[pts.length - 1]!);
+  return out;
+}
+
+/** Uniform Catmull-Rom sample between p1→p2 (t in 0…1). */
+function catmullRomPoint(
+  p0: { x: number; y: number },
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  p3: { x: number; y: number },
+  t: number,
+): { x: number; y: number } {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const x =
+    0.5
+    * (2 * p1.x
+      + (-p0.x + p2.x) * t
+      + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2
+      + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
+  const y =
+    0.5
+    * (2 * p1.y
+      + (-p0.y + p2.y) * t
+      + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2
+      + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
+  return { x, y };
+}
+
+/**
+ * Interpolating Catmull-Rom through bin centres, then draw with AUX `type:"L"`.
+ *
+ * Unlike Graph `T`/`H` (SVG Bézier + SVGRound on every command), we stay on
+ * straight segments between *our* samples. Density is capped at ~1 point per
+ * CSS pixel — more than that + SVGRound is what produced the flank “Krigel”.
+ *
+ * `xSpace:"log"` evaluates the spline in log(x) (Hz charts).
+ */
+export function catmullRomDensify(
+  pts: { x: number; y: number }[],
+  cssWidthPx: number,
+  xSpace: 'linear' | 'log' = 'linear',
+): { x: number; y: number }[] {
+  if (pts.length < 3) return pts;
+  const maxPts = Math.max(pts.length, Math.floor(Math.max(1, cssWidthPx)) + 1);
+  if (pts.length >= maxPts) return pts;
+
+  const useLog = xSpace === 'log';
+  const work = useLog
+    ? pts.map((p) => ({
+        x: p.x > 0 ? Math.log(p.x) : Number.NEGATIVE_INFINITY,
+        y: p.y,
+      }))
+    : pts;
+  if (useLog && work.some((p) => !Number.isFinite(p.x))) return pts;
+
+  const n = work.length;
+  const spans = n - 1;
+  // Extra samples per span so total ≈ maxPts (never denser than ~1/px).
+  const segs = Math.max(1, Math.min(4, Math.ceil((maxPts - 1) / spans)));
+  if (segs <= 1) return pts;
+
+  const out: { x: number; y: number }[] = [];
+  for (let i = 0; i < spans; ++i) {
+    const p0 = work[Math.max(0, i - 1)]!;
+    const p1 = work[i]!;
+    const p2 = work[i + 1]!;
+    const p3 = work[Math.min(n - 1, i + 2)]!;
+    if (i === 0) {
+      out.push(useLog ? { x: Math.exp(p1.x), y: p1.y } : { x: p1.x, y: p1.y });
+    }
+    for (let s = 1; s < segs; ++s) {
+      const p = catmullRomPoint(p0, p1, p2, p3, s / segs);
+      out.push(useLog ? { x: Math.exp(p.x), y: p.y } : p);
+    }
+    out.push(useLog ? { x: Math.exp(p2.x), y: p2.y } : { x: p2.x, y: p2.y });
+  }
   return out;
 }
 
@@ -213,7 +293,7 @@ export type SpectrumPayload = {
 
 export function parseSpectrumPayload(v: number[] | null | undefined): SpectrumPayload | null {
   if (!v || v.length < 2) return null;
-  const bins = Math.max(1, Math.min(256, Math.round(v[0] ?? 0)));
+  const bins = Math.max(1, Math.min(SPECTRUM_MAX_BINS, Math.round(v[0] ?? 0)));
   const need = 2 + 4 * bins;
   if (v.length < need) return null;
   return {
@@ -232,52 +312,95 @@ const SERIES_EDGE_PAD = 1.25;
 /**
  * Display-only soften of log-bin stairs.
  *
- * DSP sends N log bins (N ≈ min(chartCssWidth, 256)). Chart X is linear in bin
- * index → px/bin = width/N. When that is ~1, each bin is already pixel-accurate
- * → no smooth. When the 256-cap makes bins span multiple pixels, smooth more.
+ * Chart X is linear in bin index (= log-Hz). A 3/5-tap pass mixes neighbours.
+ * Passes nest from a wide light polish down into a heavy LF zone. Fractions are
+ * true log-Hz cuts (0.22 ≈ 90 Hz — not 700 Hz); the old “22 %” nest never
+ * reached the 100…800 Hz stairs.
  *
- * Locally, weight fades out toward 5 kHz (same 20…20k map as DSP): below that,
- * FFT support per log band is thinner so stairs show; above, leave detail raw.
+ * `hz` unused (API stable for call sites).
  */
 export function smoothSeriesY(
   ys: number[],
-  hz?: readonly number[],
+  _hz?: readonly number[],
   pxPerBin = 1,
 ): number[] {
   if (ys.length < 3) return ys;
   // ~1 DSP log-bin per CSS pixel → keep values as published.
-  if (!(pxPerBin > 1.15)) return ys;
+  if (!(pxPerBin > 1.05)) return ys;
 
-  const banded = hz != null && hz.length === ys.length;
-  // Global polish from undersampling (1px→0 … ~4px→1).
-  const sparse = Math.min(1, (pxPerBin - 1) / 3);
-  const logHi = Math.log(5000 / F_MIN);
-  const passes = 1 + Math.round(sparse * 2);
+  const n = ys.length;
+  const logSpan = Math.log(F_MAX / F_MIN);
+  const fracAt = (hz: number) =>
+    Math.log(Math.min(F_MAX, Math.max(F_MIN, hz)) / F_MIN) / logSpan;
+
+  // Heavy zone through the visible bass stairs (~20…~1 kHz).
+  const lfEnd = Math.max(8, Math.round(n * fracAt(1000)));
+  // Light polish up into the lower highs (~6 kHz); leave HF needles alone.
+  const midEnd = Math.max(lfEnd + 4, Math.round(n * fracAt(6000)));
+
   let cur = ys.slice();
-  for (let p = 0; p < passes; ++p) {
+
+  // --- A: break LF plateaus (needs many full-weight rounds + wider tap) ---
+  const lfPasses = Math.min(12, Math.max(5, Math.round(pxPerBin * 4)));
+  const lfW = Math.min(1, 0.82 + 0.12 * Math.min(1, pxPerBin - 1));
+  const lfFade = Math.max(6, Math.round(lfEnd * 0.18));
+  for (let p = 0; p < lfPasses; ++p) {
     const next = cur.slice();
-    for (let i = 1; i < cur.length - 1; ++i) {
-      let w = sparse;
-      if (banded) {
-        const f = hz![i]!;
-        if (!(f < 5000)) continue;
-        // More smooth where log-bands sit on fewer Hz (LF); 0 at 5 kHz.
-        const t = Math.log(Math.max(f, F_MIN) / F_MIN) / logHi;
-        w *= (1 - t) * (1 - t);
+    const wide = p >= 2;
+    for (let i = 1; i < n - 1; ++i) {
+      if (i >= lfEnd) continue;
+      let w = lfW;
+      if (i > lfEnd - lfFade) {
+        w *= 1 - (i - (lfEnd - lfFade)) / lfFade;
       }
-      if (!(w > 0.02)) continue;
+      // Stronger toward DC.
+      const t = i / lfEnd;
+      w *= 1 - 0.35 * t * t;
+      if (!(w > 0.04)) continue;
+      let avg: number;
+      if (wide && i >= 2 && i < n - 2) {
+        avg =
+          (cur[i - 2]!
+            + 4 * cur[i - 1]!
+            + 6 * cur[i]!
+            + 4 * cur[i + 1]!
+            + cur[i + 2]!)
+          / 16;
+      } else {
+        avg = 0.25 * cur[i - 1]! + 0.5 * cur[i]! + 0.25 * cur[i + 1]!;
+      }
+      next[i] = cur[i]! * (1 - w) + avg * w;
+    }
+    cur = next;
+  }
+
+  // --- B: light mid polish (stairs between ~1…6 kHz) ---
+  const midPasses = Math.min(4, Math.max(1, Math.round(pxPerBin)));
+  const midW = Math.min(0.55, 0.28 + 0.12 * pxPerBin);
+  for (let p = 0; p < midPasses; ++p) {
+    const next = cur.slice();
+    for (let i = 1; i < n - 1; ++i) {
+      if (i >= midEnd) continue;
+      const t = i / midEnd;
+      const w = midW * (1 - t * t);
+      if (!(w > 0.04)) continue;
       const avg = 0.25 * cur[i - 1]! + 0.5 * cur[i]! + 0.25 * cur[i + 1]!;
       next[i] = cur[i]! * (1 - w) + avg * w;
     }
     cur = next;
   }
+
   return cur;
 }
 
 /** CSS pixels per DSP log-bin (1 = pixel-accurate). */
 export function spectrumPxPerBin(cssWidth: number, bins: number): number {
-  const w = Math.max(1, cssWidth);
   const n = Math.max(1, bins);
+  const w = Math.max(1, cssWidth);
+  // Pre-layout stubs (chartWidthRef init 128 while bins already 512) yield
+  // px/bin ≪ 1 → smoothSeriesY + catmullRomDensify both no-op. Until the
+  // ResizeObserver measures, assume the design editor width (~1024 CSS px).
+  if (w * 1.15 < n) return 1024 / n;
   return w / n;
 }
 
@@ -305,9 +428,11 @@ function seriesDots(
   const mid: { x: number; y: number }[] = [];
   for (let i = 0; i < bins; ++i)
     mid.push({ x: i + 0.5, y: smoothed[i]! });
+  // CR in bin-index space; density ≤ ~1 pt/CSS-px (see catmullRomDensify).
+  const curved = catmullRomDensify(mid, pxPerBin * bins, 'linear');
   return [
     { x: -SERIES_EDGE_PAD, y: first },
-    ...mid,
+    ...curved,
     { x: bins + SERIES_EDGE_PAD, y: last },
   ];
 }
@@ -395,7 +520,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
   const holdRef = useRef(hold);
   const scaleRef = useRef(scale);
   const binsRef = useRef(128);
-  const chartWidthRef = useRef(128);
+  const chartWidthRef = useRef(0);
   const diffSmoothRef = useRef<Float32Array | null>(null);
   modeRef.current = mode;
   holdRef.current = hold;
@@ -427,7 +552,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
     (el: Element) => {
       const width = Math.round(el.getBoundingClientRect().width);
       chartWidthRef.current = Math.max(1, width);
-      const next = Math.max(32, Math.min(256, width));
+      const next = Math.max(SPECTRUM_MIN_BINS, Math.min(SPECTRUM_MAX_BINS, width));
       postToHost({ t: 'vizcfg', id: vizId, bins: next });
     },
     [vizId],

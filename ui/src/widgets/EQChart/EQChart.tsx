@@ -34,8 +34,11 @@ import {
 } from '../../hooks/useChartGradient';
 import {
   SPECTRUM_DB_MIN,
+  SPECTRUM_MAX_BINS,
+  SPECTRUM_MIN_BINS,
   SPECTRUM_VIZ_ID,
   binToHz,
+  catmullRomDensify,
   smoothSeriesY,
   spectrumPxPerBin,
   parseSpectrumPayload,
@@ -129,7 +132,8 @@ function spectrumSeriesDots(
   const pts: { x: number; y: number }[] = [];
   for (let i = 0; i < smoothed.length; ++i)
     pts.push({ x: hz[i]!, y: smoothed[i]! });
-  return pts;
+  // Hz chart → spline in log(f); density ≤ ~1 pt/px.
+  return catmullRomDensify(pts, Math.max(1, pts.length * pxPerBin), 'log');
 }
 
 /**
@@ -165,7 +169,7 @@ export function EQChart(props: EQChartProps) {
   const spectrumModeRef = useRef(spectrumMode);
   const yRangeRef = useRef(yRange);
   const spectrumLastRawRef = useRef<number[] | null>(null);
-  const spectrumWidthRef = useRef(128);
+  const spectrumWidthRef = useRef(0);
   spectrumModeRef.current = spectrumMode;
   yRangeRef.current = yRange;
 
@@ -534,7 +538,7 @@ export function EQChart(props: EQChartProps) {
       const sendBins = () => {
         const width = Math.round(el.getBoundingClientRect().width);
         spectrumWidthRef.current = Math.max(1, width);
-        const next = Math.max(32, Math.min(256, width));
+        const next = Math.max(SPECTRUM_MIN_BINS, Math.min(SPECTRUM_MAX_BINS, width));
         postToHost({ t: 'vizcfg', id: SPECTRUM_VIZ_ID, bins: next });
       };
       sendBins();
