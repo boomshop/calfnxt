@@ -71,7 +71,7 @@
       "unit": "",
       "min": 0.0,
       "max": 3.0,
-      "default": 1.0,
+      "default": 2.0,
       "scale": "linear",
       "precision": 0
     },

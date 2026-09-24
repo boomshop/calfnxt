@@ -6,7 +6,7 @@ export const analyzerInfo = {
   hold:
     'Freezes the peak-hold spectrum (no decay). Useful in Average / Max / Stereo to compare peaks while the live curve keeps moving. Turning Hold off clears the peak buffer so the next Hold starts fresh.',
   fftSize:
-    'FFT size: larger = finer low-frequency detail and slower updates; smaller = snappier / less bass resolution. 2k is a good default at 48 kHz; 8k helps resolve sub/bass further (more CPU).',
+    'FFT size: larger = finer low-frequency detail and slower updates; smaller = snappier / less bass resolution. 4k is the default at 48 kHz; 8k helps resolve sub/bass further (more CPU). 1k/2k when you want a quicker display.',
   scale:
     'Display tilt pivoted at 1 kHz so a balanced mix reads roughly as a horizontal line. Linear = raw dBFS (natural treble roll-off). −3 dB/oct ≈ typical pop / general programme. −4.5 dB/oct ≈ modern, bass-heavy material. Tilted views also show a midband ±9 dB corridor as a balance guide.',
   gonio:

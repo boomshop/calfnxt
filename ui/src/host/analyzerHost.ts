@@ -64,7 +64,7 @@ export function createBoundAnalyzerHost(): IAnalyzerHost {
   const hold$ = DynamicValue.fromConstant(false);
   bindBoolParamToHost(hold$, paramIds.hold);
 
-  const fftSize$ = DynamicValue.fromConstant(analyzerParamDefault('fft_size', 1));
+  const fftSize$ = DynamicValue.fromConstant(analyzerParamDefault('fft_size', 2));
   bindParamToHost(fftSize$, paramIds.fft_size);
 
   const scale$ = DynamicValue.fromConstant(analyzerParamDefault('scale'));

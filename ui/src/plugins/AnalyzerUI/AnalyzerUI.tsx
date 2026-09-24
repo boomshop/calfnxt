@@ -27,7 +27,7 @@ export function AnalyzerUI(props: AnalyzerUIProps) {
   const { host } = props;
   const mode = useDynamicValueReadonly(host.mode$, 0);
   const hold = useDynamicValueReadonly(host.hold$, false);
-  const fftSizeRaw = useDynamicValueReadonly(host.fftSize$, 1);
+  const fftSizeRaw = useDynamicValueReadonly(host.fftSize$, 2);
   const scaleRaw = useDynamicValueReadonly(host.scale$, 0);
   const fftSize = Math.round(fftSizeRaw);
   const scale = Math.round(scaleRaw);
