@@ -26,6 +26,7 @@ export const TAMER_QUALITY_ENTRIES = [
   { label: 'Fast', value: 0 },
   { label: 'Normal', value: 1 },
   { label: 'Studio', value: 2 },
+  { label: 'Ultra', value: 3 },
 ];
 
 /** Display tilt (matches Analyzer / EQ spectrum). */

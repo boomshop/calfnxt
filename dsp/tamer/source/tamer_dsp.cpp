@@ -36,12 +36,14 @@ tresult PLUGIN_API TamerPlugin::initialize(FUnknown* context)
 
 int TamerPlugin::qualityToFft(int quality)
 {
-  switch (std::clamp(quality, 0, 2))
+  switch (std::clamp(quality, 0, 3))
   {
   case 0:
     return 1024;
   case 2:
     return 4096;
+  case 3:
+    return 8192;
   default:
     return 2048;
   }
@@ -101,7 +103,7 @@ TamerPlugin::BlockState TamerPlugin::makeBlockState() const
   s.harmonics = std::clamp(params_[kParamHarmonics], 0.f, 1.f);
   s.attack = std::clamp(params_[kParamAttack], 0.1f, 500.f);
   s.release = std::clamp(params_[kParamRelease], 1.f, 2000.f);
-  s.quality = static_cast<int>(std::lround(std::clamp(params_[kParamQuality], 0.f, 2.f)));
+  s.quality = static_cast<int>(std::lround(std::clamp(params_[kParamQuality], 0.f, 3.f)));
   return s;
 }
 

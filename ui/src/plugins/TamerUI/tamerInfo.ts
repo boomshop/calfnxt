@@ -35,7 +35,7 @@ export const tamerInfo = {
     'Steepness of the high search filter (6…48 dB/oct). Same idea as HP Slope on the top end: steeper = tighter detector focus and less reaction to air above High. Gentler = a wider soft skirt. Start at 24–48 dB when you want a clear ceiling above the problem band.',
 
   quality:
-    'Analysis resolution vs latency. Fast = smaller FFT — snappier, coarser in the low mids, less PDC. Normal = balanced default. Studio = largest FFT — finer low-mid detail for narrow resonances, more latency reported to the host. The same FFT feeds the chart and the processing, so what you see is what is being treated.',
+    'Analysis resolution vs latency — same FFT for the chart and the processing. Fast = 1k (snappy, coarser low mids, least PDC). Normal = 2k (balanced default). Studio = 4k (finer low-mid detail for narrow resonances). Ultra = 8k (finest low-end resolution; ~2× Studio latency and CPU — only when you need it and can afford the PDC).',
 
   spectrum:
     'Display tilt for the background analyzer only (does not change the sound), pivoted at 1 kHz. Linear = raw dBFS — bright material looks brighter. −3 / −4.5 dB/oct ≈ pink-balanced views so a flat mix reads more horizontal and midrange problems are easier to spot.',

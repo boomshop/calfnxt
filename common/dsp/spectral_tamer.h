@@ -43,7 +43,7 @@ namespace Dsp {
 class SpectralTamer
 {
 public:
-  static constexpr int kMaxFft = 4096;
+  static constexpr int kMaxFft = 8192;
   static constexpr int kMaxBins = kMaxSpectrumBins;
   static constexpr int kMinBins = kMinSpectrumBins;
   static constexpr float kFloorDb = -120.f;
@@ -74,10 +74,10 @@ public:
     updateDetectFilter();
   }
 
-  /** 1024 / 2048 / 4096. Applied on next process() (no audio-thread alloc). */
+  /** 1024 / 2048 / 4096 / 8192. Applied on next process() (no audio-thread alloc). */
   void setFftSize(int size)
   {
-    if (size != 1024 && size != 2048 && size != 4096)
+    if (size != 1024 && size != 2048 && size != 4096 && size != 8192)
       size = 2048;
     pendingFft_.store(size, std::memory_order_relaxed);
   }
