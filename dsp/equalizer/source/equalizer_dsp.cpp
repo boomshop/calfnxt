@@ -195,7 +195,7 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
   if (spectrumRun)
   {
     spectrum_.setSampleRate(sampleRate_);
-    spectrum_.setFftSize(2048);
+    spectrum_.setFftSize(4096);
     spectrum_.setHold(false);
   }
 

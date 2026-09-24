@@ -161,7 +161,7 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
   if (wantSpectrum)
   {
     spectrum_.setSampleRate(sampleRate_);
-    spectrum_.setFftSize(2048);
+    spectrum_.setFftSize(4096);
     spectrum_.setHold(false);
   }
 
