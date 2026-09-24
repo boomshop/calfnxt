@@ -1,5 +1,6 @@
 import type { DynamicValue } from "@deutschesoft/awml";
 import { isVizSamples, onHostMessage, plainFromMsg, postToHost, type calfNXTMsg } from "./bridge";
+import { SPECTRUM_MAX_BINS } from "./spectrum_bins";
 
 type HostApply = (v: number) => void;
 type VizLevelsApply = (v: ArrayLike<number>) => void;
@@ -408,7 +409,7 @@ export function bindVizSpectrum(dv: DynamicValue<number[]>, id: string): () => v
       if (!Number.isFinite(x))
         return i < 2 ? 0 : -120;
       if (i === 0)
-        return Math.min(256, Math.max(1, Math.round(x)));
+        return Math.min(SPECTRUM_MAX_BINS, Math.max(1, Math.round(x)));
       if (i === 1)
         return x >= 0.5 ? 1 : 0;
       return Math.min(12, Math.max(-120, x));
@@ -434,7 +435,7 @@ export function bindVizResponse(dv: DynamicValue<number[]>, id: string): () => v
       if (!Number.isFinite(x))
         return i === 0 ? 0 : -96;
       if (i === 0)
-        return Math.min(512, Math.max(1, Math.round(x)));
+        return Math.min(SPECTRUM_MAX_BINS, Math.max(1, Math.round(x)));
       return Math.min(48, Math.max(-96, x));
     }));
   });

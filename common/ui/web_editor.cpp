@@ -3,6 +3,8 @@
 #include "ui_file_log.h"
 #include "viz_bin.h"
 
+#include "../dsp/spectrum_bins.h"
+
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/vstspeaker.h"
 
@@ -1313,13 +1315,13 @@ void WebEditor::flushViz()
 
   if (const char* spectrumId = vizSource_->vizSpectrumId())
   {
-    // Layout: bins, hold, avg[N], max[N], L[N], R[N] — max 2+4*256
-    constexpr int kMaxSpectrum = 2 + 4 * 256;
+    // Layout: bins, hold, avg[N], max[N], L[N], R[N]
+    constexpr int kMaxSpectrum = 2 + 4 * Dsp::kMaxSpectrumBins;
     float spectrum[kMaxSpectrum];
     const int nSpec = vizSource_->takeSpectrum(spectrum, kMaxSpectrum);
     if (nSpec >= 2)
     {
-      spectrum[0] = std::clamp(spectrum[0], 1.f, 256.f);
+      spectrum[0] = std::clamp(spectrum[0], 1.f, float(Dsp::kMaxSpectrumBins));
       spectrum[1] = spectrum[1] >= 0.5f ? 1.f : 0.f;
       for (int i = 2; i < nSpec; ++i)
       {
@@ -1334,13 +1336,13 @@ void WebEditor::flushViz()
 
   if (const char* respId = vizSource_->vizFreqResponseId())
   {
-    // Layout: bins, L[N], R[N] — max 1+2*512 (modulation response)
-    constexpr int kMaxResp = 1 + 2 * 512;
+    // Layout: bins, L[N], R[N]
+    constexpr int kMaxResp = 1 + 2 * Dsp::kMaxSpectrumBins;
     float resp[kMaxResp];
     const int nResp = vizSource_->takeFreqResponse(resp, kMaxResp);
     if (nResp >= 1)
     {
-      resp[0] = std::clamp(resp[0], 1.f, 512.f);
+      resp[0] = std::clamp(resp[0], 1.f, float(Dsp::kMaxSpectrumBins));
       for (int i = 1; i < nResp; ++i)
       {
         float v = resp[i];

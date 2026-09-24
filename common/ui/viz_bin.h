@@ -155,11 +155,17 @@ inline Profile profileForKind(const char* kind)
   if (!std::strcmp(kind, "gonio") || !std::strcmp(kind, "corr")
       || !std::strcmp(kind, "lfo"))
     return {Fmt::I16, 1.f / 32767.f, 0.f};
-  // dB / dBFS (centi-dB). Integer headers (spectrum bins) survive as n/0.01.
-  if (!std::strcmp(kind, "levels") || !std::strcmp(kind, "gains") || !std::strcmp(kind, "gr")
-      || !std::strcmp(kind, "bandio") || !std::strcmp(kind, "point")
-      || !std::strcmp(kind, "spectrum") || !std::strcmp(kind, "response"))
+  // dB / dBFS (centi-dB). OK while every sample stays within ±327.67
+  // (i16 × 0.01). Do **not** use for spectrum / response / gr: those carry a
+  // bin-count header that can be 512 (→ 51200), which clamps and makes the UI
+  // treat ~328 bins as full-span — mids paint into the 10–20 kHz region.
+  if (!std::strcmp(kind, "levels") || !std::strcmp(kind, "gains")
+      || !std::strcmp(kind, "bandio") || !std::strcmp(kind, "point"))
     return {Fmt::I16, 0.01f, 0.f};
+  // Bin-count header + dB body — keep f32 so N≤512 survives intact.
+  if (!std::strcmp(kind, "spectrum") || !std::strcmp(kind, "response")
+      || !std::strcmp(kind, "gr"))
+    return {};
   if (!std::strcmp(kind, "hz") || !std::strcmp(kind, "midi"))
     return {Fmt::I16, 1.f, 0.f};
   if (!std::strcmp(kind, "tempo"))

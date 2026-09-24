@@ -23,6 +23,7 @@
 #include "dsp_math.h"
 #include "fft_r2.h"
 #include "gain_util.h"
+#include "spectrum_bins.h"
 
 #include <algorithm>
 #include <atomic>
@@ -43,8 +44,8 @@ class SpectralTamer
 {
 public:
   static constexpr int kMaxFft = 4096;
-  static constexpr int kMaxBins = 256;
-  static constexpr int kMinBins = 32;
+  static constexpr int kMaxBins = kMaxSpectrumBins;
+  static constexpr int kMinBins = kMinSpectrumBins;
   static constexpr float kFloorDb = -120.f;
   /** Display spectrum ceiling (detection uses unclamped dB). */
   static constexpr float kSpecCeilDb = 0.f;

@@ -14,6 +14,7 @@
 
 #include "dsp_math.h"
 #include "fft_r2.h"
+#include "spectrum_bins.h"
 
 #include <algorithm>
 #include <atomic>
@@ -34,8 +35,8 @@ class SpectrumTap
 {
 public:
   static constexpr int kMaxFftSize = 8192;
-  static constexpr int kMaxBins = 256;
-  static constexpr int kMinBins = 32;
+  static constexpr int kMaxBins = kMaxSpectrumBins;
+  static constexpr int kMinBins = kMinSpectrumBins;
   static constexpr float kFloorDb = -120.f;
   static constexpr float kCeilDb = 0.f;
   /** Display EMA time constant (Average / L / R). */
