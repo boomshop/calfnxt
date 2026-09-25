@@ -1153,6 +1153,26 @@ void onScriptMessage(WebKitUserContentManager*, WebKitJavascriptResult* js, gpoi
   char* s = jsc_value_is_string(value) ? jsc_value_to_string(value) : jsc_value_to_json(value, 0);
   if (!s)
     return;
+  // Mouse-friendly viz capture for studio (DAW hosts often eat Inspector Enter).
+  static constexpr char kDumpPrefix[] = "DUMPVIZ\n";
+  if (std::strncmp(s, kDumpPrefix, sizeof kDumpPrefix - 1) == 0)
+  {
+    const char* body = s + (sizeof kDumpPrefix - 1);
+    const char* path = "/tmp/calfnxt-viz-dump.json";
+    FILE* f = std::fopen(path, "wb");
+    if (f)
+    {
+      const std::size_t n = std::strlen(body);
+      const bool ok = std::fwrite(body, 1, n, f) == n;
+      std::fclose(f);
+      hostLog("[calfnxt-web-host] viz dump %s (%zu bytes)%s\n", path, n,
+              ok ? "" : " — write incomplete");
+    }
+    else
+      hostLog("[calfnxt-web-host] viz dump failed: cannot open %s\n", path);
+    g_free(s);
+    return;
+  }
   sendLine(s);
   g_free(s);
 }
@@ -1405,7 +1425,12 @@ int main(int argc, char** argv)
     "window.__calfnxtUiVisible=true;"
     "window.__calfnxtVizDump=window.__calfnxtVizDump||{};"
     "window.__calfnxtDumpViz=function(){"
-    "var json=JSON.stringify(window.__calfnxtVizDump||{},null,2);"
+    "var bag=window.__calfnxtVizDump||{};"
+    "var out={};"
+    "for(var k in bag){if(!Object.prototype.hasOwnProperty.call(bag,k))continue;"
+    "var v=bag[k];out[k]=v&&typeof v.slice==='function'?Array.prototype.slice.call(v):v;}"
+    "var json=JSON.stringify(out,null,2);"
+    "try{window.webkit.messageHandlers.calfnxt.postMessage('DUMPVIZ\\n'+json);}catch(e){}"
     "console.log(json);return json;};"
     "window.__calfnxtOnHost=window.__calfnxtOnHost||function(m){"
     "if(m&&m.t==='viz'&&m.id!=null&&Array.isArray(m.v))"
@@ -1436,9 +1461,43 @@ int main(int argc, char** argv)
     "if(src.t==='midi'){"
     "if(src.cmd!=null)o.cmd=String(src.cmd);"
     "}"
+    "if(src.t==='meter'){"
+    "if(src.cmd!=null)o.cmd=String(src.cmd);"
+    "}"
     "window.webkit.messageHandlers.calfnxt.postMessage(JSON.stringify(o));}};"
     ;
-  auto* script = webkit_user_script_new(bridge, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+
+  // When Inspector/Debug is on, offer a click dump — DAWs often steal Enter.
+  std::string bridgeSrc = bridge;
+  if (envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR"))
+  {
+    bridgeSrc +=
+      "(function(){"
+      "function mount(){"
+      "if(document.getElementById('calfnxt-dump-viz'))return;"
+      "var b=document.createElement('button');"
+      "b.id='calfnxt-dump-viz';"
+      "b.type='button';"
+      "b.textContent='Dump viz';"
+      "b.title='Write /tmp/calfnxt-viz-dump.json';"
+      "b.style.cssText='position:fixed;top:4px;right:4px;z-index:2147483647;"
+      "font:12px/1.2 sans-serif;padding:6px 10px;cursor:pointer;"
+      "background:#222;color:#fff;border:1px solid #666;border-radius:3px;';"
+      "b.addEventListener('click',function(ev){"
+      "ev.preventDefault();ev.stopPropagation();"
+      "if(typeof window.__calfnxtDumpViz==='function')window.__calfnxtDumpViz();"
+      "b.textContent='Dumped';"
+      "setTimeout(function(){b.textContent='Dump viz';},1200);"
+      "});"
+      "document.documentElement.appendChild(b);"
+      "}"
+      "if(document.readyState==='loading')"
+      "document.addEventListener('DOMContentLoaded',mount);"
+      "else mount();"
+      "})();";
+  }
+
+  auto* script = webkit_user_script_new(bridgeSrc.c_str(), WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
                                         WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, nullptr, nullptr);
   webkit_user_content_manager_add_script(ucm, script);
   webkit_user_script_unref(script);

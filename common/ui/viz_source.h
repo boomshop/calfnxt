@@ -135,8 +135,8 @@ public:
   virtual const char* vizEnvelopeId() const { return "env"; }
 
   /**
-   * Spectrum snapshot: v[0]=N, v[1]=hold, then avg[N], max[N], L[N], R[N] (dBFS).
-   * Returns float count (2+4*N), or 0 if unused / unavailable.
+   * Spectrum snapshot: v[0]=N, v[1]=hold, then avg[N], max[N], L[N], R[N]
+   * and optional rms[N] (dBFS). Returns 2+4*N or 2+5*N, or 0 if unused.
    */
   virtual int takeSpectrum(float* out, int maxOut)
   {
@@ -337,6 +337,28 @@ public:
    * UI MIDI commands (`{t:"midi", cmd:"alloff"}`). Returns true if consumed.
    */
   virtual bool handleMidiCommand(const char* json)
+  {
+    (void)json;
+    return false;
+  }
+
+  /**
+   * Loudness / true-peak block (Analyzer).
+   * [M, S, I, LRA, tpL, tpR, tpMaxL, tpMaxR, spMaxL, spMaxR, timeSec,
+   *  paused, integratedValid, lraValid].
+   * Returns 14, or 0 if unused. Flushed as kind "loudness".
+   */
+  virtual int takeLoudness(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  virtual const char* vizLoudnessId() const { return nullptr; }
+
+  /** UI meter commands (`{t:"meter", cmd:"reset"|"resetpeak"}`). */
+  virtual bool handleMeterCommand(const char* json)
   {
     (void)json;
     return false;

@@ -14,7 +14,7 @@
   ],
   "editor": {
     "width": 1024,
-    "height": 480
+    "height": 720
   },
   "buses": {
     "audio_inputs": [
@@ -44,18 +44,18 @@
     },
     {
       "id": "mode",
-      "name": "Mode",
+      "name": "Waterfall",
       "type": "float",
       "unit": "",
       "min": 0.0,
-      "max": 4.0,
+      "max": 1.0,
       "default": 0.0,
       "scale": "linear",
       "precision": 0
     },
     {
       "id": "hold",
-      "name": "Hold",
+      "name": "Pause",
       "type": "float",
       "unit": "",
       "min": 0.0,
@@ -85,6 +85,39 @@
       "default": 0.0,
       "scale": "linear",
       "precision": 0
+    },
+    {
+      "id": "standard",
+      "name": "Standard",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 2.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "target",
+      "name": "Target",
+      "type": "float",
+      "unit": "LUFS",
+      "min": -36.0,
+      "max": -8.0,
+      "default": -14.0,
+      "scale": "linear",
+      "precision": 1
+    },
+    {
+      "id": "tp_ceil",
+      "name": "TP Ceiling",
+      "type": "float",
+      "unit": "dBTP",
+      "min": -6.0,
+      "max": 0.0,
+      "default": -1.0,
+      "scale": "linear",
+      "precision": 1
     }
   ]
 }

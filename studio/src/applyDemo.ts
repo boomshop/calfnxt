@@ -48,6 +48,11 @@ export type VizFixture = {
   shape?: number[];
   /** Spectrum: [bins, hold, avg×N, max×N, L×N, R×N] dBFS. */
   spectrum?: number[];
+  /**
+   * Analyzer loudness pack (BS.1770): scalars + histCount × (M, S, TP, RMS).
+   * See `LoudnessMeter::take` / analyzerHost subscribe.
+   */
+  loudness?: number[];
   /** Modulation L/R response: [bins, L×N, R×N] dB. */
   response?: number[];
   /** IR envelope: [bins, origMs, usedMs, db…]. */
@@ -247,10 +252,13 @@ export function applyAnalyzerDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
-  setNum(host.mode$, params.mode);
+  setBool(host.mode$, params.mode);
   setBool(host.hold$, params.hold);
   setNum(host.fftSize$, params.fft_size);
   setNum(host.scale$, params.scale);
+  setNum(host.standard$, params.standard);
+  setNum(host.target$, params.target);
+  setNum(host.tpCeil$, params.tp_ceil);
 
   applySharedViz(viz);
   if (typeof viz.corr === 'number')
@@ -260,6 +268,10 @@ export function applyAnalyzerDemo(
   if (viz.spectrum) {
     host.spectrum$.set(viz.spectrum);
     pushViz('fft', 'spectrum', viz.spectrum);
+  }
+  if (viz.loudness) {
+    host.loudness$.set(viz.loudness);
+    pushViz('loud', 'loudness', viz.loudness);
   }
 }
 

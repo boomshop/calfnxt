@@ -1,7 +1,10 @@
 {
   "bypass": false,
-  "mode": 2,
+  "mode": 0,
   "hold": false,
   "fft_size": 2,
-  "scale": 1
+  "scale": 1,
+  "standard": 2,
+  "target": -14,
+  "tp_ceil": -1
 }

@@ -9,8 +9,9 @@
 // Viz payload layout (kind:"spectrum"):
 //   v[0] = bins N
 //   v[1] = hold (0/1)
-//   then avg[N], max[N], L[N], R[N]  (dBFS, typically −120…0)
-// Total floats: 2 + 4*N
+//   then avg[N], max[N], L[N], R[N], rms[N]  (dBFS, typically −120…0)
+// Total floats: 2 + 5*N
+// rms is a ~1 s power-mean of L+R (mono body). avg stays the fast mid.
 
 #include "dsp_math.h"
 #include "fft_r2.h"
@@ -41,6 +42,8 @@ public:
   static constexpr float kCeilDb = 0.f;
   /** Display EMA time constant (Average / L / R). */
   static constexpr double kEmaTauSec = 0.1;
+  /** Slow RMS body (power-domain), drawn under L/R on the monitor. */
+  static constexpr double kRmsTauSec = 1.0;
 
   SpectrumTap()
   {
@@ -79,6 +82,29 @@ public:
       std::fill(maxDb_.begin(), maxDb_.end(), kFloorDb);
     hold_ = on;
   }
+
+  /** When set, the peak trace never decays (cleared only by resetPeaks). */
+  void setPeakLatch(bool on) { latchPeaks_ = on; }
+
+  void resetPeaks()
+  {
+    std::fill(maxDb_.begin(), maxDb_.end(), kFloorDb);
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::fill(pubMax_.begin(), pubMax_.end(), kFloorDb);
+  }
+
+  /** Drop live traces (L/R/RMS/average). Latched peaks stay until resetPeaks. */
+  void clearLive()
+  {
+    std::fill(avgDb_.begin(), avgDb_.end(), kFloorDb);
+    std::fill(lDb_.begin(), lDb_.end(), kFloorDb);
+    std::fill(rDb_.begin(), rDb_.end(), kFloorDb);
+    std::fill(rmsDb_.begin(), rmsDb_.end(), kFloorDb);
+    std::fill(rmsPow_.begin(), rmsPow_.end(), 0.f);
+    std::lock_guard<std::mutex> lock(mutex_);
+    publishLocked();
+  }
+
   bool hold() const { return hold_; }
 
   /** UI→DSP bin request (applied on next hop; audio-thread safe). */
@@ -98,6 +124,8 @@ public:
     std::fill(maxDb_.begin(), maxDb_.end(), kFloorDb);
     std::fill(lDb_.begin(), lDb_.end(), kFloorDb);
     std::fill(rDb_.begin(), rDb_.end(), kFloorDb);
+    std::fill(rmsDb_.begin(), rmsDb_.end(), kFloorDb);
+    std::fill(rmsPow_.begin(), rmsPow_.end(), 0.f);
     std::fill(instantL_.begin(), instantL_.end(), kFloorDb);
     std::fill(instantR_.begin(), instantR_.end(), kFloorDb);
     std::lock_guard<std::mutex> lock(mutex_);
@@ -148,10 +176,11 @@ public:
         || static_cast<int>(pubAvg_.size()) < n
         || static_cast<int>(pubMax_.size()) < n
         || static_cast<int>(pubL_.size()) < n
-        || static_cast<int>(pubR_.size()) < n)
+        || static_cast<int>(pubR_.size()) < n
+        || static_cast<int>(pubRms_.size()) < n)
       return 0;
-    const int need = 2 + 4 * n;
-    if (maxOut < need)
+    const int need = 2 + 5 * n;
+    if (maxOut < need || static_cast<int>(pubRms_.size()) < n)
       return 0;
     out[0] = static_cast<float>(n);
     out[1] = hold_ ? 1.f : 0.f;
@@ -159,6 +188,7 @@ public:
     std::memcpy(out + 2 + n, pubMax_.data(), static_cast<size_t>(n) * sizeof(float));
     std::memcpy(out + 2 + 2 * n, pubL_.data(), static_cast<size_t>(n) * sizeof(float));
     std::memcpy(out + 2 + 3 * n, pubR_.data(), static_cast<size_t>(n) * sizeof(float));
+    std::memcpy(out + 2 + 4 * n, pubRms_.data(), static_cast<size_t>(n) * sizeof(float));
     return need;
   }
 
@@ -171,7 +201,10 @@ private:
     const float alpha = static_cast<float>(
       1.0 - std::exp(-1.0 / (kEmaTauSec * hopsPerSec)));
     emaAlpha_ = std::clamp(alpha, 0.01f, 1.f);
-    // ~2 dB/s max decay when hold is off.
+    const float rmsAlpha = static_cast<float>(
+      1.0 - std::exp(-1.0 / (kRmsTauSec * hopsPerSec)));
+    rmsAlpha_ = std::clamp(rmsAlpha, 0.001f, 1.f);
+    // ~2 dB/s max decay when hold is off and peaks are not latched.
     maxDecayDb_ = static_cast<float>(2.0 / hopsPerSec);
   }
 
@@ -205,8 +238,12 @@ private:
     std::fill(maxDb_.begin(), maxDb_.end(), kFloorDb);
     std::fill(lDb_.begin(), lDb_.end(), kFloorDb);
     std::fill(rDb_.begin(), rDb_.end(), kFloorDb);
+    std::fill(rmsDb_.begin(), rmsDb_.end(), kFloorDb);
+    std::fill(rmsPow_.begin(), rmsPow_.end(), 0.f);
     std::fill(instantL_.begin(), instantL_.end(), kFloorDb);
     std::fill(instantR_.begin(), instantR_.end(), kFloorDb);
+    std::fill(powL_.begin(), powL_.end(), 0.f);
+    std::fill(powR_.begin(), powR_.end(), 0.f);
     rebuildWindow();
     updateBallistics();
     rebuildBinMap();
@@ -225,14 +262,19 @@ private:
     maxDb_.assign(static_cast<size_t>(bins_), kFloorDb);
     lDb_.assign(static_cast<size_t>(bins_), kFloorDb);
     rDb_.assign(static_cast<size_t>(bins_), kFloorDb);
+    rmsDb_.assign(static_cast<size_t>(bins_), kFloorDb);
+    rmsPow_.assign(static_cast<size_t>(bins_), 0.f);
     instantL_.assign(static_cast<size_t>(bins_), kFloorDb);
     instantR_.assign(static_cast<size_t>(bins_), kFloorDb);
+    powL_.assign(static_cast<size_t>(bins_), 0.f);
+    powR_.assign(static_cast<size_t>(bins_), 0.f);
     {
       std::lock_guard<std::mutex> lock(mutex_);
       pubAvg_.assign(static_cast<size_t>(bins_), kFloorDb);
       pubMax_.assign(static_cast<size_t>(bins_), kFloorDb);
       pubL_.assign(static_cast<size_t>(bins_), kFloorDb);
       pubR_.assign(static_cast<size_t>(bins_), kFloorDb);
+      pubRms_.assign(static_cast<size_t>(bins_), kFloorDb);
     }
     rebuildBinMap();
   }
@@ -292,8 +334,9 @@ private:
     dst = std::clamp(dst, kFloorDb, kCeilDb);
   }
 
-  /** Instantaneous peak-bin dB for one channel (no ballistics). */
-  void analyzeChannelInstant(const std::vector<float>& ring, std::vector<float>& outDb)
+  /** Instantaneous peak-bin dB plus mean-square power for one channel. */
+  void analyzeChannelInstant(
+    const std::vector<float>& ring, std::vector<float>& outDb, std::vector<float>& outPow)
   {
     const int n = fftSize_;
     const int start = ringPos_;
@@ -307,20 +350,31 @@ private:
     fftRadix2(re_.data(), im_.data(), n);
 
     const float norm = 2.f / (static_cast<float>(n) * 0.5f);
+    const float normSq = norm * norm;
 
     for (int i = 0; i < bins_; ++i)
     {
       if (!binValid_[static_cast<size_t>(i)])
       {
         outDb[static_cast<size_t>(i)] = kFloorDb;
+        outPow[static_cast<size_t>(i)] = 0.f;
         continue;
       }
       const int lo = binLo_[static_cast<size_t>(i)];
       const int hi = binHi_[static_cast<size_t>(i)];
       float peak = 0.f;
+      float sumSq = 0.f;
+      int count = 0;
       for (int k = lo; k < hi; ++k)
-        peak = std::max(peak, fftBinMag(re_.data(), im_.data(), k));
+      {
+        const float mag = fftBinMag(re_.data(), im_.data(), k);
+        peak = std::max(peak, mag);
+        sumSq += mag * mag;
+        ++count;
+      }
       outDb[static_cast<size_t>(i)] = magToDb(peak, norm);
+      outPow[static_cast<size_t>(i)] =
+        count > 0 ? (sumSq / static_cast<float>(count)) * normSq : 0.f;
     }
   }
 
@@ -330,8 +384,8 @@ private:
     if (wantBins != bins_)
       applyBins(wantBins);
 
-    analyzeChannelInstant(ringL_, instantL_);
-    analyzeChannelInstant(ringR_, instantR_);
+    analyzeChannelInstant(ringL_, instantL_, powL_);
+    analyzeChannelInstant(ringR_, instantR_, powR_);
 
     for (int i = 0; i < bins_; ++i)
     {
@@ -341,6 +395,8 @@ private:
         maxDb_[static_cast<size_t>(i)] = kFloorDb;
         lDb_[static_cast<size_t>(i)] = kFloorDb;
         rDb_[static_cast<size_t>(i)] = kFloorDb;
+        rmsDb_[static_cast<size_t>(i)] = kFloorDb;
+        rmsPow_[static_cast<size_t>(i)] = 0.f;
         continue;
       }
       const float lInst = instantL_[static_cast<size_t>(i)];
@@ -352,12 +408,25 @@ private:
         0.5f * (lDb_[static_cast<size_t>(i)] + rDb_[static_cast<size_t>(i)]);
       sanitize(avgDb_[static_cast<size_t>(i)]);
 
+      float& pow = rmsPow_[static_cast<size_t>(i)];
+      const float midPow = 0.5f * (powL_[static_cast<size_t>(i)] + powR_[static_cast<size_t>(i)]);
+      pow += rmsAlpha_ * (midPow - pow);
+      if (!(pow > 1.0e-20f))
+        rmsDb_[static_cast<size_t>(i)] = kFloorDb;
+      else
+      {
+        float db = 10.f * std::log10(pow);
+        if (!std::isfinite(db))
+          db = kFloorDb;
+        rmsDb_[static_cast<size_t>(i)] = std::clamp(db, kFloorDb, kCeilDb);
+      }
+
       // Max tracks instantaneous mid so Hold catches real peaks.
       const float midInst = 0.5f * (lInst + rInst);
       float& mx = maxDb_[static_cast<size_t>(i)];
       if (midInst > mx)
         mx = midInst;
-      else if (!hold_)
+      else if (!hold_ && !latchPeaks_)
         mx = std::max(kFloorDb, mx - maxDecayDb_);
       sanitize(mx);
     }
@@ -369,12 +438,15 @@ private:
     pubMax_ = maxDb_;
     pubL_ = lDb_;
     pubR_ = rDb_;
+    pubRms_ = rmsDb_;
   }
 
   double sampleRate_ = 48000.0;
   float emaAlpha_ = 0.2f;
+  float rmsAlpha_ = 0.05f;
   float maxDecayDb_ = 0.05f;
   bool hold_ = false;
+  bool latchPeaks_ = false;
   int fftSize_ = 0;
   int hopSize_ = 512;
   int bins_ = 0;
@@ -397,12 +469,17 @@ private:
   std::vector<float> maxDb_;
   std::vector<float> lDb_;
   std::vector<float> rDb_;
+  std::vector<float> rmsDb_;
+  std::vector<float> rmsPow_;
+  std::vector<float> powL_;
+  std::vector<float> powR_;
 
   std::mutex mutex_;
   std::vector<float> pubAvg_;
   std::vector<float> pubMax_;
   std::vector<float> pubL_;
   std::vector<float> pubR_;
+  std::vector<float> pubRms_;
 };
 
 } // namespace Dsp

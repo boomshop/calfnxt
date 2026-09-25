@@ -23,6 +23,7 @@ const vizPointApplies = new Map<string, VizLevelsApply>();
 const vizShapeApplies = new Map<string, VizLevelsApply>();
 const vizTempoApplies = new Map<string, VizLevelsApply>();
 const vizSpectrumApplies = new Map<string, VizLevelsApply>();
+const vizLoudnessApplies = new Map<string, VizLevelsApply>();
 const vizResponseApplies = new Map<string, VizLevelsApply>();
 const vizCombApplies = new Map<string, VizLevelsApply>();
 const vizLadderApplies = new Map<string, VizLevelsApply>();
@@ -111,6 +112,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizTempoApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "spectrum" && isVizSamples(msg.v))
     vizSpectrumApplies.get(msg.id)?.(msg.v);
+  if (msg.t === "viz" && msg.kind === "loudness" && isVizSamples(msg.v))
+    vizLoudnessApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "response" && isVizSamples(msg.v))
     vizResponseApplies.get(msg.id)?.(msg.v);
   if (msg.t === "viz" && msg.kind === "comb" && isVizSamples(msg.v))
@@ -398,6 +401,17 @@ export function bindVizShape(dv: DynamicValue<number[]>, id: string): () => void
  * Wire spectrum payload (id e.g. "fft"):
  * [bins, hold, avg×N, max×N, L×N, R×N] in dBFS (−120…12).
  */
+/** Analyzer loudness block (M/S/I/LRA/true peak/time). */
+export function bindVizLoudness(dv: DynamicValue<number[]>, id: string): () => void {
+  ensureHostWire();
+  vizLoudnessApplies.set(id, (v) => {
+    dv.set(Array.from(v));
+  });
+  return () => {
+    vizLoudnessApplies.delete(id);
+  };
+}
+
 export function bindVizSpectrum(dv: DynamicValue<number[]>, id: string): () => void {
   ensureHostWire();
   vizSpectrumApplies.set(id, (v) => {

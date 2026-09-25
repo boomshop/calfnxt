@@ -13,13 +13,15 @@ export type calfNXTMsg =
   /** Host→UI: bus channel counts (`ch` = out, legacy; `in`/`out` when they differ). */
   | { t: "io"; ch: number; in?: number; out?: number }
   /** DSP→UI telemetry (meters / charts). `v` is often a Float32Array from binary viz. */
-  | { t: "viz"; id: string; kind: "levels" | "unit" | "spectrum" | "gains" | "corr" | "gonio" | "envelope" | "pitch" | "midi" | "gr" | "bandio" | "point" | "tempo" | "shape" | "hz" | "ctrl" | "lfo" | "response" | "comb" | "ladder" | "wave"; v: number[] | Float32Array }
+  | { t: "viz"; id: string; kind: "levels" | "unit" | "spectrum" | "gains" | "corr" | "gonio" | "envelope" | "pitch" | "midi" | "gr" | "bandio" | "point" | "tempo" | "shape" | "hz" | "ctrl" | "lfo" | "response" | "comb" | "ladder" | "wave" | "loudness"; v: number[] | Float32Array }
   /** UI→host viz config (e.g. FFT bin count from pixel width). */
   | { t: "vizcfg"; id: string; bins?: number }
   /** Editor viz flush rate (Hz), default 30. */
   | { t: "vizhz"; hz: number }
   /** Tuner: clear held MIDI note override (`cmd:"alloff"`). */
   | { t: "midi"; cmd: string }
+  /** Analyzer: reset integrated loudness (`reset`) or latched spectrum peaks (`resetpeak`). */
+  | { t: "meter"; cmd: string }
   /** Impulse library: browse / select / tree / status. */
   | { t: "ir"; cmd: string; path?: string; root?: string; sel?: string; status?: string; tree?: IrNode[]; open?: string[]; scroll?: number };
 
@@ -72,6 +74,10 @@ function vizSamplesForDump(v: ArrayLike<number>): number[] | Float32Array {
   return Array.from(v);
 }
 
+/**
+ * Snapshot bag → JSON. Also posts DUMPVIZ to calfnxt-web-host, which writes
+ * `/tmp/calfnxt-viz-dump.json` (for studio import when the DAW eats Enter).
+ */
 function installVizDumpApi(): void {
   // Keep / refresh the classic global (web-host injects a stub at document start).
   window.__calfnxtDumpViz = () => {
@@ -84,6 +90,16 @@ function installVizDumpApi(): void {
       void navigator.clipboard?.writeText(json);
     } catch {
       /* WebKit may deny clipboard without a gesture — still return the string. */
+    }
+    try {
+      const wh = (
+        window as Window & {
+          webkit?: { messageHandlers?: { calfnxt?: { postMessage: (m: string) => void } } };
+        }
+      ).webkit?.messageHandlers?.calfnxt;
+      wh?.postMessage(`DUMPVIZ\n${json}`);
+    } catch {
+      /* Host-only path; ignore in Vite / studio. */
     }
     console.log(json);
     return json;

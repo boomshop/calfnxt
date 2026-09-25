@@ -64,6 +64,17 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         viz["spectrum"] = d["fft:spectrum"]
     if "tamer:response" in d:
         viz["response"] = d["tamer:response"]
+    if "loud:loudness" in d:
+        viz["loudness"] = d["loud:loudness"]
+    # Analyzer / Stereo share the stereo viz id for gonio + correlation.
+    if "stereo:gonio" in d:
+        viz["gonio"] = d["stereo:gonio"]
+    if "stereo:corr" in d:
+        corr = d["stereo:corr"]
+        if isinstance(corr, list) and corr:
+            viz["corr"] = float(corr[0])
+        elif isinstance(corr, (int, float)):
+            viz["corr"] = float(corr)
     # Generic response / spectrum aliases used by some plugins.
     for src, dst in (
         ("mod:response", "response"),

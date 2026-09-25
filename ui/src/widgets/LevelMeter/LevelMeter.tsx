@@ -9,6 +9,9 @@ import './LevelMeter.scss';
 
 const LevelMeterBindings = {
   value$: { name: 'value' },
+  base$: { name: 'base' },
+  top$: { name: 'top' },
+  bottom$: { name: 'bottom' },
 };
 
 /**

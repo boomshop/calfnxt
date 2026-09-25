@@ -14,7 +14,8 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5855u; // 'CNXU'
-constexpr uint32 kStateVersion = 1;
+constexpr uint32 kStateVersion = 2;
+constexpr int kStateV1Count = 7;
 } // namespace
 
 AnalyzerPlugin::AnalyzerPlugin()
@@ -40,8 +41,11 @@ tresult PLUGIN_API AnalyzerPlugin::setActive(TBool state)
   {
     spectrum_.setSampleRate(sampleRate_);
     spectrum_.reset();
+    spectrum_.setPeakLatch(true);
     fieldTap_.setSampleRate(sampleRate_);
     fieldTap_.clearDisplay();
+    loudness_.setSampleRate(sampleRate_);
+    loudness_.reset();
   }
   return EffectBase::setActive(state);
 }
@@ -51,6 +55,7 @@ tresult PLUGIN_API AnalyzerPlugin::setupProcessing(ProcessSetup& newSetup)
   sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
   spectrum_.setSampleRate(sampleRate_);
   fieldTap_.setSampleRate(sampleRate_);
+  loudness_.setSampleRate(sampleRate_);
   return EffectBase::setupProcessing(newSetup);
 }
 
@@ -59,8 +64,9 @@ tresult PLUGIN_API AnalyzerPlugin::process(ProcessData& data)
   syncParamPlains(data, params_, kParamCount);
 
   const bool bypass = params_[kParamBypass] >= 0.5f;
-  const bool hold = params_[kParamHold] >= 0.5f;
-  spectrum_.setHold(hold);
+  spectrum_.setPeakLatch(true);
+  spectrum_.setHold(false);
+  loudness_.setPaused(params_[kParamHold] >= 0.5f);
 
   const int fftSel = static_cast<int>(std::lround(std::clamp(params_[kParamFftSize], 0.f, 3.f)));
   static constexpr int kFftSizes[4] = {1024, 2048, 4096, 8192};
@@ -71,62 +77,87 @@ tresult PLUGIN_API AnalyzerPlugin::process(ProcessData& data)
 
   const bool hasHostAudio = io_.begin(data);
   const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
-  // Quiet or UI hidden: skip FFT/gonio — keep last display frame.
-  if (quietIn || !vizConsumerActive())
-  {
-    if (hasHostAudio)
-      io_.end(data);
-    return kResultOk;
-  }
-
-  // Tap after in_gain (IoStage writes to outs); before out_gain (end).
-  const int32 nFrames = data.numSamples;
-  if (data.symbolicSampleSize == kSample32)
-  {
-    auto** out = data.outputs[0].channelBuffers32;
-    const int32 nCh = data.outputs[0].numChannels;
-    if (!bypass)
-    {
-      for (int32 i = 0; i < nFrames; ++i)
-      {
-        const float L = nCh > 0 ? out[0][i] : 0.f;
-        const float R = nCh > 1 ? out[1][i] : L;
-        spectrum_.process(L, R);
-        fieldTap_.process(L, R);
-      }
-      spectrum_.publish();
-      fieldTap_.publish();
-    }
-    else
-    {
-      spectrum_.clearDisplay();
-      fieldTap_.clearDisplay();
-    }
-  }
+  const bool drawField = hasHostAudio && !bypass && !quietIn && vizConsumerActive();
+  if (quietIn)
+    quietSamples_ += data.numSamples;
   else
+    quietSamples_ = 0;
+  const bool silenceHold =
+    quietIn && quietSamples_ > static_cast<int>(sampleRate_ * 0.4);
+
+  // Spectrum / gonio: after in_gain, before out_gain. Skip when the UI is hidden.
+  if (bypass && vizConsumerActive())
   {
-    auto** out = data.outputs[0].channelBuffers64;
-    const int32 nCh = data.outputs[0].numChannels;
-    if (!bypass)
+    spectrum_.clearDisplay();
+    fieldTap_.clearDisplay();
+  }
+  else if (drawField && data.numOutputs > 0)
+  {
+    const int32 nFrames = data.numSamples;
+    if (data.symbolicSampleSize == kSample32)
     {
+      auto** out = data.outputs[0].channelBuffers32;
+      const int32 nCh = data.outputs[0].numChannels;
       for (int32 i = 0; i < nFrames; ++i)
       {
-        const float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
-        const float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
+        const float L = nCh > 0 && out[0] ? out[0][i] : 0.f;
+        const float R = nCh > 1 && out[1] ? out[1][i] : L;
         spectrum_.process(L, R);
         fieldTap_.process(L, R);
       }
-      spectrum_.publish();
-      fieldTap_.publish();
     }
     else
     {
-      spectrum_.clearDisplay();
-      fieldTap_.clearDisplay();
+      auto** out = data.outputs[0].channelBuffers64;
+      const int32 nCh = data.outputs[0].numChannels;
+      for (int32 i = 0; i < nFrames; ++i)
+      {
+        const float L = nCh > 0 && out[0] ? static_cast<float>(out[0][i]) : 0.f;
+        const float R = nCh > 1 && out[1] ? static_cast<float>(out[1][i]) : L;
+        spectrum_.process(L, R);
+        fieldTap_.process(L, R);
+      }
     }
+    spectrum_.publish();
+    fieldTap_.publish();
+  }
+  else if (silenceHold && vizConsumerActive())
+  {
+    spectrum_.clearLive();
+    fieldTap_.clearDisplay();
   }
 
-  io_.end(data);
+  if (hasHostAudio)
+    io_.end(data);
+
+  // Loudness sees the signal that leaves the plugin (after out_gain), even
+  // while the editor is closed or the FFT is skipped.
+  if (hasHostAudio && data.numOutputs > 0)
+  {
+    const int32 nFrames = data.numSamples;
+    if (data.symbolicSampleSize == kSample32)
+    {
+      auto** out = data.outputs[0].channelBuffers32;
+      const int32 nCh = data.outputs[0].numChannels;
+      for (int32 i = 0; i < nFrames; ++i)
+      {
+        const float L = nCh > 0 && out[0] ? out[0][i] : 0.f;
+        const float R = nCh > 1 && out[1] ? out[1][i] : L;
+        loudness_.process(L, R);
+      }
+    }
+    else
+    {
+      auto** out = data.outputs[0].channelBuffers64;
+      const int32 nCh = data.outputs[0].numChannels;
+      for (int32 i = 0; i < nFrames; ++i)
+      {
+        const float L = nCh > 0 && out[0] ? static_cast<float>(out[0][i]) : 0.f;
+        const float R = nCh > 1 && out[1] ? static_cast<float>(out[1][i]) : L;
+        loudness_.process(L, R);
+      }
+    }
+  }
   return kResultOk;
 }
 
@@ -148,6 +179,28 @@ int AnalyzerPlugin::takeSpectrum(float* out, int maxOut)
   return spectrum_.takeSpectrum(out, maxOut);
 }
 
+int AnalyzerPlugin::takeLoudness(float* out, int maxOut)
+{
+  return loudness_.take(out, maxOut);
+}
+
+bool AnalyzerPlugin::handleMeterCommand(const char* json)
+{
+  if (!json)
+    return false;
+  if (std::strstr(json, "resetpeak"))
+  {
+    spectrum_.resetPeaks();
+    return true;
+  }
+  if (std::strstr(json, "reset"))
+  {
+    loudness_.reset();
+    return true;
+  }
+  return false;
+}
+
 void AnalyzerPlugin::configureVizBins(const char* id, int bins)
 {
   if (!id || bins < 1)
@@ -167,16 +220,25 @@ tresult PLUGIN_API AnalyzerPlugin::setState(IBStream* state)
   int32 count = 0;
   if (!streamer.readInt32u(magic) || magic != kStateMagic)
     return kResultFalse;
-  if (!streamer.readInt32u(version) || version != kStateVersion)
+  if (!streamer.readInt32u(version) || version < 1 || version > kStateVersion)
     return kResultFalse;
-  if (!streamer.readInt32(count) || count != kParamCount)
+  if (!streamer.readInt32(count) || count < kStateV1Count || count > kParamCount)
     return kResultFalse;
 
-  float plains[kParamCount];
-  for (int i = 0; i < kParamCount; ++i)
+  float plains[kParamCount] {};
+  for (int i = 0; i < count; ++i)
   {
     if (!streamer.readFloat(plains[i]))
       return kResultFalse;
+  }
+  if (version < 2)
+  {
+    // v1 mode was Average…Spectralizer. Only Spectralizer maps to the waterfall.
+    plains[kParamMode] = (std::lround(plains[kParamMode]) == 4) ? 1.f : 0.f;
+    plains[kParamHold] = 0.f;
+    plains[kParamStandard] = 2.f;
+    plains[kParamTarget] = -14.f;
+    plains[kParamTpCeil] = -1.f;
   }
   for (int i = 0; i < kParamCount; ++i)
   {

@@ -7,10 +7,16 @@ import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { themeColors$ } from '../../theme/themeColors';
-import { SPECTRUM_MAX_BINS, SPECTRUM_MIN_BINS } from '../../utils/spectrum_bins';
+import {
+  SPECTRUM_MAX_BINS,
+  SPECTRUM_MIN_BINS,
+} from '../../utils/spectrum_bins';
 import './SpectrumChart.scss';
 
-export { SPECTRUM_MAX_BINS, SPECTRUM_MIN_BINS } from '../../utils/spectrum_bins';
+export {
+  SPECTRUM_MAX_BINS,
+  SPECTRUM_MIN_BINS,
+} from '../../utils/spectrum_bins';
 
 /** Stable empty default — never inline `[]` in hook deps / subscribe fallbacks. */
 const EMPTY_SPECTRUM: number[] = [];
@@ -69,8 +75,9 @@ export function binToHz(i: number, bins: number): number {
 export function hzToBin(hz: number, bins: number): number {
   const n = Math.max(1, bins);
   if (!(hz > 0)) return 0;
-  const t = Math.log(Math.min(F_MAX, Math.max(F_MIN, hz)) / F_MIN)
-    / Math.log(F_MAX / F_MIN);
+  const t =
+    Math.log(Math.min(F_MAX, Math.max(F_MIN, hz)) / F_MIN) /
+    Math.log(F_MAX / F_MIN);
   return Math.max(0, Math.min(n - 1, Math.floor(t * n)));
 }
 
@@ -118,17 +125,17 @@ function catmullRomPoint(
   const t2 = t * t;
   const t3 = t2 * t;
   const x =
-    0.5
-    * (2 * p1.x
-      + (-p0.x + p2.x) * t
-      + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2
-      + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
+    0.5 *
+    (2 * p1.x +
+      (-p0.x + p2.x) * t +
+      (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+      (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
   const y =
-    0.5
-    * (2 * p1.y
-      + (-p0.y + p2.y) * t
-      + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2
-      + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
+    0.5 *
+    (2 * p1.y +
+      (-p0.y + p2.y) * t +
+      (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+      (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
   return { x, y };
 }
 
@@ -184,20 +191,31 @@ export function catmullRomDensify(
 }
 
 /** SPAN-style tilt: add slope·log2(f/1k) so pink looks flat. */
-export function tiltDb(db: number, freqHz: number, slopePerOct: number): number {
+export function tiltDb(
+  db: number,
+  freqHz: number,
+  slopePerOct: number,
+): number {
   if (!(slopePerOct > 0) || !(freqHz > 0)) return db;
   return db + slopePerOct * Math.log2(freqHz / 1000);
 }
 
-function buildDbGridY(min: number, max: number, step: number, labelStep: number) {
+export function buildDbGridY(
+  min: number,
+  max: number,
+  step: number,
+  labelStep: number,
+) {
   const lines: { pos: number; label?: string; class?: string }[] = [];
   const start = Math.ceil(min / step) * step;
   for (let db = start; db <= max; db += step) {
     const major = db % labelStep === 0;
+    const base = db === 0;
+    const cls = '' + (major ? 'major ' : '') + (base ? 'base' : '');
     lines.push({
       pos: db,
       label: major ? `${db}` : undefined,
-      class: major ? 'major' : undefined,
+      class: cls,
     });
   }
   return lines;
@@ -235,7 +253,7 @@ const FREQ_GRID_MARKS: { hz: number; label?: string }[] = [
   { hz: 20000, label: '20kHz' },
 ];
 
-function buildFreqGridX(bins: number) {
+export function buildFreqGridX(bins: number) {
   const lines: { pos: number; label?: string; class?: string }[] = [];
   for (const mark of FREQ_GRID_MARKS) {
     if (mark.hz < F_MIN || mark.hz > F_MAX) continue;
@@ -289,9 +307,13 @@ export type SpectrumPayload = {
   max: Float32Array;
   L: Float32Array;
   R: Float32Array;
+  /** ~1 s power-mean body. Absent on older 4-series payloads. */
+  rms: Float32Array | null;
 };
 
-export function parseSpectrumPayload(v: number[] | null | undefined): SpectrumPayload | null {
+export function parseSpectrumPayload(
+  v: number[] | null | undefined,
+): SpectrumPayload | null {
   if (!v || v.length < 2) return null;
   const bins = Math.max(1, Math.min(SPECTRUM_MAX_BINS, Math.round(v[0] ?? 0)));
   const need = 2 + 4 * bins;
@@ -303,6 +325,10 @@ export function parseSpectrumPayload(v: number[] | null | undefined): SpectrumPa
     max: Float32Array.from(v.slice(2 + bins, 2 + 2 * bins)),
     L: Float32Array.from(v.slice(2 + 2 * bins, 2 + 3 * bins)),
     R: Float32Array.from(v.slice(2 + 3 * bins, 2 + 4 * bins)),
+    rms:
+      v.length >= 2 + 5 * bins
+        ? Float32Array.from(v.slice(2 + 4 * bins, 2 + 5 * bins))
+        : null,
   };
 }
 
@@ -360,12 +386,12 @@ export function smoothSeriesY(
       let avg: number;
       if (wide && i >= 2 && i < n - 2) {
         avg =
-          (cur[i - 2]!
-            + 4 * cur[i - 1]!
-            + 6 * cur[i]!
-            + 4 * cur[i + 1]!
-            + cur[i + 2]!)
-          / 16;
+          (cur[i - 2]! +
+            4 * cur[i - 1]! +
+            6 * cur[i]! +
+            4 * cur[i + 1]! +
+            cur[i + 2]!) /
+          16;
       } else {
         avg = 0.25 * cur[i - 1]! + 0.5 * cur[i]! + 0.25 * cur[i + 1]!;
       }
@@ -404,7 +430,7 @@ export function spectrumPxPerBin(cssWidth: number, bins: number): number {
   return w / n;
 }
 
-function seriesDots(
+export function seriesDots(
   data: Float32Array,
   bins: number,
   yMin = SPECTRUM_DB_MIN,
@@ -426,8 +452,7 @@ function seriesDots(
   const first = smoothed[0]!;
   const last = smoothed[bins - 1]!;
   const mid: { x: number; y: number }[] = [];
-  for (let i = 0; i < bins; ++i)
-    mid.push({ x: i + 0.5, y: smoothed[i]! });
+  for (let i = 0; i < bins; ++i) mid.push({ x: i + 0.5, y: smoothed[i]! });
   // CR in bin-index space; density ≤ ~1 pt/CSS-px (see catmullRomDensify).
   const curved = catmullRomDensify(mid, pxPerBin * bins, 'linear');
   return [
@@ -450,7 +475,10 @@ function midbandMean(data: Float32Array, bins: number, slope: number): number {
   return n > 0 ? sum / n : -24;
 }
 
-function corridorBandStyle(centerDb: number, half: number): { top: string; height: string } {
+function corridorBandStyle(
+  centerDb: number,
+  half: number,
+): { top: string; height: string } {
   const yLo = Math.max(SPECTRUM_DB_MIN, centerDb - half);
   const yHi = Math.min(SPECTRUM_DB_MAX, centerDb + half);
   const range = SPECTRUM_DB_MAX - SPECTRUM_DB_MIN;
@@ -463,10 +491,45 @@ function lerpByte(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);
 }
 
+/** Waterfall on black: −66 black, −54 accent, −32 warn, −18 white. */
+const WF_BLACK_DB = -66;
+const WF_ACCENT_DB = -54;
+const WF_WARN_DB = -32;
+const WF_WHITE_DB = -18;
+const WF_BLACK: [number, number, number] = [0, 0, 0];
+const WF_WHITE: [number, number, number] = [255, 255, 255];
+
+function waterfallPixel(
+  db: number,
+  accent: [number, number, number],
+  warn: [number, number, number],
+): [number, number, number, number] {
+  const mix = (
+    a: [number, number, number],
+    b: [number, number, number],
+    t: number,
+  ): [number, number, number, number] => {
+    const u = Math.min(1, Math.max(0, t));
+    return [
+      lerpByte(a[0], b[0], u),
+      lerpByte(a[1], b[1], u),
+      lerpByte(a[2], b[2], u),
+      255,
+    ];
+  };
+  if (db <= WF_BLACK_DB) return [0, 0, 0, 0];
+  if (db >= WF_WHITE_DB) return [255, 255, 255, 255];
+  if (db < WF_ACCENT_DB)
+    return mix(WF_BLACK, accent, (db - WF_BLACK_DB) / (WF_ACCENT_DB - WF_BLACK_DB));
+  if (db < WF_WARN_DB)
+    return mix(accent, warn, (db - WF_ACCENT_DB) / (WF_WARN_DB - WF_ACCENT_DB));
+  return mix(warn, WF_WHITE, (db - WF_WARN_DB) / (WF_WHITE_DB - WF_WARN_DB));
+}
+
 function parseCssColor(c: string): [number, number, number] {
-  const hex = c.trim();
-  if (hex.startsWith('#') && (hex.length === 7 || hex.length === 4)) {
-    const s = hex.slice(1);
+  const raw = c.trim();
+  if (raw.startsWith('#') && (raw.length === 7 || raw.length === 4)) {
+    const s = raw.slice(1);
     if (s.length === 3) {
       return [
         parseInt(s[0] + s[0], 16),
@@ -480,9 +543,19 @@ function parseCssColor(c: string): [number, number, number] {
       parseInt(s.slice(4, 6), 16),
     ];
   }
-  const m = hex.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
-  if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
-  return [80, 180, 220];
+  const rgb = raw.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  // Theme accents are often hsl(); getPropertyValue does not resolve them.
+  if (typeof document !== 'undefined') {
+    const probe = document.createElement('span');
+    probe.style.color = raw;
+    document.documentElement.appendChild(probe);
+    const computed = getComputedStyle(probe).color;
+    probe.remove();
+    const m = computed.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
+    if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
+  }
+  return [0, 102, 255];
 }
 
 export interface SpectrumChartProps {
@@ -492,6 +565,11 @@ export interface SpectrumChartProps {
   /** 0 Linear / 1 −3 dB/oct / 2 −4.5 dB/oct */
   scale?: number;
   hold: boolean;
+  /**
+   * Monitor layout: L, R, slow RMS and latched peak together.
+   * Waterfall still uses `mode === Spectralizer`.
+   */
+  monitor?: boolean;
   vizId?: string;
   className?: string;
 }
@@ -506,6 +584,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
     mode,
     scale = 0,
     hold,
+    monitor = false,
     vizId = SPECTRUM_VIZ_ID,
     className,
   } = props;
@@ -518,6 +597,8 @@ export function SpectrumChart(props: SpectrumChartProps) {
   const dataLatestRef = useRef<number[]>(EMPTY_SPECTRUM);
   const modeRef = useRef(mode);
   const holdRef = useRef(hold);
+  const monitorRef = useRef(monitor);
+  monitorRef.current = monitor;
   const scaleRef = useRef(scale);
   const binsRef = useRef(128);
   const chartWidthRef = useRef(0);
@@ -552,7 +633,10 @@ export function SpectrumChart(props: SpectrumChartProps) {
     (el: Element) => {
       const width = Math.round(el.getBoundingClientRect().width);
       chartWidthRef.current = Math.max(1, width);
-      const next = Math.max(SPECTRUM_MIN_BINS, Math.min(SPECTRUM_MAX_BINS, width));
+      const next = Math.max(
+        SPECTRUM_MIN_BINS,
+        Math.min(SPECTRUM_MAX_BINS, width),
+      );
       postToHost({ t: 'vizcfg', id: vizId, bins: next });
     },
     [vizId],
@@ -589,30 +673,21 @@ export function SpectrumChart(props: SpectrumChartProps) {
       img.data.fill(0, (h - 1) * rowBytes);
 
       const colors = themeColors$.value;
-      const [ar, ag, ab] = parseCssColor(colors.accent);
-      const [wr, wg, wb] = parseCssColor(colors.warn);
+      const accent = parseCssColor(colors.accent);
+      const warn = parseCssColor(colors.warn);
       const n = payload.bins;
       const y0 = (h - 1) * rowBytes;
-      const range = SPECTRUM_DB_MAX - SPECTRUM_DB_MIN;
 
       for (let x = 0; x < w; ++x) {
         const bin = Math.min(n - 1, Math.floor((x / w) * n));
         const raw = payload.avg[bin] ?? SPECTRUM_DSP_FLOOR_DB;
         const db = tiltDb(raw, binToHz(bin, n), slope);
-        const t = Math.min(1, Math.max(0, (db - SPECTRUM_DB_MIN) / range));
+        const [r, g, b, a] = waterfallPixel(db, accent, warn);
         const i = y0 + x * 4;
-        if (t < 0.015) {
-          img.data[i] = 0;
-          img.data[i + 1] = 0;
-          img.data[i + 2] = 0;
-          img.data[i + 3] = 0;
-        } else {
-          img.data[i] = lerpByte(ar, wr, t);
-          img.data[i + 1] = lerpByte(ag, wg, t);
-          img.data[i + 2] = lerpByte(ab, wb, t);
-          // Opacity tracks level: silence → 0, full scale → 1.
-          img.data[i + 3] = Math.round(t * 255);
-        }
+        img.data[i] = r;
+        img.data[i + 1] = g;
+        img.data[i + 2] = b;
+        img.data[i + 3] = a;
       }
 
       ctx.putImageData(img, 0, 0);
@@ -629,8 +704,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
 
       if (m === SPECTRUM_MODE.Spectralizer) {
         paintWaterfall(payload, slope);
-        if (corridorElRef.current)
-          corridorElRef.current.hidden = true;
+        if (corridorElRef.current) corridorElRef.current.hidden = true;
         return null;
       }
 
@@ -658,9 +732,44 @@ export function SpectrumChart(props: SpectrumChartProps) {
         );
       }
 
-      const [g0, g1, gHold] = graphs;
+      const [g0, g1, gHold, gPeak] = graphs;
       if (m !== SPECTRUM_MODE.Difference)
-        gHold?.element?.classList.remove('spec-diff');
+        (gPeak ?? gHold)?.element?.classList.remove('spec-diff');
+
+      if (monitorRef.current && m !== SPECTRUM_MODE.Spectralizer) {
+        chart.set('range_y', { min: SPECTRUM_DB_MIN, max: SPECTRUM_DB_MAX });
+        chart.set(
+          'grid_y',
+          buildDbGridY(SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, DB_GRID, DB_LABEL),
+        );
+        const px = spectrumPxPerBin(chartWidthRef.current, payload.bins);
+        const dots = (data: Float32Array, s = slope) =>
+          seriesDots(
+            data,
+            payload.bins,
+            SPECTRUM_DB_MIN,
+            SPECTRUM_DB_MAX,
+            s,
+            px,
+          );
+        const rms = payload.rms ?? payload.avg;
+        g1?.set('dots', dots(payload.L, slope));
+        gHold?.set('dots', dots(payload.R, slope));
+        gPeak?.set('dots', dots(payload.max, slope));
+        const band = corridorElRef.current;
+        if (band && slope > 0) {
+          const center = midbandMean(rms, payload.bins, slope);
+          const st = corridorBandStyle(center, CORRIDOR_HALF_DB);
+          band.hidden = false;
+          band.style.top = st.top;
+          band.style.height = st.height;
+        } else if (band) {
+          band.hidden = true;
+        }
+        gPeak?.toFront?.();
+        reassertRef.current();
+        return dots(rms, slope);
+      }
 
       let primary: { x: number; y: number }[] | null = null;
       g1?.set('dots', null);
@@ -690,7 +799,9 @@ export function SpectrumChart(props: SpectrumChartProps) {
           diffSmoothRef.current = smooth;
         }
         for (let i = 0; i < payload.bins; ++i) {
-          const d = (payload.L[i] ?? SPECTRUM_DSP_FLOOR_DB) - (payload.R[i] ?? SPECTRUM_DSP_FLOOR_DB);
+          const d =
+            (payload.L[i] ?? SPECTRUM_DSP_FLOOR_DB) -
+            (payload.R[i] ?? SPECTRUM_DSP_FLOOR_DB);
           smooth[i] = DIFF_EMA * smooth[i]! + (1 - DIFF_EMA) * d;
         }
         gHold?.set('dots', dots(smooth, -24, 24, 0));
@@ -701,9 +812,11 @@ export function SpectrumChart(props: SpectrumChartProps) {
       // Filled midband corridor in tilted Average/Max/Stereo views.
       const band = corridorElRef.current;
       if (
-        band
-        && slope > 0
-        && (m === SPECTRUM_MODE.Average || m === SPECTRUM_MODE.Max || m === SPECTRUM_MODE.Stereo)
+        band &&
+        slope > 0 &&
+        (m === SPECTRUM_MODE.Average ||
+          m === SPECTRUM_MODE.Max ||
+          m === SPECTRUM_MODE.Stereo)
       ) {
         const src = m === SPECTRUM_MODE.Max ? payload.max : payload.avg;
         const center = midbandMean(src, payload.bins, slope);
@@ -741,7 +854,9 @@ export function SpectrumChart(props: SpectrumChartProps) {
         readonly: true,
         transformReceive: (raw: unknown) => {
           const next =
-            Array.isArray(raw) && raw.length ? (raw as number[]) : EMPTY_SPECTRUM;
+            Array.isArray(raw) && raw.length
+              ? (raw as number[])
+              : EMPTY_SPECTRUM;
           dataLatestRef.current = next;
           return buildPoints(next);
         },
@@ -775,12 +890,54 @@ export function SpectrumChart(props: SpectrumChartProps) {
       // Idempotent: use-aux-widgets re-calls widgetRef when the callback
       // identity changes, without nulling the old ref — never double-add.
       if (graphsRef.current.length === 0) {
-        const specs = [
-          // L + Y-smooth + densify. AUX T (quadratic Bézier) grain/rings on dense dots.
-          { className: 'spec-primary', mode: 'bottom' as const, gradient: true, type: 'L' },
-          { className: 'spec-secondary', mode: 'bottom' as const, gradient: false, type: 'L' },
-          { className: 'spec-hold', mode: 'line' as const, gradient: false, type: 'L' },
-        ];
+        const specs = monitorRef.current
+          ? [
+              {
+                className: 'spec-rms',
+                mode: 'line' as const,
+                gradient: false,
+                type: 'L',
+              },
+              {
+                className: 'spec-primary',
+                mode: 'line' as const,
+                gradient: false,
+                type: 'L',
+              },
+              {
+                className: 'spec-secondary',
+                mode: 'line' as const,
+                gradient: false,
+                type: 'L',
+              },
+              {
+                className: 'spec-hold',
+                mode: 'line' as const,
+                gradient: false,
+                type: 'L',
+              },
+            ]
+          : [
+              // L + Y-smooth + densify. AUX T (quadratic Bézier) grain/rings on dense dots.
+              {
+                className: 'spec-primary',
+                mode: 'bottom' as const,
+                gradient: true,
+                type: 'L',
+              },
+              {
+                className: 'spec-secondary',
+                mode: 'bottom' as const,
+                gradient: false,
+                type: 'L',
+              },
+              {
+                className: 'spec-hold',
+                mode: 'line' as const,
+                gradient: false,
+                type: 'L',
+              },
+            ];
         const aux: AuxGraph[] = [];
         const grads: SVGElement[] = [];
         for (const spec of specs) {
@@ -819,21 +976,18 @@ export function SpectrumChart(props: SpectrumChartProps) {
   );
 
   /** Spectralizer: AUX Chart used only as frequency/dB grid overlay. */
-  const gridAttach = useCallback(
-    (chart: AuxChartInstance) => {
-      if (chart.isDestructed?.()) return;
-      const b = binsRef.current;
-      chart.set('range_x', { min: 0, max: b });
-      chart.set('grid_x', buildFreqGridX(b));
-      chart.set('range_y', { min: SPECTRUM_DB_MIN, max: SPECTRUM_DB_MAX });
-      chart.set(
-        'grid_y',
-        buildDbGridY(SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, DB_GRID, DB_LABEL),
-      );
-      chart.set('show_grid', true);
-    },
-    [],
-  );
+  const gridAttach = useCallback((chart: AuxChartInstance) => {
+    if (chart.isDestructed?.()) return;
+    const b = binsRef.current;
+    chart.set('range_x', { min: 0, max: b });
+    chart.set('grid_x', buildFreqGridX(b));
+    chart.set('range_y', { min: SPECTRUM_DB_MIN, max: SPECTRUM_DB_MAX });
+    chart.set(
+      'grid_y',
+      buildDbGridY(SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, DB_GRID, DB_LABEL),
+    );
+    chart.set('show_grid', true);
+  }, []);
 
   const gridWidgetRef = useCallback(
     (chart: AuxChartInstance | null) => {
@@ -870,8 +1024,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
     disposeBindings();
     let raf = 0;
     const unsub = data$.subscribe((raw: number[]) => {
-      const next =
-        Array.isArray(raw) && raw.length ? raw : EMPTY_SPECTRUM;
+      const next = Array.isArray(raw) && raw.length ? raw : EMPTY_SPECTRUM;
       dataLatestRef.current = next;
       if (raf) cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
@@ -910,12 +1063,13 @@ export function SpectrumChart(props: SpectrumChartProps) {
 
   const viewClass = useMemo(() => {
     const m = Math.round(mode);
+    if (monitor && m !== SPECTRUM_MODE.Spectralizer) return 'view-monitor';
     if (m === SPECTRUM_MODE.Stereo) return 'view-stereo';
     if (m === SPECTRUM_MODE.Difference) return 'view-difference';
     if (m === SPECTRUM_MODE.Spectralizer) return 'view-spectralizer';
     // Average + Max: one primary curve
     return 'view-single';
-  }, [mode]);
+  }, [mode, monitor]);
 
   const modeClass = useMemo(() => {
     switch (Math.round(mode)) {
@@ -946,7 +1100,12 @@ export function SpectrumChart(props: SpectrumChartProps) {
       {!isSpectralizer && (
         <>
           <ChartWidget className="SpectrumChart-aux" widgetRef={widgetRef} />
-          <div ref={corridorElRef} className="spec-corridor-fill" hidden aria-hidden />
+          <div
+            ref={corridorElRef}
+            className="spec-corridor-fill"
+            hidden
+            aria-hidden
+          />
         </>
       )}
       {isSpectralizer && (

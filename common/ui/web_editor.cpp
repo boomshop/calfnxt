@@ -1315,8 +1315,8 @@ void WebEditor::flushViz()
 
   if (const char* spectrumId = vizSource_->vizSpectrumId())
   {
-    // Layout: bins, hold, avg[N], max[N], L[N], R[N]
-    constexpr int kMaxSpectrum = 2 + 4 * Dsp::kMaxSpectrumBins;
+    // Layout: bins, hold, avg[N], max[N], L[N], R[N], optional rms[N]
+    constexpr int kMaxSpectrum = 2 + 5 * Dsp::kMaxSpectrumBins;
     float spectrum[kMaxSpectrum];
     const int nSpec = vizSource_->takeSpectrum(spectrum, kMaxSpectrum);
     if (nSpec >= 2)
@@ -1331,6 +1331,21 @@ void WebEditor::flushViz()
         spectrum[i] = std::clamp(v, -120.f, 12.f);
       }
       flushVizArray(spectrumId, "spectrum", spectrum, nSpec);
+    }
+  }
+
+  if (const char* loudId = vizSource_->vizLoudnessId())
+  {
+    float loud[8 + 4 * 160] {};
+    const int nLoud = vizSource_->takeLoudness(loud, 8 + 4 * 160);
+    if (nLoud > 0)
+    {
+      for (int i = 0; i < nLoud; ++i)
+      {
+        if (!std::isfinite(loud[i]))
+          loud[i] = -200.f;
+      }
+      flushVizArray(loudId, "loudness", loud, nLoud);
     }
   }
 
@@ -1715,6 +1730,13 @@ bool WebEditor::onWebMessage(const char* json)
   {
     if (vizSource_)
       vizSource_->handleMidiCommand(json);
+    return true;
+  }
+
+  if (jsonHasType(json, "meter"))
+  {
+    if (vizSource_)
+      vizSource_->handleMeterCommand(json);
     return true;
   }
 

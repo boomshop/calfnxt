@@ -3,7 +3,7 @@
   width: 100%;
   height: 100%;
   min-height: 160px;
-  background: var(--background);
+  background: #000;
   overflow: hidden;
 
   > .SpectrumChart-aux,
@@ -13,10 +13,20 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
+    background: #000;
+    border-color: #000;
 
     > svg {
       overflow: hidden;
     }
+  }
+
+  .aux-chart > svg > .aux-grid > .aux-gridlabel {
+    fill: rgba(255, 255, 255, 0.55);
+  }
+
+  .aux-chart > svg > .aux-grid > .aux-gridline {
+    stroke: rgba(255, 255, 255, 0.22);
   }
 
   // Above the curve chart so the band stays visible (a behind-chart layer is
@@ -39,7 +49,7 @@
     z-index: 1;
     width: 100%;
     height: 100%;
-    background: var(--background);
+    background: #000;
   }
 
   > .SpectrumChart-gridOverlay {
@@ -90,6 +100,36 @@
     .spec-secondary {
       stroke: var(--color-warn);
       fill: transparent;
+    }
+  }
+
+  &.view-monitor {
+    .spec-rms {
+      stroke: var(--color);
+      fill: none;
+      stroke-width: 1.25px;
+      stroke-opacity: 1;
+      stroke-dasharray: 4 3;
+    }
+
+    .spec-primary {
+      stroke: var(--color-accent);
+      fill: none;
+      stroke-width: 1.25px;
+    }
+
+    .spec-secondary {
+      stroke: var(--color-warn);
+      fill: none;
+      stroke-width: 1.25px;
+    }
+
+    .spec-hold {
+      stroke: var(--color);
+      stroke-dasharray: none;
+      stroke-width: 1.25px !important;
+      stroke-opacity: 0.33;
+      fill: none;
     }
   }
 

@@ -116,6 +116,14 @@ export interface HistoryChartProps {
   /** Host vizcfg / envelope stream id (e.g. `"comp"`, `"deess"`). */
   vizId: string;
   windowMs?: number;
+  /**
+   * Fixed spacing between samples. Partial buffers then sit at “now”
+   * (the right edge) instead of being stretched across `windowMs`.
+   */
+  slotMs?: number;
+  /** Plot range in dB. Defaults to −48…0 (peaks and gain reduction). */
+  dbMin?: number;
+  dbMax?: number;
   className?: string;
 }
 
@@ -128,6 +136,7 @@ function historyChannelDots(
   nCh: number,
   windowMs: number,
   toDb: (v: number) => number,
+  fixedSlotMs?: number,
 ): HistDot[] | null {
   if (!buf || nCh < 1 || buf.length < nCh) return null;
 
@@ -141,7 +150,12 @@ function historyChannelDots(
   const slots = Math.floor(data.length / nCh);
   if (slots < 1) return null;
 
-  const slotMs = slots > 1 ? windowMs / (slots - 1) : windowMs;
+  const slotMs =
+    fixedSlotMs != null && fixedSlotMs > 0
+      ? fixedSlotMs
+      : slots > 1
+        ? windowMs / (slots - 1)
+        : windowMs;
   const phaseShift = phase * slotMs;
   const pts: HistDot[] = [];
   for (let i = 0; i < slots; ++i) {
@@ -164,6 +178,9 @@ export function HistoryChart(props: HistoryChartProps) {
     graphs,
     vizId,
     windowMs = HISTORY_CHART_MS,
+    slotMs,
+    dbMin = DB_MIN,
+    dbMax = DB_MAX,
     className,
   } = props;
 
@@ -178,6 +195,8 @@ export function HistoryChart(props: HistoryChartProps) {
   graphsSpecRef.current = graphs;
   const windowMsRef = useRef(windowMs);
   windowMsRef.current = windowMs;
+  const slotMsRef = useRef(slotMs);
+  slotMsRef.current = slotMs;
   const chartRef = useRef<AuxChartInstance | null>(null);
   const auxGraphsRef = useRef<AuxGraph[]>([]);
   const graphBindingsRef = useRef<Bindings[]>([]);
@@ -233,6 +252,8 @@ export function HistoryChart(props: HistoryChartProps) {
 
       chart.set('range_x', { min: 0, max: windowMs, reverse: true });
       chart.set('grid_x', buildTimeGridX(windowMs));
+      chart.set('range_y', { min: dbMin, max: dbMax });
+      chart.set('grid_y', buildDbGridY(dbMin, dbMax, DB_GRID, DB_LABEL));
 
       const specs = graphsSpecRef.current;
       const nCh = specs.length;
@@ -268,6 +289,7 @@ export function HistoryChart(props: HistoryChartProps) {
               nCh,
               windowMsRef.current,
               () => DB_MIN,
+              slotMsRef.current,
             );
             return base;
           }
@@ -277,6 +299,7 @@ export function HistoryChart(props: HistoryChartProps) {
             nCh,
             windowMsRef.current,
             toDb,
+            slotMsRef.current,
           );
         };
 
@@ -328,7 +351,7 @@ export function HistoryChart(props: HistoryChartProps) {
         resizeRoRef.current = ro;
       }
     },
-    [data$, sendVizBins, windowMs, graphsKey],
+    [data$, dbMax, dbMin, sendVizBins, windowMs, graphsKey],
   );
 
   const widgetRef = useCallback(

@@ -1,65 +1,266 @@
 .AnalyzerUI {
   display: grid;
-  grid-template-rows: auto auto 1fr;
-  grid-template-columns: 1fr auto auto;
-  grid-template-areas: 'chart mode fft' 'chart mode tilt' 'chart gonio gonio';
+  grid-template-rows: auto minmax(140px, 1fr) 120px 140px;
+  grid-template-columns: minmax(0, 1fr) 256px;
+  grid-template-areas:
+    'tools side'
+    'chart side'
+    'diff side'
+    'hist side';
   align-items: stretch;
   gap: var(--gap);
+  min-height: 0;
 
-  > .SpectrumChart {
+  > .Header {
+    grid-column: 1 / -1;
+  }
+
+  .block {
+    .aux-button {
+      height: auto;
+    }
+  }
+
+  > .tools {
+    grid-area: tools;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--gap);
+    align-items: center;
+
+    > i {
+      flex: 1;
+    }
+  }
+
+  > .chart-info {
     grid-area: chart;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+
+    > .SpectrumChart {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
   }
 
-  > .mode {
-    grid-area: mode;
+  > .diff-info {
+    grid-area: diff;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+
+    > .SpectrumDiffChart {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
   }
 
-  > .fft {
-    grid-area: fft;
+  > .hist {
+    grid-area: hist;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    > .hist-info {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+
+      > .HistoryChart {
+        flex: 1 1 auto;
+        min-height: 0;
+
+        .hist-mom {
+          fill: none;
+          stroke: var(--color-accent);
+          stroke-width: 1.75px;
+        }
+
+        .hist-st {
+          fill: none;
+          stroke: var(--color);
+          stroke-width: 1.75px;
+        }
+
+        .hist-tp {
+          fill: none;
+          stroke: var(--color-warn);
+          stroke-width: 1.75px;
+        }
+
+        .hist-rms {
+          fill: none;
+          stroke: var(--color);
+          stroke-width: 1.75px;
+          stroke-opacity: 0.45;
+        }
+      }
+    }
+
+    > .hist-legend {
+      position: absolute;
+      bottom: 10px;
+      left: 32px;
+      display: flex;
+      gap: 10px;
+      font-size: var(--font-size-small);
+      line-height: 1;
+
+      > .mom {
+        color: var(--color-accent);
+      }
+
+      > .st {
+        color: var(--color);
+      }
+
+      > .tp {
+        color: var(--color-warn);
+      }
+
+      > .rms {
+        color: var(--color);
+        opacity: 0.45;
+      }
+    }
   }
 
-  > .tilt {
-    grid-area: tilt;
-  }
+  > .side {
+    grid-area: side;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap);
 
-  > .block {
-    > .WithInfo {
-      > .Buttons {
-        > .Button {
-          min-height: 0;
-          height: auto;
+    > .readout {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+
+      > .measure {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--gap);
+        align-items: center;
+
+        > .WithInfo {
           flex: 1;
+
+          .Buttons {
+            flex: 1;
+
+            .Button {
+              flex: 1;
+            }
+          }
+        }
+      }
+
+      > .figures {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--gap);
+
+        > label {
+          display: flex;
+          justify-content: space-between;
+          gap: 6px;
+          color: var(--color-less);
+          font-size: var(--font-size-small);
+          align-items: center;
+
+          .aux-label {
+            font-size: var(--font-size-large);
+          }
+
+          > .limit.is-over > .aux-label {
+            color: var(--color-warn);
+          }
+        }
+      }
+    }
+
+    > .meters {
+      flex: 1 1 auto;
+      display: flex;
+      padding-left: 32px;
+      justify-content: space-between;
+
+      > .Scale {
+        position: absolute;
+        inset: var(--gap);
+        bottom: 18px;
+        right: 24px;
+        z-index: 2;
+
+        --aux-scale-labelmarginvertical: calc(100% - 14px);
+        --aux-scale-dotsize: calc(100% - 20px);
+        --aux-scale-markersize: calc(100% - 20px);
+
+        > .aux-dot {
+          opacity: 0.25;
+          background: var(--color);
+
+          &.aux-marker {
+            opacity: 0.4;
+          }
+        }
+      }
+
+      > .WithInfo {
+        display: flex;
+
+        > .LevelMeter,
+        > .MultiMeter {
+          flex: 1 1 auto;
+        }
+      }
+
+      > .levels {
+        > .MultiMeter {
+          --aux-meter-size: 26px;
+        }
+      }
+
+      > .lufs {
+        > .MultiMeter {
+          --aux-meter-size: 16px;
+        }
+      }
+
+      > .range > .LevelMeter.aux-left {
+        --aux-meter-size: 12px;
+        grid-template-rows: 1fr auto;
+        gap: 0;
+        grid-template-areas:
+          'bar scale'
+          'label .';
+
+        > .aux-scale {
+          > .aux-dot {
+            display: none;
+          }
         }
       }
     }
   }
 
-  > .gonio {
-    grid-area: gonio;
+  .gonio {
+    flex: 0 0 256px;
     flex-direction: column;
     align-items: stretch;
     gap: 2px;
-    padding-bottom: 0;
-    min-width: 0;
-    min-height: 0;
 
     > .WithInfo:has(> .GonioMeter) {
       flex: 1 1 0;
-      min-width: 0;
-      min-height: 0;
       display: flex;
-      width: 100%;
 
       > .GonioMeter {
         flex: 1 1 0;
-        min-width: 0;
-        min-height: 0;
       }
-    }
-
-    > .WithInfo:has(> .CorrelationMeter) {
-      flex: 0 0 auto;
-      width: 100%;
     }
   }
 }

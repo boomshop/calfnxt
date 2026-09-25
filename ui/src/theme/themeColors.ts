@@ -30,12 +30,44 @@ const FALLBACK: ThemeColors = {
   contrastAccent: '#ffffff',
 };
 
+function cssByte(n: number): string {
+  return Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+}
+
+let colorProbe: HTMLSpanElement | null = null;
+
+/**
+ * Custom properties keep the authored form (`hsl(...)`). Canvas pixels need
+ * a concrete sRGB hex, so resolve through the browser once per read.
+ */
+function concreteColor(specified: string, fallback: string): string {
+  const v = specified.trim();
+  if (!v) return fallback;
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) return v.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(v)) {
+    const s = v.slice(1);
+    return `#${s[0]}${s[0]}${s[1]}${s[1]}${s[2]}${s[2]}`.toLowerCase();
+  }
+  if (typeof document === 'undefined') return fallback;
+  if (!colorProbe) {
+    colorProbe = document.createElement('span');
+    colorProbe.hidden = true;
+    document.documentElement.appendChild(colorProbe);
+  }
+  colorProbe.style.color = fallback;
+  colorProbe.style.color = v;
+  const computed = getComputedStyle(colorProbe).color;
+  const m = computed.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
+  if (!m) return fallback;
+  return `#${cssByte(Number(m[1]))}${cssByte(Number(m[2]))}${cssByte(Number(m[3]))}`;
+}
+
 function cssVar(name: string, fallback: string): string {
   if (typeof document === 'undefined') return fallback;
   const v = getComputedStyle(document.documentElement)
     .getPropertyValue(name)
     .trim();
-  return v || fallback;
+  return concreteColor(v || fallback, fallback);
 }
 
 export function readThemeColors(): ThemeColors {

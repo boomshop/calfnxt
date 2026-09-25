@@ -2,6 +2,7 @@
 
 #include "effect_base.h"
 #include "io_stage.h"
+#include "loudness_meter.h"
 #include "spectrum_tap.h"
 #include "stereo_field_tap.h"
 #include "viz_source.h"
@@ -35,6 +36,9 @@ public:
   int takeGonio(float* out, int maxOut) override;
   int takeSpectrum(float* out, int maxOut) override;
   const char* vizSpectrumId() const override { return "fft"; }
+  int takeLoudness(float* out, int maxOut) override;
+  const char* vizLoudnessId() const override { return "loud"; }
+  bool handleMeterCommand(const char* json) override;
   void configureVizBins(const char* id, int bins) override;
 
   OBJ_METHODS(AnalyzerPlugin, Plugin::EffectBase)
@@ -51,6 +55,8 @@ private:
   double sampleRate_ = 44100.0;
   Dsp::SpectrumTap spectrum_;
   Dsp::StereoFieldTap fieldTap_;
+  Dsp::LoudnessMeter loudness_;
+  int quietSamples_ = 0;
 };
 
 } // namespace Analyzer

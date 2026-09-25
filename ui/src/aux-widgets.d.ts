@@ -9,6 +9,7 @@ declare module '@deutschesoft/aux-widgets/src/index.pure.js' {
   export const EqualizerGraph: new (...args: unknown[]) => unknown;
   export const Toggle: new (...args: unknown[]) => unknown;
   export const Select: new (...args: unknown[]) => unknown;
+  export const Scale: new (...args: unknown[]) => unknown;
   export const Button: new (...args: unknown[]) => unknown;
   export const ConfirmButton: new (...args: unknown[]) => unknown;
   export const MultiMeter: new (...args: unknown[]) => unknown;
@@ -21,6 +22,8 @@ declare module '@deutschesoft/aux-widgets/src/index.pure.js' {
   export const Dynamics: new (...args: unknown[]) => unknown;
   export const Reverb: new (...args: unknown[]) => unknown;
   export const State: new (...args: unknown[]) => unknown;
+  export const Value: new (...args: unknown[]) => unknown;
+  export const Label: new (...args: unknown[]) => unknown;
 }
 
 declare module '@deutschesoft/aux-widgets/src/widgets/icon.js' {

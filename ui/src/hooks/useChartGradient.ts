@@ -27,6 +27,8 @@ export type UseChartGradientOptions = {
   getHeight?: (svg: SVGSVGElement) => number;
   /** Swap blue/red vertically (top = blue, bottom = red). */
   reverse?: boolean;
+  /** Stop offsets. Default stretches accent through the body. */
+  stopOffsets?: { cut: string; boost: string };
 };
 
 function applyPaint(
@@ -64,6 +66,7 @@ export function useChartGradient(
     opacities,
     getHeight,
     reverse = false,
+    stopOffsets,
   } = options;
   const gradId = `chart-level-grad-${useId().replace(/:/g, '')}`;
   const applyRef = useRef<() => void>(() => {});
@@ -98,9 +101,9 @@ export function useChartGradient(
       grad.setAttribute('x1', '0');
       grad.setAttribute('x2', '0');
       stopCut = document.createElementNS(SVG_NS, 'stop') as SVGStopElement;
-      stopCut.setAttribute('offset', '20%');
+      stopCut.setAttribute('offset', stopOffsets?.cut ?? '20%');
       stopBoost = document.createElementNS(SVG_NS, 'stop') as SVGStopElement;
-      stopBoost.setAttribute('offset', '800%');
+      stopBoost.setAttribute('offset', stopOffsets?.boost ?? '800%');
       grad.appendChild(stopCut);
       grad.appendChild(stopBoost);
       defs.appendChild(grad);
@@ -114,6 +117,8 @@ export function useChartGradient(
 
     const syncStops = () => {
       const c = themeColors$.value;
+      stopCut.setAttribute('offset', stopOffsets?.cut ?? '20%');
+      stopBoost.setAttribute('offset', stopOffsets?.boost ?? '800%');
       stopCut.setAttribute('stop-color', c.accent);
       stopCut.setAttribute('stop-opacity', String(cutOpacity));
       stopBoost.setAttribute('stop-color', c.warn);
@@ -173,6 +178,7 @@ export function useChartGradient(
     targets,
     paint,
     reverse,
+    stopOffsets,
     cutOpacity,
     boostOpacity,
   ]);
