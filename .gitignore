@@ -43,3 +43,4 @@ dsp/*/web/
 /tools/tuner_click_history.jsonl
 
 OCTAVER*.md
+/node_modules/
