@@ -1,6 +1,7 @@
 #pragma once
 
 #include "effect_base.h"
+#include "channel_mode.h"
 #include "expander.h"
 #include "gain_util.h"
 #include "gr_meter.h"
@@ -117,6 +118,7 @@ private:
     float invHoldMs[kInhibitCount] {};
     float invReleaseMs[kInhibitCount] {120.f, 120.f};
     Dsp::StereoLink link = Dsp::StereoLink::Max;
+    Dsp::ChannelMode channel = Dsp::ChannelMode::Stereo;
   };
 
   BlockState makeBlockState() const;

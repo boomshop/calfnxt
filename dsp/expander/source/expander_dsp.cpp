@@ -1,6 +1,7 @@
 #include "expander_dsp.h"
 
 #include "base/source/fstreamer.h"
+#include "channel_mode.h"
 #include "gain_util.h"
 
 #include <algorithm>
@@ -16,7 +17,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5845u; // 'CNXE'
-constexpr uint32 kStateVersion = 1;
+constexpr uint32 kStateVersion = 2; // v2: + channel
 
 constexpr float kHistoryDisplayMs = 10000.f;
 
@@ -164,6 +165,7 @@ ExpanderPlugin::BlockState ExpanderPlugin::makeBlockState() const
   state.listen = params_[kParamListen] >= 0.5f;
   state.sidechainActive = params_[kParamSidechainActive] >= 0.5f;
   state.link = stereoLinkFromPlain(params_[kParamLink]);
+  state.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
 
   const ParamID activeId[kInhibitCount] = {kParamInv1Active, kParamInv2Active};
   const ParamID listenId[kInhibitCount] = {kParamInv1Listen, kParamInv2Listen};
@@ -357,6 +359,38 @@ void ExpanderPlugin::processSample(const BlockState& state, float& L, float& R, 
 
   L = dryL * gr;
   R = dryR * gr;
+  switch (state.channel)
+  {
+    case Dsp::ChannelMode::Left:
+      L = dryL * gr;
+      R = dryR;
+      break;
+    case Dsp::ChannelMode::Right:
+      L = dryL;
+      R = dryR * gr;
+      break;
+    case Dsp::ChannelMode::Mid:
+    {
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(dryL, dryR, mid, side);
+      mid *= gr;
+      Dsp::decodeMs(mid, side, L, R);
+      break;
+    }
+    case Dsp::ChannelMode::Side:
+    {
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(dryL, dryR, mid, side);
+      side *= gr;
+      Dsp::decodeMs(mid, side, L, R);
+      break;
+    }
+    case Dsp::ChannelMode::Stereo:
+    default:
+      break;
+  }
 }
 
 int ExpanderPlugin::takeGainReductionDb(float* out, int maxOut)

@@ -11,12 +11,14 @@ import {
   postEnd,
 } from '../utils/bind_param';
 import {
+  COMPRESSOR_CHANNEL_ENTRIES,
   COMPRESSOR_LINK_ENTRIES,
   COMPRESSOR_MODE_ENTRIES,
 } from './compressorHost';
 
 export const EXPANDER_MODE_ENTRIES = COMPRESSOR_MODE_ENTRIES;
 export const EXPANDER_LINK_ENTRIES = COMPRESSOR_LINK_ENTRIES;
+export const EXPANDER_CHANNEL_ENTRIES = COMPRESSOR_CHANNEL_ENTRIES;
 
 export type ExpanderPanelId = 'detector' | 'inv1' | 'inv2';
 
@@ -38,6 +40,8 @@ export type IExpanderInhibitHost = {
 export type IExpanderHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  /** 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side. */
+  channel$: DynamicValue<number>;
   sidechainActive$: DynamicValue<boolean>;
   threshold$: DynamicValue<number>;
   releaseThreshold$: DynamicValue<number>;
@@ -166,6 +170,7 @@ export function createBoundExpanderHost(): IExpanderHost {
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    channel$: bindNum('channel', 0),
     sidechainActive$: bindBool('sidechain_active'),
     threshold$,
     releaseThreshold$,

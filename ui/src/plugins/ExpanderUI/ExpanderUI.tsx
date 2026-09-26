@@ -10,12 +10,14 @@ import {
   HistoryChart,
   Knob,
   LevelMeter,
+  Select,
   State,
   Toggle,
   WithInfo,
 } from '../../widgets';
 import { paramIds } from '../../generated/expanderModel';
 import {
+  EXPANDER_CHANNEL_ENTRIES,
   EXPANDER_LINK_ENTRIES,
   EXPANDER_MODE_ENTRIES,
   expanderParamDefault,
@@ -260,6 +262,9 @@ export function ExpanderUI(props: ExpanderUIProps) {
       <Header title="Expander">
         <WithInfo title={expanderInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
+        <WithInfo title={expanderInfo.channel} className="info-block">
+          <Select value$={host.channel$} entries={EXPANDER_CHANNEL_ENTRIES} />
         </WithInfo>
       </Header>
 
