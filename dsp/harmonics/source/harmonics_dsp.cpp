@@ -1,6 +1,7 @@
 #include "harmonics_dsp.h"
 
 #include "base/source/fstreamer.h"
+#include "channel_mode.h"
 #include "dsp_math.h"
 #include "gain_util.h"
 
@@ -15,8 +16,8 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5848u; // 'CNXH'
-// v7: pre-listen; v8: +oversample / asymmetry / tone
-constexpr uint32 kStateVersion = 8;
+// v7: pre-listen; v8: +oversample / asymmetry / tone; v9: +channel
+constexpr uint32 kStateVersion = 9;
 
 int snapOversample(float plain)
 {
@@ -147,7 +148,7 @@ void HarmonicsPlugin::observeSend(float sendL, float sendR)
 
 void HarmonicsPlugin::processSample(float& L, float& R, bool bypass,
                                     bool preListen, bool postListen, float dry,
-                                    float wet)
+                                    float wet, Dsp::ChannelMode channel)
 {
   if (bypass)
   {
@@ -155,14 +156,141 @@ void HarmonicsPlugin::processSample(float& L, float& R, bool bypass,
     return;
   }
 
-  // Two parallel paths:
-  //   dry:  input
-  //   wet:  feed → waveshaper → post
-  // Mix uses wet−clean (clean = feed→post, no shaper) so Dry stays raw and
-  // Dry+Wet never double the linear band (no cancellation notches).
+  // Dry always scales the raw stereo input. Wet adds harmonics only on the
+  // selected path (Stereo / L / R / Mid / Side).
   const float inL = L;
   const float inR = R;
 
+  switch (channel)
+  {
+    case Dsp::ChannelMode::Left:
+    {
+      const float sendL = pre_.processWet(0, inL);
+      observeSend(sendL, 0.f);
+      const float shapedL = distL_.process(sendL);
+      const float hotL = postHot_.processWet(0, shapedL);
+      const float cleanL = postClean_.processWet(0, sendL);
+      float deltaL = hotL - cleanL;
+      deltaL = static_cast<float>(toneL_.process(deltaL));
+      toneL_.sanitize();
+      Dsp::sanitizeDenormal(deltaL);
+
+      if (postListen)
+      {
+        L = deltaL * wet;
+        R = 0.f;
+        return;
+      }
+      if (preListen)
+      {
+        L = sendL;
+        R = 0.f;
+        return;
+      }
+      L = inL * dry + deltaL * wet;
+      R = inR * dry;
+      return;
+    }
+    case Dsp::ChannelMode::Right:
+    {
+      const float sendR = pre_.processWet(1, inR);
+      observeSend(0.f, sendR);
+      const float shapedR = distR_.process(sendR);
+      const float hotR = postHot_.processWet(1, shapedR);
+      const float cleanR = postClean_.processWet(1, sendR);
+      float deltaR = hotR - cleanR;
+      deltaR = static_cast<float>(toneR_.process(deltaR));
+      toneR_.sanitize();
+      Dsp::sanitizeDenormal(deltaR);
+
+      if (postListen)
+      {
+        L = 0.f;
+        R = deltaR * wet;
+        return;
+      }
+      if (preListen)
+      {
+        L = 0.f;
+        R = sendR;
+        return;
+      }
+      L = inL * dry;
+      R = inR * dry + deltaR * wet;
+      return;
+    }
+    case Dsp::ChannelMode::Mid:
+    {
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(inL, inR, mid, side);
+      (void)side;
+      const float send = pre_.processWet(0, mid);
+      observeSend(send, send);
+      const float shaped = distL_.process(send);
+      const float hot = postHot_.processWet(0, shaped);
+      const float clean = postClean_.processWet(0, send);
+      float delta = hot - clean;
+      delta = static_cast<float>(toneL_.process(delta));
+      toneL_.sanitize();
+      Dsp::sanitizeDenormal(delta);
+
+      if (postListen)
+      {
+        L = delta * wet;
+        R = delta * wet;
+        return;
+      }
+      if (preListen)
+      {
+        L = send;
+        R = send;
+        return;
+      }
+      // Mid wet → same add on L and R (decode(delta, 0)).
+      L = inL * dry + delta * wet;
+      R = inR * dry + delta * wet;
+      return;
+    }
+    case Dsp::ChannelMode::Side:
+    {
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(inL, inR, mid, side);
+      (void)mid;
+      const float send = pre_.processWet(0, side);
+      observeSend(send, send);
+      const float shaped = distL_.process(send);
+      const float hot = postHot_.processWet(0, shaped);
+      const float clean = postClean_.processWet(0, send);
+      float delta = hot - clean;
+      delta = static_cast<float>(toneL_.process(delta));
+      toneL_.sanitize();
+      Dsp::sanitizeDenormal(delta);
+
+      if (postListen)
+      {
+        L = delta * wet;
+        R = -delta * wet;
+        return;
+      }
+      if (preListen)
+      {
+        L = send;
+        R = -send;
+        return;
+      }
+      // Side wet → decode(0, delta).
+      L = inL * dry + delta * wet;
+      R = inR * dry - delta * wet;
+      return;
+    }
+    case Dsp::ChannelMode::Stereo:
+    default:
+      break;
+  }
+
+  // Stereo — original dual-path process.
   const float sendL = pre_.processWet(0, inL);
   const float sendR = pre_.processWet(1, inR);
   observeSend(sendL, sendR);
@@ -184,7 +312,6 @@ void HarmonicsPlugin::processSample(float& L, float& R, bool bypass,
   Dsp::sanitizeDenormal(deltaL);
   Dsp::sanitizeDenormal(deltaR);
 
-  // Feed listen solos the send; post listen solos what Wet adds (delta).
   if (postListen)
   {
     L = deltaL * wet;
@@ -260,6 +387,7 @@ tresult PLUGIN_API HarmonicsPlugin::process(ProcessData& data)
   const bool bypass = params_[kParamBypass] >= 0.5f;
   const bool preListen = params_[kParamPreListen] >= 0.5f;
   const bool postListen = params_[kParamListen] >= 0.5f;
+  const auto channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   const float dry = Dsp::dbToLin(std::clamp(params_[kParamDry], -60.f, 12.f));
   const float wet = Dsp::dbToLin(std::clamp(params_[kParamWet], -60.f, 12.f));
   const float drive = std::clamp(params_[kParamDrive], 0.1f, 10.f);
@@ -298,7 +426,7 @@ tresult PLUGIN_API HarmonicsPlugin::process(ProcessData& data)
     {
       float L = nCh > 0 ? out[0][i] : 0.f;
       float R = nCh > 1 ? out[1][i] : L;
-      processSample(L, R, bypass, preListen, postListen, dry, wet);
+      processSample(L, R, bypass, preListen, postListen, dry, wet, channel);
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)
@@ -313,7 +441,7 @@ tresult PLUGIN_API HarmonicsPlugin::process(ProcessData& data)
     {
       float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
       float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
-      processSample(L, R, bypass, preListen, postListen, dry, wet);
+      processSample(L, R, bypass, preListen, postListen, dry, wet, channel);
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)

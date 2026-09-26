@@ -647,6 +647,7 @@ export function applyHarmonicsDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setNum(host.channel$, params.channel);
   setNum(host.drive$, params.drive);
   setNum(host.blend$, params.blend);
   setNum(host.dry$, params.dry);

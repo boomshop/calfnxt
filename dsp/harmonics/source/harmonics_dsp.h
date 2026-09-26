@@ -1,6 +1,7 @@
 #pragma once
 
 #include "biquad.h"
+#include "channel_mode.h"
 #include "complementary_band_filter.h"
 #include "effect_base.h"
 #include "io_stage.h"
@@ -53,7 +54,8 @@ private:
   void applyFilterParams();
   void applyToneParams();
   void processSample(float& L, float& R, bool bypass, bool preListen,
-                     bool postListen, float dry, float wet);
+                     bool postListen, float dry, float wet,
+                     Dsp::ChannelMode channel);
   void observeSend(float sendL, float sendR);
 
   float params_[kParamCount] {};

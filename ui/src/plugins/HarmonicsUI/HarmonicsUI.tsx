@@ -5,12 +5,14 @@ import {
   FREQUENCY_RANGE_LR_MODE_ENTRIES,
   HarmonicBars,
   Knob,
+  Select,
   Toggle,
   WaveshapeChart,
   WithInfo,
 } from '../../widgets';
 import { paramIds } from '../../generated/harmonicsModel';
 import {
+  HARMONICS_CHANNEL_ENTRIES,
   HARMONICS_PRESET_ENTRIES,
   harmonicsParamDefault,
   type IHarmonicsHost,
@@ -83,6 +85,9 @@ export function HarmonicsUI(props: HarmonicsUIProps) {
       <Header title="Harmonics">
         <WithInfo title={harmonicsInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
+        <WithInfo title={harmonicsInfo.channel} className="info-block">
+          <Select value$={host.channel$} entries={HARMONICS_CHANNEL_ENTRIES} />
         </WithInfo>
       </Header>
 

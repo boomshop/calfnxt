@@ -18,9 +18,20 @@ export const HARMONICS_PRESET_ENTRIES = HARMONICS_PRESETS.map((p) => ({
   value: p.id,
 }));
 
+/** Stereo / L / R / Mid / Side (matches `Dsp::ChannelMode`). */
+export const HARMONICS_CHANNEL_ENTRIES = [
+  { label: 'Stereo', value: 0 },
+  { label: 'Left', value: 1 },
+  { label: 'Right', value: 2 },
+  { label: 'Mid', value: 3 },
+  { label: 'Side', value: 4 },
+];
+
 export type IHarmonicsHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  /** 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side. */
+  channel$: DynamicValue<number>;
   drive$: DynamicValue<number>;
   blend$: DynamicValue<number>;
   dry$: DynamicValue<number>;
@@ -153,6 +164,7 @@ export function createBoundHarmonicsHost(): IHarmonicsHost {
   return {
     meta: pluginMeta,
     bypass$,
+    channel$: bindNum('channel', 0),
     drive$,
     blend$,
     dry$,

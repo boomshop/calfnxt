@@ -2,7 +2,10 @@
 
 export const harmonicsInfo = {
   bypass:
-    'Turns the effect off so you hear the dry path (In/Out gains still apply). A/B whether the saturation/excitement is adding useful density and air — or just grit and mud. Meters keep running.',
+    'Turns the effect off so you hear dry input (In/Out gains and meters still work). A/B whether the saturation/excitement is adding useful density and air — or just grit and mud. Meters keep running.',
+
+  channel:
+    'Which stereo path gets the harmonics. Stereo = both channels (normal). Left / Right = grit or air on one side only. Mid = thicken the centre (vocals, kick, bass) while leaving width alone. Side = excite width and ambience without chewing the mono sum. Dry still scales the full stereo input; Wet adds only on the selected path. Mid/Side is encode → shape → decode.',
 
   oversample:
     'Waveshaper oversampling (1×…4×). Higher = cleaner top end / less aliasing when Drive is hard; 1× is lightest on CPU. Same stepped range as the Limiter.',
