@@ -2,7 +2,7 @@ export const flangerInfo = {
   active:
     'Turns the wet (flanged) path off so you hear Dry only — same idea as Delay/Reverb Power. In/Out gains still apply; LFO and the response chart keep moving.',
   channel:
-    'Which stereo path gets the flanger. Stereo = both channels (Stereo offset still sweeps L vs R). Left / Right = flange one side only. Mid = whoosh the centre while leaving width dry. Side = widen ambience without chewing the mono sum. Dry/Amount still blend on the selected path. Mid/Side is encode → flange → decode.',
+    'Which stereo path gets the flanger. Stereo = both channels (Stereo offset still sweeps L vs R). Left / Right = flange one side only. Mid = whoosh the centre while leaving width dry. Side = widen ambience without chewing the mono sum. Mid/Side use a single wet engine (not L/R averaged — that cancelled notches when Stereo≈180°). Dry/Amount still blend on the selected path. Encode → flange → decode.',
   minDelay:
     'Shortest delay of the comb (ms). Lower = denser, brighter notches; higher = thicker, more “jet” spacing. Classic flanging sits around a few tenths of a millisecond.',
   modDepth:
