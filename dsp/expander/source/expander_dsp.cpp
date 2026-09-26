@@ -142,6 +142,7 @@ void ExpanderPlugin::resetProcessing()
   histSnapshotSampleCount_ = 0;
   histSnapshotSamplesPerSlot_ = 1;
   histSeq_.fetch_add(1, std::memory_order_release); // even: stable
+  bypassSmooth_ = 1.f;
 }
 
 tresult PLUGIN_API ExpanderPlugin::setActive(TBool state)
@@ -362,22 +363,10 @@ void ExpanderPlugin::processSample(const BlockState& state, float& L, float& R, 
 
   if (state.listen && !state.bypass)
   {
-    L = detL;
-    R = detR;
+    Dsp::listenImage(state.channel, detL, detR, L, R);
     const float gr = gx_.processDetector(detL, detR);
     grMeter_.process(gr);
     histFeedSample(audioPeak, detPeak, gr, inhibitCombined);
-    return;
-  }
-
-  if (state.bypass)
-  {
-    gx_.processDetector(detL, detR);
-    grMeter_.forceZero();
-    histFeedSample(audioPeak, detPeak, 1.f, inhibitCombined);
-    const float inDb = linToDbSafe(gx_.lastDetectorLin());
-    pointInDbPlain_ = inDb;
-    pointOutDbPlain_ = inDb;
     return;
   }
 
@@ -394,6 +383,24 @@ void ExpanderPlugin::processSample(const BlockState& state, float& L, float& R, 
   }
 
   const float det = gx_.lastDetectorLin();
+
+  const float bypassTarget = state.bypass ? 0.f : 1.f;
+  bypassSmooth_ = Dsp::slewToward(
+    bypassSmooth_, bypassTarget,
+    Dsp::bypassFadeCoeff(static_cast<float>(sampleRate_)));
+
+  if (bypassSmooth_ <= 0.f)
+  {
+    L = dryL;
+    R = dryR;
+    grMeter_.forceZero();
+    histFeedSample(audioPeak, detPeak, 1.f, inhibitCombined);
+    const float inDb = linToDbSafe(det);
+    pointInDbPlain_ = inDb;
+    pointOutDbPlain_ = inDb;
+    return;
+  }
+
   grMeter_.process(gr);
   histFeedSample(audioPeak, detPeak, gr, inhibitCombined);
 
@@ -435,6 +442,12 @@ void ExpanderPlugin::processSample(const BlockState& state, float& L, float& R, 
     case Dsp::ChannelMode::Stereo:
     default:
       break;
+  }
+
+  if (bypassSmooth_ < 1.f)
+  {
+    L = bypassSmooth_ * L + (1.f - bypassSmooth_) * dryL;
+    R = bypassSmooth_ * R + (1.f - bypassSmooth_) * dryR;
   }
 }
 
