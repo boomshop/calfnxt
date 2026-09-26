@@ -296,8 +296,7 @@ void TransientsPlugin::processSample(const BlockState& state, float& L, float& R
 
   if (state.listen && !state.bypass)
   {
-    L = detL;
-    R = detR;
+    Dsp::listenImage(state.channel, detL, detR, L, R);
     float delayed[2] = {inL, inR};
     (void)transients_.processFrame(delayed, detector);
     const float dryPeak = std::max(std::fabs(delayed[0]), std::fabs(delayed[1]));
