@@ -2,6 +2,7 @@
 
 #include "effect_base.h"
 #include "io_stage.h"
+#include "channel_mode.h"
 #include "spectral_tamer.h"
 #include "viz_source.h"
 
@@ -52,6 +53,7 @@ private:
   {
     bool bypass = false;
     bool diffListen = false;
+    Dsp::ChannelMode channel = Dsp::ChannelMode::Stereo;
     float fLo = 200.f;
     float fHi = 5000.f;
     float hpSlope = 2.f;

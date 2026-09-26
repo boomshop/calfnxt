@@ -1021,6 +1021,7 @@ export function applyTamerDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setNum(host.channel$, params.channel);
   setNum(host.fLo$, params.f_lo);
   setNum(host.fHi$, params.f_hi);
   setNum(host.hpSlope$, params.hp_slope);

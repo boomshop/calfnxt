@@ -20,6 +20,7 @@
 // Viz: log-binned spectrum (SpectrumTap layout) + GR response [N, L×N, R×N].
 
 #include "biquad.h"
+#include "channel_mode.h"
 #include "dsp_math.h"
 #include "fft_r2.h"
 #include "gain_util.h"
@@ -161,10 +162,13 @@ public:
    * Process in-place stereo. When STFT parked: latency-matched dry only.
    * Bypass with live STFT: GR→0 on the wet OLA (no dry↔wet cut). Diff Listen:
    * delayed dry − wet.
+   * Channel: Stereo / L / R / Mid / Side — unused path stays latency-matched dry.
+   * Mid/Side: dry ring stores mid|side; STFT feeds the selected path on both
+   * analysis channels (linked detector).
    * `runStft`: false skips analysis/OLA (CPU fastpath).
    */
   void process(float* left, float* right, int n, bool bypass, bool diffListen,
-               bool runStft)
+               bool runStft, ChannelMode channel = ChannelMode::Stereo)
   {
     if (!left || n <= 0)
       return;
@@ -183,7 +187,7 @@ public:
 
     if (!runStft)
     {
-      processDryOnly(left, right, n, bypass, diffListen);
+      processDryOnly(left, right, n, bypass, diffListen, channel);
       return;
     }
 
@@ -203,15 +207,56 @@ public:
       sanitizeDenormal(inL);
       sanitizeDenormal(inR);
 
-      dryL_[static_cast<size_t>(dryWrite_)] = inL;
-      dryR_[static_cast<size_t>(dryWrite_)] = inR;
+      float feedL = inL;
+      float feedR = inR;
+      float dryStoreL = inL;
+      float dryStoreR = inR;
+      switch (channel)
+      {
+        case ChannelMode::Left:
+          feedL = inL;
+          feedR = inL;
+          break;
+        case ChannelMode::Right:
+          feedL = inR;
+          feedR = inR;
+          break;
+        case ChannelMode::Mid:
+        {
+          float mid = 0.f;
+          float side = 0.f;
+          encodeMs(inL, inR, mid, side);
+          feedL = mid;
+          feedR = mid;
+          dryStoreL = mid;
+          dryStoreR = side;
+          break;
+        }
+        case ChannelMode::Side:
+        {
+          float mid = 0.f;
+          float side = 0.f;
+          encodeMs(inL, inR, mid, side);
+          feedL = side;
+          feedR = side;
+          dryStoreL = mid;
+          dryStoreR = side;
+          break;
+        }
+        case ChannelMode::Stereo:
+        default:
+          break;
+      }
+
+      dryL_[static_cast<size_t>(dryWrite_)] = dryStoreL;
+      dryR_[static_cast<size_t>(dryWrite_)] = dryStoreR;
       const int dryRead = (dryWrite_ - lat) & dryMask;
       const float dryOutL = dryL_[static_cast<size_t>(dryRead)];
       const float dryOutR = dryR_[static_cast<size_t>(dryRead)];
       dryWrite_ = (dryWrite_ + 1) & dryMask;
 
-      inL_[static_cast<size_t>(writePos_)] = inL;
-      inR_[static_cast<size_t>(writePos_)] = inR;
+      inL_[static_cast<size_t>(writePos_)] = feedL;
+      inR_[static_cast<size_t>(writePos_)] = feedR;
       writePos_ = (writePos_ + 1) % nFft;
 
       if (filled_ < nFft)
@@ -239,24 +284,69 @@ public:
 
       // Bypass stays on the wet OLA path with GR forced to 0 — no dry↔wet
       // switch (that hard cut clicked when GR was mid-flight).
-      if (diffListen)
+      float outL = 0.f;
+      float outR = 0.f;
+      switch (channel)
       {
-        left[i] = dryOutL - wetL;
-        if (nChR)
-          right[i] = dryOutR - wetR;
+        case ChannelMode::Left:
+          if (diffListen)
+          {
+            outL = dryOutL - wetL;
+            outR = 0.f;
+          }
+          else
+          {
+            outL = wetL;
+            outR = dryOutR;
+          }
+          break;
+        case ChannelMode::Right:
+          if (diffListen)
+          {
+            outL = 0.f;
+            outR = dryOutR - wetR;
+          }
+          else
+          {
+            outL = dryOutL;
+            outR = wetR;
+          }
+          break;
+        case ChannelMode::Mid:
+          if (diffListen)
+            decodeMs(dryOutL - wetL, 0.f, outL, outR);
+          else
+            decodeMs(wetL, dryOutR, outL, outR);
+          break;
+        case ChannelMode::Side:
+          if (diffListen)
+            decodeMs(0.f, dryOutR - wetR, outL, outR);
+          else
+            decodeMs(dryOutL, wetR, outL, outR);
+          break;
+        case ChannelMode::Stereo:
+        default:
+          if (diffListen)
+          {
+            outL = dryOutL - wetL;
+            outR = dryOutR - wetR;
+          }
+          else
+          {
+            outL = wetL;
+            outR = wetR;
+          }
+          break;
       }
-      else
-      {
-        left[i] = wetL;
-        if (nChR)
-          right[i] = wetR;
-      }
+      left[i] = outL;
+      if (nChR)
+        right[i] = outR;
     }
   }
 
   /** Latency-matched dry only — used while STFT is parked. */
   void processDryOnly(float* left, float* right, int n, bool /*bypass*/,
-                      bool diffListen)
+                      bool diffListen, ChannelMode channel = ChannelMode::Stereo)
   {
     const int nChR = right ? 1 : 0;
     const int dryMask = dryMask_;
@@ -268,8 +358,19 @@ public:
       sanitizeDenormal(inL);
       sanitizeDenormal(inR);
 
-      dryL_[static_cast<size_t>(dryWrite_)] = inL;
-      dryR_[static_cast<size_t>(dryWrite_)] = inR;
+      float dryStoreL = inL;
+      float dryStoreR = inR;
+      if (channel == ChannelMode::Mid || channel == ChannelMode::Side)
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        encodeMs(inL, inR, mid, side);
+        dryStoreL = mid;
+        dryStoreR = side;
+      }
+
+      dryL_[static_cast<size_t>(dryWrite_)] = dryStoreL;
+      dryR_[static_cast<size_t>(dryWrite_)] = dryStoreR;
       const int dryRead = (dryWrite_ - lat) & dryMask;
       const float dryOutL = dryL_[static_cast<size_t>(dryRead)];
       const float dryOutR = dryR_[static_cast<size_t>(dryRead)];
@@ -281,6 +382,15 @@ public:
         left[i] = 0.f;
         if (nChR)
           right[i] = 0.f;
+      }
+      else if (channel == ChannelMode::Mid || channel == ChannelMode::Side)
+      {
+        float outL = 0.f;
+        float outR = 0.f;
+        decodeMs(dryOutL, dryOutR, outL, outR);
+        left[i] = outL;
+        if (nChR)
+          right[i] = outR;
       }
       else
       {

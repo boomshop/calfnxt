@@ -29,6 +29,15 @@ export const TAMER_QUALITY_ENTRIES = [
   { label: 'Ultra', value: 3 },
 ];
 
+/** Stereo / L / R / Mid / Side (matches `Dsp::ChannelMode`). */
+export const TAMER_CHANNEL_ENTRIES = [
+  { label: 'Stereo', value: 0 },
+  { label: 'Left', value: 1 },
+  { label: 'Right', value: 2 },
+  { label: 'Mid', value: 3 },
+  { label: 'Side', value: 4 },
+];
+
 /** Display tilt (matches Analyzer / EQ spectrum). */
 export const TAMER_SPECTRUM_ENTRIES = [
   { label: 'Linear', value: 0 },
@@ -81,6 +90,8 @@ export function tamerAuxLpType(slopeDb: TamerSlopeDb) {
 export type ITamerHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  /** 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side. */
+  channel$: DynamicValue<number>;
   fLo$: DynamicValue<number>;
   fHi$: DynamicValue<number>;
   hpSlope$: DynamicValue<number>;
@@ -137,6 +148,7 @@ export function createBoundTamerHost(): ITamerHost {
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    channel$: bindNum('channel', 0),
     fLo$: bindNum('f_lo', 200),
     fHi$: bindNum('f_hi', 5000),
     hpSlope$: bindNum('hp_slope', 2),

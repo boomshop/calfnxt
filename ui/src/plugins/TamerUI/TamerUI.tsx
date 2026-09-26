@@ -10,6 +10,7 @@ import {
 } from '../../widgets';
 import { paramIds } from '../../generated/tamerModel';
 import {
+  TAMER_CHANNEL_ENTRIES,
   TAMER_QUALITY_ENTRIES,
   TAMER_SLOPE_ENTRIES,
   TAMER_SPECTRUM_ENTRIES,
@@ -107,6 +108,9 @@ export function TamerUI(props: TamerUIProps) {
       <Header title="Tamer">
         <WithInfo title={tamerInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
+        <WithInfo title={tamerInfo.channel} className="info-block">
+          <Select value$={host.channel$} entries={TAMER_CHANNEL_ENTRIES} />
         </WithInfo>
         <WithInfo title={tamerInfo.diffListen}>
           <Toggle

@@ -4,6 +4,9 @@ export const tamerInfo = {
   bypass:
     'Turns the tamer off while keeping plugin latency so timing stays aligned with the rest of the chain. Use it to A/B whether harshness, whistle, or ring is really gone — or whether you also lost body and air from the source.',
 
+  channel:
+    'Which stereo path the resonance detector and cuts act on. Stereo = linked L+R (default). Left / Right = tame one side only; the other stays latency-matched dry. Mid = scrub centre harshness/whistle while leaving width alone — useful on vocals or kick in a stereo bus. Side = tame wide rings and ambience without chewing the mono sum. Diff Listen solos only what was removed on the selected path. Mid/Side is encode → STFT → decode.',
+
   depth:
     'How deep a detected resonance may be cut (0…24 dB). Once a tip clears Threshold, reduction eases toward this ceiling with a soft knee — the first bit over Threshold never jumps straight to full Depth. Up to about 12 dB, raising Depth mainly allows a deeper cut; past 12 dB (value ring turns warn) the knee also gets hungrier, so the same excess reaches the ceiling faster and the processor feels more surgical. Stay in the gentler zone for vocals and acoustic sources; push higher for stubborn whistles, feedback-ish rings, or harsh presence that will not sit down. A/B with Diff Listen: you want scratch and ring in the solo, not the body of the singer or instrument.',
 

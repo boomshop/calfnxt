@@ -1,6 +1,7 @@
 #include "tamer_dsp.h"
 
 #include "base/source/fstreamer.h"
+#include "channel_mode.h"
 
 #include <algorithm>
 #include <cmath>
@@ -14,7 +15,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5854u; // 'CNXT' family — Tamer
-constexpr uint32 kStateVersion = 1;
+constexpr uint32 kStateVersion = 2; // v2: + channel
 } // namespace
 
 TamerPlugin::TamerPlugin()
@@ -93,6 +94,7 @@ TamerPlugin::BlockState TamerPlugin::makeBlockState() const
   BlockState s;
   s.bypass = params_[kParamBypass] >= 0.5f;
   s.diffListen = params_[kParamDiffListen] >= 0.5f;
+  s.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   s.fLo = std::clamp(params_[kParamFLo], 20.f, 20000.f);
   s.fHi = std::clamp(params_[kParamFHi], 20.f, 20000.f);
   s.hpSlope = std::clamp(params_[kParamHpSlope], 0.f, 4.f);
@@ -168,7 +170,8 @@ tresult PLUGIN_API TamerPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
-  tamer_.process(left, right, nFrames, state.bypass, state.diffListen, runStft);
+  tamer_.process(left, right, nFrames, state.bypass, state.diffListen, runStft,
+                 state.channel);
 
   if (wantViz)
     tamer_.publish();
