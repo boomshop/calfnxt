@@ -5,7 +5,7 @@ export const ringmodInfo = {
     'Turns the effect off so you hear dry input (In/Out gains and meters still work). Use this to A/B whether the ring modulation is adding useful grit or just clutter.',
 
   channel:
-    'Which stereo path gets ring-modulated. Stereo = both channels (with Phase/Detune stereo carriers). Left / Right = modulate one side only. Mid = metallic centre while leaving width alone. Side = clang on the sides without chewing the mono sum. Amount still blends dry vs ring on the selected path. Mid/Side is encode → modulate → decode.',
+    'Which stereo path gets ring-modulated. Stereo = both channels (Phase/Detune stereo carriers). Left / Right = modulate one side only. Mid / Side = modulate centre or width with a single carrier (not the stereo Phase average — that would cancel at Phase 0.5). Amount blends dry vs ring on the selected path. Mid/Side is encode → modulate → decode.',
 
   modMode:
     'Carrier waveform. Sine is the classic metallic ring-mod. Triangle is softer. Square is harsher / more digital. Saw up/down skew the sidebands — try them when sine feels too “clean” or sterile.',

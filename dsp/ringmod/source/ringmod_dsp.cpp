@@ -330,7 +330,8 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
           float mid = 0.f;
           float side = 0.f;
           Dsp::encodeMs(L, R, mid, side);
-          const float modul = 0.5f * (modulL + modulR);
+          // One carrier — averaging L/R cancels at default Phase 0.5 (180°).
+          const float modul = modulL;
           if (state.listen)
           {
             outL = modul;
@@ -348,7 +349,7 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
           float mid = 0.f;
           float side = 0.f;
           Dsp::encodeMs(L, R, mid, side);
-          const float modul = 0.5f * (modulL + modulR);
+          const float modul = modulL;
           if (state.listen)
           {
             outL = modul;
