@@ -1,5 +1,6 @@
 #pragma once
 
+#include "channel_mode.h"
 #include "complementary_band_filter.h"
 #include "effect_base.h"
 #include "io_stage.h"
@@ -66,6 +67,7 @@ private:
     float hpMode = 0.f;
     float lpMode = 0.f;
     bool listen = false;
+    Dsp::ChannelMode channel = Dsp::ChannelMode::Stereo;
   };
 
   BlockState makeBlockState() const;

@@ -5,11 +5,16 @@ import {
   FREQUENCY_RANGE_LR_MODE_ENTRIES,
   FrequencyRange,
   Knob,
+  Select,
   Toggle,
   WithInfo,
 } from '../../widgets';
 import { paramIds } from '../../generated/chorusModel';
-import { chorusParamDefault, type IChorusHost } from '../../host/chorusHost';
+import {
+  CHORUS_CHANNEL_ENTRIES,
+  chorusParamDefault,
+  type IChorusHost,
+} from '../../host/chorusHost';
 import { chorusInfo } from './chorusInfo';
 import '../PluginUI.scss';
 import './ChorusUI.scss';
@@ -95,6 +100,9 @@ export function ChorusUI(props: ChorusUIProps) {
       <Header title="Chorus">
         <WithInfo title={chorusInfo.active}>
           <Toggle state$={host.active$} icon="power" className="active" />
+        </WithInfo>
+        <WithInfo title={chorusInfo.channel} className="info-block">
+          <Select value$={host.channel$} entries={CHORUS_CHANNEL_ENTRIES} />
         </WithInfo>
       </Header>
 

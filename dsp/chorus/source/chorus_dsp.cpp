@@ -1,6 +1,7 @@
 #include "chorus_dsp.h"
 
 #include "base/source/fstreamer.h"
+#include "channel_mode.h"
 #include "gain_util.h"
 
 #include <algorithm>
@@ -15,7 +16,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5843u; // 'CNXC'
-constexpr uint32 kStateVersion = 1;
+constexpr uint32 kStateVersion = 2; // v2: + channel
 } // namespace
 
 ChorusPlugin::ChorusPlugin()
@@ -95,6 +96,7 @@ ChorusPlugin::BlockState ChorusPlugin::makeBlockState() const
   s.hpMode = params_[kParamHpMode];
   s.lpMode = params_[kParamLpMode];
   s.listen = params_[kParamListen] >= 0.5f;
+  s.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   return s;
 }
 
@@ -255,18 +257,76 @@ tresult PLUGIN_API ChorusPlugin::process(ProcessData& data)
   auto run = [&](auto** out) {
     for (int32 i = 0; i < nFrames; ++i)
     {
-      float inL = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
-      float inR = nCh > 1 ? static_cast<float>(out[1][i]) : inL;
-
-      float wetL = left_.processWet(inL);
-      float wetR = right_.processWet(inR);
-      wetL = post_.processWet(0, wetL);
-      wetR = post_.processWet(1, wetR);
+      const float inL = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
+      const float inR = nCh > 1 ? static_cast<float>(out[1][i]) : inL;
 
       const float a = amountGain_.get();
       const float d = dryGain_.get();
-      float outL = state.listen ? a * wetL : d * inL + a * wetL;
-      float outR = state.listen ? a * wetR : d * inR + a * wetR;
+
+      float outL = inL;
+      float outR = inR;
+      switch (state.channel)
+      {
+        case Dsp::ChannelMode::Left:
+        {
+          float wetL = left_.processWet(inL);
+          float wetR = right_.processWet(inR);
+          wetL = post_.processWet(0, wetL);
+          (void)post_.processWet(1, wetR);
+          outL = state.listen ? a * wetL : d * inL + a * wetL;
+          outR = inR;
+          break;
+        }
+        case Dsp::ChannelMode::Right:
+        {
+          float wetL = left_.processWet(inL);
+          float wetR = right_.processWet(inR);
+          (void)post_.processWet(0, wetL);
+          wetR = post_.processWet(1, wetR);
+          outL = inL;
+          outR = state.listen ? a * wetR : d * inR + a * wetR;
+          break;
+        }
+        case Dsp::ChannelMode::Mid:
+        {
+          float mid = 0.f;
+          float side = 0.f;
+          Dsp::encodeMs(inL, inR, mid, side);
+          float wetL = left_.processWet(mid);
+          float wetR = right_.processWet(mid);
+          wetL = post_.processWet(0, wetL);
+          wetR = post_.processWet(1, wetR);
+          const float wetM = 0.5f * (wetL + wetR);
+          const float midOut = state.listen ? a * wetM : d * mid + a * wetM;
+          Dsp::decodeMs(midOut, side, outL, outR);
+          break;
+        }
+        case Dsp::ChannelMode::Side:
+        {
+          float mid = 0.f;
+          float side = 0.f;
+          Dsp::encodeMs(inL, inR, mid, side);
+          float wetL = left_.processWet(side);
+          float wetR = right_.processWet(side);
+          wetL = post_.processWet(0, wetL);
+          wetR = post_.processWet(1, wetR);
+          const float wetS = 0.5f * (wetL + wetR);
+          const float sideOut = state.listen ? a * wetS : d * side + a * wetS;
+          Dsp::decodeMs(mid, sideOut, outL, outR);
+          break;
+        }
+        case Dsp::ChannelMode::Stereo:
+        default:
+        {
+          float wetL = left_.processWet(inL);
+          float wetR = right_.processWet(inR);
+          wetL = post_.processWet(0, wetL);
+          wetR = post_.processWet(1, wetR);
+          outL = state.listen ? a * wetL : d * inL + a * wetL;
+          outR = state.listen ? a * wetR : d * inR + a * wetR;
+          break;
+        }
+      }
       Dsp::sanitizeDenormal(outL);
       Dsp::sanitizeDenormal(outR);
 

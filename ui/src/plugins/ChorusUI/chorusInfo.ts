@@ -1,6 +1,8 @@
 export const chorusInfo = {
   active:
     'Turns the wet (chorused) path off so you hear Dry only — same idea as Delay/Reverb Power. In/Out gains still apply; LFO charts keep moving.',
+  channel:
+    'Which stereo path gets the chorus. Stereo = both channels (Stereo offset still spreads L vs R). Left / Right = chorus one side only. Mid = thicken the centre while leaving width dry — useful under vocals. Side = widen ambience without chewing the mono sum. Dry/Amount and Listen still apply on the selected path. Mid/Side is encode → chorus → decode.',
   minDelay:
     'Shortest delay of the multi-tap chorus (ms). Higher values thicken and slow the swirl; lower values sound brighter and tighter.',
   modDepth:
