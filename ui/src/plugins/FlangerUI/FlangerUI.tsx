@@ -1,7 +1,11 @@
 import { Header } from '../../components';
-import { Button, Knob, ModulationChart, Toggle, WithInfo } from '../../widgets';
+import { Button, Knob, ModulationChart, Select, Toggle, WithInfo } from '../../widgets';
 import { paramIds } from '../../generated/flangerModel';
-import { flangerParamDefault, type IFlangerHost } from '../../host/flangerHost';
+import {
+  FLANGER_CHANNEL_ENTRIES,
+  flangerParamDefault,
+  type IFlangerHost,
+} from '../../host/flangerHost';
 import { flangerInfo } from './flangerInfo';
 import '../PluginUI.scss';
 import './FlangerUI.scss';
@@ -75,6 +79,9 @@ export function FlangerUI(props: FlangerUIProps) {
       <Header title="Flanger">
         <WithInfo title={flangerInfo.active}>
           <Toggle state$={host.active$} icon="power" className="active" />
+        </WithInfo>
+        <WithInfo title={flangerInfo.channel} className="info-block">
+          <Select value$={host.channel$} entries={FLANGER_CHANNEL_ENTRIES} />
         </WithInfo>
       </Header>
 

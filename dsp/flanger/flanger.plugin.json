@@ -140,6 +140,17 @@
       "default": 1.0,
       "scale": "linear",
       "precision": 0
+    },
+    {
+      "id": "channel",
+      "name": "Channel",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 4.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
     }
   ]
 }
