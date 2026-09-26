@@ -1,6 +1,6 @@
 .AnalyzerUI {
   display: grid;
-  grid-template-rows: auto minmax(140px, 1fr) 120px 140px;
+  grid-template-rows: auto 3fr 1fr 1.5fr;
   grid-template-columns: minmax(0, 1fr) 256px;
   grid-template-areas:
     'tools side'
