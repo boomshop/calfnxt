@@ -227,25 +227,68 @@ void TransientsPlugin::processSample(const BlockState& state, float& L, float& R
   const float inL = L;
   const float inR = R;
 
-  float detL = inL;
-  float detR = inR;
-  float detector = 0.f;
-  if (state.link == Dsp::StereoLink::Mid)
+  // Detector follows Channel; Link applies in Stereo.
+  float srcL = inL;
+  float srcR = inR;
+  switch (state.channel)
   {
-    detector = sc_.processMono(0.5f * (inL + inR));
+    case Dsp::ChannelMode::Left:
+      srcR = inL;
+      break;
+    case Dsp::ChannelMode::Right:
+      srcL = inR;
+      break;
+    case Dsp::ChannelMode::Mid:
+    {
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(inL, inR, mid, side);
+      (void)side;
+      srcL = mid;
+      srcR = mid;
+      break;
+    }
+    case Dsp::ChannelMode::Side:
+    {
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(inL, inR, mid, side);
+      (void)mid;
+      srcL = side;
+      srcR = side;
+      break;
+    }
+    case Dsp::ChannelMode::Stereo:
+    default:
+      break;
+  }
+
+  float detL = srcL;
+  float detR = srcR;
+  float detector = 0.f;
+  if (state.channel != Dsp::ChannelMode::Stereo)
+  {
+    // L/R/Mid/Side: mono detector on the selected path.
+    detector = sc_.processMono(srcL);
+    detL = detector;
+    detR = detector;
+  }
+  else if (state.link == Dsp::StereoLink::Mid)
+  {
+    detector = sc_.processMono(0.5f * (srcL + srcR));
     detL = detector;
     detR = detector;
   }
   else if (state.link == Dsp::StereoLink::Average)
   {
-    detL = sc_.processChannel(0, inL);
-    detR = sc_.processChannel(1, inR);
+    detL = sc_.processChannel(0, srcL);
+    detR = sc_.processChannel(1, srcR);
     detector = 0.5f * (std::fabs(detL) + std::fabs(detR));
   }
   else
   {
-    detL = sc_.processChannel(0, inL);
-    detR = sc_.processChannel(1, inR);
+    detL = sc_.processChannel(0, srcL);
+    detR = sc_.processChannel(1, srcR);
     detector = std::max(std::fabs(detL), std::fabs(detR));
   }
 

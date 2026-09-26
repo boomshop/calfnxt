@@ -144,9 +144,45 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
   const float dryR = R;
   const float audioPeak = std::max(std::fabs(dryL), std::fabs(dryR));
 
+  // Detector follows Channel (same path as Wide/Split GR).
+  float detInL = dryL;
+  float detInR = dryR;
+  switch (state.channel)
+  {
+    case Dsp::ChannelMode::Left:
+      detInR = dryL;
+      break;
+    case Dsp::ChannelMode::Right:
+      detInL = dryR;
+      break;
+    case Dsp::ChannelMode::Mid:
+    {
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(dryL, dryR, mid, side);
+      (void)side;
+      detInL = mid;
+      detInR = mid;
+      break;
+    }
+    case Dsp::ChannelMode::Side:
+    {
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(dryL, dryR, mid, side);
+      (void)mid;
+      detInL = side;
+      detInR = side;
+      break;
+    }
+    case Dsp::ChannelMode::Stereo:
+    default:
+      break;
+  }
+
   float detL = 0.f;
   float detR = 0.f;
-  detector_.processStereo(dryL, dryR, detL, detR);
+  detector_.processStereo(detInL, detInR, detL, detR);
   Dsp::sanitizeDenormal(detL);
   Dsp::sanitizeDenormal(detR);
   const float detPeak = std::max(std::fabs(detL), std::fabs(detR));

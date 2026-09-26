@@ -5,7 +5,7 @@ export const compressorInfo = {
     'Turns compression off so you hear the dry path (In/Out gains still apply). Use this to A/B whether the compressor is helping glue and control, or just squashing life out of the track.',
 
   channel:
-    'Which stereo path receives gain reduction and makeup. Stereo = both channels (Link still decides how L/R share the detector). Left / Right = compress one side only; the other stays dry. Mid = glue the centre (vocals, kick, bass) while leaving width alone. Side = tame wide peaks without ducking the mono sum. Mix still blends wet vs dry on the selected path. Mid/Side is encode → compress → decode.',
+    'Which stereo path the detector and gain reduction act on (same path — like FabFilter Mid/Side default). Stereo = both channels; Link still decides how L/R share the detector. Left / Right = hear and compress one side only; the other stays dry. Mid = detect and glue the centre (vocals, kick, bass) while leaving width alone. Side = detect and tame wide peaks without ducking the mono sum. Mix still blends wet vs dry on the selected path. External sidechain is also read through Channel (Mid of the SC bus when Channel=Mid). Mid/Side is encode → detect/compress → decode.',
 
   sidechainActive:
     'Uses the external Sidechain input for the level detector (Mode, Link, HP/LP filters) instead of the main program bus. Route a kick, bass, or keyed track into the host’s sidechain port, then enable this toggle — compression follows that source while the audio path stays on the main input. If nothing is routed or the bus is inactive, detection falls back to the main signal.',

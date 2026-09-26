@@ -240,18 +240,63 @@ void ExpanderPlugin::processSample(const BlockState& state, float& L, float& R, 
   const float sr = static_cast<float>(sampleRate_);
 
   // Main open-detector first — relative inhibit compares against this.
-  float detL = scL;
-  float detR = scR;
-  if (state.link == Dsp::StereoLink::Mid)
+  // Channel selects detector feed (and GR path below); Link applies in Stereo.
+  float detL = 0.f;
+  float detR = 0.f;
+  switch (state.channel)
   {
-    const float mid = sc_.processMono(0.5f * (scL + scR));
-    detL = mid;
-    detR = mid;
-  }
-  else
-  {
-    detL = sc_.processChannel(0, scL);
-    detR = sc_.processChannel(1, scR);
+    case Dsp::ChannelMode::Left:
+    {
+      const float x = sc_.processChannel(0, scL);
+      (void)sc_.processChannel(1, scR);
+      detL = x;
+      detR = x;
+      break;
+    }
+    case Dsp::ChannelMode::Right:
+    {
+      (void)sc_.processChannel(0, scL);
+      const float x = sc_.processChannel(1, scR);
+      detL = x;
+      detR = x;
+      break;
+    }
+    case Dsp::ChannelMode::Mid:
+    {
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(scL, scR, mid, side);
+      (void)side;
+      const float x = sc_.processMono(mid);
+      detL = x;
+      detR = x;
+      break;
+    }
+    case Dsp::ChannelMode::Side:
+    {
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(scL, scR, mid, side);
+      (void)mid;
+      const float x = sc_.processMono(side);
+      detL = x;
+      detR = x;
+      break;
+    }
+    case Dsp::ChannelMode::Stereo:
+    default:
+      if (state.link == Dsp::StereoLink::Mid)
+      {
+        const float mid = sc_.processMono(0.5f * (scL + scR));
+        detL = mid;
+        detR = mid;
+      }
+      else
+      {
+        detL = sc_.processChannel(0, scL);
+        detR = sc_.processChannel(1, scR);
+      }
+      break;
   }
   const float mainPeak = std::max(std::fabs(detL), std::fabs(detR));
   const float detPeak = mainPeak;

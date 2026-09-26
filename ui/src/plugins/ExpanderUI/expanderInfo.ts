@@ -2,7 +2,7 @@ export const expanderInfo = {
   bypass:
     'Turns expansion/gating off so you hear the dry path (In/Out gains still apply). A/B whether the expander is cleaning space or eating body.',
   channel:
-    'Which stereo path receives expansion/gating. Stereo = both channels (Link still decides the detector). Left / Right = expand one side only. Mid = clean the centre while leaving width. Side = gate ambience/width without chewing the mono sum. Mid/Side is encode → expand → decode.',
+    'Which stereo path the detector and expansion/gating act on (same path). Stereo = both channels; Link still decides how L/R share the detector. Left / Right = hear and expand one side only. Mid = detect and clean the centre while leaving width. Side = detect and gate ambience/width without chewing the mono sum. External sidechain is also read through Channel. Inhibit keys stay on their own buses. Mid/Side is encode → detect/expand → decode.',
   sidechainActive:
     'Uses the external Sidechain input for the envelope detector (Mode, Link, HP/LP filters) instead of the main program bus. Route a reference track into the host’s sidechain port and enable this — expansion/gating follows that source while audio still passes through the main input. This key tries to open the gate. Inhibit 1 / Inhibit 2 (Inv tabs) are separate buses for signals that should force it closed. With no sidechain routed, detection falls back to the main signal.',
   mode: 'How the detector measures level. Peak = snappy, follows hits. RMS = smoother average — less chatter. Opto = photocell-like ballistics that soften attack/release as reduction deepens.',
