@@ -75,6 +75,7 @@ void DeesserPlugin::resetProcessing()
   histSnapshotSampleCount_ = 0;
   histSnapshotSamplesPerSlot_ = 1;
   histSeq_.fetch_add(1, std::memory_order_release); // even: stable
+  bypassSmooth_ = 1.f;
 }
 
 tresult PLUGIN_API DeesserPlugin::setActive(TBool state)
@@ -214,37 +215,48 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
     const float gr = gr_.processDetector(detL, detR);
     grMeter_.process(gr);
     histFeedSample(audioPeak, detPeak, gr);
-    L = detL;
-    R = detR;
-    return;
-  }
-
-  if (state.bypass)
-  {
-    splitL_.process2(dryL, loL, hiL);
-    splitR_.process2(dryR, loR, hiR);
-    gr_.processDetector(detL, detR);
-    grMeter_.forceZero();
-    histFeedSample(audioPeak, detPeak, 1.f);
+    Dsp::listenImage(state.channel, detL, detR, L, R);
     return;
   }
 
   const float gr = gr_.processDetector(detL, detR);
+
+  const float bypassTarget = state.bypass ? 0.f : 1.f;
+  bypassSmooth_ = Dsp::slewToward(
+    bypassSmooth_, bypassTarget,
+    Dsp::bypassFadeCoeff(static_cast<float>(sampleRate_)));
+
+  // Keep splitters warm even while fully bypassed.
+  auto allpassSum = [](float lo, float hi) { return lo + hi; };
+
+  if (bypassSmooth_ <= 0.f)
+  {
+    splitL_.process2(dryL, loL, hiL);
+    splitR_.process2(dryR, loR, hiR);
+    grMeter_.forceZero();
+    histFeedSample(audioPeak, detPeak, 1.f);
+    L = dryL;
+    R = dryR;
+    return;
+  }
+
   grMeter_.process(gr);
   histFeedSample(audioPeak, detPeak, gr);
 
+  // Split: unused / complement path = band sum without GR ≈ LR allpass.
+  // Wide: no crossover — raw complement is fine.
   switch (state.channel)
   {
     case Dsp::ChannelMode::Left:
       splitL_.process2(dryL, loL, hiL);
       splitR_.process2(dryR, loR, hiR);
       L = applySplit(dryL, loL, hiL, gr);
-      R = dryR;
+      R = state.split ? allpassSum(loR, hiR) : dryR;
       break;
     case Dsp::ChannelMode::Right:
       splitL_.process2(dryL, loL, hiL);
       splitR_.process2(dryR, loR, hiR);
-      L = dryL;
+      L = state.split ? allpassSum(loL, hiL) : dryL;
       R = applySplit(dryR, loR, hiR, gr);
       break;
     case Dsp::ChannelMode::Mid:
@@ -253,8 +265,10 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
       float side = 0.f;
       Dsp::encodeMs(dryL, dryR, mid, side);
       splitL_.process2(mid, loL, hiL);
-      splitR_.process2(mid, loR, hiR);
+      splitR_.process2(side, loR, hiR);
       mid = applySplit(mid, loL, hiL, gr);
+      if (state.split)
+        side = allpassSum(loR, hiR);
       Dsp::decodeMs(mid, side, L, R);
       break;
     }
@@ -264,8 +278,10 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
       float side = 0.f;
       Dsp::encodeMs(dryL, dryR, mid, side);
       splitL_.process2(side, loL, hiL);
-      splitR_.process2(side, loR, hiR);
+      splitR_.process2(mid, loR, hiR);
       side = applySplit(side, loL, hiL, gr);
+      if (state.split)
+        mid = allpassSum(loR, hiR);
       Dsp::decodeMs(mid, side, L, R);
       break;
     }
@@ -276,6 +292,12 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
       L = applySplit(dryL, loL, hiL, gr);
       R = applySplit(dryR, loR, hiR, gr);
       break;
+  }
+
+  if (bypassSmooth_ < 1.f)
+  {
+    L = bypassSmooth_ * L + (1.f - bypassSmooth_) * dryL;
+    R = bypassSmooth_ * R + (1.f - bypassSmooth_) * dryR;
   }
 
   Dsp::sanitizeDenormal(L);

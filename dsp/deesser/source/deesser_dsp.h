@@ -100,6 +100,8 @@ private:
   int histSnapshotSampleCount_ = 0;
   int histSnapshotSamplesPerSlot_ = 1;
   int histVisibleSlots_ = 160;
+  /** 1 = fully active, 0 = fully bypassed (soft crossfade). */
+  float bypassSmooth_ = 1.f;
 };
 
 } // namespace Deesser
