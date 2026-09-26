@@ -274,7 +274,7 @@ tresult PLUGIN_API ChorusPlugin::process(ProcessData& data)
           wetL = post_.processWet(0, wetL);
           (void)post_.processWet(1, wetR);
           outL = state.listen ? a * wetL : d * inL + a * wetL;
-          outR = inR;
+          outR = state.listen ? 0.f : inR;
           break;
         }
         case Dsp::ChannelMode::Right:
@@ -283,7 +283,7 @@ tresult PLUGIN_API ChorusPlugin::process(ProcessData& data)
           float wetR = right_.processWet(inR);
           (void)post_.processWet(0, wetL);
           wetR = post_.processWet(1, wetR);
-          outL = inL;
+          outL = state.listen ? 0.f : inL;
           outR = state.listen ? a * wetR : d * inR + a * wetR;
           break;
         }
@@ -297,8 +297,16 @@ tresult PLUGIN_API ChorusPlugin::process(ProcessData& data)
           wetL = post_.processWet(0, wetL);
           wetR = post_.processWet(1, wetR);
           const float wetM = 0.5f * (wetL + wetR);
-          const float midOut = state.listen ? a * wetM : d * mid + a * wetM;
-          Dsp::decodeMs(midOut, side, outL, outR);
+          if (state.listen)
+          {
+            outL = a * wetM;
+            outR = a * wetM;
+          }
+          else
+          {
+            const float midOut = d * mid + a * wetM;
+            Dsp::decodeMs(midOut, side, outL, outR);
+          }
           break;
         }
         case Dsp::ChannelMode::Side:
@@ -311,8 +319,16 @@ tresult PLUGIN_API ChorusPlugin::process(ProcessData& data)
           wetL = post_.processWet(0, wetL);
           wetR = post_.processWet(1, wetR);
           const float wetS = 0.5f * (wetL + wetR);
-          const float sideOut = state.listen ? a * wetS : d * side + a * wetS;
-          Dsp::decodeMs(mid, sideOut, outL, outR);
+          if (state.listen)
+          {
+            outL = a * wetS;
+            outR = -a * wetS;
+          }
+          else
+          {
+            const float sideOut = d * side + a * wetS;
+            Dsp::decodeMs(mid, sideOut, outL, outR);
+          }
           break;
         }
         case Dsp::ChannelMode::Stereo:
