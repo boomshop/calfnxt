@@ -41,6 +41,15 @@ export const MBCOMP_SLOPE_ENTRIES: { label: string; value: number }[] = [
   { label: '96 dB', value: 96 },
 ];
 
+/** Stereo / L / R / Mid / Side (matches `Dsp::ChannelMode`). */
+export const MBCOMP_CHANNEL_ENTRIES = [
+  { label: 'Stereo', value: 0 },
+  { label: 'Left', value: 1 },
+  { label: 'Right', value: 2 },
+  { label: 'Mid', value: 3 },
+  { label: 'Side', value: 4 },
+];
+
 export type MbcompBandParam = keyof typeof MB_BAND_OFFSET;
 
 export interface IMbcompBand {
@@ -80,6 +89,8 @@ export interface IMbcompHost {
   io: IHeaderIo;
   bypass$: DynamicValue<boolean>;
   mono$: DynamicValue<boolean>;
+  /** 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side. Hidden while Mono. */
+  channel$: DynamicValue<number>;
   numBands$: DynamicValue<number>;
   slope$: DynamicValue<number>;
   xover$: DynamicValue<number>[];
@@ -197,6 +208,9 @@ export function createBoundMbcompHost(): IMbcompHost {
 
   const mono$ = DynamicValue.fromConstant(globalDefault('mono', 0) >= 0.5);
   disposers.push(bindBoolParamToHost(mono$, paramIds.mono));
+
+  const channel$ = DynamicValue.fromConstant(globalDefault('channel', 0));
+  disposers.push(bindParamToHost(channel$, paramIds.channel));
 
   const numBands$ = DynamicValue.fromConstant(
     clampBands(globalDefault('num_bands', 4)),
@@ -334,6 +348,7 @@ export function createBoundMbcompHost(): IMbcompHost {
     io,
     bypass$,
     mono$,
+    channel$,
     numBands$,
     slope$,
     xover$,

@@ -6,6 +6,11 @@
 
   > .Header {
     > .children {
+      > .bypass {
+        > .Button {
+          --aux-button-paddinghorizontal: 8px;
+        }
+      }
       > .bandcount {
         > .bandcount {
           display: flex;

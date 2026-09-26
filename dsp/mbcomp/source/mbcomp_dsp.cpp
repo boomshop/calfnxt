@@ -1,6 +1,7 @@
 #include "mbcomp_dsp.h"
 
 #include "base/source/fstreamer.h"
+#include "channel_mode.h"
 #include "gain_util.h"
 
 #include <algorithm>
@@ -15,7 +16,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e584Du; // 'CNXM'
-constexpr uint32 kStateVersion = 1;
+constexpr uint32 kStateVersion = 2; // v2: + channel
 constexpr float kHistoryDisplayMs = 10000.f;
 
 float linToDbSafe(float lin)
@@ -305,6 +306,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
   const bool globalBypass = params_[kParamBypass] >= 0.5f;
   const bool mono = params_[kParamMono] >= 0.5f;
   const float slopeDb = params_[kParamSlope];
+  const auto channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
 
   BandState bandState[kMaxBands];
   int listenBand = -1;
@@ -559,11 +561,46 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     readLR(i, L, R);
     if (mono)
       R = L;
-    const float fullPeak = std::max(std::fabs(L), std::fabs(R));
+    const float dryL = L;
+    const float dryR = R;
+    float midHold = 0.f;
+    float sideHold = 0.f;
+    const bool routeChannel = !mono && channel != Dsp::ChannelMode::Stereo;
+    if (routeChannel)
+    {
+      switch (channel)
+      {
+        case Dsp::ChannelMode::Left:
+          R = L;
+          break;
+        case Dsp::ChannelMode::Right:
+          L = R;
+          break;
+        case Dsp::ChannelMode::Mid:
+          Dsp::encodeMs(dryL, dryR, midHold, sideHold);
+          L = midHold;
+          R = midHold;
+          break;
+        case Dsp::ChannelMode::Side:
+          Dsp::encodeMs(dryL, dryR, midHold, sideHold);
+          L = sideHold;
+          R = sideHold;
+          break;
+        default:
+          break;
+      }
+    }
+    const float fullPeak = std::max(std::fabs(dryL), std::fabs(dryR));
+
+    // Channel modes feed a linked mono path into both splitters.
+    const bool linkedPath = mono || routeChannel;
 
     splitL_.process(L, bandsL);
-    if (mono)
+    if (linkedPath)
     {
+      // Keep the unused splitter warm (mode switches stay continuous).
+      float discard[kMaxBands];
+      splitR_.process(L, discard);
       for (int b = 0; b < bands; ++b)
         bandsR[b] = bandsL[b];
     }
@@ -594,9 +631,9 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
       {
         float detL = bL;
         float detR = bR;
-        if (mono || st.link == Dsp::StereoLink::Mid)
+        if (linkedPath || st.link == Dsp::StereoLink::Mid)
         {
-          const float mid = mono ? bL : 0.5f * (bL + bR);
+          const float mid = linkedPath ? bL : 0.5f * (bL + bR);
           detL = mid;
           detR = mid;
         }
@@ -605,7 +642,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
         if (!(grLin > 0.f) || !std::isfinite(grLin))
           grLin = 1.f;
 
-        if (mono)
+        if (linkedPath)
         {
           const float wetL = bL * grLin * st.makeupLin;
           bL = st.dry * bL + st.mix * wetL;
@@ -639,7 +676,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
       else
       {
         // Bypassed band: passthrough only — compressor already reset above.
-        if (mono)
+        if (linkedPath)
           bR = bL;
         grMeter_[b].forceZero();
         lastGrDb_[b] = 0.f;
@@ -666,10 +703,32 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     hardenSample(sumL);
     hardenSample(sumR);
 
-    if (anyListen)
-      writeLR(i, listenL, mono ? listenL : listenR);
-    else
-      writeLR(i, sumL, mono ? sumL : sumR);
+    float outL = anyListen ? listenL : sumL;
+    float outR = anyListen ? listenR : sumR;
+    if (mono)
+      outR = outL;
+    else if (routeChannel)
+    {
+      switch (channel)
+      {
+        case Dsp::ChannelMode::Left:
+          outR = dryR;
+          break;
+        case Dsp::ChannelMode::Right:
+          outL = dryL;
+          break;
+        case Dsp::ChannelMode::Mid:
+          Dsp::decodeMs(outL, sideHold, outL, outR);
+          break;
+        case Dsp::ChannelMode::Side:
+          Dsp::decodeMs(midHold, outL, outL, outR);
+          break;
+        default:
+          break;
+      }
+    }
+
+    writeLR(i, outL, outR);
   }
 
   publishHistSnapshot();
@@ -693,7 +752,7 @@ tresult PLUGIN_API MbcompPlugin::setState(IBStream* state)
   int32 count = 0;
   if (!streamer.readInt32u(magic) || magic != kStateMagic)
     return kResultFalse;
-  if (!streamer.readInt32u(version) || version != kStateVersion)
+  if (!streamer.readInt32u(version) || (version != kStateVersion && version != 1))
     return kResultFalse;
   if (!streamer.readInt32(count) || count <= 0 || count > kParamCount)
     return kResultFalse;

@@ -783,6 +783,7 @@ export function applyMbcompDemo(
 ): () => void {
   setBool(host.bypass$, params.bypass);
   setBool(host.mono$, params.mono);
+  setNum(host.channel$, params.channel);
   setNum(host.numBands$, params.num_bands);
   setNum(host.slope$, params.slope);
   const xovers = params.xovers;

@@ -2,6 +2,7 @@
 
 #include "effect_base.h"
 #include "io_stage.h"
+#include "channel_mode.h"
 #include "compressor.h"
 #include "gr_meter.h"
 #include "band_splitter.h"

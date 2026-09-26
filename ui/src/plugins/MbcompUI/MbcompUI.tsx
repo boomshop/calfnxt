@@ -13,12 +13,14 @@ import {
   MB_FREQ_MAX,
   MB_FREQ_MIN,
   MultibandChart,
+  Select,
   Toggle,
   WithInfo,
   type BandBridgeSegment,
 } from '../../widgets';
 import { paramIds } from '../../generated/mbcompModel';
 import {
+  MBCOMP_CHANNEL_ENTRIES,
   MBCOMP_LINK_ENTRIES,
   MBCOMP_MAX_BANDS,
   MBCOMP_MIN_BANDS,
@@ -536,7 +538,7 @@ export function MbcompUI(props: MbcompUIProps) {
       Math.round(useDynamicValueReadonly(host.numBands$, 4)),
     ),
   );
-  const slope = useDynamicValueReadonly(host.slope$, 48);
+  const mono = useDynamicValueReadonly(host.mono$, false);
   const selected = Math.min(
     numBands - 1,
     useDynamicValueReadonly(host.selectedBandIndex$, 0),
@@ -610,16 +612,13 @@ export function MbcompUI(props: MbcompUIProps) {
         <WithInfo title={mbcompInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>
+        {!mono ? (
+          <WithInfo title={mbcompInfo.channel} className="info-block">
+            <Select value$={host.channel$} entries={MBCOMP_CHANNEL_ENTRIES} />
+          </WithInfo>
+        ) : null}
         <WithInfo title={mbcompInfo.slope} className="info-block slope">
-          <Buttons
-            entries={MBCOMP_SLOPE_ENTRIES}
-            value={slope}
-            onChange={(v) => {
-              host.beginEdit(paramIds.slope);
-              host.slope$.set(v);
-              host.endEdit(paramIds.slope);
-            }}
-          />
+          <Select value$={host.slope$} entries={MBCOMP_SLOPE_ENTRIES} />
         </WithInfo>
         <WithInfo title={mbcompInfo.numBands} className="info-block bandcount">
           <div className="bandcount">
