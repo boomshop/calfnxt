@@ -1,6 +1,7 @@
 #include "compressor_dsp.h"
 
 #include "base/source/fstreamer.h"
+#include "channel_mode.h"
 #include "gain_util.h"
 
 #include <algorithm>
@@ -15,7 +16,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5843u; // 'CNXC'
-constexpr uint32 kStateVersion = 6;
+constexpr uint32 kStateVersion = 7; // v7: + channel
 
 /** Fixed history plot window (ms) — keep in sync with CompressorHistoryChart. */
 constexpr float kHistoryDisplayMs = 10000.f;
@@ -121,6 +122,7 @@ CompressorPlugin::BlockState CompressorPlugin::makeBlockState() const
   state.listen = params_[kParamListen] >= 0.5f;
   state.sidechainActive = params_[kParamSidechainActive] >= 0.5f;
   state.link = stereoLinkFromPlain(params_[kParamLink]);
+  state.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   return state;
 }
 
@@ -224,10 +226,54 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
   pointInDbPlain_ = inDb;
   pointOutDbPlain_ = outDb;
 
-  const float wetL = dryL * gr * state.makeupLin;
-  const float wetR = dryR * gr * state.makeupLin;
-  L = wetL * state.mix + dryL * state.dry;
-  R = wetR * state.mix + dryR * state.dry;
+  // Mix applies GR+makeup only on the selected stereo path.
+  const float applied = gr * state.makeupLin;
+  switch (state.channel)
+  {
+    case Dsp::ChannelMode::Left:
+    {
+      const float wetL = dryL * applied;
+      L = wetL * state.mix + dryL * state.dry;
+      R = dryR;
+      break;
+    }
+    case Dsp::ChannelMode::Right:
+    {
+      const float wetR = dryR * applied;
+      L = dryL;
+      R = wetR * state.mix + dryR * state.dry;
+      break;
+    }
+    case Dsp::ChannelMode::Mid:
+    {
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(dryL, dryR, mid, side);
+      const float wetM = mid * applied;
+      mid = wetM * state.mix + mid * state.dry;
+      Dsp::decodeMs(mid, side, L, R);
+      break;
+    }
+    case Dsp::ChannelMode::Side:
+    {
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(dryL, dryR, mid, side);
+      const float wetS = side * applied;
+      side = wetS * state.mix + side * state.dry;
+      Dsp::decodeMs(mid, side, L, R);
+      break;
+    }
+    case Dsp::ChannelMode::Stereo:
+    default:
+    {
+      const float wetL = dryL * applied;
+      const float wetR = dryR * applied;
+      L = wetL * state.mix + dryL * state.dry;
+      R = wetR * state.mix + dryR * state.dry;
+      break;
+    }
+  }
 }
 
 int CompressorPlugin::takeGainReductionDb(float* out, int maxOut)

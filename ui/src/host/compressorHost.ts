@@ -22,9 +22,20 @@ export const COMPRESSOR_LINK_ENTRIES = [
   { label: 'Mid', value: 2 },
 ];
 
+/** Stereo / L / R / Mid / Side (matches `Dsp::ChannelMode`). */
+export const COMPRESSOR_CHANNEL_ENTRIES = [
+  { label: 'Stereo', value: 0 },
+  { label: 'Left', value: 1 },
+  { label: 'Right', value: 2 },
+  { label: 'Mid', value: 3 },
+  { label: 'Side', value: 4 },
+];
+
 export type ICompressorHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  /** 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side. */
+  channel$: DynamicValue<number>;
   sidechainActive$: DynamicValue<boolean>;
   threshold$: DynamicValue<number>;
   ratio$: DynamicValue<number>;
@@ -87,6 +98,7 @@ export function createBoundCompressorHost(): ICompressorHost {
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    channel$: bindNum('channel', 0),
     sidechainActive$: bindBool('sidechain_active'),
     threshold$: bindNum('threshold', -20),
     ratio$: bindNum('ratio', 4),

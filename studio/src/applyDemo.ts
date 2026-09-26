@@ -98,6 +98,7 @@ export function applyCompressorDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setNum(host.channel$, params.channel);
   setNum(host.threshold$, params.threshold);
   setNum(host.ratio$, params.ratio);
   setNum(host.knee$, params.knee);

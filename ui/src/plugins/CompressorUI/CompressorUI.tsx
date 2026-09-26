@@ -7,11 +7,13 @@ import {
   HistoryChart,
   Knob,
   LevelMeter,
+  Select,
   Toggle,
   WithInfo,
 } from '../../widgets';
 import { paramIds } from '../../generated/compressorModel';
 import {
+  COMPRESSOR_CHANNEL_ENTRIES,
   COMPRESSOR_LINK_ENTRIES,
   COMPRESSOR_MODE_ENTRIES,
   compressorParamDefault,
@@ -111,6 +113,9 @@ export function CompressorUI(props: CompressorUIProps) {
       <Header title="Compressor">
         <WithInfo title={compressorInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
+        <WithInfo title={compressorInfo.channel} className="info-block">
+          <Select value$={host.channel$} entries={COMPRESSOR_CHANNEL_ENTRIES} />
         </WithInfo>
       </Header>
 
