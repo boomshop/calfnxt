@@ -1,5 +1,6 @@
 #pragma once
 
+#include "channel_mode.h"
 #include "effect_base.h"
 #include "io_stage.h"
 #include "simple_lfo.h"
@@ -57,6 +58,7 @@ private:
     int modMode = 0;
     int lfo1Mode = 0;
     int lfo2Mode = 0;
+    Dsp::ChannelMode channel = Dsp::ChannelMode::Stereo;
     float modFreq = 1000.f;
     float modAmount = 0.5f;
     float modPhase = 0.5f;

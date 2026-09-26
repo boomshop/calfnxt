@@ -305,6 +305,7 @@ export function applyRingmodDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setNum(host.channel$, params.channel);
   setNum(host.modMode$, params.mod_mode);
   setNum(host.modFreq$, params.mod_freq);
   setNum(host.modAmount$, params.mod_amount);

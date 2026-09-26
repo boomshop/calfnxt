@@ -12,6 +12,8 @@ import {
 export type IRingmodHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  /** 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side. */
+  channel$: DynamicValue<number>;
   modMode$: DynamicValue<number>;
   modFreq$: DynamicValue<number>;
   modAmount$: DynamicValue<number>;
@@ -60,6 +62,15 @@ export type IRingmodHost = {
   endEdit: (id: number) => void;
   pulseReset: (which: 1 | 2) => void;
 };
+
+/** Stereo / L / R / Mid / Side (matches `Dsp::ChannelMode`). */
+export const RINGMOD_CHANNEL_ENTRIES = [
+  { label: 'Stereo', value: 0 },
+  { label: 'Left', value: 1 },
+  { label: 'Right', value: 2 },
+  { label: 'Mid', value: 3 },
+  { label: 'Side', value: 4 },
+];
 
 function paramDefault(name: keyof typeof paramIds, fallback = 0): number {
   const meta = pluginMeta.parameters.find((p) => p.id === name);
@@ -223,6 +234,7 @@ export function createBoundRingmodHost(): IRingmodHost {
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    channel$: bindNum('channel', 0),
     modMode$: bindNum('mod_mode', 0),
     modFreq$,
     modAmount$,

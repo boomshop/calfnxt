@@ -1,8 +1,9 @@
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { Header } from '../../components';
-import { Button, Knob, State, Toggle, WaveformButtons, WithInfo } from '../../widgets';
+import { Button, Knob, Select, State, Toggle, WaveformButtons, WithInfo } from '../../widgets';
 import { paramIds } from '../../generated/ringmodModel';
 import {
+  RINGMOD_CHANNEL_ENTRIES,
   ringmodParamDefault,
   type IRingmodHost,
 } from '../../host/ringmodHost';
@@ -87,6 +88,9 @@ export function RingmodUI(props: RingmodUIProps) {
       <Header title="Ring Modulator">
         <WithInfo title={ringmodInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
+        <WithInfo title={ringmodInfo.channel} className="info-block">
+          <Select value$={host.channel$} entries={RINGMOD_CHANNEL_ENTRIES} />
         </WithInfo>
       </Header>
 

@@ -1,6 +1,7 @@
 #include "ringmod_dsp.h"
 
 #include "base/source/fstreamer.h"
+#include "channel_mode.h"
 #include "dsp_math.h"
 
 #include <algorithm>
@@ -14,7 +15,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5852u; // 'CNXR'
-constexpr uint32 kStateVersion = 1;
+constexpr uint32 kStateVersion = 2; // v2: + channel
 
 inline float centsRatio(float cents)
 {
@@ -97,6 +98,7 @@ RingmodPlugin::BlockState RingmodPlugin::makeBlockState() const
   s.lfo1DetuneActive = params_[kParamLfo1ModDetuneActive] >= 0.5f;
   s.lfo2Lfo1Active = params_[kParamLfo2Lfo1FreqActive] >= 0.5f;
   s.lfo2AmountActive = params_[kParamLfo2ModAmountActive] >= 0.5f;
+  s.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   s.modMode = static_cast<int>(std::lround(std::clamp(params_[kParamModMode], 0.f, 4.f)));
   s.lfo1Mode = static_cast<int>(std::lround(std::clamp(params_[kParamLfo1Mode], 0.f, 4.f)));
   s.lfo2Mode = static_cast<int>(std::lround(std::clamp(params_[kParamLfo2Mode], 0.f, 4.f)));
@@ -295,15 +297,83 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
 
       float outL = 0.f;
       float outR = 0.f;
-      if (state.listen)
+      // Dry blend: in * (1−amount); wet: in * carrier*amount. Channel routes wet.
+      const float dryAmt = 1.f - amount;
+      switch (state.channel)
       {
-        outL = modulL;
-        outR = modulR;
-      }
-      else
-      {
-        outL = L * modulL + L * (1.f - amount);
-        outR = R * modulR + R * (1.f - amount);
+        case Dsp::ChannelMode::Left:
+          if (state.listen)
+          {
+            outL = modulL;
+            outR = 0.f;
+          }
+          else
+          {
+            outL = L * modulL + L * dryAmt;
+            outR = R;
+          }
+          break;
+        case Dsp::ChannelMode::Right:
+          if (state.listen)
+          {
+            outL = 0.f;
+            outR = modulR;
+          }
+          else
+          {
+            outL = L;
+            outR = R * modulR + R * dryAmt;
+          }
+          break;
+        case Dsp::ChannelMode::Mid:
+        {
+          float mid = 0.f;
+          float side = 0.f;
+          Dsp::encodeMs(L, R, mid, side);
+          const float modul = 0.5f * (modulL + modulR);
+          if (state.listen)
+          {
+            outL = modul;
+            outR = modul;
+          }
+          else
+          {
+            mid = mid * modul + mid * dryAmt;
+            Dsp::decodeMs(mid, side, outL, outR);
+          }
+          break;
+        }
+        case Dsp::ChannelMode::Side:
+        {
+          float mid = 0.f;
+          float side = 0.f;
+          Dsp::encodeMs(L, R, mid, side);
+          const float modul = 0.5f * (modulL + modulR);
+          if (state.listen)
+          {
+            outL = modul;
+            outR = -modul;
+          }
+          else
+          {
+            side = side * modul + side * dryAmt;
+            Dsp::decodeMs(mid, side, outL, outR);
+          }
+          break;
+        }
+        case Dsp::ChannelMode::Stereo:
+        default:
+          if (state.listen)
+          {
+            outL = modulL;
+            outR = modulR;
+          }
+          else
+          {
+            outL = L * modulL + L * dryAmt;
+            outR = R * modulR + R * dryAmt;
+          }
+          break;
       }
       Dsp::sanitize(outL);
       Dsp::sanitize(outR);
