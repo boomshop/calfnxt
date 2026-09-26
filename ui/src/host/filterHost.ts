@@ -49,6 +49,15 @@ export const FILTER_DETECTION_ENTRIES = [
   { label: 'Opto', value: 2 },
 ];
 
+/** Stereo / L / R / Mid / Side (matches `Dsp::ChannelMode`). */
+export const FILTER_CHANNEL_ENTRIES = [
+  { label: 'Stereo', value: 0 },
+  { label: 'Left', value: 1 },
+  { label: 'Right', value: 2 },
+  { label: 'Mid', value: 3 },
+  { label: 'Side', value: 4 },
+];
+
 export { EQ_SPECTRUM_ENTRIES as FILTER_SPECTRUM_ENTRIES };
 
 export type IFilterHost = {
@@ -56,6 +65,8 @@ export type IFilterHost = {
   bypass$: DynamicValue<boolean>;
   mono$: DynamicValue<boolean>;
   mode$: DynamicValue<number>;
+  /** 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side. */
+  channel$: DynamicValue<number>;
   resonance$: DynamicValue<number>;
   frequency$: DynamicValue<number>;
   inertia$: DynamicValue<number>;
@@ -325,6 +336,7 @@ export function createBoundFilterHost(): IFilterHost {
     bypass$: bindBool('bypass'),
     mono$: bindBool('mono'),
     mode$,
+    channel$: bindNum('channel', 0),
     resonance$,
     frequency$,
     inertia$: bindNum('inertia', 20),

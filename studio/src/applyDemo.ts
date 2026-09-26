@@ -283,6 +283,7 @@ export function applyFilterDemo(
   setBool(host.bypass$, params.bypass);
   setBool(host.mono$, params.mono);
   setNum(host.mode$, params.mode);
+  setNum(host.channel$, params.channel);
   setNum(host.resonance$, params.resonance);
   setNum(host.frequency$, params.frequency);
   setNum(host.inertia$, params.inertia);

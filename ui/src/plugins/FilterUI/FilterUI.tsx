@@ -10,6 +10,7 @@ import {
 } from '../../widgets';
 import { paramIds } from '../../generated/filterModel';
 import {
+  FILTER_CHANNEL_ENTRIES,
   FILTER_DETECTION_ENTRIES,
   FILTER_MODE_ENTRIES,
   FILTER_SPECTRUM_ENTRIES,
@@ -107,6 +108,7 @@ export function FilterUI(props: FilterUIProps) {
   const envOn = useDynamicValueReadonly(host.envPower$, false);
   const detection = useDynamicValueReadonly(host.detection$, 0);
   const spectrumMode = useDynamicValueReadonly(host.spectrum$, 0);
+  const mono = useDynamicValueReadonly(host.mono$, false);
 
   return (
     <div className="FilterUI PluginUI">
@@ -133,9 +135,19 @@ export function FilterUI(props: FilterUIProps) {
 
       <div className="block filter">
         <div className="title">Filter</div>
-        <WithInfo title={filterInfo.mode} className="info-block mode">
-          <Select value$={host.mode$} entries={FILTER_MODE_ENTRIES} />
-        </WithInfo>
+        <div className="filter-top">
+          <WithInfo title={filterInfo.mode} className="info-block mode">
+            <Select value$={host.mode$} entries={FILTER_MODE_ENTRIES} />
+          </WithInfo>
+          {!mono ? (
+            <WithInfo title={filterInfo.channel} className="info-block channel">
+              <Select
+                value$={host.channel$}
+                entries={FILTER_CHANNEL_ENTRIES}
+              />
+            </WithInfo>
+          ) : null}
+        </div>
         <div className="knobs">
           <WithInfo title={filterInfo.frequency}>
             <Knob

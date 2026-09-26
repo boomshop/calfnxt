@@ -5,10 +5,13 @@ export const filterInfo = {
     'Turns the filter off so you hear dry input (In/Out gains and meters still work). Use this to A/B whether the filter is shaping tone usefully or just thinning / hollowing the track.',
 
   mono:
-    'Process the Left channel only and copy the result to both outs. Roughly halves filter CPU — ideal on mono tracks. Right-channel content is ignored while on.',
+    'Process the Left channel only and copy the result to both outs. Roughly halves filter CPU — ideal on mono tracks. While on, Stereo/L/R/Mid/Side is hidden and ignored. Right-channel content is discarded.',
 
   mode:
     'Filter shape. Low-pass = darkens / removes highs (mud control, dulling harshness, synth “closed filter”). High-pass = thins / removes lows (cleanup, rumble, air without boom). Band-pass = mid “wah” / telephone / auto-wah territory. Band-reject (notch) = scoops a band (hum, resonance, harsh spot). Allpass ≈ same loudness curve but twists phase — subtle when soloed; with Mix < 100% it can add comb-like color. Steeper slopes (24 / 48) cut harder and sound more “surgical”; gentler slopes sound smoother and more musical.',
+
+  channel:
+    'Which stereo path the filter processes. Stereo = both channels. Left / Right = only that side — fix one channel without touching the other. Mid = shared centre (vocals, kick, bass). Side = width and ambience. Mid/Side is encode → filter → decode. Hidden while header Mono is on (Mono always filters L only). Envelope detection follows the same path.',
 
   resonance:
     'Emphasis at the cutoff / center. Low (≈0.7) = smooth Butterworth-ish, natural. Higher = a peak or “sing” at the edge — classic filter scream, auto-wah bite, synth resonance. Very high Q can ring, whistle, or make Mix sound hollow when dry is blended in (the complementary dry path softens then — expect some coloration).',

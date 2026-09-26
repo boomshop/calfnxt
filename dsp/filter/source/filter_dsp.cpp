@@ -1,6 +1,7 @@
 #include "filter_dsp.h"
 
 #include "base/source/fstreamer.h"
+#include "channel_mode.h"
 #include "gain_util.h"
 
 #include <algorithm>
@@ -15,7 +16,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5846u; // 'CNXF'
-constexpr uint32 kStateVersion = 6; // v6: + mono (trailing)
+constexpr uint32 kStateVersion = 7; // v7: + channel (trailing)
 
 Dsp::DetectorMode detectorModeFromPlain(float v)
 {
@@ -83,6 +84,7 @@ FilterPlugin::BlockState FilterPlugin::makeBlockState() const
   s.spectrumOn =
     static_cast<int>(std::lround(std::clamp(params_[kParamSpectrum], 0.f, 3.f))) >= 1;
   s.mode = static_cast<int>(std::lround(std::clamp(params_[kParamMode], 0.f, 12.f)));
+  s.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   s.resonance = params_[kParamResonance];
   s.frequency = params_[kParamFrequency];
   s.inertiaMs = params_[kParamInertia];
@@ -192,6 +194,7 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
       {
         if (state.mono)
         {
+          // Global Mono: always Left-path filters (ignore per-slot channel).
           if (state.envOn)
           {
             const float env = std::clamp(
@@ -211,11 +214,46 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
         }
         else
         {
+          float detL = L;
+          float detR = R;
+          switch (state.channel)
+          {
+            case Dsp::ChannelMode::Left:
+              detR = L;
+              break;
+            case Dsp::ChannelMode::Right:
+              detL = R;
+              break;
+            case Dsp::ChannelMode::Mid:
+            {
+              float mid = 0.f;
+              float side = 0.f;
+              Dsp::encodeMs(L, R, mid, side);
+              (void)side;
+              detL = mid;
+              detR = mid;
+              break;
+            }
+            case Dsp::ChannelMode::Side:
+            {
+              float mid = 0.f;
+              float side = 0.f;
+              Dsp::encodeMs(L, R, mid, side);
+              (void)mid;
+              detL = side;
+              detR = side;
+              break;
+            }
+            case Dsp::ChannelMode::Stereo:
+            default:
+              break;
+          }
+
           if (state.envOn)
           {
             const float env = std::clamp(
               envelope_.process(
-                L, R, state.activationLin, state.attackMs, state.releaseMs,
+                detL, detR, state.activationLin, state.attackMs, state.releaseMs,
                 state.detection),
               0.f, 1.f);
             float freq = std::pow(10.f, (logCeil - logFloor) * env + logFloor);
@@ -226,7 +264,37 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
             filter_.setCutoffNow(freq);
           }
 
-          filter_.processStereo(L, R, state.mix, state.softClip);
+          switch (state.channel)
+          {
+            case Dsp::ChannelMode::Left:
+              filter_.processMono(L, state.mix, state.softClip);
+              break;
+            case Dsp::ChannelMode::Right:
+              filter_.processRight(R, state.mix, state.softClip);
+              break;
+            case Dsp::ChannelMode::Mid:
+            {
+              float mid = 0.f;
+              float side = 0.f;
+              Dsp::encodeMs(L, R, mid, side);
+              filter_.processMono(mid, state.mix, state.softClip);
+              Dsp::decodeMs(mid, side, L, R);
+              break;
+            }
+            case Dsp::ChannelMode::Side:
+            {
+              float mid = 0.f;
+              float side = 0.f;
+              Dsp::encodeMs(L, R, mid, side);
+              filter_.processMono(side, state.mix, state.softClip);
+              Dsp::decodeMs(mid, side, L, R);
+              break;
+            }
+            case Dsp::ChannelMode::Stereo:
+            default:
+              filter_.processStereo(L, R, state.mix, state.softClip);
+              break;
+          }
         }
       }
 

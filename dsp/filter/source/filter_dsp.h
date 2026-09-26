@@ -1,6 +1,7 @@
 #pragma once
 
 #include "effect_base.h"
+#include "channel_mode.h"
 #include "io_stage.h"
 #include "midi_note_hold.h"
 #include "multimode_filter.h"
@@ -57,6 +58,7 @@ private:
     bool envOn = false;
     bool spectrumOn = false;
     int mode = 0;
+    Dsp::ChannelMode channel = Dsp::ChannelMode::Stereo;
     float resonance = 0.707f;
     float frequency = 1000.f;
     float inertiaMs = 20.f;
