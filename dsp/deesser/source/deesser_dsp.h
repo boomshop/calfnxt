@@ -3,6 +3,7 @@
 #include "effect_base.h"
 #include "io_stage.h"
 #include "band_splitter.h"
+#include "channel_mode.h"
 #include "compressor.h"
 #include "deesser_detector.h"
 #include "gr_meter.h"
@@ -67,6 +68,7 @@ private:
     bool split = false;
     /** Rumble target: detector LP + Split reduces the low band. */
     bool rumble = false;
+    Dsp::ChannelMode channel = Dsp::ChannelMode::Stereo;
   };
 
   BlockState makeBlockState() const;

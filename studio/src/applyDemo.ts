@@ -162,6 +162,7 @@ export function applyDeesserDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setNum(host.channel$, params.channel);
   setNum(host.mode$, params.mode);
   setNum(host.target$, params.target);
   setNum(host.detection$, params.detection);

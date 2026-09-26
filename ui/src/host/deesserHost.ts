@@ -39,9 +39,20 @@ export const DEESSER_SLOPE_ENTRIES = [
   { label: '48', value: 48 },
 ];
 
+/** Stereo / L / R / Mid / Side (matches `Dsp::ChannelMode`). */
+export const DEESSER_CHANNEL_ENTRIES = [
+  { label: 'Stereo', value: 0 },
+  { label: 'Left', value: 1 },
+  { label: 'Right', value: 2 },
+  { label: 'Mid', value: 3 },
+  { label: 'Side', value: 4 },
+];
+
 export type IDeesserHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  /** 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side. */
+  channel$: DynamicValue<number>;
   mode$: DynamicValue<number>;
   target$: DynamicValue<number>;
   detection$: DynamicValue<number>;
@@ -191,6 +202,7 @@ export function createBoundDeesserHost(): IDeesserHost {
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    channel$: bindNum('channel', 0),
     mode$: bindNum('mode', 0),
     target$,
     detection$: bindNum('detection', 1),

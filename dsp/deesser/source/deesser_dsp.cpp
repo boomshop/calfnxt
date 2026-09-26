@@ -1,6 +1,7 @@
 #include "deesser_dsp.h"
 
 #include "base/source/fstreamer.h"
+#include "channel_mode.h"
 #include "dsp_math.h"
 #include "gain_util.h"
 
@@ -16,8 +17,8 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5844u; // 'CNXD'
-// v1: pre-target; v2: +target (Ess/Rumble). Older counts accepted; missing plains = defaults.
-constexpr uint32 kStateVersion = 2;
+// v1: pre-target; v2: +target (Ess/Rumble); v3: +channel.
+constexpr uint32 kStateVersion = 3;
 
 Dsp::DetectorMode detectorModeFromPlain(float v)
 {
@@ -98,6 +99,7 @@ DeesserPlugin::BlockState DeesserPlugin::makeBlockState() const
   state.listen = params_[kParamListen] >= 0.5f;
   state.split = params_[kParamMode] >= 0.5f;
   state.rumble = params_[kParamTarget] >= 0.5f;
+  state.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   return state;
 }
 
@@ -149,16 +151,30 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
   Dsp::sanitizeDenormal(detR);
   const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
 
-  // Always feed LR splitters so Wide↔Split stays continuous and states sanitize.
+  auto applySplit = [&](float in, float lo, float hi, float gain) -> float {
+    float out = 0.f;
+    if (state.split)
+    {
+      if (state.rumble)
+        out = lo * gain + hi;
+      else
+        out = lo + hi * gain;
+    }
+    else
+      out = in * gain;
+    return out * state.makeupLin;
+  };
+
+  // Always feed LR splitters so Wide↔Split / channel switches stay continuous.
   float loL = 0.f;
   float hiL = 0.f;
   float loR = 0.f;
   float hiR = 0.f;
-  splitL_.process2(dryL, loL, hiL);
-  splitR_.process2(dryR, loR, hiR);
 
   if (state.listen && !state.bypass)
   {
+    splitL_.process2(dryL, loL, hiL);
+    splitR_.process2(dryR, loR, hiR);
     const float gr = gr_.processDetector(detL, detR);
     grMeter_.process(gr);
     histFeedSample(audioPeak, detPeak, gr);
@@ -167,9 +183,10 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
     return;
   }
 
-  // Bypass: keep audio + detector history, GR meter/history idle.
   if (state.bypass)
   {
+    splitL_.process2(dryL, loL, hiL);
+    splitR_.process2(dryR, loR, hiR);
     gr_.processDetector(detL, detR);
     grMeter_.forceZero();
     histFeedSample(audioPeak, detPeak, 1.f);
@@ -180,24 +197,49 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
   grMeter_.process(gr);
   histFeedSample(audioPeak, detPeak, gr);
 
-  if (state.split)
+  switch (state.channel)
   {
-    // Ess: reduce high band; Rumble: reduce low band (same LR split).
-    if (state.rumble)
+    case Dsp::ChannelMode::Left:
+      splitL_.process2(dryL, loL, hiL);
+      splitR_.process2(dryR, loR, hiR);
+      L = applySplit(dryL, loL, hiL, gr);
+      R = dryR;
+      break;
+    case Dsp::ChannelMode::Right:
+      splitL_.process2(dryL, loL, hiL);
+      splitR_.process2(dryR, loR, hiR);
+      L = dryL;
+      R = applySplit(dryR, loR, hiR, gr);
+      break;
+    case Dsp::ChannelMode::Mid:
     {
-      L = (loL * gr + hiL) * state.makeupLin;
-      R = (loR * gr + hiR) * state.makeupLin;
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(dryL, dryR, mid, side);
+      splitL_.process2(mid, loL, hiL);
+      splitR_.process2(mid, loR, hiR);
+      mid = applySplit(mid, loL, hiL, gr);
+      Dsp::decodeMs(mid, side, L, R);
+      break;
     }
-    else
+    case Dsp::ChannelMode::Side:
     {
-      L = (loL + hiL * gr) * state.makeupLin;
-      R = (loR + hiR * gr) * state.makeupLin;
+      float mid = 0.f;
+      float side = 0.f;
+      Dsp::encodeMs(dryL, dryR, mid, side);
+      splitL_.process2(side, loL, hiL);
+      splitR_.process2(side, loR, hiR);
+      side = applySplit(side, loL, hiL, gr);
+      Dsp::decodeMs(mid, side, L, R);
+      break;
     }
-  }
-  else
-  {
-    L = dryL * gr * state.makeupLin;
-    R = dryR * gr * state.makeupLin;
+    case Dsp::ChannelMode::Stereo:
+    default:
+      splitL_.process2(dryL, loL, hiL);
+      splitR_.process2(dryR, loR, hiR);
+      L = applySplit(dryL, loL, hiL, gr);
+      R = applySplit(dryR, loR, hiR, gr);
+      break;
   }
 
   Dsp::sanitizeDenormal(L);

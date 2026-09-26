@@ -4,6 +4,9 @@ export const deesserInfo = {
   bypass:
     'Turns processing off so sibilance or rumble is left untouched (In/Out gains still apply). A/B to hear whether the problem is controlled or the source just got duller / thinner.',
 
+  channel:
+    'Which stereo path the de-esser acts on. Stereo = both channels. Left / Right = treat one side only. Mid = tame centre sibilance (vocals) while leaving width alone. Side = scrub wide ess / air without ducking the mono sum. Split and Wide still apply on the selected path. Mid/Side is encode → process → decode.',
+
   target:
     'Ess = classic de-esser: detection high-pass, Split reduces the high band. Rumble = same engine flipped: detection low-pass, Split reduces the low band (bass thumps / rumble). Does not change frequencies or dynamics — retune Split/Peak yourself for the problem band.',
 

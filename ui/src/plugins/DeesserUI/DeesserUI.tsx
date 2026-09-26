@@ -6,11 +6,13 @@ import {
   HistoryChart,
   Knob,
   LevelMeter,
+  Select,
   Toggle,
   WithInfo,
 } from '../../widgets';
 import { paramIds } from '../../generated/deesserModel';
 import {
+  DEESSER_CHANNEL_ENTRIES,
   DEESSER_DETECTION_ENTRIES,
   DEESSER_MODE_ENTRIES,
   DEESSER_SLOPE_ENTRIES,
@@ -105,6 +107,9 @@ export function DeesserUI(props: DeesserUIProps) {
       <Header title="DeEsser">
         <WithInfo title={deesserInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
+        <WithInfo title={deesserInfo.channel} className="info-block">
+          <Select value$={host.channel$} entries={DEESSER_CHANNEL_ENTRIES} />
         </WithInfo>
         <WithInfo title={deesserInfo.target} className="info-block">
           <Buttons
