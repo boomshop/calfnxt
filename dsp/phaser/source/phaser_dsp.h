@@ -1,5 +1,6 @@
 #pragma once
 
+#include "channel_mode.h"
 #include "effect_base.h"
 #include "io_stage.h"
 #include "simple_phaser.h"
@@ -60,6 +61,7 @@ private:
     float stereoDeg = 180.f;
     float amount = -6.f;
     float dry = 0.f;
+    Dsp::ChannelMode channel = Dsp::ChannelMode::Stereo;
   };
 
   BlockState makeBlockState() const;

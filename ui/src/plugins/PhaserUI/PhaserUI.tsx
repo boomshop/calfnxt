@@ -1,7 +1,11 @@
 import { Header } from '../../components';
-import { Button, Knob, ModulationChart, Toggle, WithInfo } from '../../widgets';
+import { Button, Knob, ModulationChart, Select, Toggle, WithInfo } from '../../widgets';
 import { paramIds } from '../../generated/phaserModel';
-import { phaserParamDefault, type IPhaserHost } from '../../host/phaserHost';
+import {
+  PHASER_CHANNEL_ENTRIES,
+  phaserParamDefault,
+  type IPhaserHost,
+} from '../../host/phaserHost';
 import { phaserInfo } from './phaserInfo';
 import '../PluginUI.scss';
 import './PhaserUI.scss';
@@ -100,6 +104,9 @@ export function PhaserUI(props: PhaserUIProps) {
       <Header title="Phaser">
         <WithInfo title={phaserInfo.active}>
           <Toggle state$={host.active$} icon="power" className="active" />
+        </WithInfo>
+        <WithInfo title={phaserInfo.channel} className="info-block">
+          <Select value$={host.channel$} entries={PHASER_CHANNEL_ENTRIES} />
         </WithInfo>
       </Header>
 

@@ -8,9 +8,20 @@ import {
   postEnd,
 } from '../utils/bind_param';
 
+/** Stereo / L / R / Mid / Side (matches `Dsp::ChannelMode`). */
+export const PHASER_CHANNEL_ENTRIES = [
+  { label: 'Stereo', value: 0 },
+  { label: 'Left', value: 1 },
+  { label: 'Right', value: 2 },
+  { label: 'Mid', value: 3 },
+  { label: 'Side', value: 4 },
+];
+
 export type IPhaserHost = {
   meta: typeof pluginMeta;
   active$: DynamicValue<boolean>;
+  /** 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side. */
+  channel$: DynamicValue<number>;
   baseFreq$: DynamicValue<number>;
   modDepth$: DynamicValue<number>;
   modRate$: DynamicValue<number>;
@@ -69,6 +80,7 @@ export function createBoundPhaserHost(): IPhaserHost {
   return {
     meta: pluginMeta,
     active$: bindBool('active'),
+    channel$: bindNum('channel', 0),
     baseFreq$: bindNum('base_freq', 1000),
     modDepth$: bindNum('mod_depth', 4000),
     modRate$: bindNum('mod_rate', 0.1),

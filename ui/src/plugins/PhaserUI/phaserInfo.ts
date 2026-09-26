@@ -1,6 +1,8 @@
 export const phaserInfo = {
   active:
     'Turns the wet (phased) path off so you hear Dry only — same idea as Delay/Reverb Power. In/Out gains still apply; LFO and the response chart keep moving.',
+  channel:
+    'Which stereo path gets the phaser. Stereo = both channels (Stereo offset still sweeps L vs R). Left / Right = phase one side only. Mid = swirl the centre while leaving width dry — keeps vocals solid. Side = widen ambience without chewing the mono sum. Dry/Amount still blend on the selected path. Mid/Side is encode → phase → decode.',
   baseFreq:
     'Center frequency the allpass cascade sweeps around (Hz). Lower = darker, slower-sounding notches; higher = brighter, more “air” phasing. Classic sweet spot is often midrange.',
   modDepth:

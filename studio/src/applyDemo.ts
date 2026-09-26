@@ -391,6 +391,7 @@ export function applyPhaserDemo(
   viz: VizFixture,
 ) {
   setBool(host.active$, params.active);
+  setNum(host.channel$, params.channel);
   setNum(host.baseFreq$, params.base_freq);
   setNum(host.modDepth$, params.mod_depth);
   setNum(host.modRate$, params.mod_rate);
@@ -420,6 +421,7 @@ export function applyFlangerDemo(
   viz: VizFixture,
 ) {
   setBool(host.active$, params.active);
+  setNum(host.channel$, params.channel);
   setNum(host.minDelay$, params.min_delay);
   setNum(host.modDepth$, params.mod_depth);
   setNum(host.modRate$, params.mod_rate);
@@ -448,6 +450,7 @@ export function applyChorusDemo(
   viz: VizFixture,
 ) {
   setBool(host.active$, params.active);
+  setNum(host.channel$, params.channel);
   setNum(host.minDelay$, params.min_delay);
   setNum(host.modDepth$, params.mod_depth);
   setNum(host.modRate$, params.mod_rate);

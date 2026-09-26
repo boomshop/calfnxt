@@ -1,6 +1,7 @@
 #include "phaser_dsp.h"
 
 #include "base/source/fstreamer.h"
+#include "channel_mode.h"
 
 #include <algorithm>
 #include <cmath>
@@ -14,7 +15,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5850u; // 'CNXP'
-constexpr uint32 kStateVersion = 1;
+constexpr uint32 kStateVersion = 2; // v2: + channel
 
 float linToDbSafe(float lin)
 {
@@ -78,6 +79,7 @@ PhaserPlugin::BlockState PhaserPlugin::makeBlockState() const
   s.stereoDeg = params_[kParamStereo];
   s.amount = params_[kParamAmount];
   s.dry = params_[kParamDry];
+  s.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   return s;
 }
 
@@ -277,10 +279,48 @@ tresult PLUGIN_API PhaserPlugin::process(ProcessData& data)
   auto run = [&](auto** out) {
     for (int32 i = 0; i < nFrames; ++i)
     {
-      float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
-      float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
-      L = left_.process(L, wetOn);
-      R = right_.process(R, wetOn);
+      const float inL = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
+      const float inR = nCh > 1 ? static_cast<float>(out[1][i]) : inL;
+      float L = inL;
+      float R = inR;
+      switch (state.channel)
+      {
+        case Dsp::ChannelMode::Left:
+          L = left_.process(inL, wetOn);
+          (void)right_.process(inR, false);
+          R = inR;
+          break;
+        case Dsp::ChannelMode::Right:
+          (void)left_.process(inL, false);
+          R = right_.process(inR, wetOn);
+          L = inL;
+          break;
+        case Dsp::ChannelMode::Mid:
+        {
+          float mid = 0.f;
+          float side = 0.f;
+          Dsp::encodeMs(inL, inR, mid, side);
+          const float oL = left_.process(mid, wetOn);
+          const float oR = right_.process(mid, wetOn);
+          Dsp::decodeMs(0.5f * (oL + oR), side, L, R);
+          break;
+        }
+        case Dsp::ChannelMode::Side:
+        {
+          float mid = 0.f;
+          float side = 0.f;
+          Dsp::encodeMs(inL, inR, mid, side);
+          const float oL = left_.process(side, wetOn);
+          const float oR = right_.process(side, wetOn);
+          Dsp::decodeMs(mid, 0.5f * (oL + oR), L, R);
+          break;
+        }
+        case Dsp::ChannelMode::Stereo:
+        default:
+          L = left_.process(inL, wetOn);
+          R = right_.process(inR, wetOn);
+          break;
+      }
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)
