@@ -300,9 +300,10 @@ tresult PLUGIN_API PhaserPlugin::process(ProcessData& data)
           float mid = 0.f;
           float side = 0.f;
           Dsp::encodeMs(inL, inR, mid, side);
+          // One wet engine — averaging L/R cancels notches when Stereo≈180°.
           const float oL = left_.process(mid, wetOn);
-          const float oR = right_.process(mid, wetOn);
-          Dsp::decodeMs(0.5f * (oL + oR), side, L, R);
+          (void)right_.process(mid, false);
+          Dsp::decodeMs(oL, side, L, R);
           break;
         }
         case Dsp::ChannelMode::Side:
@@ -311,8 +312,8 @@ tresult PLUGIN_API PhaserPlugin::process(ProcessData& data)
           float side = 0.f;
           Dsp::encodeMs(inL, inR, mid, side);
           const float oL = left_.process(side, wetOn);
-          const float oR = right_.process(side, wetOn);
-          Dsp::decodeMs(mid, 0.5f * (oL + oR), L, R);
+          (void)right_.process(side, false);
+          Dsp::decodeMs(mid, oL, L, R);
           break;
         }
         case Dsp::ChannelMode::Stereo:
