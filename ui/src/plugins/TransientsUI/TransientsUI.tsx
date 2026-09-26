@@ -11,6 +11,7 @@ import {
 } from '../../widgets';
 import { paramIds } from '../../generated/transientsModel';
 import {
+  TRANSIENTS_CHANNEL_ENTRIES,
   TRANSIENTS_LINK_ENTRIES,
   TRANSIENTS_VIEW_ENTRIES,
   transientsParamDefault,
@@ -114,6 +115,9 @@ export function TransientsUI(props: TransientsUIProps) {
       <Header title="Transients">
         <WithInfo title={transientsInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
+        <WithInfo title={transientsInfo.channel} className="info-block">
+          <Select value$={host.channel$} entries={TRANSIENTS_CHANNEL_ENTRIES} />
         </WithInfo>
         <WithInfo title={transientsInfo.delta}>
           <Toggle state$={host.delta$} icon="headphones" />

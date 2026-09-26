@@ -16,12 +16,23 @@ export const TRANSIENTS_LINK_ENTRIES = [
   { label: 'Mid', value: 2 },
 ];
 
+/** Stereo / L / R / Mid / Side (matches `Dsp::ChannelMode`). */
+export const TRANSIENTS_CHANNEL_ENTRIES = [
+  { label: 'Stereo', value: 0 },
+  { label: 'Left', value: 1 },
+  { label: 'Right', value: 2 },
+  { label: 'Mid', value: 3 },
+  { label: 'Side', value: 4 },
+];
+
 /** @deprecated Prefer FREQUENCY_RANGE_MODE_ENTRIES from FrequencyRange. */
 export const TRANSIENTS_FILTER_MODE_ENTRIES = FREQUENCY_RANGE_MODE_ENTRIES;
 
 export type ITransientsHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  /** 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side. */
+  channel$: DynamicValue<number>;
   mix$: DynamicValue<number>;
   attackTime$: DynamicValue<number>;
   attackBoost$: DynamicValue<number>;
@@ -76,6 +87,7 @@ export function createBoundTransientsHost(): ITransientsHost {
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    channel$: bindNum('channel', 0),
     mix$: bindNum('mix', 1),
     attackTime$: bindNum('attack_time', 30),
     attackBoost$: bindNum('attack_boost', 0),

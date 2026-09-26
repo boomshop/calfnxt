@@ -1,5 +1,6 @@
 #pragma once
 
+#include "channel_mode.h"
 #include "compressor.h" // StereoLink
 #include "effect_base.h"
 #include "io_stage.h"
@@ -65,6 +66,7 @@ private:
     bool neutral = true;
     bool bypass = false;
     Dsp::StereoLink link = Dsp::StereoLink::Max;
+    Dsp::ChannelMode channel = Dsp::ChannelMode::Stereo;
   };
 
   void updateLatency(bool bypass, int lookaheadSamples);

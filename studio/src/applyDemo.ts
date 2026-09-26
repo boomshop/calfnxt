@@ -191,6 +191,7 @@ export function applyTransientsDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setNum(host.channel$, params.channel);
   setNum(host.mix$, params.mix);
   setNum(host.attackTime$, params.attack_time);
   setNum(host.attackBoost$, params.attack_boost);

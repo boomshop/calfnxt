@@ -4,6 +4,9 @@ export const transientsInfo = {
   bypass:
     'Turns shaping off so you hear the dry input (levels/meters still apply). A/B punch vs. softness — whether attacks got snappier or the body got sucked out.',
 
+  channel:
+    'Which stereo path gets transient shaping. Stereo = both channels (Link still decides the detector). Left / Right = shape one side only; the other stays latency-matched dry. Mid = add punch to the centre while leaving width. Side = shape ambience/width without chewing the mono sum. Mix and Delta still apply on the selected path. Mid/Side is encode → shape → decode.',
+
   mix:
     'Blend between dry and shaped signal. 0% = dry only; 100% = full transient processing. Parallel-style mixes (e.g. 30–70%) often keep natural tone while adding snap or tightness.',
 

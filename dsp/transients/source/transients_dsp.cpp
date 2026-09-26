@@ -1,7 +1,7 @@
 #include "transients_dsp.h"
 
 #include "base/source/fstreamer.h"
-
+#include "channel_mode.h"
 #include "gain_util.h"
 
 #include <algorithm>
@@ -17,8 +17,8 @@ using namespace Steinberg::Vst;
 namespace {
 constexpr uint32 kStateMagic = 0x434e5854u; // 'CNXT'
 /** v2: had display window. v3: display removed; + soft_clip/link/sensitivity/delta.
- *  v4: sensitivity = rise threshold (dB), not level gate. */
-constexpr uint32 kStateVersion = 4;
+ *  v4: sensitivity = rise threshold (dB), not level gate. v5: + channel. */
+constexpr uint32 kStateVersion = 5;
 constexpr uint32 kStateVersionWithDisplay = 2;
 /** Fixed envelope plot window (ms) — keep in sync with EnvelopeChart. */
 constexpr float kEnvelopeWindowMs = 10000.f;
@@ -143,6 +143,7 @@ TransientsPlugin::BlockState TransientsPlugin::makeBlockState() const
   state.bypass = params_[kParamBypass] >= 0.5f;
   state.neutral = transients_.isNeutral();
   state.link = stereoLinkFromPlain(params_[kParamLink]);
+  state.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   return state;
 }
 
@@ -274,23 +275,85 @@ void TransientsPlugin::processSample(const BlockState& state, float& L, float& R
   if (!state.bypass)
   {
     scale = state.neutral ? 1.f : (state.mix * gain + state.dry);
-    wetL = dryL * scale;
-    wetR = dryR * scale;
-    // Soft-clip attack boosts only (gain > 1): round peaks, leave body dry.
-    if (state.softClip > 1.0e-6f && scale > 1.f)
+    auto softMaybe = [&](float x) {
+      if (state.softClip > 1.0e-6f && scale > 1.f)
+        return softClipSample(x, state.softClip);
+      return x;
+    };
+
+    switch (state.channel)
     {
-      wetL = softClipSample(wetL, state.softClip);
-      wetR = softClipSample(wetR, state.softClip);
-    }
-    if (state.delta)
-    {
-      L = wetL - dryL;
-      R = wetR - dryR;
-    }
-    else
-    {
-      L = wetL;
-      R = wetR;
+      case Dsp::ChannelMode::Left:
+        wetL = softMaybe(dryL * scale);
+        wetR = dryR;
+        if (state.delta)
+        {
+          L = wetL - dryL;
+          R = 0.f;
+        }
+        else
+        {
+          L = wetL;
+          R = dryR;
+        }
+        break;
+      case Dsp::ChannelMode::Right:
+        wetL = dryL;
+        wetR = softMaybe(dryR * scale);
+        if (state.delta)
+        {
+          L = 0.f;
+          R = wetR - dryR;
+        }
+        else
+        {
+          L = dryL;
+          R = wetR;
+        }
+        break;
+      case Dsp::ChannelMode::Mid:
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        Dsp::encodeMs(dryL, dryR, mid, side);
+        const float wetM = softMaybe(mid * scale);
+        wetL = wetM;
+        wetR = wetM;
+        if (state.delta)
+          Dsp::decodeMs(wetM - mid, 0.f, L, R);
+        else
+          Dsp::decodeMs(wetM, side, L, R);
+        break;
+      }
+      case Dsp::ChannelMode::Side:
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        Dsp::encodeMs(dryL, dryR, mid, side);
+        const float wetS = softMaybe(side * scale);
+        wetL = wetS;
+        wetR = wetS;
+        if (state.delta)
+          Dsp::decodeMs(0.f, wetS - side, L, R);
+        else
+          Dsp::decodeMs(mid, wetS, L, R);
+        break;
+      }
+      case Dsp::ChannelMode::Stereo:
+      default:
+        wetL = softMaybe(dryL * scale);
+        wetR = softMaybe(dryR * scale);
+        if (state.delta)
+        {
+          L = wetL - dryL;
+          R = wetR - dryR;
+        }
+        else
+        {
+          L = wetL;
+          R = wetR;
+        }
+        break;
     }
   }
 
@@ -483,8 +546,8 @@ tresult PLUGIN_API TransientsPlugin::setState(IBStream* state)
   if (!streamer.readInt32u(magic) || magic != kStateMagic)
     return kResultFalse;
   if (!streamer.readInt32u(version)
-      || (version != kStateVersion && version != 3 && version != kStateVersionWithDisplay
-          && version != 1))
+      || (version != kStateVersion && version != 4 && version != 3
+          && version != kStateVersionWithDisplay && version != 1))
     return kResultFalse;
   if (!streamer.readInt32(count) || count <= 0)
     return kResultFalse;
@@ -499,9 +562,10 @@ tresult PLUGIN_API TransientsPlugin::setState(IBStream* state)
   float plains[kParamCount] {};
   readParamPlains(plains, kParamCount);
 
-  if ((version == kStateVersion || version == 3) && count == kParamCount)
+  if ((version == kStateVersion || version == 4 || version == 3) && count <= kParamCount
+      && count >= kParamCount - 1)
   {
-    for (int i = 0; i < kParamCount; ++i)
+    for (int i = 0; i < count && i < kParamCount; ++i)
       plains[i] = raw[static_cast<size_t>(i)];
     // v3 sensitivity was a level gate (−60…0 dB); v4 is rise threshold (0…12 dB).
     if (version == 3)
