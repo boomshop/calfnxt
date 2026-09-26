@@ -98,6 +98,7 @@ void MbcompPlugin::resetProcessing()
     bandInHold_[b].reset();
     bandOutHold_[b].reset();
     lastGrDb_[b] = 0.f;
+    bypassSmooth_[b] = 1.f;
     std::memset(histBuf_[b], 0, sizeof(histBuf_[b]));
     histPos_[b] = 0;
     histSampleCount_[b] = 0;
@@ -326,26 +327,18 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     if (st.listen)
       listenBand = b;
 
-    // Only configure compressors that will run this block.
-    if (!st.bypass)
-    {
-      const auto mode = detectorModeFromPlain(params_[bandParam(b, kBandMode)]);
-      gr_[b].setSampleRate(static_cast<float>(sampleRate_));
-      gr_[b].setParams(
-        params_[bandParam(b, kBandAttack)],
-        params_[bandParam(b, kBandRelease)],
-        params_[bandParam(b, kBandThreshold)],
-        params_[bandParam(b, kBandRatio)],
-        params_[bandParam(b, kBandKnee)],
-        mode,
-        st.link,
-        params_[bandParam(b, kBandPdr)]);
-    }
-    else
-    {
-      gr_[b].reset();
-      lastGrDb_[b] = 0.f;
-    }
+    // Keep compressors configured while soft-bypassing so un-bypass is seamless.
+    const auto mode = detectorModeFromPlain(params_[bandParam(b, kBandMode)]);
+    gr_[b].setSampleRate(static_cast<float>(sampleRate_));
+    gr_[b].setParams(
+      params_[bandParam(b, kBandAttack)],
+      params_[bandParam(b, kBandRelease)],
+      params_[bandParam(b, kBandThreshold)],
+      params_[bandParam(b, kBandRatio)],
+      params_[bandParam(b, kBandKnee)],
+      mode,
+      st.link,
+      params_[bandParam(b, kBandPdr)]);
   }
 
   // Idle slots beyond the active band count — no compressor / meter work.
@@ -354,7 +347,11 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     gr_[b].reset();
     lastGrDb_[b] = 0.f;
     grMeter_[b].forceZero();
+    bypassSmooth_[b] = 0.f;
   }
+
+  const float bypassCoeff =
+    Dsp::bypassFadeCoeff(static_cast<float>(sampleRate_));
 
   const int nSamples = data.numSamples;
   histSamplesPerSlot_ = std::max(
@@ -369,7 +366,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
   bool allGrIdle = true;
   for (int b = 0; b < bands; ++b)
   {
-    if (bandState[b].bypass)
+    if (bandState[b].bypass && bypassSmooth_[b] <= 0.f)
       continue;
     if (!gr_[b].isIdle())
     {
@@ -566,25 +563,31 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     float midHold = 0.f;
     float sideHold = 0.f;
     const bool routeChannel = !mono && channel != Dsp::ChannelMode::Stereo;
+    // Routed modes: process one path in splitL, allpass-match the complement
+    // in splitR (no GR). Raw complement + LR sum notches at every xover.
+    float procIn = L;
+    float compIn = R;
     if (routeChannel)
     {
       switch (channel)
       {
         case Dsp::ChannelMode::Left:
-          R = L;
+          procIn = dryL;
+          compIn = dryR;
           break;
         case Dsp::ChannelMode::Right:
-          L = R;
+          procIn = dryR;
+          compIn = dryL;
           break;
         case Dsp::ChannelMode::Mid:
           Dsp::encodeMs(dryL, dryR, midHold, sideHold);
-          L = midHold;
-          R = midHold;
+          procIn = midHold;
+          compIn = sideHold;
           break;
         case Dsp::ChannelMode::Side:
           Dsp::encodeMs(dryL, dryR, midHold, sideHold);
-          L = sideHold;
-          R = sideHold;
+          procIn = sideHold;
+          compIn = midHold;
           break;
         default:
           break;
@@ -592,23 +595,32 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     }
     const float fullPeak = std::max(std::fabs(dryL), std::fabs(dryR));
 
-    // Channel modes feed a linked mono path into both splitters.
-    const bool linkedPath = mono || routeChannel;
+    // Mono duplicates; Stereo processes L/R; routed = proc + allpass complement.
+    const bool linkedPath = mono;
 
-    splitL_.process(L, bandsL);
-    if (linkedPath)
+    if (routeChannel)
     {
-      // Keep the unused splitter warm (mode switches stay continuous).
-      float discard[kMaxBands];
-      splitR_.process(L, discard);
-      for (int b = 0; b < bands; ++b)
-        bandsR[b] = bandsL[b];
+      splitL_.process(procIn, bandsL);
+      splitR_.process(compIn, bandsR);
     }
     else
-      splitR_.process(R, bandsR);
+    {
+      splitL_.process(L, bandsL);
+      if (linkedPath)
+      {
+        float discard[kMaxBands];
+        splitR_.process(L, discard);
+        for (int b = 0; b < bands; ++b)
+          bandsR[b] = bandsL[b];
+      }
+      else
+        splitR_.process(R, bandsR);
+    }
 
     float sumL = 0.f;
     float sumR = 0.f;
+    float sumProc = 0.f;
+    float sumComp = 0.f;
     float listenL = 0.f;
     float listenR = 0.f;
     const bool anyListen = listenBand >= 0;
@@ -621,19 +633,29 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
       Dsp::sanitizeDenormal(bR);
       hardenSample(bL);
       hardenSample(bR);
-      const float bandPeak = std::max(std::fabs(bL), std::fabs(bR));
+      const float bandPeak =
+        routeChannel ? std::fabs(bL)
+                     : std::max(std::fabs(bL), std::fabs(bR));
       bandInHold_[b].accumulate(0, bandPeak);
 
       const BandState& st = bandState[b];
       float grLin = 1.f;
+      const float dryBandL = bL;
+      const float dryBandR = bR;
 
-      if (!st.bypass)
+      const float bypassTarget = st.bypass ? 0.f : 1.f;
+      bypassSmooth_[b] =
+        Dsp::slewToward(bypassSmooth_[b], bypassTarget, bypassCoeff);
+      const float act = bypassSmooth_[b];
+
+      // Always run the detector so un-bypass stays continuous.
       {
         float detL = bL;
-        float detR = bR;
-        if (linkedPath || st.link == Dsp::StereoLink::Mid)
+        float detR = routeChannel ? bL : bR;
+        if (linkedPath || routeChannel || st.link == Dsp::StereoLink::Mid)
         {
-          const float mid = linkedPath ? bL : 0.5f * (bL + bR);
+          const float mid =
+            (linkedPath || routeChannel) ? bL : 0.5f * (bL + bR);
           detL = mid;
           detR = mid;
         }
@@ -641,41 +663,12 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
         Dsp::sanitizeDenormal(grLin);
         if (!(grLin > 0.f) || !std::isfinite(grLin))
           grLin = 1.f;
-
-        if (linkedPath)
-        {
-          const float wetL = bL * grLin * st.makeupLin;
-          bL = st.dry * bL + st.mix * wetL;
-          bR = bL;
-          Dsp::sanitizeDenormal(bL);
-          hardenSample(bL);
-          bR = bL;
-        }
-        else
-        {
-          const float wetL = bL * grLin * st.makeupLin;
-          const float wetR = bR * grLin * st.makeupLin;
-          bL = st.dry * bL + st.mix * wetL;
-          bR = st.dry * bR + st.mix * wetR;
-          Dsp::sanitizeDenormal(bL);
-          Dsp::sanitizeDenormal(bR);
-          hardenSample(bL);
-          hardenSample(bR);
-        }
-
-        const float grDb = linToDbSafe(grLin);
-        grMeter_[b].process(grLin);
-        lastGrDb_[b] = grDb;
-        // Curve GR (not lagged audio GR) — keeps the point on the transfer line.
-        const float inDb = linToDbSafe(gr_[b].lastDetectorLin());
-        const float outDb =
-          inDb + linToDbSafe(gr_[b].lastCurveGain()) + st.makeupDb;
-        pointInDbPlain_[b] = inDb;
-        pointOutDbPlain_[b] = outDb;
       }
-      else
+
+      if (act <= 0.f)
       {
-        // Bypassed band: passthrough only — compressor already reset above.
+        bL = dryBandL;
+        bR = dryBandR;
         if (linkedPath)
           bR = bL;
         grMeter_[b].forceZero();
@@ -684,48 +677,136 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
         pointInDbPlain_[b] = inDb;
         pointOutDbPlain_[b] = inDb;
       }
+      else
+      {
+        if (routeChannel)
+        {
+          const float wet = dryBandL * grLin * st.makeupLin;
+          bL = st.dry * dryBandL + st.mix * wet;
+          Dsp::sanitizeDenormal(bL);
+          hardenSample(bL);
+        }
+        else if (linkedPath)
+        {
+          const float wetL = dryBandL * grLin * st.makeupLin;
+          bL = st.dry * dryBandL + st.mix * wetL;
+          bR = bL;
+          Dsp::sanitizeDenormal(bL);
+          hardenSample(bL);
+          bR = bL;
+        }
+        else
+        {
+          const float wetL = dryBandL * grLin * st.makeupLin;
+          const float wetR = dryBandR * grLin * st.makeupLin;
+          bL = st.dry * dryBandL + st.mix * wetL;
+          bR = st.dry * dryBandR + st.mix * wetR;
+          Dsp::sanitizeDenormal(bL);
+          Dsp::sanitizeDenormal(bR);
+          hardenSample(bL);
+          hardenSample(bR);
+        }
 
-      bandOutHold_[b].accumulate(0, std::max(std::fabs(bL), std::fabs(bR)));
-      // Always feed full + band peaks; GR history is unity while bypassed.
-      histFeedSample(b, fullPeak, bandPeak, grLin);
+        if (act < 1.f)
+        {
+          bL = act * bL + (1.f - act) * dryBandL;
+          if (!routeChannel)
+          {
+            if (linkedPath)
+              bR = bL;
+            else
+              bR = act * bR + (1.f - act) * dryBandR;
+          }
+          Dsp::sanitizeDenormal(bL);
+          Dsp::sanitizeDenormal(bR);
+        }
+
+        const float grDb = linToDbSafe(grLin);
+        grMeter_[b].process(grLin);
+        lastGrDb_[b] = grDb;
+        const float inDb = linToDbSafe(gr_[b].lastDetectorLin());
+        const float outDb =
+          inDb + linToDbSafe(gr_[b].lastCurveGain()) + st.makeupDb;
+        pointInDbPlain_[b] = inDb;
+        pointOutDbPlain_[b] = outDb;
+      }
+
+      bandOutHold_[b].accumulate(
+        0, routeChannel ? std::fabs(bL) : std::max(std::fabs(bL), std::fabs(bR)));
+      // Always feed full + band peaks; GR history is unity while fully bypassed.
+      histFeedSample(b, fullPeak, bandPeak, act <= 0.f ? 1.f : grLin);
 
       if (anyListen && b == listenBand)
       {
         listenL = bL;
-        listenR = bR;
+        listenR = routeChannel ? bL : bR;
       }
-      sumL += bL;
-      sumR += bR;
+
+      if (routeChannel)
+      {
+        sumProc += bL;
+        sumComp += bR;
+      }
+      else
+      {
+        sumL += bL;
+        sumR += bR;
+      }
     }
 
-    Dsp::sanitizeDenormal(sumL);
-    Dsp::sanitizeDenormal(sumR);
-    hardenSample(sumL);
-    hardenSample(sumR);
-
-    float outL = anyListen ? listenL : sumL;
-    float outR = anyListen ? listenR : sumR;
-    if (mono)
-      outR = outL;
+    float outL = 0.f;
+    float outR = 0.f;
+    if (anyListen)
+    {
+      // Solo the band; do not recombine with the allpass complement.
+      if (channel == Dsp::ChannelMode::Stereo && !mono)
+      {
+        outL = listenL;
+        outR = listenR;
+      }
+      else
+        Dsp::listenImage(channel, listenL, listenR, outL, outR);
+      if (mono)
+        outR = outL;
+    }
     else if (routeChannel)
     {
+      Dsp::sanitizeDenormal(sumProc);
+      Dsp::sanitizeDenormal(sumComp);
+      hardenSample(sumProc);
+      hardenSample(sumComp);
       switch (channel)
       {
         case Dsp::ChannelMode::Left:
-          outR = dryR;
+          outL = sumProc;
+          outR = sumComp;
           break;
         case Dsp::ChannelMode::Right:
-          outL = dryL;
+          outL = sumComp;
+          outR = sumProc;
           break;
         case Dsp::ChannelMode::Mid:
-          Dsp::decodeMs(outL, sideHold, outL, outR);
+          Dsp::decodeMs(sumProc, sumComp, outL, outR);
           break;
         case Dsp::ChannelMode::Side:
-          Dsp::decodeMs(midHold, outL, outL, outR);
+          Dsp::decodeMs(sumComp, sumProc, outL, outR);
           break;
         default:
+          outL = sumProc;
+          outR = sumComp;
           break;
       }
+    }
+    else
+    {
+      Dsp::sanitizeDenormal(sumL);
+      Dsp::sanitizeDenormal(sumR);
+      hardenSample(sumL);
+      hardenSample(sumR);
+      outL = sumL;
+      outR = sumR;
+      if (mono)
+        outR = outL;
     }
 
     writeLR(i, outL, outR);

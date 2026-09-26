@@ -116,6 +116,8 @@ private:
   int histVisibleSlots_ = 160;
   /** After one quiet zero-feed block, crossover state is drained. */
   bool quietDrained_ = false;
+  /** Per-band soft bypass: 1 = active, 0 = fully bypassed. */
+  float bypassSmooth_[kMaxBands] {};
 };
 
 } // namespace Mbcomp

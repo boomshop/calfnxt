@@ -5,7 +5,7 @@ export const mbcompInfo = {
     'Turns all band compression off so you hear the dry path (In/Out gains still apply). A/B the whole multiband treatment — glue vs. lifeless or phasey.',
 
   channel:
-    'Which stereo path the crossovers, detectors and compressors act on (same path). Stereo = linked L+R (default). Left / Right = hear and compress one side only; the other stays dry. Mid = detect and glue the centre while leaving width. Side = detect and tame wide peaks without ducking the mono sum. Hidden while Mono is on (Left-only path). Mid/Side is encode → split/detect/compress → decode.',
+    'Which stereo path the crossovers, detectors and compressors act on (same path). Stereo = linked L+R (default). Left / Right = compress one side; the other is LR-allpass matched (not raw dry — that notched at every crossover). Mid / Side = compress centre or width with the same allpass-matched complement. Listen solos that band only (Side images L/−R; no complement leak). Hidden while Mono is on. Encode → split/detect/compress → decode.',
 
   mono:
     'Process the Left channel only (one crossover + dynamics path) and copy to both outs. Big CPU win with many bands / steep slopes — ideal on mono tracks. Right is ignored while on.',
