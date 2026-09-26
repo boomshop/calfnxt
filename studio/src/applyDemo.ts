@@ -360,6 +360,7 @@ export function applyCrusherDemo(
   viz: VizFixture,
 ) {
   setBool(host.bypass$, params.bypass);
+  setNum(host.channel$, params.channel);
   setNum(host.bits$, params.bits);
   setNum(host.morph$, params.morph);
   setBool(host.mode$, params.mode);

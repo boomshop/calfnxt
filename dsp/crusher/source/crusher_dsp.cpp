@@ -1,6 +1,7 @@
 #include "crusher_dsp.h"
 
 #include "base/source/fstreamer.h"
+#include "channel_mode.h"
 #include "dsp_math.h"
 #include "gain_util.h"
 
@@ -15,7 +16,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5843u; // 'CNXC'
-constexpr uint32 kStateVersion = 2;
+constexpr uint32 kStateVersion = 3; // v3: + channel
 } // namespace
 
 CrusherPlugin::CrusherPlugin()
@@ -68,6 +69,7 @@ CrusherPlugin::BlockState CrusherPlugin::makeBlockState() const
   BlockState s;
   s.bypass = params_[kParamBypass] >= 0.5f;
   s.mode = params_[kParamMode] >= 0.5f ? 1 : 0;
+  s.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   s.bits = std::clamp(params_[kParamBits], 1.f, 16.f);
   s.morph = std::clamp(params_[kParamMorph], 0.f, 1.f);
   s.dcLin = std::clamp(Dsp::dbToLin(std::clamp(params_[kParamDc], -12.f, 12.f)), 0.25f, 4.f);
@@ -138,15 +140,54 @@ tresult PLUGIN_API CrusherPlugin::process(ProcessData& data)
   {
     const float inL = outs[0][i];
     const float inR = (nCh > 1 && outs[1]) ? outs[1][i] : inL;
-    observeSend(inL, inR);
+    float L = inL;
+    float R = inR;
 
-    outs[0][i] = bit_.process(inL);
-    Dsp::sanitizeDenormal(outs[0][i]);
-    if (nCh > 1 && outs[1])
+    switch (state.channel)
     {
-      outs[1][i] = bit_.process(inR);
-      Dsp::sanitizeDenormal(outs[1][i]);
+      case Dsp::ChannelMode::Left:
+        observeSend(inL, 0.f);
+        L = bit_.process(inL);
+        R = inR;
+        break;
+      case Dsp::ChannelMode::Right:
+        observeSend(0.f, inR);
+        L = inL;
+        R = bit_.process(inR);
+        break;
+      case Dsp::ChannelMode::Mid:
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        Dsp::encodeMs(inL, inR, mid, side);
+        observeSend(mid, mid);
+        mid = bit_.process(mid);
+        Dsp::decodeMs(mid, side, L, R);
+        break;
+      }
+      case Dsp::ChannelMode::Side:
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        Dsp::encodeMs(inL, inR, mid, side);
+        observeSend(side, side);
+        side = bit_.process(side);
+        Dsp::decodeMs(mid, side, L, R);
+        break;
+      }
+      case Dsp::ChannelMode::Stereo:
+      default:
+        observeSend(inL, inR);
+        L = bit_.process(inL);
+        R = bit_.process(inR);
+        break;
     }
+
+    Dsp::sanitizeDenormal(L);
+    Dsp::sanitizeDenormal(R);
+    outs[0][i] = L;
+    if (nCh > 1 && outs[1])
+      outs[1][i] = R;
   }
 
   io_.end(data);

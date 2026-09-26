@@ -11,6 +11,8 @@ import {
 export type ICrusherHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  /** 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side. */
+  channel$: DynamicValue<number>;
   bits$: DynamicValue<number>;
   morph$: DynamicValue<number>;
   mode$: DynamicValue<boolean>;
@@ -21,6 +23,15 @@ export type ICrusherHost = {
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
 };
+
+/** Stereo / L / R / Mid / Side (matches `Dsp::ChannelMode`). */
+export const CRUSHER_CHANNEL_ENTRIES = [
+  { label: 'Stereo', value: 0 },
+  { label: 'Left', value: 1 },
+  { label: 'Right', value: 2 },
+  { label: 'Mid', value: 3 },
+  { label: 'Side', value: 4 },
+];
 
 function paramDefault(name: keyof typeof paramIds, fallback = 0): number {
   const meta = pluginMeta.parameters.find((p) => p.id === name);
@@ -53,6 +64,7 @@ export function createBoundCrusherHost(): ICrusherHost {
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    channel$: bindNum('channel', 0),
     bits$: bindNum('bits', 4),
     morph$: bindNum('morph', 0.5),
     mode$: bindBool('mode'),

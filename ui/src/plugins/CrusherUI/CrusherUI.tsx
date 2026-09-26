@@ -2,9 +2,13 @@ import { DynamicValue as DV } from '@deutschesoft/awml';
 import { useEffect, useMemo } from 'react';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { Header } from '../../components';
-import { CrusherChart, Knob, Toggle, WithInfo } from '../../widgets';
+import { CrusherChart, Knob, Select, Toggle, WithInfo } from '../../widgets';
 import { paramIds } from '../../generated/crusherModel';
-import { crusherParamDefault, type ICrusherHost } from '../../host/crusherHost';
+import {
+  CRUSHER_CHANNEL_ENTRIES,
+  crusherParamDefault,
+  type ICrusherHost,
+} from '../../host/crusherHost';
 import { crusherInfo } from './crusherInfo';
 import '../PluginUI.scss';
 import './CrusherUI.scss';
@@ -66,6 +70,9 @@ export function CrusherUI(props: CrusherUIProps) {
       <Header title="Crusher">
         <WithInfo title={crusherInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
+        </WithInfo>
+        <WithInfo title={crusherInfo.channel} className="info-block">
+          <Select value$={host.channel$} entries={CRUSHER_CHANNEL_ENTRIES} />
         </WithInfo>
       </Header>
 

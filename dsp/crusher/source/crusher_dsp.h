@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bitreduction.h"
+#include "channel_mode.h"
 #include "effect_base.h"
 #include "io_stage.h"
 #include "viz_source.h"
@@ -49,6 +50,7 @@ private:
   {
     bool bypass = false;
     int mode = 0;
+    Dsp::ChannelMode channel = Dsp::ChannelMode::Stereo;
     float bits = 4.f;
     float morph = 0.5f;
     float dcLin = 1.f;
