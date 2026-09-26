@@ -95,6 +95,7 @@ void CompressorPlugin::resetProcessing()
   histSnapshotSampleCount_ = 0;
   histSnapshotSamplesPerSlot_ = 1;
   histSeq_.fetch_add(1, std::memory_order_release); // even: stable
+  bypassSmooth_ = 1.f;
 }
 
 tresult PLUGIN_API CompressorPlugin::setActive(TBool state)
@@ -236,8 +237,7 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
 
   if (state.listen && !state.bypass)
   {
-    L = detL;
-    R = detR;
+    Dsp::listenImage(state.channel, detL, detR, L, R);
     const float gr = gr_.processDetector(detL, detR);
     const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
     grMeter_.process(gr);
@@ -246,21 +246,27 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
   }
 
   const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
+  const float gr = gr_.processDetector(detL, detR);
+  const float det = gr_.lastDetectorLin();
 
-  // Bypass: keep audio + detector history, but GR meter/history show idle.
-  if (state.bypass)
+  const float bypassTarget = state.bypass ? 0.f : 1.f;
+  bypassSmooth_ = Dsp::slewToward(
+    bypassSmooth_, bypassTarget,
+    Dsp::bypassFadeCoeff(static_cast<float>(sampleRate_)));
+
+  // Fully bypassed: dry audio, idle meters — detector kept warm above.
+  if (bypassSmooth_ <= 0.f)
   {
-    gr_.processDetector(detL, detR); // keep detector state continuous
+    L = dryL;
+    R = dryR;
     grMeter_.forceZero();
     histFeedSample(audioPeak, detPeak, 1.f);
-    const float inDb = linToDbSafe(gr_.lastDetectorLin());
+    const float inDb = linToDbSafe(det);
     pointInDbPlain_ = inDb;
     pointOutDbPlain_ = inDb;
     return;
   }
 
-  const float gr = gr_.processDetector(detL, detR);
-  const float det = gr_.lastDetectorLin();
   grMeter_.process(gr);
   histFeedSample(audioPeak, detPeak, gr);
 
@@ -318,6 +324,12 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
       R = wetR * state.mix + dryR * state.dry;
       break;
     }
+  }
+
+  if (bypassSmooth_ < 1.f)
+  {
+    L = bypassSmooth_ * L + (1.f - bypassSmooth_) * dryL;
+    R = bypassSmooth_ * R + (1.f - bypassSmooth_) * dryR;
   }
 }
 
