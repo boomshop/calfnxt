@@ -2,7 +2,7 @@
   display: grid;
   grid-template-areas: 'graph' 'bands' 'controls';
   grid-template-columns: 1fr;
-  grid-template-rows: 1fr 64px 192px;
+  grid-template-rows: 1fr 64px 220px;
   gap: 5px;
   align-items: stretch;
 
@@ -21,9 +21,40 @@
     > .eq {
       flex: 1 1 auto;
       display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 24px;
+      flex-direction: row;
+      justify-content: flex-start;
+      align-items: stretch;
+      gap: 16px;
+
+      > .channel {
+        width: auto;
+        flex: 0 0 auto;
+        display: flex;
+        align-items: stretch;
+
+        > .Buttons {
+          height: 100%;
+
+          > .Button {
+            flex: 1;
+            min-height: 0;
+            font-size: var(--font-size-tiny);
+          }
+        }
+      }
+
+      > .eq-main {
+        flex: 1 1 auto;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-width: 0;
+        gap: 20px;
+
+        > .title {
+          text-align: center;
+        }
+      }
     }
 
     > .dyn {
@@ -96,9 +127,61 @@
         flex-direction: column;
 
         > .freq {
-          color: var(--color-least);
+          color: var(--color);
           font-size: var(--font-size-tiny);
+          transition:
+            color var(--transition),
+            background var(--transition);
           z-index: 2;
+          display: block;
+          text-align: center;
+          line-height: 1.4;
+          padding: 0 2px;
+          border-top-left-radius: var(--border-radius);
+          border-top-right-radius: var(--border-radius);
+
+          &.ch-stereo {
+            background: var(--color-accent);
+            color: var(--contrast-accent);
+          }
+
+          &.ch-left {
+            background: linear-gradient(
+              to right,
+              var(--color-accent),
+              transparent
+            );
+            color: var(--contrast-accent);
+          }
+
+          &.ch-right {
+            background: linear-gradient(
+              to right,
+              transparent,
+              var(--color-accent)
+            );
+            color: var(--contrast-accent);
+          }
+
+          &.ch-mid {
+            background: linear-gradient(
+              to right,
+              transparent,
+              var(--color-warn),
+              transparent
+            );
+            color: var(--contrast-warn);
+          }
+
+          &.ch-side {
+            background: linear-gradient(
+              to right,
+              var(--color-warn),
+              transparent,
+              var(--color-warn)
+            );
+            color: var(--contrast-warn);
+          }
         }
 
         > .aux-chart {
@@ -131,13 +214,17 @@
       }
 
       &.selected {
-        border-color: var(--color-accent);
+        border-color: var(--color);
 
         > .aux-button {
           border-radius: 0;
         }
 
         > .mini {
+          > .freq {
+            border-radius: 0;
+          }
+
           > .aux-chart {
             > svg {
               > .aux-graphs {
@@ -168,8 +255,10 @@
       }
 
       &:has(> .mini.dyn) {
-        --color-accent: var(--color-warn);
-        --accent: var(--color-warn);
+        .aux-button {
+          --color-accent: var(--color-warn);
+          --accent: var(--color-warn);
+        }
       }
 
       &:has(> .mini.listen) {

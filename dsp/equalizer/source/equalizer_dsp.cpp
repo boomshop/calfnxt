@@ -13,11 +13,13 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5845u; // 'CNXE'
-constexpr uint32 kStateVersion = 5;              // + per-band dyn_mode
+constexpr uint32 kStateVersion = 6;              // + per-band channel
+constexpr uint32 kStateVersionDynMode = 5;       // + per-band dyn_mode
 constexpr uint32 kStateVersionMono = 4;          // + mono (trailing)
 constexpr uint32 kStateVersionSpectrum = 3;      // + spectrum
 constexpr uint32 kStateVersionBandsOnly = 2;
 constexpr int32 kLegacyParamsPerBand = 12;
+constexpr int32 kParamsPerBandDynMode = 13;
 
 Dsp::DetectorMode detectorModeFromPlain(float v)
 {
@@ -126,6 +128,8 @@ void EqualizerPlugin::applyBandTargetsFromParams()
     const float ratio = params_[bandParam(b, kBandDynRatio)];
     const auto mode = detectorModeFromPlain(params_[bandParam(b, kBandDynMode)]);
     bands_[b].setDynParams(dyn, attack, release, thresh, ratio, mode);
+    bands_[b].setChannelMode(
+      Dsp::channelModeFromPlain(params_[bandParam(b, kBandChannel)]));
     // Listen = dyn sidechain audition; needs the band on + dyn (never solo from stale state).
     bands_[b].setListen(active && dyn &&
                         params_[bandParam(b, kBandDynListen)] >= 0.5f);
@@ -225,6 +229,7 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
       {
         if (mono)
         {
+          // Global Mono: always Left-path filters (ignore per-band channel).
           if (listenBand >= 0)
             bands_[listenBand].processListenMono(L);
           else
@@ -263,6 +268,7 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
       {
         if (mono)
         {
+          // Global Mono: always Left-path filters (ignore per-band channel).
           if (listenBand >= 0)
             bands_[listenBand].processListenMono(L);
           else
@@ -337,6 +343,35 @@ tresult PLUGIN_API EqualizerPlugin::setState(IBStream* state)
         return kResultFalse;
     }
   }
+  else if (version == kStateVersionDynMode)
+  {
+    // Layout before per-band channel (13 floats/band).
+    const int32 oldBandFloats = kEqBandCount * kParamsPerBandDynMode;
+    const int32 oldCount = 3 + oldBandFloats + 2; // + spectrum + mono
+    if (count != oldCount)
+      return kResultFalse;
+    float oldPlains[256] {};
+    for (int i = 0; i < count; ++i)
+    {
+      if (!streamer.readFloat(oldPlains[i]))
+        return kResultFalse;
+    }
+    for (int i = 0; i < 3; ++i)
+      plains[i] = oldPlains[i];
+    for (int b = 0; b < kEqBandCount; ++b)
+    {
+      for (int o = 0; o < kParamsPerBandDynMode; ++o)
+        plains[bandParam(b, o)] = oldPlains[3 + b * kParamsPerBandDynMode + o];
+      plains[bandParam(b, kBandChannel)] = 0.f;
+    }
+    const int oldTrail = 3 + oldBandFloats;
+    const int newTrail =
+      static_cast<int>(kParamBandBase) + kEqBandCount * kParamsPerBand;
+    if (oldTrail < count)
+      plains[newTrail] = oldPlains[oldTrail];
+    if (oldTrail + 1 < count)
+      plains[newTrail + 1] = oldPlains[oldTrail + 1];
+  }
   else if (version >= kStateVersionBandsOnly && version <= kStateVersionMono)
   {
     const int32 oldBandFloats = kEqBandCount * kLegacyParamsPerBand;
@@ -358,6 +393,7 @@ tresult PLUGIN_API EqualizerPlugin::setState(IBStream* state)
     {
       for (int o = 0; o < kLegacyParamsPerBand; ++o)
         plains[bandParam(b, o)] = oldPlains[3 + b * kLegacyParamsPerBand + o];
+      plains[bandParam(b, kBandChannel)] = 0.f;
     }
     const int oldTrail = 3 + oldBandFloats;
     const int newTrail =

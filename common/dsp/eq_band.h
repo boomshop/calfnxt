@@ -1,6 +1,7 @@
 #pragma once
 
 #include "biquad.h"
+#include "channel_mode.h"
 #include "compressor.h"
 #include "dsp_math.h"
 #include "gain_util.h"
@@ -124,6 +125,10 @@ public:
     listen_ = listen;
   }
 
+  void setChannelMode(ChannelMode mode) { channel_ = mode; }
+
+  ChannelMode channelMode() const { return channel_; }
+
   bool isListening() const { return listen_; }
 
   /** True when dyn GR is off or settled — safe to skip silence DSP for this band. */
@@ -184,11 +189,42 @@ public:
       updateDetectorCoeffs();
   }
 
-  /** Stereo process (required for linked dyn detector). */
+  /** Stereo process with optional L / R / Mid / Side routing. */
   void process(float& left, float& right)
   {
     if (!active_)
       return;
+
+    switch (channel_)
+    {
+      case ChannelMode::Left:
+        processLeftOnly(left);
+        return;
+      case ChannelMode::Right:
+        processRightOnly(right);
+        return;
+      case ChannelMode::Mid:
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        encodeMs(left, right, mid, side);
+        processLeftOnly(mid);
+        decodeMs(mid, side, left, right);
+        return;
+      }
+      case ChannelMode::Side:
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        encodeMs(left, right, mid, side);
+        processLeftOnly(side);
+        decodeMs(mid, side, left, right);
+        return;
+      }
+      case ChannelMode::Stereo:
+      default:
+        break;
+    }
 
     if (dynEnabled_ && typeUsesGain(type_))
     {
@@ -219,30 +255,54 @@ public:
   {
     if (!active_)
       return;
-
-    if (dynEnabled_ && typeUsesGain(type_))
-    {
-      const float d = static_cast<float>(detL_.process(sample));
-      const float gr = gr_.processDetector(d, d);
-      const float effectiveDb = gainCur_ + linToDb(gr);
-      if (std::fabs(effectiveDb - lastAppliedGainDb_) > 0.01f)
-      {
-        updateAudioCoeffs(effectiveDb);
-        lastAppliedGainDb_ = effectiveDb;
-      }
-    }
-
-    double y = sample;
-    for (int s = 0; s < stages_; ++s)
-      y = L_[s].process(y);
-    sample = static_cast<float>(y);
+    processLeftOnly(sample);
   }
 
   /** Solo detector / sidechain signal (EQ bands bypassed by caller). */
   void processListen(float& left, float& right)
   {
-    left = static_cast<float>(detL_.process(left));
-    right = static_cast<float>(detR_.process(right));
+    switch (channel_)
+    {
+      case ChannelMode::Left:
+      {
+        left = static_cast<float>(detL_.process(left));
+        right = left;
+        return;
+      }
+      case ChannelMode::Right:
+      {
+        right = static_cast<float>(detR_.process(right));
+        left = right;
+        return;
+      }
+      case ChannelMode::Mid:
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        encodeMs(left, right, mid, side);
+        (void)side;
+        mid = static_cast<float>(detL_.process(mid));
+        left = mid;
+        right = mid;
+        return;
+      }
+      case ChannelMode::Side:
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        encodeMs(left, right, mid, side);
+        (void)mid;
+        side = static_cast<float>(detL_.process(side));
+        left = side;
+        right = side;
+        return;
+      }
+      case ChannelMode::Stereo:
+      default:
+        left = static_cast<float>(detL_.process(left));
+        right = static_cast<float>(detR_.process(right));
+        return;
+    }
   }
 
   void processListenMono(float& sample)
@@ -277,6 +337,45 @@ private:
   {
     return type == static_cast<int>(EqType::LowPass) ||
            type == static_cast<int>(EqType::HighPass);
+  }
+
+  void applyDynFromDetector(float dL, float dR)
+  {
+    if (!dynEnabled_ || !typeUsesGain(type_))
+      return;
+    const float gr = gr_.processDetector(dL, dR);
+    const float effectiveDb = gainCur_ + linToDb(gr);
+    if (std::fabs(effectiveDb - lastAppliedGainDb_) > 0.01f)
+    {
+      updateAudioCoeffs(effectiveDb);
+      lastAppliedGainDb_ = effectiveDb;
+    }
+  }
+
+  void processLeftOnly(float& sample)
+  {
+    if (dynEnabled_ && typeUsesGain(type_))
+    {
+      const float d = static_cast<float>(detL_.process(sample));
+      applyDynFromDetector(d, d);
+    }
+    double y = sample;
+    for (int s = 0; s < stages_; ++s)
+      y = L_[s].process(y);
+    sample = static_cast<float>(y);
+  }
+
+  void processRightOnly(float& sample)
+  {
+    if (dynEnabled_ && typeUsesGain(type_))
+    {
+      const float d = static_cast<float>(detR_.process(sample));
+      applyDynFromDetector(d, d);
+    }
+    double y = sample;
+    for (int s = 0; s < stages_; ++s)
+      y = R_[s].process(y);
+    sample = static_cast<float>(y);
   }
 
   void updateAudioCoeffs(float gainDb)
@@ -363,6 +462,7 @@ private:
   bool active_ = false;
   bool dynEnabled_ = false;
   bool listen_ = false;
+  ChannelMode channel_ = ChannelMode::Stereo;
   int type_ = 0;
   float slopeDb_ = 12.f;
   int stages_ = 1;

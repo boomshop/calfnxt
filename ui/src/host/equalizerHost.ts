@@ -139,6 +139,28 @@ export const EQ_PASS_SLOPE_ENTRIES: { label: string; value: EqPassSlope }[] = [
 /** Peak / RMS / Opto — same detector as Compressor. Default Peak (heritage DynEQ). */
 export const EQ_DYN_MODE_ENTRIES = COMPRESSOR_MODE_ENTRIES;
 
+/** Per-band channel routing (matches `Dsp::ChannelMode`). */
+export const EQ_CHANNEL_ENTRIES = [
+  { label: 'Stereo', value: 0 },
+  { label: 'Left', value: 1 },
+  { label: 'Right', value: 2 },
+  { label: 'Mid', value: 3 },
+  { label: 'Side', value: 4 },
+] as const;
+
+export const EQ_CHANNEL_CLASS = [
+  'ch-stereo',
+  'ch-left',
+  'ch-right',
+  'ch-mid',
+  'ch-side',
+] as const;
+
+export function eqChannelClass(mode: number): string {
+  const i = Math.round(Math.min(4, Math.max(0, mode)));
+  return EQ_CHANNEL_CLASS[i] ?? 'ch-stereo';
+}
+
 export const EQ_MAX_BANDS = EQ_BAND_COUNT;
 export const EQ_FREQ_MIN = 20;
 export const EQ_FREQ_MAX = 20000;
@@ -183,6 +205,11 @@ export interface IEqualizerBand {
   dynRatio$: DynamicValue<number>;
   /** 0 Peak / 1 RMS / 2 Opto (GainReduction detector). */
   dynMode$: DynamicValue<number>;
+  /**
+   * Channel routing for this band.
+   * 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side.
+   */
+  channel$: DynamicValue<number>;
   /** Solo detector / sidechain into the plugin output. */
   listen$: DynamicValue<boolean>;
   /** Optional chart handle title (EQ defaults to B1…). */
@@ -393,6 +420,9 @@ export function createBoundEqualizerBands(): {
     const dynMode$ = DynamicValue.fromConstant(
       paramDefault(bandParamId(i, EQ_BAND_OFFSET.dyn_mode), 0),
     );
+    const channel$ = DynamicValue.fromConstant(
+      paramDefault(bandParamId(i, EQ_BAND_OFFSET.channel), 0),
+    );
     const listen$ = DynamicValue.fromConstant(
       paramDefault(bandParamId(i, EQ_BAND_OFFSET.dyn_listen), 0) >= 0.5,
     );
@@ -439,6 +469,9 @@ export function createBoundEqualizerBands(): {
       bindParamToHost(dynMode$, bandParamId(i, EQ_BAND_OFFSET.dyn_mode)),
     );
     disposers.push(
+      bindParamToHost(channel$, bandParamId(i, EQ_BAND_OFFSET.channel)),
+    );
+    disposers.push(
       bindBoolParamToHost(listen$, bandParamId(i, EQ_BAND_OFFSET.dyn_listen)),
     );
 
@@ -459,6 +492,7 @@ export function createBoundEqualizerBands(): {
       dynThreshold$,
       dynRatio$,
       dynMode$,
+      channel$,
       listen$,
       defaults: {
         frequency: freqDefault,

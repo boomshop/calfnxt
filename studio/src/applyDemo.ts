@@ -558,6 +558,7 @@ export function applyEqualizerDemo(
       setBool(band.active$, rec.active);
       setBool(band.dyn$, rec.dyn);
       setNum(band.dynMode$, rec.dyn_mode);
+      setNum(band.channel$, rec.channel);
       setNum(band.frequency$, rec.frequency);
       setNum(band.gain$, rec.gain);
       setNum(band.q$, rec.q);

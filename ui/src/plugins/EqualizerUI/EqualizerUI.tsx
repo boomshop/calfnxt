@@ -27,7 +27,9 @@ import {
   EQ_Q_MIN,
   EQ_SPECTRUM_ENTRIES,
   EQ_DYN_MODE_ENTRIES,
+  EQ_CHANNEL_ENTRIES,
   bandSupportsDyn,
+  eqChannelClass,
   isPassFilter,
   type EqFilterType,
   type IEqualizerBand,
@@ -120,9 +122,10 @@ function BandRow(props: {
   band: IEqualizerBand;
   index: number;
   selected: boolean;
+  mono: boolean;
   onSelect: (id: string) => void;
 }) {
-  const { band, index, selected, onSelect } = props;
+  const { band, index, selected, mono, onSelect } = props;
   const active = useDynamicValueReadonly(band.active$, false);
   const freq = useDynamicValueReadonly(band.frequency$, 0);
   const filterType = useDynamicValueReadonly<EqFilterType>(
@@ -131,7 +134,15 @@ function BandRow(props: {
   );
   const dyn = useDynamicValueReadonly(band.dyn$, false);
   const listen = useDynamicValueReadonly(band.listen$, false);
+  const channel = useDynamicValueReadonly(band.channel$, 0);
   const dynActive = bandSupportsDyn(filterType) && dyn;
+  // Global Mono always runs the Left path — stripe shows Stereo, not L/R/M/S.
+  const freqChannelClass =
+    active && !mono ? eqChannelClass(channel) : active && mono ? 'ch-stereo' : undefined;
+
+  useEffect(() => {
+    return band.active$.subscribe(() => onSelect(band.id), false);
+  }, [band.active$, band.id, onSelect]);
 
   return (
     <div
@@ -150,7 +161,10 @@ function BandRow(props: {
           .join(' ')}
         onClick={() => onSelect(band.id)}
         aria-label={`Select band ${index + 1}`}>
-        <span className="freq">{freq.toFixed(2)}</span>
+        <span
+          className={['freq', freqChannelClass].filter(Boolean).join(' ')}>
+          {freq.toFixed(2)}
+        </span>
         <EQChart
           bands={[band]}
           size="mini"
@@ -168,86 +182,108 @@ function BandRow(props: {
   );
 }
 
-function BandControls(props: { band: IEqualizerBand; host: IEqualizerHost }) {
-  const { band, host } = props;
+function BandControls(props: {
+  band: IEqualizerBand;
+  host: IEqualizerHost;
+  mono: boolean;
+}) {
+  const { band, host, mono } = props;
   const filterType = useDynamicValueReadonly<EqFilterType>(
     band.type$,
     'parametric',
   );
   const dynMode = useDynamicValueReadonly(band.dynMode$, 0);
+  const channel = useDynamicValueReadonly(band.channel$, 0);
   const pass = isPassFilter(filterType);
   const canDyn = bandSupportsDyn(filterType);
   return (
     <div className="controls" data-band={band.id}>
       <div className="block eq">
         <div className="title">Band {band.index + 1}</div>
-        <WithInfo title={equalizerInfo.type}>
-          <Select value$={band.type$} entries={EQ_FILTER_TYPE_ENTRIES} />
-        </WithInfo>
-        {pass ? (
-          <WithInfo title={equalizerInfo.slope}>
-            <Select
-              className="slope"
-              value$={band.slope$}
-              entries={EQ_PASS_SLOPE_ENTRIES}
-            />
-          </WithInfo>
-        ) : null}
-        <WithInfo title={equalizerInfo.freq}>
-          <Knob
-            value$={band.frequency$}
-            min={EQ_FREQ_MIN}
-            max={EQ_FREQ_MAX}
-            reset={band.defaults.frequency}
-            label="Freq"
-            size={pass ? 'large' : 'medium'}
-            scale="frequency"
-            dots={EQ_FREQ_DOTS}
-            labels={EQ_FREQ_LABELS}
-            {...{
-              'value.format': (v: number) =>
-                v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0),
-            }}
-          />
-        </WithInfo>
-        {!pass ? (
-          <WithInfo title={equalizerInfo.gain}>
-            <Knob
-              value$={band.gain$}
-              min={EQ_GAIN_MIN}
-              max={EQ_GAIN_MAX}
-              reset={band.defaults.gain}
-              label="Gain"
-              size="large"
-              base={0}
-              dots={EQ_GAIN_DOTS}
-              labels={EQ_GAIN_LABELS}
-              {...{
-                'value.format': (v: number) => v.toFixed(1),
+        {!mono ? (
+          <WithInfo title={equalizerInfo.channel} className="info-block channel">
+            <Buttons
+              layout="vertical"
+              entries={EQ_CHANNEL_ENTRIES}
+              value={Math.round(channel)}
+              onChange={(v) => {
+                const id = bandParamId(band.index, EQ_BAND_OFFSET.channel);
+                host.beginEdit(id);
+                band.channel$.set(v as number);
+                host.endEdit(id);
               }}
             />
           </WithInfo>
         ) : null}
-        <WithInfo title={equalizerInfo.q}>
-          <Knob
-            value$={band.q$}
-            min={EQ_Q_MIN}
-            max={EQ_Q_MAX}
-            reset={band.defaults.q}
-            label="Q"
-            size="medium"
-            scale="log2"
-            log_factor={4}
-            dots={EQ_Q_DOTS}
-            labels={EQ_Q_LABELS}
-            {...{
-              'value.format': (v: number) => v.toFixed(2),
-            }}
-          />
-        </WithInfo>
-        <WithInfo title={equalizerInfo.active} className="power">
-          <Toggle state$={band.active$} icon="power" />
-        </WithInfo>
+        <div className="eq-main">
+          <WithInfo title={equalizerInfo.type}>
+            <Select value$={band.type$} entries={EQ_FILTER_TYPE_ENTRIES} />
+          </WithInfo>
+          {pass ? (
+            <WithInfo title={equalizerInfo.slope}>
+              <Select
+                className="slope"
+                value$={band.slope$}
+                entries={EQ_PASS_SLOPE_ENTRIES}
+              />
+            </WithInfo>
+          ) : null}
+          <WithInfo title={equalizerInfo.freq}>
+            <Knob
+              value$={band.frequency$}
+              min={EQ_FREQ_MIN}
+              max={EQ_FREQ_MAX}
+              reset={band.defaults.frequency}
+              label="Freq"
+              size={pass ? 'large' : 'medium'}
+              scale="frequency"
+              dots={EQ_FREQ_DOTS}
+              labels={EQ_FREQ_LABELS}
+              {...{
+                'value.format': (v: number) =>
+                  v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0),
+              }}
+            />
+          </WithInfo>
+          {!pass ? (
+            <WithInfo title={equalizerInfo.gain}>
+              <Knob
+                value$={band.gain$}
+                min={EQ_GAIN_MIN}
+                max={EQ_GAIN_MAX}
+                reset={band.defaults.gain}
+                label="Gain"
+                size="large"
+                base={0}
+                dots={EQ_GAIN_DOTS}
+                labels={EQ_GAIN_LABELS}
+                {...{
+                  'value.format': (v: number) => v.toFixed(1),
+                }}
+              />
+            </WithInfo>
+          ) : null}
+          <WithInfo title={equalizerInfo.q}>
+            <Knob
+              value$={band.q$}
+              min={EQ_Q_MIN}
+              max={EQ_Q_MAX}
+              reset={band.defaults.q}
+              label="Q"
+              size="medium"
+              scale="log2"
+              log_factor={4}
+              dots={EQ_Q_DOTS}
+              labels={EQ_Q_LABELS}
+              {...{
+                'value.format': (v: number) => v.toFixed(2),
+              }}
+            />
+          </WithInfo>
+          <WithInfo title={equalizerInfo.active} className="power">
+            <Toggle state$={band.active$} icon="power" />
+          </WithInfo>
+        </div>
       </div>
       {canDyn ? (
         <div className="block dyn">
@@ -366,6 +402,7 @@ export function EqualizerUI(props: EqualizerUIProps) {
   const { host } = props;
   const bands = host.bands;
   const spectrumMode = useDynamicValueReadonly(host.spectrum$, 0);
+  const mono = useDynamicValueReadonly(host.mono$, false);
   const [selectedBandId, setSelectedBandId] = useState(
     () => bands[EQ_DEFAULT_SELECTED_INDEX]?.id ?? bands[0]?.id ?? '',
   );
@@ -416,7 +453,9 @@ export function EqualizerUI(props: EqualizerUIProps) {
         spectrumMode={Math.round(spectrumMode)}
       />
 
-      {selectedBand ? <BandControls band={selectedBand} host={host} /> : null}
+      {selectedBand ? (
+        <BandControls band={selectedBand} host={host} mono={mono} />
+      ) : null}
 
       <div className="bands">
         {bands.map((band, index) => (
@@ -425,6 +464,7 @@ export function EqualizerUI(props: EqualizerUIProps) {
             band={band}
             index={index}
             selected={band.id === selectedBandId}
+            mono={mono}
             onSelect={selectBand}
           />
         ))}

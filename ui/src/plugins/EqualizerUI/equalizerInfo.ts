@@ -5,7 +5,7 @@ export const equalizerInfo = {
     'Turns all EQ processing off (In/Out gains still apply). A/B to hear whether the curve is clarifying the mix or just making things louder/harsher.',
 
   mono:
-    'Process the Left channel only and copy the result to both outs. Roughly halves filter CPU — ideal on mono tracks. Right-channel content is ignored while on.',
+    'Process Left only and copy to both outs — halves filter CPU, ideal on mono tracks. While on, per-band Stereo/L/R/Mid/Side is hidden and ignored (everything runs on L). Right-channel content is discarded.',
 
   type:
     'Filter shape for this band. Peaking = boost/cut a region; shelves = tilt highs or lows; HP/LP = remove below/above a cutoff; band-pass = isolate a band. Type changes what Gain and Slope mean — a “gain” on HP/LP isn’t the same as a bell boost.',
@@ -24,6 +24,9 @@ export const equalizerInfo = {
 
   active:
     'Enables or bypasses this band only. Flip bands off to hear their contribution without losing the rest of the curve.',
+
+  channel:
+    'Which stereo path this band processes. Stereo = both channels (normal EQ). Left / Right = only that channel — useful for fixing one side without touching the other. Mid = shared centre content (vocals, kick, bass on most mixes). Side = width and ambience (hard-panned guitars, room, stereo FX). Mid/Side is encode → filter → decode, so you can carve width without a separate MS plugin. Hidden while header Mono is on (Mono always filters L only). The coloured stripe above each band mini shows the mode at a glance.',
 
   dyn:
     'Turns Dynamic EQ on for this band. Level in the detector band modulates the effective gain — like compressing or expanding only that frequency region. Great for taming harshness that only appears on loud notes, or lifting presence when the source gets quiet.',
