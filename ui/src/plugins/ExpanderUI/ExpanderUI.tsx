@@ -8,6 +8,7 @@ import {
   DynamicsChart,
   FrequencyRange,
   HistoryChart,
+  HISTORY_STYLE,
   Knob,
   LevelMeter,
   Select,
@@ -272,17 +273,39 @@ export function ExpanderUI(props: ExpanderUIProps) {
         <HistoryChart
           data$={host.historyData$}
           vizId="exp"
-          graphs={[
-            { className: 'hist-audio', mode: 'bottom' },
-            { className: 'hist-audio-filtered', mode: 'bottom' },
+          series={[
             {
-              className: 'hist-gr',
+              id: 'audio',
+              name: 'Input',
+              short: 'In',
+              channel: 0,
+              className: HISTORY_STYLE.audio,
+              mode: 'bottom',
+            },
+            {
+              id: 'detector',
+              name: 'Detector',
+              short: 'Det',
+              channel: 1,
+              className: HISTORY_STYLE.detector,
+              mode: 'bottom',
+            },
+            {
+              id: 'gr',
+              name: 'Gain reduction',
+              short: 'GR',
+              channel: 2,
+              className: HISTORY_STYLE.gr,
               mode: 'line',
               toFront: true,
               gradient: true,
             },
             {
-              className: 'hist-inhibit',
+              id: 'inhibit',
+              name: 'Inhibit',
+              short: 'Inv',
+              channel: 3,
+              className: HISTORY_STYLE.inhibit,
               mode: 'line',
               toFront: true,
               visible$: host.inhibitHistVisible$,

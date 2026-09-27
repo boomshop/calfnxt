@@ -14,6 +14,7 @@ import {
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
+import { addGraphClasses, GRAPH_STYLE } from '../../styles/graphStyles';
 import './ImpulseChart.scss';
 
 const DB_MAX = 6;
@@ -484,7 +485,7 @@ export function ImpulseChart(props: ImpulseChartProps) {
           mode: 'bottom',
           class: 'ir-wave',
         });
-        ir.element?.classList.add('ir-wave');
+        addGraphClasses(ir.element, 'ir-wave', GRAPH_STYLE.audio);
         irGraphRef.current = ir;
       }
       if (!usedGraphRef.current) {
@@ -494,7 +495,7 @@ export function ImpulseChart(props: ImpulseChartProps) {
           mode: 'bottom',
           class: 'ir-used',
         });
-        used.element?.classList.add('ir-used');
+        addGraphClasses(used.element, 'ir-used', GRAPH_STYLE.detector);
         usedGraphRef.current = used;
       }
       if (!decayGraphRef.current) {
@@ -504,7 +505,11 @@ export function ImpulseChart(props: ImpulseChartProps) {
           mode: 'line',
           class: 'ir-decay',
         });
-        dec.element?.classList.add('ir-decay');
+        addGraphClasses(
+          dec.element,
+          'ir-decay',
+          'fill-none stroke-gradient stroke-dashed',
+        );
         decayGraphRef.current = dec;
         setGradTarget(dec.element ?? null);
       }

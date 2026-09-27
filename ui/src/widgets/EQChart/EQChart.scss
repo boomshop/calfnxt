@@ -9,23 +9,19 @@
       > .aux-baseline {
         fill: none;
         stroke: var(--chart-level-stroke, var(--color-accent));
-        stroke-width: 1.75px;
+        stroke-width: var(--graph-stroke-medium);
       }
 
       > .aux-graph {
+        /* Fill-only ghosts; default .aux-graph stroke must not outline them. */
+        stroke-opacity: 0;
         fill: var(--color);
-        fill-opacity: 0.05;
-
-        &.eq-spectrum {
-          stroke: none !important;
-          fill: var(--color);
-          fill-opacity: 0.1;
-        }
+        fill-opacity: var(--graph-fill-opacity-ghost);
 
         &.eq-selected {
           stroke: var(--color-least);
-          stroke-width: 1px;
-          stroke-opacity: 0.75;
+          stroke-width: var(--graph-stroke-thinner);
+          stroke-opacity: var(--graph-stroke-opacity-semi);
         }
       }
     }
@@ -65,7 +61,7 @@
           > .aux-handle {
             // Set on eq.svg via useChartGradient (full url(#…) paint value).
             stroke: var(--chart-level-stroke, var(--accent));
-            stroke-width: 2px;
+            stroke-width: var(--graph-stroke-thicker);
           }
         }
       }

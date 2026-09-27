@@ -1,0 +1,167 @@
+/**
+ * Shared graph / chart stroke & fill utilities (Tailwind-style).
+ *
+ * Soft defaults on bare `.aux-graph` only (low specificity so chart SCSS and
+ * utility classes can override). Compose modifiers on any SVG paint node:
+ *   class="aux-graph stroke-thick stroke-accent fill-none"
+ *
+ * Recommended baseline when composing from scratch:
+ *   stroke-medium, stroke-visible, stroke-color, stroke-solid,
+ *   fill-semi, fill-color
+ *
+ * Gradients need a paint server on the chart SVG (`useChartGradient`).
+ * The hook sets `--graph-gradient: url(#…)` (and mirrors `--chart-level-stroke`).
+ * Then `.stroke-gradient` / `.fill-gradient` just consume that var — same idea
+ * as solids, with the hook as the one-time installer per chart.
+ *   gradient     = top accent → bottom warn  (hook `reverse: true`)
+ *   gradient-inv = top warn → bottom accent
+ */
+
+:root {
+  /* stroke-width */
+  --graph-stroke-thinnest: 0.75px;
+  --graph-stroke-thinner: 1px;
+  --graph-stroke-thin: 1.25px;
+  --graph-stroke-medium: 1.5px;
+  --graph-stroke-thick: 1.75px;
+  --graph-stroke-thicker: 2px;
+  --graph-stroke-thickest: 2.25px;
+
+  /* stroke-opacity */
+  --graph-stroke-opacity-visible: 1;
+  --graph-stroke-opacity-semi: 0.75;
+  --graph-stroke-opacity-faint: 0.5;
+  --graph-stroke-opacity-none: 0;
+
+  /* fill-opacity */
+  --graph-fill-opacity-visible: 0.75;
+  --graph-fill-opacity-semi: 0.5;
+  --graph-fill-opacity-faint: 0.25;
+  --graph-fill-opacity-ghost: 0.1;
+  --graph-fill-opacity-none: 0;
+
+  /* stroke-dasharray */
+  --graph-dash-dashed: 3 3;
+  --graph-dash-dotted: 1.5 1.5;
+}
+
+/* Soft defaults — yield to any more specific chart rule or utility class. */
+.aux-graph {
+  stroke-width: var(--graph-stroke-medium);
+  stroke-opacity: var(--graph-stroke-opacity-visible);
+  stroke: var(--color);
+  stroke-dasharray: none;
+  fill: var(--color);
+  fill-opacity: var(--graph-fill-opacity-semi);
+}
+
+/* ---- stroke-width ---- */
+
+.stroke-thinnest {
+  stroke-width: var(--graph-stroke-thinnest);
+}
+.stroke-thinner {
+  stroke-width: var(--graph-stroke-thinner);
+}
+.stroke-thin {
+  stroke-width: var(--graph-stroke-thin);
+}
+.stroke-medium {
+  stroke-width: var(--graph-stroke-medium);
+}
+.stroke-thick {
+  stroke-width: var(--graph-stroke-thick);
+}
+.stroke-thicker {
+  stroke-width: var(--graph-stroke-thicker);
+}
+.stroke-thickest {
+  stroke-width: var(--graph-stroke-thickest);
+}
+
+/* ---- stroke-opacity ---- */
+
+.stroke-visible {
+  stroke-opacity: var(--graph-stroke-opacity-visible);
+}
+.stroke-semi {
+  stroke-opacity: var(--graph-stroke-opacity-semi);
+}
+.stroke-faint {
+  stroke-opacity: var(--graph-stroke-opacity-faint);
+}
+.stroke-none {
+  stroke-opacity: var(--graph-stroke-opacity-none);
+}
+
+/* ---- fill-opacity ---- */
+
+.fill-visible {
+  fill-opacity: var(--graph-fill-opacity-visible);
+}
+.fill-semi {
+  fill-opacity: var(--graph-fill-opacity-semi);
+}
+.fill-faint {
+  fill-opacity: var(--graph-fill-opacity-faint);
+}
+.fill-ghost {
+  fill-opacity: var(--graph-fill-opacity-ghost);
+}
+.fill-none {
+  fill-opacity: var(--graph-fill-opacity-none);
+}
+
+/* ---- fill ---- */
+
+.fill-color {
+  fill: var(--color);
+}
+.fill-accent {
+  fill: var(--color-accent);
+}
+.fill-warn {
+  fill: var(--color-warn);
+}
+.fill-gradient {
+  fill: var(--graph-gradient, var(--chart-level-stroke, var(--color-accent)));
+}
+.fill-gradient-inv {
+  fill: var(
+    --graph-gradient-inv,
+    var(--chart-level-stroke-inv, var(--color-warn))
+  );
+}
+
+/* ---- stroke ---- */
+
+.stroke-color {
+  stroke: var(--color);
+}
+.stroke-accent {
+  stroke: var(--color-accent);
+}
+.stroke-warn {
+  stroke: var(--color-warn);
+}
+.stroke-gradient {
+  stroke: var(--graph-gradient, var(--chart-level-stroke, var(--color-accent)));
+}
+.stroke-gradient-inv {
+  stroke: var(
+    --graph-gradient-inv,
+    var(--chart-level-stroke-inv, var(--color-warn))
+  );
+}
+
+/* ---- stroke-dasharray ---- */
+
+.stroke-solid {
+  stroke-dasharray: none;
+}
+.stroke-dashed {
+  stroke-dasharray: var(--graph-dash-dashed);
+}
+.stroke-dotted {
+  stroke-dasharray: var(--graph-dash-dotted);
+}

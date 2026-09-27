@@ -15,11 +15,6 @@
       }
 
       > .aux-graph {
-        fill: none;
-        stroke: var(--chart-level-stroke, var(--color));
-        stroke-width: 1.75px;
-        stroke-opacity: 1;
-
         &.aux-inactive {
           display: none;
         }
@@ -29,8 +24,8 @@
         }
 
         &.mb-selected {
+          // Soft fill under the lobe (mode=bottom); beat `.fill-none`.
           stroke: var(--color);
-          // Soft fill under the lobe via Graph mode=bottom (value-space dots).
           fill: var(--color);
           fill-opacity: 0.18;
         }
@@ -83,7 +78,7 @@
         &.mb-thresh {
           > .aux-line {
             stroke: var(--color);
-            stroke-width: 1px;
+            stroke-width: var(--graph-stroke-thinner);
             stroke-opacity: 0.66;
           }
 

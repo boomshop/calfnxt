@@ -3,6 +3,7 @@ import { Header } from '../../components';
 import {
   Buttons,
   HistoryChart,
+  HISTORY_STYLE,
   Knob,
   LevelMeter,
   Toggle,
@@ -122,10 +123,21 @@ export function LimiterUI(props: LimiterUIProps) {
       <HistoryChart
         data$={host.historyData$}
         vizId="limiter"
-        graphs={[
-          { className: 'hist-audio-filtered', mode: 'bottom' },
+        series={[
           {
-            className: 'hist-gr',
+            id: 'audio',
+            name: 'Input',
+            short: 'In',
+            channel: 0,
+            className: HISTORY_STYLE.detector,
+            mode: 'bottom',
+          },
+          {
+            id: 'gr',
+            name: 'Gain reduction',
+            short: 'GR',
+            channel: 1,
+            className: HISTORY_STYLE.gr,
             mode: 'line',
             toFront: true,
             gradient: true,

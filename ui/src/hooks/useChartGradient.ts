@@ -3,7 +3,9 @@ import { themeColors$ } from '../theme/themeColors';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-/** CSS custom property set on the chart SVG; value is `url(#…)`. */
+/** CSS custom property on the chart SVG; value is `url(#…)`. */
+export const GRAPH_GRADIENT_VAR = '--graph-gradient';
+/** @deprecated Prefer GRAPH_GRADIENT_VAR — still dual-written for legacy SCSS. */
 export const CHART_LEVEL_STROKE_VAR = '--chart-level-stroke';
 
 export type ChartGradientPaint = 'stroke' | 'fill' | 'both';
@@ -50,8 +52,10 @@ function clearPaint(el: SVGElement, paint: ChartGradientPaint): void {
 }
 
 /**
- * Install a vertical accent→warn level gradient on an AUX chart SVG and paint
- * optional targets. Stops track `themeColors$` (day/night + accent pair).
+ * Install a vertical accent↔warn level gradient on an AUX chart SVG and expose
+ * it as `--graph-gradient` (also mirrors `--chart-level-stroke` for legacy SCSS).
+ * Optional `targets` get an inline paint so AUX path redraws cannot drop it.
+ * Utility classes `.stroke-gradient` / `.fill-gradient` read the CSS var.
  * Returns `reassert` for after AUX rewrites paths.
  */
 export function useChartGradient(
@@ -60,7 +64,7 @@ export function useChartGradient(
   const {
     svg,
     enabled = true,
-    cssVar = CHART_LEVEL_STROKE_VAR,
+    cssVar = GRAPH_GRADIENT_VAR,
     targets,
     paint = 'stroke',
     opacities,
@@ -114,6 +118,11 @@ export function useChartGradient(
 
     const paintValue = `url(#${gradId})`;
     svg.style.setProperty(cssVar, paintValue);
+    // Keep stroke-gradient / fill-gradient utilities and legacy SCSS in sync.
+    if (cssVar !== GRAPH_GRADIENT_VAR)
+      svg.style.setProperty(GRAPH_GRADIENT_VAR, paintValue);
+    if (cssVar !== CHART_LEVEL_STROKE_VAR)
+      svg.style.setProperty(CHART_LEVEL_STROKE_VAR, paintValue);
 
     const syncStops = () => {
       const c = themeColors$.value;
@@ -166,6 +175,10 @@ export function useChartGradient(
         if (el) clearPaint(el, paint);
       }
       svg.style.removeProperty(cssVar);
+      if (cssVar !== GRAPH_GRADIENT_VAR)
+        svg.style.removeProperty(GRAPH_GRADIENT_VAR);
+      if (cssVar !== CHART_LEVEL_STROKE_VAR)
+        svg.style.removeProperty(CHART_LEVEL_STROKE_VAR);
       grad?.remove();
       if (defs && !defs.childElementCount) defs.remove();
     };

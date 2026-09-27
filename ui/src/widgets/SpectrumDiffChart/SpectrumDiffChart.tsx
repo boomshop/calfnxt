@@ -4,6 +4,7 @@ import type { DynamicValue } from '@deutschesoft/awml';
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { useChartGradient } from '../../hooks/useChartGradient';
+import { addGraphClasses } from '../../styles/graphStyles';
 import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
 import {
   buildDbGridY,
@@ -69,7 +70,6 @@ export function SpectrumDiffChart(props: { data$: DynamicValue<number[]> }) {
     targets: gradTargets,
     paint: 'stroke',
     reverse: true,
-    cssVar: '--chart-diff-stroke',
     stopOffsets: DIFF_STOPS,
   });
 
@@ -110,7 +110,11 @@ export function SpectrumDiffChart(props: { data$: DynamicValue<number[]> }) {
         mode: 'line',
         class: 'spec-diff',
       });
-      g.element?.classList.add('spec-diff');
+      addGraphClasses(
+        g.element,
+        'spec-diff',
+        'fill-none stroke-gradient stroke-thin',
+      );
       graphRef.current = g;
       setStrokeEl(g.element ?? null);
       bindRef.current = bindAuxOptions(g, [

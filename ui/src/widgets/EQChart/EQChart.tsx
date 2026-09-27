@@ -15,6 +15,7 @@ import {
   useWidgetsWithBindingsAndEvents,
 } from '@deutschesoft/use-aux-widgets';
 import type { EqFilterType, IEqualizerBand } from '../../host/equalizerHost';
+import { addGraphClasses } from '../../styles/graphStyles';
 import {
   EQ_FILTER_MODES,
   EQ_FREQ_MAX,
@@ -334,7 +335,7 @@ export function EQChart(props: EQChartProps) {
       ghosts.map((ghost, index) => ({
         bands: [ghost],
         mode: 'center',
-        class: `eq-individual eq-band-${index}`,
+        class: `eq-individual eq-band-${index} fill-color fill-ghost stroke-none`,
         // Tiny canvases miss high-Q needles unless we always densify between pixels
         // (threshold 0 → oversample every segment; see AUX EqualizerGraph.drawPath).
         ...(isMini
@@ -496,7 +497,11 @@ export function EQChart(props: EQChartProps) {
         mode: 'bottom',
         class: 'eq-spectrum',
       });
-      g.element?.classList.add('eq-spectrum');
+      addGraphClasses(
+        g.element,
+        'eq-spectrum',
+        'fill-color fill-ghost stroke-none',
+      );
       spectrumGraphRef.current = g;
       eq.baseline?.toFront?.();
     }

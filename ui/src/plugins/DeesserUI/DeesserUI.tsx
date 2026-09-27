@@ -4,6 +4,7 @@ import {
   Buttons,
   EQChart,
   HistoryChart,
+  HISTORY_STYLE,
   Knob,
   LevelMeter,
   Select,
@@ -127,10 +128,33 @@ export function DeesserUI(props: DeesserUIProps) {
       <HistoryChart
         data$={host.historyData$}
         vizId="deess"
-        graphs={[
-          { className: 'hist-audio', mode: 'bottom' },
-          { className: 'hist-audio-filtered', mode: 'bottom' },
-          { className: 'hist-gr', mode: 'line', toFront: true, gradient: true },
+        series={[
+          {
+            id: 'audio',
+            name: 'Input',
+            short: 'In',
+            channel: 0,
+            className: HISTORY_STYLE.audio,
+            mode: 'bottom',
+          },
+          {
+            id: 'detector',
+            name: 'Detector',
+            short: 'Det',
+            channel: 1,
+            className: HISTORY_STYLE.detector,
+            mode: 'bottom',
+          },
+          {
+            id: 'gr',
+            name: 'Gain reduction',
+            short: 'GR',
+            channel: 2,
+            className: HISTORY_STYLE.gr,
+            mode: 'line',
+            toFront: true,
+            gradient: true,
+          },
         ]}
       />
 

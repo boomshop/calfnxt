@@ -890,28 +890,30 @@ export function SpectrumChart(props: SpectrumChartProps) {
       // Idempotent: use-aux-widgets re-calls widgetRef when the callback
       // identity changes, without nulling the old ref — never double-add.
       if (graphsRef.current.length === 0) {
-        const specs = monitorRef.current
+          const specs = monitorRef.current
           ? [
               {
-                className: 'spec-rms',
+                className:
+                  'spec-rms fill-none stroke-color stroke-thin stroke-dashed',
                 mode: 'line' as const,
                 gradient: false,
                 type: 'L',
               },
               {
-                className: 'spec-primary',
+                className: 'spec-primary fill-none stroke-accent stroke-thin',
                 mode: 'line' as const,
                 gradient: false,
                 type: 'L',
               },
               {
-                className: 'spec-secondary',
+                className: 'spec-secondary fill-none stroke-warn stroke-thin',
                 mode: 'line' as const,
                 gradient: false,
                 type: 'L',
               },
               {
-                className: 'spec-hold',
+                className:
+                  'spec-hold fill-none stroke-color stroke-thin stroke-faint',
                 mode: 'line' as const,
                 gradient: false,
                 type: 'L',
@@ -920,19 +922,22 @@ export function SpectrumChart(props: SpectrumChartProps) {
           : [
               // L + Y-smooth + densify. AUX T (quadratic Bézier) grain/rings on dense dots.
               {
-                className: 'spec-primary',
+                className:
+                  'spec-primary fill-color fill-ghost stroke-gradient',
                 mode: 'bottom' as const,
                 gradient: true,
                 type: 'L',
               },
               {
-                className: 'spec-secondary',
+                className:
+                  'spec-secondary fill-color fill-ghost stroke-color',
                 mode: 'bottom' as const,
                 gradient: false,
                 type: 'L',
               },
               {
-                className: 'spec-hold',
+                className:
+                  'spec-hold fill-none stroke-color stroke-thinner stroke-faint stroke-dashed',
                 mode: 'line' as const,
                 gradient: false,
                 type: 'L',
@@ -945,9 +950,11 @@ export function SpectrumChart(props: SpectrumChartProps) {
             dots: null,
             type: spec.type,
             mode: spec.mode,
-            class: spec.className,
+            class: spec.className.split(/\s+/)[0] ?? '',
           });
-          g.element?.classList.add(spec.className);
+          g.element?.classList.add(
+            ...spec.className.split(/\s+/).filter(Boolean),
+          );
           if (spec.gradient && g.element) grads.push(g.element);
           aux.push(g);
         }

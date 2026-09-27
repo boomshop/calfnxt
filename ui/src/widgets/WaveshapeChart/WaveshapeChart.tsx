@@ -219,21 +219,21 @@ export function WaveshapeChart(props: WaveshapeChartProps) {
         </filter>
       </defs>
       <line
-        className="axis"
+        className="axis stroke-color stroke-thinner stroke-faint"
         x1={toX(0, w)}
         y1={pad}
         x2={toX(0, w)}
         y2={h - pad}
       />
       <line
-        className="axis"
+        className="axis stroke-color stroke-thinner stroke-faint"
         x1={pad}
         y1={toY(0, h)}
         x2={w - pad}
         y2={toY(0, h)}
       />
       <path
-        className="unity"
+        className="unity fill-none stroke-color stroke-faint stroke-thinner stroke-dashed"
         d={`M${toX(-1, w)},${toY(-1, h)} L${toX(1, w)},${toY(1, h)}`}
       />
 
@@ -243,8 +243,17 @@ export function WaveshapeChart(props: WaveshapeChartProps) {
         filter={`url(#${blurId})`}
       />
 
-      <path ref={setCurveEl} className="curve" d={basePath} />
-      <path ref={zonePathRef} className="zone" d="" style={{ display: 'none' }} />
+      <path
+        ref={setCurveEl}
+        className="curve fill-none stroke-gradient stroke-thicker"
+        d={basePath}
+      />
+      <path
+        ref={zonePathRef}
+        className="zone fill-none stroke-gradient stroke-thickest"
+        d=""
+        style={{ display: 'none' }}
+      />
     </svg>
   );
 }

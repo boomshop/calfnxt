@@ -18,21 +18,8 @@
     }
   }
 
-  .mod-L {
-    stroke: var(--color-accent);
-    fill: none;
-    stroke-width: 1.75px;
-  }
-
-  .mod-R {
-    stroke: var(--color-warn);
-    fill: none;
-    stroke-width: 1.75px;
-  }
-
   &.is-comb {
     .mod-stem {
-      stroke-width: 1.75px;
       stroke-linecap: butt;
     }
   }

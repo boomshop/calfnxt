@@ -1,12 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
-import type { DynamicValue } from '@deutschesoft/awml';
+import { DynamicValue } from '@deutschesoft/awml';
 import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
-import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
+import {
+  componentFromWidget,
+  useDynamicValueReadonly,
+} from '@deutschesoft/use-aux-widgets';
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
+import { addGraphClasses } from '../../styles/graphStyles';
 import './HistoryChart.scss';
+
+export {
+  HISTORY_STYLE,
+  GRAPH_STYLE,
+  addGraphClasses,
+} from '../../styles/graphStyles';
 
 const DB_MAX = 0;
 const DB_MIN = -48;
@@ -16,6 +26,78 @@ const DB_LABEL = 12;
 /** Fixed history window (ms) — keep in sync with DSP history display. */
 export const HISTORY_CHART_MS = 10000;
 const HISTORY_GRID_STEP_MS = 1000;
+
+/** AUX Graph drawing modes (see aux-widgets Graph `options.mode`). */
+export type HistoryGraphMode =
+  | 'line'
+  | 'bottom'
+  | 'top'
+  | 'center'
+  | 'base'
+  | 'fill';
+
+/** One announced series on the interleaved history blob. */
+export type HistorySeries = {
+  /** Stable key (reconcile / legend). */
+  id: string;
+  /** Full label (tip / a11y). */
+  name: string;
+  /** Short legend / toggle label. */
+  short: string;
+  /** Channel index in `data$` (`[ch0…chN] × slots` + optional phase). */
+  channel: number;
+  /**
+   * Graph utility classes from `styles/graph.scss`, e.g.
+   * `"stroke-thin stroke-accent fill-faint"`.
+   */
+  className?: string;
+  /** AUX path mode. Default `bottom`. */
+  mode?: HistoryGraphMode;
+  /** Map blob sample → plot Y (default: linear amplitude → dB). */
+  transform?: (value: number) => number;
+  /** Raise this series after attach. */
+  toFront?: boolean;
+  /**
+   * Install the vertical accent→warn paint server on the chart SVG.
+   * Also implied when `className` contains `stroke-gradient` / `fill-gradient`
+   * (non-inv). Style the path with `stroke-gradient` / `fill-gradient`.
+   */
+  gradient?: boolean;
+  /**
+   * When false, series is out of the current context — no path, no toggle.
+   * Default: always listed.
+   */
+  listed$?: DynamicValue<boolean>;
+  /**
+   * User / host visibility within a listed series. Default: visible.
+   * Toggle chrome (when `toggle`) writes this value.
+   */
+  visible$?: DynamicValue<boolean>;
+  /** Show a legend chip that toggles `visible$`. */
+  toggle?: boolean;
+};
+
+export interface HistoryChartProps {
+  data$: DynamicValue<Float32Array | null>;
+  /**
+   * Full announcement of every series the blob can drive. Visibility is
+   * controlled per series via `listed$` / `visible$` — do not remount for
+   * panel switches.
+   */
+  series: HistorySeries[];
+  /** Host vizcfg / envelope stream id (e.g. `"comp"`, `"deess"`). */
+  vizId: string;
+  windowMs?: number;
+  /**
+   * Fixed spacing between samples. Partial buffers then sit at “now”
+   * (the right edge) instead of being stretched across `windowMs`.
+   */
+  slotMs?: number;
+  /** Plot range in dB. Defaults to −48…0 (peaks and gain reduction). */
+  dbMin?: number;
+  dbMax?: number;
+  className?: string;
+}
 
 function buildDbGridY(min: number, max: number, step: number, labelStep: number) {
   const lines: { pos: number; label?: string; class?: string }[] = [];
@@ -52,6 +134,44 @@ export function historyLinToDb(lin: number): number {
   return Math.max(DB_MIN, Math.min(DB_MAX, 20 * Math.log10(lin)));
 }
 
+function splitClassNames(className: string | undefined): string[] {
+  if (!className) return [];
+  return className.split(/\s+/).filter(Boolean);
+}
+
+function wantsGradient(spec: HistorySeries): boolean {
+  if (spec.gradient) return true;
+  const cls = spec.className ?? '';
+  return (
+    /\bstroke-gradient\b/.test(cls) ||
+    /\bfill-gradient\b/.test(cls)
+  );
+}
+
+function seriesKey(series: HistorySeries[]): string {
+  return series
+    .map(
+      (s) =>
+        [
+          s.id,
+          s.channel,
+          s.className ?? '',
+          s.mode ?? 'bottom',
+          wantsGradient(s) ? 1 : 0,
+          s.toggle ? 1 : 0,
+          s.listed$ ? 1 : 0,
+          s.visible$ ? 1 : 0,
+        ].join(':'),
+    )
+    .join('|');
+}
+
+function channelCountOf(series: HistorySeries[]): number {
+  let n = 0;
+  for (const s of series) n = Math.max(n, s.channel + 1);
+  return n;
+}
+
 const ChartBindings = {};
 const ChartOptions = {
   auto_size: true,
@@ -67,7 +187,7 @@ const ChartWidget = componentFromWidget(
   AuxChart,
   ChartBindings,
   ChartOptions,
-  'HistoryChart',
+  'HistoryChart-chart',
 );
 
 type AuxGraph = {
@@ -85,48 +205,6 @@ type AuxChartInstance = {
   removeGraph: (g: AuxGraph) => void;
 };
 
-export type HistoryGraphSpec = {
-  /** CSS class on the graph path — style from plugin SCSS. */
-  className: string;
-  /** AUX Chart graph mode. */
-  mode?: 'bottom' | 'line' | 'top';
-  /** Map interleaved channel value (usually lin) → plot dB. */
-  toDb?: (value: number) => number;
-  /** Raise this series after each update. */
-  toFront?: boolean;
-  /**
-   * Stroke uses `--chart-level-stroke` (vertical blue↔red gradient installed
-   * on the SVG). Style with `stroke: var(--chart-level-stroke)` in CSS.
-   */
-  gradient?: boolean;
-  /**
-   * When false, series is hidden (CSS) and dots forced to the floor so AUX
-   * does not leave a ghost path. Driven via DynamicValue — no React.
-   */
-  visible$?: DynamicValue<boolean>;
-};
-
-export interface HistoryChartProps {
-  data$: DynamicValue<Float32Array | null>;
-  /**
-   * One graph per interleaved channel (channel i ↔ graphs[i]).
-   * Buffer layout: `[ch0, ch1, …, chN-1] × slots` + optional trailing phase.
-   */
-  graphs: HistoryGraphSpec[];
-  /** Host vizcfg / envelope stream id (e.g. `"comp"`, `"deess"`). */
-  vizId: string;
-  windowMs?: number;
-  /**
-   * Fixed spacing between samples. Partial buffers then sit at “now”
-   * (the right edge) instead of being stretched across `windowMs`.
-   */
-  slotMs?: number;
-  /** Plot range in dB. Defaults to −48…0 (peaks and gain reduction). */
-  dbMin?: number;
-  dbMax?: number;
-  className?: string;
-}
-
 type HistDot = { x: number; y: number };
 
 /** Build one channel’s AUX dots from the interleaved history buffer. */
@@ -135,8 +213,9 @@ function historyChannelDots(
   channel: number,
   nCh: number,
   windowMs: number,
-  toDb: (v: number) => number,
+  transform: (v: number) => number,
   fixedSlotMs?: number,
+  floorY?: number,
 ): HistDot[] | null {
   if (!buf || nCh < 1 || buf.length < nCh) return null;
 
@@ -160,22 +239,50 @@ function historyChannelDots(
   const pts: HistDot[] = [];
   for (let i = 0; i < slots; ++i) {
     const age = i === slots - 1 ? 0 : slotMs * (slots - 1 - i) + phaseShift;
-    pts.push({
-      x: age,
-      y: toDb(data[i * nCh + channel] ?? 0),
-    });
+    const y =
+      floorY != null
+        ? floorY
+        : transform(data[i * nCh + channel] ?? 0);
+    pts.push({ x: age, y });
   }
   return pts;
 }
 
+const alwaysTrue$ = DynamicValue.fromConstant(true);
+
+function SeriesToggle(props: { series: HistorySeries }) {
+  const { series } = props;
+  const listed = useDynamicValueReadonly(series.listed$ ?? alwaysTrue$);
+  const visible = useDynamicValueReadonly(series.visible$ ?? alwaysTrue$);
+  if (!series.toggle || !listed) return null;
+
+  const visible$ = series.visible$;
+  return (
+    <button
+      type="button"
+      className={['history-toggle', visible && 'is-on']
+        .filter(Boolean)
+        .join(' ')}
+      title={series.name}
+      aria-pressed={visible}
+      aria-label={series.name}
+      onClick={() => {
+        if (!visible$) return;
+        visible$.set(!visible$.value);
+      }}>
+      {series.short}
+    </button>
+  );
+}
+
 /**
- * Scrolling multi-series history chart. Channel count = `graphs.length`.
+ * Scrolling multi-series history chart.
  * Paint via AWML Bindings → AUX `dots` (no React re-render on viz ticks).
  */
 export function HistoryChart(props: HistoryChartProps) {
   const {
     data$,
-    graphs,
+    series,
     vizId,
     windowMs = HISTORY_CHART_MS,
     slotMs,
@@ -184,19 +291,15 @@ export function HistoryChart(props: HistoryChartProps) {
     className,
   } = props;
 
-  const graphsKey = graphs
-    .map(
-      (g) =>
-        `${g.className}:${g.mode ?? 'line'}:${!!g.gradient}:${!!g.visible$}`,
-    )
-    .join('|');
-
-  const graphsSpecRef = useRef(graphs);
-  graphsSpecRef.current = graphs;
+  const layoutKey = seriesKey(series);
+  const seriesRef = useRef(series);
+  seriesRef.current = series;
   const windowMsRef = useRef(windowMs);
   windowMsRef.current = windowMs;
   const slotMsRef = useRef(slotMs);
   slotMsRef.current = slotMs;
+  const dbMinRef = useRef(dbMin);
+  dbMinRef.current = dbMin;
   const chartRef = useRef<AuxChartInstance | null>(null);
   const auxGraphsRef = useRef<AuxGraph[]>([]);
   const graphBindingsRef = useRef<Bindings[]>([]);
@@ -204,6 +307,11 @@ export function HistoryChart(props: HistoryChartProps) {
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
   const [gradTargets, setGradTargets] = useState<SVGElement[]>([]);
+
+  const hasToggleChrome = useMemo(
+    () => series.some((s) => s.toggle),
+    [series],
+  );
 
   const reassertGradStroke = useChartGradient({
     svg: chartSvg,
@@ -255,50 +363,57 @@ export function HistoryChart(props: HistoryChartProps) {
       chart.set('range_y', { min: dbMin, max: dbMax });
       chart.set('grid_y', buildDbGridY(dbMin, dbMax, DB_GRID, DB_LABEL));
 
-      const specs = graphsSpecRef.current;
-      const nCh = specs.length;
+      const specs = seriesRef.current;
+      const nCh = channelCountOf(specs);
       const aux: AuxGraph[] = [];
       const grads: SVGElement[] = [];
       const bindingsList: Bindings[] = [];
       const visibleUnsubs: Array<() => void> = [];
 
-      for (let c = 0; c < nCh; ++c) {
-        const spec = specs[c]!;
+      for (const spec of specs) {
+        const classes = splitClassNames(spec.className);
         const g = chart.addGraph({
           dots: null,
           type: 'L',
-          mode: spec.mode ?? 'line',
-          class: spec.className,
+          mode: spec.mode ?? 'bottom',
+          class: classes[0] ?? '',
         });
-        g.element?.classList.add(spec.className);
-        if (spec.gradient && g.element) grads.push(g.element);
+        addGraphClasses(g.element, spec.className);
+        if (wantsGradient(spec) && g.element) grads.push(g.element);
         aux.push(g);
 
-        const channel = c;
-        const toDb = spec.toDb ?? historyLinToDb;
+        const channel = spec.channel;
+        const transform = spec.transform ?? historyLinToDb;
+        const listed$ = spec.listed$;
         const visible$ = spec.visible$;
 
-        const dotsFromBuf = (buf: unknown): HistDot[] | null => {
+        const isShown = () => {
+          const listed = listed$ ? !!listed$.value : true;
           const visible = visible$ ? !!visible$.value : true;
-          g.element?.classList.toggle('hist-hidden', !visible);
-          if (!visible) {
+          return listed && visible;
+        };
+
+        const dotsFromBuf = (buf: unknown): HistDot[] | null => {
+          const shown = isShown();
+          g.element?.classList.toggle('history-hidden', !shown);
+          if (!shown) {
             // Floor line (not null) so AUX replaces the previous path.
-            const base = historyChannelDots(
+            return historyChannelDots(
               buf as Float32Array | null,
               channel,
               nCh,
               windowMsRef.current,
-              () => DB_MIN,
+              transform,
               slotMsRef.current,
+              dbMinRef.current,
             );
-            return base;
           }
           return historyChannelDots(
             buf as Float32Array | null,
             channel,
             nCh,
             windowMsRef.current,
-            toDb,
+            transform,
             slotMsRef.current,
           );
         };
@@ -313,30 +428,23 @@ export function HistoryChart(props: HistoryChartProps) {
         ]);
         bindingsList.push(bindings);
 
-        if (visible$) {
-          visibleUnsubs.push(
-            visible$.subscribe(() => {
-              g.set('dots', dotsFromBuf(data$.value));
-            }),
-          );
-          // Initial hide state before first viz tick.
-          g.element?.classList.toggle('hist-hidden', !visible$.value);
-        }
+        const onVisibility = () => {
+          g.set('dots', dotsFromBuf(data$.value));
+        };
+        if (listed$) visibleUnsubs.push(listed$.subscribe(onVisibility));
+        if (visible$) visibleUnsubs.push(visible$.subscribe(onVisibility));
+        g.element?.classList.toggle('history-hidden', !isShown());
       }
 
       auxGraphsRef.current = aux;
       graphBindingsRef.current = bindingsList;
       visibleUnsubsRef.current = visibleUnsubs;
-      for (const spec of specs) {
-        if (spec.toFront) {
-          const i = specs.indexOf(spec);
-          aux[i]?.toFront?.();
-        }
+      for (let i = 0; i < specs.length; ++i) {
+        if (specs[i]?.toFront) aux[i]?.toFront?.();
       }
 
       setChartSvg(chart.svg ?? null);
       setGradTargets(grads);
-      // One-shot after attach (CSS var --chart-level-stroke covers later redraws).
       queueMicrotask(() => reassertRef.current());
 
       const el = chart.element ?? chart.svg;
@@ -351,7 +459,7 @@ export function HistoryChart(props: HistoryChartProps) {
         resizeRoRef.current = ro;
       }
     },
-    [data$, dbMax, dbMin, sendVizBins, windowMs, graphsKey],
+    [data$, dbMax, dbMin, sendVizBins, windowMs, layoutKey],
   );
 
   const widgetRef = useCallback(
@@ -366,17 +474,28 @@ export function HistoryChart(props: HistoryChartProps) {
     [attach, detach],
   );
 
-  // Rebuild graphs when channel layout / classes change.
+  // Rebuild graphs when series layout / classes change.
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || chart.isDestructed?.()) return;
     detach();
     attach(chart);
-  }, [attach, detach, graphsKey]);
+  }, [attach, detach, layoutKey]);
 
   useEffect(() => () => detach(), [detach]);
 
-  const cls = ['HistoryChart', className ?? ''].filter(Boolean).join(' ');
+  const rootCls = ['HistoryChart', className ?? ''].filter(Boolean).join(' ');
 
-  return <ChartWidget className={cls} widgetRef={widgetRef} />;
+  return (
+    <div className={rootCls}>
+      <ChartWidget className="HistoryChart-chart" widgetRef={widgetRef} />
+      {hasToggleChrome ? (
+        <div className="history-toggles">
+          {series.map((s) => (
+            <SeriesToggle key={s.id} series={s} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }

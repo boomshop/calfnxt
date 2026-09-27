@@ -4,30 +4,6 @@
   min-height: 120px;
   background: var(--background);
 
-  .ir-wave {
-    fill: var(--color-accent);
-    fill-opacity: 0.28;
-    stroke: var(--color-accent);
-    stroke-width: 1px;
-    stroke-opacity: 0.75;
-  }
-
-  // Captured IR after Decay/Shape — History `--color` band style, on top.
-  .ir-used {
-    fill: var(--color);
-    fill-opacity: 0.25;
-    stroke: var(--color);
-    stroke-width: 1px;
-    stroke-opacity: 0.66;
-  }
-
-  .ir-decay {
-    fill: none;
-    stroke: var(--chart-level-stroke, var(--color-warn));
-    stroke-width: 1.75px;
-    stroke-dasharray: 4 3;
-  }
-
   .aux-charthandle.ir-decay-handle {
     > .aux-line1 {
       stroke: var(--color-warn);

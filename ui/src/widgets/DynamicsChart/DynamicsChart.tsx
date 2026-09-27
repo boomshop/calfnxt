@@ -9,6 +9,7 @@ import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
 import { map } from '@deutschesoft/awml/src/operators/map.js';
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { useChartGradient } from '../../hooks/useChartGradient';
+import { addGraphClasses } from '../../styles/graphStyles';
 import { expanderResponseDots } from '../../dsp/expanderCurve';
 import { composeInteractingOnSet, type AuxOnSet } from '../editGesture';
 import './DynamicsChart.scss';
@@ -185,6 +186,21 @@ export function DynamicsChart(props: DynamicsChartProps) {
   const reassertRef = useRef(reassertGradStroke);
   reassertRef.current = reassertGradStroke;
 
+  useEffect(() => {
+    addGraphClasses(chart?.response?.element, 'fill-none', 'stroke-gradient');
+    const steady = chart?.svg?.querySelector(
+      '.aux-graphs > .aux-steady',
+    ) as SVGElement | null;
+    addGraphClasses(
+      steady,
+      'fill-none',
+      'stroke-color',
+      'stroke-thinner',
+      'stroke-faint',
+      'stroke-dashed',
+    );
+  }, [chart]);
+
   const isRelThreshActive = useCallback(
     () => relThreshActive,
     [relThreshActive],
@@ -339,6 +355,10 @@ export function DynamicsChart(props: DynamicsChartProps) {
           dots: [],
           visible: isRelThreshActive(),
         });
+        addGraphClasses(
+          releaseCurveRef.current.element,
+          'fill-none stroke-gradient',
+        );
       }
       if (!bandRef.current && typeof w.addGraph === 'function') {
         bandRef.current = w.addGraph({
@@ -347,6 +367,10 @@ export function DynamicsChart(props: DynamicsChartProps) {
           dots: [],
           visible: isRelThreshActive(),
         });
+        addGraphClasses(
+          bandRef.current.element,
+          'fill-color fill-ghost stroke-none',
+        );
       }
 
       if (!relHandleRef.current && releaseThreshold$ && typeof w.addHandle === 'function') {

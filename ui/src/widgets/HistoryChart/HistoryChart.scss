@@ -1,48 +1,59 @@
 .HistoryChart {
+  position: relative;
   width: 100%;
   height: 100%;
   min-height: 80px;
   background: var(--background);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 
-  // Unfiltered / full-range input — accent blue (DeEsser reference).
-  .hist-audio,
-  .hist-full {
-    fill: var(--color-accent);
-    fill-opacity: 0.25;
-    stroke: var(--color-accent);
-    stroke-width: 1px;
-    stroke-opacity: 0.66;
+  > .HistoryChart-chart {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0;
   }
 
-  // Filtered / band signal — muted foreground fill + stroke.
-  .hist-audio-filtered,
-  .hist-band {
-    fill: var(--color);
-    fill-opacity: 0.25;
-    stroke: var(--color);
-    stroke-width: 1px;
-    stroke-opacity: 0.66;
-  }
-
-  .hist-gr {
-    fill: none;
-    stroke: var(--chart-level-stroke, var(--color-accent));
-    stroke-width: 1.75px;
-    stroke-opacity: 1;
-  }
-
-  /* Inverse-sidechain hold amount — dashed foreground (Tuner/Octaver 2/2). */
-  .hist-inhibit {
-    fill: none;
-    stroke: var(--color);
-    stroke-width: 1.5px;
-    stroke-opacity: 0.66;
-    stroke-dasharray: 3 3;
-  }
-
-  .hist-hidden {
+  /* Hidden via listed$ / visible$ — keep path node, kill paint. */
+  .history-hidden {
     opacity: 0 !important;
     stroke-opacity: 0 !important;
     fill-opacity: 0 !important;
+  }
+
+  > .history-toggles {
+    position: absolute;
+    left: var(--gap);
+    bottom: var(--gap);
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    pointer-events: none;
+
+    > .history-toggle {
+      pointer-events: auto;
+      appearance: none;
+      border: 1px solid var(--background-least);
+      border-radius: var(--border-radius);
+      background: var(--background-lesser);
+      color: var(--color-least);
+      font: inherit;
+      font-size: var(--font-size-tiny);
+      line-height: 1;
+      padding: 3px 6px;
+      cursor: pointer;
+      opacity: 0.55;
+
+      &.is-on {
+        opacity: 1;
+        color: var(--color);
+        border-color: var(--color-least);
+      }
+    }
   }
 }

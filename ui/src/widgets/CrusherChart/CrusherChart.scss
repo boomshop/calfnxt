@@ -6,12 +6,6 @@
   display: block;
   background: var(--background);
 
-  .axis {
-    stroke: var(--background-least, var(--color-least));
-    stroke-width: 1;
-    stroke-opacity: 0.55;
-  }
-
   .heat-layer {
     pointer-events: none;
   }
@@ -23,30 +17,16 @@
     stroke-linecap: round;
   }
 
-  .wave-dry {
-    fill: none;
-    stroke: var(--color);
-    stroke-opacity: 0.33;
-    stroke-width: 1;
-    stroke-linejoin: round;
-    stroke-linecap: round;
-  }
-
-  .curve {
-    fill: var(--chart-level-stroke);
-    fill-opacity: 0.18;
-    stroke: var(--chart-level-stroke, var(--color-accent));
-    stroke-width: 1.75;
+  .curve,
+  .wave-dry,
+  .zone {
     stroke-linejoin: round;
     stroke-linecap: round;
   }
 
   .zone {
-    fill: none;
-    stroke: var(--chart-level-stroke, var(--color-accent));
+    /* Wider than the utility scale (soft send envelope). */
     stroke-width: 4px;
-    stroke-linejoin: round;
-    stroke-linecap: round;
     opacity: 0.95;
     pointer-events: none;
   }

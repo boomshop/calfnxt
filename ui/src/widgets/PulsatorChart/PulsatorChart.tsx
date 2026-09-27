@@ -149,11 +149,11 @@ export function PulsatorChart(props: PulsatorChartProps) {
       viewBox={`0 0 ${size.w} ${size.h}`}
       preserveAspectRatio="none"
       aria-hidden>
-      <line className="grid" x1={padX} y1={midY} x2={size.w - padX} y2={midY} />
-      <path className="wave wave-l" d={pathL} />
-      <path className="wave wave-r" d={pathR} />
-      <circle ref={dotLRef} className="dot dot-l" cx={0} cy={0} r={4} />
-      <circle ref={dotRRef} className="dot dot-r" cx={0} cy={0} r={4} />
+      <line className="grid stroke-color stroke-thinner stroke-faint" x1={padX} y1={midY} x2={size.w - padX} y2={midY} />
+      <path className="wave wave-l fill-none stroke-accent stroke-thicker stroke-semi" d={pathL} />
+      <path className="wave wave-r fill-none stroke-warn stroke-thicker stroke-semi" d={pathR} />
+      <circle ref={dotLRef} className="dot dot-l fill-accent stroke-none" cx={0} cy={0} r={4} />
+      <circle ref={dotRRef} className="dot dot-r fill-warn stroke-none" cx={0} cy={0} r={4} />
     </svg>
   );
 }

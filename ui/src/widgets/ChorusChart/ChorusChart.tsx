@@ -217,7 +217,7 @@ export function ChorusChart(props: ChorusChartProps) {
           preserveAspectRatio="none"
         >
           <line
-            className="grid"
+            className="grid stroke-color stroke-thinner stroke-faint"
             x1={padX}
             x2={depthSize.w - padX}
             y1={mapDepthY(0, depthSize.h)}
@@ -229,7 +229,7 @@ export function ChorusChart(props: ChorusChartProps) {
                 ref={(el) => {
                   depthDotsRef.current[v * 2] = el;
                 }}
-                className="dot dot-l"
+                className="dot dot-l fill-accent stroke-none"
                 cx={0}
                 cy={0}
                 r={3.5}
@@ -238,7 +238,7 @@ export function ChorusChart(props: ChorusChartProps) {
                 ref={(el) => {
                   depthDotsRef.current[v * 2 + 1] = el;
                 }}
-                className="dot dot-r"
+                className="dot dot-r fill-warn stroke-none"
                 cx={0}
                 cy={0}
                 r={3.5}
@@ -254,7 +254,7 @@ export function ChorusChart(props: ChorusChartProps) {
           preserveAspectRatio="none"
         >
           <line
-            className="grid"
+            className="grid stroke-color stroke-thinner stroke-faint"
             x1={padX}
             x2={rateSize.w - padX}
             y1={mapRateY(0, rateSize.h)}
@@ -263,7 +263,7 @@ export function ChorusChart(props: ChorusChartProps) {
           {curves.map((pts, v) => (
             <path
               key={`c${v}`}
-              className="wave"
+              className="wave fill-none stroke-color stroke-semi"
               d={pathThrough(
                 pts,
                 (x) => mapRateX(x, rateSize.w),
@@ -277,7 +277,7 @@ export function ChorusChart(props: ChorusChartProps) {
                 ref={(el) => {
                   rateDotsRef.current[v * 2] = el;
                 }}
-                className="dot dot-l"
+                className="dot dot-l fill-accent stroke-none"
                 cx={0}
                 cy={0}
                 r={3.5}
@@ -286,7 +286,7 @@ export function ChorusChart(props: ChorusChartProps) {
                 ref={(el) => {
                   rateDotsRef.current[v * 2 + 1] = el;
                 }}
-                className="dot dot-r"
+                className="dot dot-r fill-warn stroke-none"
                 cx={0}
                 cy={0}
                 r={3.5}

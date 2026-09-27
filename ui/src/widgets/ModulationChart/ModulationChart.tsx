@@ -218,19 +218,25 @@ export function ModulationChart(props: ModulationChartProps) {
       const gL = w.addGraph({
         type: 'L',
         mode: 'line',
-        class: mode === 'comb' ? 'mod-L mod-stem' : 'mod-L',
+        class: mode === 'comb' ? 'mod-L' : 'mod-L',
       });
       const gR = w.addGraph({
         type: 'L',
         mode: 'line',
-        class: mode === 'comb' ? 'mod-R mod-stem' : 'mod-R',
+        class: mode === 'comb' ? 'mod-R' : 'mod-R',
       });
-      gL.element?.classList.add('mod-L');
-      gR.element?.classList.add('mod-R');
-      if (mode === 'comb') {
-        gL.element?.classList.add('mod-stem');
-        gR.element?.classList.add('mod-stem');
-      }
+      gL.element?.classList.add(
+        'mod-L',
+        'fill-none',
+        'stroke-accent',
+        ...(mode === 'comb' ? (['mod-stem'] as const) : []),
+      );
+      gR.element?.classList.add(
+        'mod-R',
+        'fill-none',
+        'stroke-warn',
+        ...(mode === 'comb' ? (['mod-stem'] as const) : []),
+      );
       graphsRef.current = [gL, gR];
       graphBindingsRef.current = [
         bindAuxOptions(gL, [

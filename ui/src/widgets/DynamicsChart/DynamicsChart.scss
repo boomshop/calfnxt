@@ -3,31 +3,6 @@
   min-height: 200px;
 
   > svg {
-    > .aux-graphs {
-      > .aux-response {
-        stroke: var(--chart-level-stroke, var(--color-accent));
-        stroke-width: 1.75px;
-      }
-
-      > .aux-response-release {
-        stroke: var(--chart-level-stroke, var(--color-warn));
-        stroke-width: 1.75px;
-        fill: none;
-      }
-
-      > .aux-steady {
-        stroke: var(--color-least);
-        stroke-width: 1px;
-        stroke-dasharray: 2 3;
-      }
-
-      > .aux-hysteresis-band {
-        fill: var(--color);
-        fill-opacity: 0.08;
-        stroke: none;
-      }
-    }
-
     > .aux-handles {
       > .aux-charthandle.aux-operating {
         pointer-events: none;

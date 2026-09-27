@@ -15,12 +15,6 @@
     stroke: var(--color);
   }
 
-  .spec-diff {
-    fill: none;
-    stroke: var(--chart-diff-stroke, var(--color-accent));
-    stroke-width: 1.25px;
-  }
-
   > .diff-tag {
     position: absolute;
     left: 6px;

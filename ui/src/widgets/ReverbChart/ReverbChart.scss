@@ -12,16 +12,17 @@
 
   svg > .aux-graphs {
     > .aux-reverb {
-      stroke: var(--chart-level-stroke, var(--color-accent));
-      stroke-width: 1.75px;
-      stroke-dasharray: 4 3;
+      fill-opacity: 0;
+      stroke: var(--graph-gradient, var(--chart-level-stroke, var(--color-accent)));
+      stroke-width: var(--graph-stroke-medium);
+      stroke-dasharray: var(--graph-dash-dashed);
     }
 
     > .aux-graph.aux-reflection,
     > .aux-reflection {
-      fill: none !important;
+      fill-opacity: 0 !important;
       stroke: var(--color);
-      stroke-width: 1.75px;
+      stroke-width: var(--graph-stroke-medium);
       stroke-opacity: 0.33;
     }
   }

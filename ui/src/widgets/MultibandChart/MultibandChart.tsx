@@ -368,7 +368,7 @@ export function MultibandChart(props: MultibandChartProps) {
         bands: [shapes[b], shapes[b + MB_MAX_BANDS]].filter(Boolean),
         // Selected band uses bottom fill; others stay stroke-only.
         mode: b === selectedBand ? 'bottom' : 'line',
-        class: `mb-curve mb-band-${b}`,
+        class: `mb-curve mb-band-${b} fill-none stroke-gradient`,
         accuracy: 1,
         oversampling: 8,
         threshold: 3,
@@ -632,8 +632,8 @@ export function MultibandChart(props: MultibandChartProps) {
     [eqWidget],
   );
 
-  // Gradient only as SVG CSS var — bands paint via SCSS (no inline stroke;
-  // that would override `.mb-selected { stroke: var(--color) }`).
+  // Expose --graph-gradient for .stroke-gradient on band curves (no inline
+  // stroke — that would override `.mb-selected { stroke: var(--color) }`).
   useChartGradient({
     svg: eqWidget?.svg,
     enabled: !!eqWidget,

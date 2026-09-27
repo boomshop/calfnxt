@@ -13,6 +13,7 @@ import {
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
+import { addGraphClasses, GRAPH_STYLE } from '../../styles/graphStyles';
 import {
   tamerAuxHpType,
   tamerAuxLpType,
@@ -687,7 +688,11 @@ export function TamerChart(props: TamerChartProps) {
             mode: 'fill',
             class: 'tamer-harmonics',
           });
-          g.element?.classList.add('tamer-harmonics');
+          addGraphClasses(
+            g.element,
+            'tamer-harmonics',
+            'fill-warn fill-semi stroke-none',
+          );
           harmBands.push(g);
         }
         harmBandGraphsRef.current = harmBands;
@@ -698,21 +703,25 @@ export function TamerChart(props: TamerChartProps) {
           mode: 'bottom',
           class: 'tamer-in',
         });
-        gIn.element?.classList.add('tamer-in');
+        addGraphClasses(gIn.element, 'tamer-in', GRAPH_STYLE.audio);
         const gOut = inst.addGraph({
           dots: null,
           type: 'L',
           mode: 'bottom',
           class: 'tamer-out',
         });
-        gOut.element?.classList.add('tamer-out');
+        addGraphClasses(
+          gOut.element,
+          'tamer-out',
+          'fill-color fill-faint stroke-color stroke-semi',
+        );
         const gGr = inst.addGraph({
           dots: null,
           type: 'L',
           mode: 'line',
           class: 'tamer-gr',
         });
-        gGr.element?.classList.add('tamer-gr');
+        addGraphClasses(gGr.element, 'tamer-gr', GRAPH_STYLE.gr);
         graphsRef.current = [gIn, gOut, gGr];
         setGradTargets(gGr.element ? [gGr.element as SVGElement] : []);
       }
@@ -749,7 +758,10 @@ export function TamerChart(props: TamerChartProps) {
       (
         inst as AuxChartInstance & { addGraph: (g: unknown) => unknown }
       ).addGraph(g);
-      (g as AuxGraph).element?.classList.add('tamer-search-eq');
+      (g as AuxGraph).element?.classList.add(
+        'tamer-search-eq',
+        ...'fill-none stroke-color stroke-semi stroke-dashed'.split(' '),
+      );
     }
     return () => {
       if (inst.isDestructed?.()) return;

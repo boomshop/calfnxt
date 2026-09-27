@@ -9,6 +9,7 @@ import {
   type DelayEchoTap,
   type DelayMixMode,
 } from '../../dsp/delayEchoTaps';
+import { addGraphClasses } from '../../styles/graphStyles';
 import './DelayEchoChart.scss';
 
 const DB_MIN = -48;
@@ -282,6 +283,18 @@ function useEchoPane(
       });
       ghost.element?.classList.add(ghostCls);
       primary.element?.classList.add(primaryCls);
+      addGraphClasses(
+        ghost.element,
+        ghostCls === 'echo-l'
+          ? 'fill-accent fill-visible stroke-none'
+          : 'fill-warn fill-visible stroke-none',
+      );
+      addGraphClasses(
+        primary.element,
+        primaryCls === 'echo-l'
+          ? 'fill-accent fill-visible stroke-none'
+          : 'fill-warn fill-visible stroke-none',
+      );
       ghostRef.current = ghost;
       primaryRef.current = primary;
       lastSpanRef.current = -1;

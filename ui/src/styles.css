@@ -1,5 +1,6 @@
 @import '@deutschesoft/aux-widgets/styles/blank.css';
 @import './fonts/calfnxt.css';
+@import './styles/graph.scss';
 
 :root {
   --background: #000000;
@@ -348,7 +349,7 @@ textarea::selection {
     > .aux-graphs {
       > .aux-baseline {
         fill: none;
-        stroke-width: 1.75px;
+        stroke-width: var(--graph-stroke-medium);
         stroke: var(--color-accent);
       }
     }

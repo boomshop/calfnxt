@@ -27,29 +27,4 @@
       height: 100%;
     }
   }
-
-  .grid {
-    stroke: var(--color-least);
-    stroke-width: 1px;
-    stroke-opacity: 0.45;
-  }
-
-  .wave {
-    fill: none;
-    stroke: var(--color-least);
-    stroke-width: 1.75px;
-    stroke-opacity: 0.75;
-  }
-
-  .dot {
-    stroke: none;
-  }
-
-  .dot-l {
-    fill: var(--color-accent);
-  }
-
-  .dot-r {
-    fill: var(--color-warn);
-  }
 }

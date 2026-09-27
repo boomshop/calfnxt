@@ -6,18 +6,6 @@
   display: block;
   background: var(--background);
 
-  .axis {
-    stroke: var(--background-least);
-    stroke-width: 1;
-  }
-
-  .unity {
-    fill: none;
-    stroke: color-mix(in srgb, currentColor 22%, transparent);
-    stroke-width: 1;
-    stroke-dasharray: 3 3;
-  }
-
   .heat-layer {
     pointer-events: none;
   }
@@ -29,20 +17,15 @@
     stroke-linecap: round;
   }
 
-  .curve {
-    fill: none;
-    stroke: var(--chart-level-stroke, var(--color-accent));
-    stroke-width: 1.75;
+  .curve,
+  .zone {
     stroke-linejoin: round;
     stroke-linecap: round;
   }
 
   .zone {
-    fill: none;
-    stroke: var(--chart-level-stroke, var(--color-accent));
+    /* Wider than the utility scale (soft send envelope). */
     stroke-width: 4px;
-    stroke-linejoin: round;
-    stroke-linecap: round;
     opacity: 0.95;
     pointer-events: none;
   }

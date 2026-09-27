@@ -12,6 +12,7 @@ import {
   CorrelationMeter,
   GonioMeter,
   HistoryChart,
+  HISTORY_STYLE,
   LevelMeter,
   MultiMeter,
   SpectrumChart,
@@ -42,16 +43,44 @@ function loudHistoryDb(v: number): number {
 }
 
 /** Slot order matches the loudness history: M, S, true peak, RMS. */
-const LOUD_GRAPHS = [
+const LOUD_SERIES = [
   {
-    className: 'hist-mom',
+    id: 'mom',
+    name: 'Momentary',
+    short: 'M',
+    channel: 0,
+    className: HISTORY_STYLE.loudMom,
     mode: 'line' as const,
-    toDb: loudHistoryDb,
+    transform: loudHistoryDb,
     toFront: true,
   },
-  { className: 'hist-st', mode: 'line' as const, toDb: loudHistoryDb },
-  { className: 'hist-tp', mode: 'line' as const, toDb: loudHistoryDb },
-  { className: 'hist-rms', mode: 'line' as const, toDb: loudHistoryDb },
+  {
+    id: 'st',
+    name: 'Short-term',
+    short: 'ST',
+    channel: 1,
+    className: HISTORY_STYLE.loudSt,
+    mode: 'line' as const,
+    transform: loudHistoryDb,
+  },
+  {
+    id: 'tp',
+    name: 'True peak',
+    short: 'TP',
+    channel: 2,
+    className: HISTORY_STYLE.loudTp,
+    mode: 'line' as const,
+    transform: loudHistoryDb,
+  },
+  {
+    id: 'rms',
+    name: 'RMS',
+    short: 'RMS',
+    channel: 3,
+    className: HISTORY_STYLE.loudRms,
+    mode: 'line' as const,
+    transform: loudHistoryDb,
+  },
 ];
 
 const LEVEL_METER = {
@@ -218,10 +247,10 @@ export function AnalyzerUI(props: AnalyzerUIProps) {
             data$={host.loudnessHistory$}
             vizId="loud"
             windowMs={12000}
-          slotMs={100}
+            slotMs={100}
             dbMin={LOUD_DB_MIN}
             dbMax={LOUD_DB_MAX}
-            graphs={LOUD_GRAPHS}
+            series={LOUD_SERIES}
           />
         </WithInfo>
         <div className="hist-legend">

@@ -7,6 +7,7 @@ import {
   Button,
   Buttons,
   HistoryChart,
+  HISTORY_STYLE,
   Knob,
   LevelMeter,
   MB_FREQ_MAX,
@@ -179,11 +180,29 @@ function BandStrip(props: { band: IMblimiterBand; compactKnobs: boolean }) {
         <HistoryChart
           data$={band.historyData$}
           vizId="mblimiter"
-          graphs={[
-            { className: 'hist-audio', mode: 'bottom' },
-            { className: 'hist-audio-filtered', mode: 'bottom' },
+          series={[
             {
-              className: 'hist-gr',
+              id: 'full',
+              name: 'Full-range input',
+              short: 'Full',
+              channel: 0,
+              className: HISTORY_STYLE.audio,
+              mode: 'bottom',
+            },
+            {
+              id: 'band',
+              name: 'Band signal',
+              short: 'Band',
+              channel: 1,
+              className: HISTORY_STYLE.detector,
+              mode: 'bottom',
+            },
+            {
+              id: 'gr',
+              name: 'Gain reduction',
+              short: 'GR',
+              channel: 2,
+              className: HISTORY_STYLE.gr,
               mode: 'line',
               toFront: true,
               gradient: true,

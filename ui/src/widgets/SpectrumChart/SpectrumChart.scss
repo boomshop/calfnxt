@@ -76,75 +76,22 @@
     }
   }
 
-  // --- Curve layout hooks (style per view) ---
-  // .view-single      → Average / Max (one primary curve)
-  // .view-stereo      → L + R
-  // .view-difference  → bipolar diff line
-  // .view-spectralizer → canvas waterfall
-  // Plus exact mode: .mode-average | .mode-max | .mode-stereo | .mode-difference | .mode-spectralizer
-
-  .spec-primary,
-  .spec-secondary {
-    stroke: var(--chart-level-stroke);
-    fill: var(--color);
-    fill-opacity: 0.08;
-    stroke-width: 1.75px;
-  }
-
+  // Mode paint overrides (utilities set the base look in TSX).
   &.mode-stereo {
     .spec-primary {
       stroke: var(--color-accent);
-      fill: transparent;
+      fill-opacity: 0;
     }
 
     .spec-secondary {
       stroke: var(--color-warn);
-      fill: transparent;
+      fill-opacity: 0;
     }
-  }
-
-  &.view-monitor {
-    .spec-rms {
-      stroke: var(--color);
-      fill: none;
-      stroke-width: 1.25px;
-      stroke-opacity: 1;
-      stroke-dasharray: 4 3;
-    }
-
-    .spec-primary {
-      stroke: var(--color-accent);
-      fill: none;
-      stroke-width: 1.25px;
-    }
-
-    .spec-secondary {
-      stroke: var(--color-warn);
-      fill: none;
-      stroke-width: 1.25px;
-    }
-
-    .spec-hold {
-      stroke: var(--color);
-      stroke-dasharray: none;
-      stroke-width: 1.25px !important;
-      stroke-opacity: 0.33;
-      fill: none;
-    }
-  }
-
-  .spec-hold {
-    fill: none;
-    stroke: var(--color);
-    stroke-width: 1px !important;
-    stroke-dasharray: 2 2;
-    stroke-opacity: 0.5;
   }
 
   .spec-hold.spec-diff {
     stroke: var(--chart-level-stroke, var(--color-accent));
     stroke-dasharray: none;
-    stroke-width: 1.75px;
     stroke-opacity: 0.95;
   }
 }

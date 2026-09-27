@@ -3,6 +3,7 @@ import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { Reverb as AuxReverb } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
 import { useChartGradient } from '../../hooks/useChartGradient';
+import { addGraphClasses } from '../../styles/graphStyles';
 import { composeInteractingOnSet, type AuxOnSet } from '../editGesture';
 import {
   buildErReflections,
@@ -228,6 +229,10 @@ export function ReverbChart(props: ReverbChartProps) {
     paint: 'stroke',
     getHeight: getChartHeight,
   });
+
+  useEffect(() => {
+    addGraphClasses(chart?.reverb?.element, 'fill-none', 'stroke-gradient', 'stroke-dashed');
+  }, [chart]);
 
   const widgetRef = useCallback((w: AuxReverbInstance | null) => {
     if (!w || w.isDestructed()) {

@@ -7,6 +7,7 @@ import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
+import { addGraphClasses, GRAPH_STYLE } from '../../styles/graphStyles';
 import './EnvelopeChart.scss';
 
 /** Slot layout: original, filtered, output, envelope, attack, release. */
@@ -242,7 +243,7 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
           mode: 'bottom',
           class: 'env-original-graph',
         });
-        g.element?.classList.add('env-original-graph');
+        addGraphClasses(g.element, 'env-original-graph', GRAPH_STYLE.audio);
         graphsRef.current.original = g;
       }
       if (!graphsRef.current.filtered) {
@@ -252,7 +253,11 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
           mode: 'bottom',
           class: 'env-filtered-graph',
         });
-        g.element?.classList.add('env-filtered-graph');
+        addGraphClasses(
+          g.element,
+          'env-filtered-graph',
+          GRAPH_STYLE.detector,
+        );
         graphsRef.current.filtered = g;
       }
       if (!graphsRef.current.result) {
@@ -262,7 +267,7 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
           mode: 'line',
           class: 'env-result-graph',
         });
-        g.element?.classList.add('env-result-graph');
+        addGraphClasses(g.element, 'env-result-graph', GRAPH_STYLE.gr);
         graphsRef.current.result = g;
       }
       graphsRef.current.original?.element?.parentElement?.appendChild(
