@@ -26,7 +26,7 @@ export const ANALYZER_STANDARD_ENTRIES = [
 ] as const;
 
 export const ANALYZER_SCALE_ENTRIES = [
-  { label: 'Linear', value: 0 },
+  { label: 'Lin', value: 0 },
   { label: '−3 dB', value: 1 },
   { label: '−4.5 dB', value: 2 },
 ] as const;

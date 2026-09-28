@@ -17,6 +17,7 @@ import {
   postEnd,
 } from '../utils/bind_param';
 import { createHeaderIo, type IHeaderIo } from './headerMeters';
+import { ANALYZER_SCALE_ENTRIES } from './analyzerHost';
 import { LIMITER_CURVE_ENTRIES } from './limiterHost';
 
 export { LIMITER_CURVE_ENTRIES };
@@ -35,6 +36,9 @@ export const MBLIMITER_SLOPE_ENTRIES: { label: string; value: number }[] = [
   { label: '48 dB', value: 48 },
   { label: '96 dB', value: 96 },
 ];
+
+/** Analyzer-style spectrum display tilt (Linear / −3 / −4.5). */
+export const MBLIMITER_SCALE_ENTRIES = ANALYZER_SCALE_ENTRIES;
 
 export type MblimiterBandParam = keyof typeof MB_BAND_OFFSET;
 
@@ -68,6 +72,8 @@ export interface IMblimiterHost {
   diffListen$: DynamicValue<boolean>;
   numBands$: DynamicValue<number>;
   slope$: DynamicValue<number>;
+  /** Analyzer-style spectrum tilt: 0 Linear / 1 −3 / 2 −4.5. */
+  scale$: DynamicValue<number>;
   xover$: DynamicValue<number>[];
   limit$: DynamicValue<number>;
   attack$: DynamicValue<number>;
@@ -203,6 +209,9 @@ export function createBoundMblimiterHost(): IMblimiterHost {
 
   const slope$ = DynamicValue.fromConstant(globalDefault('slope', 48));
   disposers.push(bindParamToHost(slope$, paramIds.slope));
+
+  const scale$ = DynamicValue.fromConstant(globalDefault('scale', 0));
+  disposers.push(bindParamToHost(scale$, paramIds.scale));
 
   const xoverIds = [
     paramIds.xover1,
@@ -354,6 +363,7 @@ export function createBoundMblimiterHost(): IMblimiterHost {
     diffListen$,
     numBands$,
     slope$,
+    scale$,
     xover$,
     limit$,
     attack$,

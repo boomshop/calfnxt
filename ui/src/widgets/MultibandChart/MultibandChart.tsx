@@ -25,10 +25,12 @@ import { postToHost } from '../../utils/bridge';
 import {
   SPECTRUM_MAX_BINS,
   SPECTRUM_MIN_BINS,
+  spectrumScaleSlope,
 } from '../SpectrumChart/SpectrumChart';
 import {
   spectrumOverlayContourDots,
   spectrumOverlayDiffDots,
+  type SpectrumOverlayAxis,
 } from '../../utils/spectrumDiffOverlay';
 import { addGraphClasses, GRAPH_STYLE } from '../../styles/graphStyles';
 import type { EditGesture } from '../editGesture';
@@ -121,6 +123,11 @@ export interface MultibandChartProps {
   spectrumIn$?: DynamicValue<number[]>;
   /** Post-dynamics spectrum payload (fft_out). */
   spectrumOut$?: DynamicValue<number[]>;
+  /**
+   * Analyzer-style display tilt (0 Linear / 1 −3 / 2 −4.5 dB/oct).
+   * When omitted, spectrum overlay stays linear.
+   */
+  spectrumScale$?: DynamicValue<number>;
   className?: string;
 }
 
@@ -241,6 +248,7 @@ export function MultibandChart(props: MultibandChartProps) {
     showThresholds = true,
     spectrumIn$,
     spectrumOut$,
+    spectrumScale$,
     className,
   } = props;
 
@@ -675,8 +683,14 @@ export function MultibandChart(props: MultibandChartProps) {
 
   const spectrumPair$ = useMemo(() => {
     if (!spectrumIn$ || !spectrumOut$) return null;
+    if (spectrumScale$)
+      return new ListValue<[number[], number[], number]>([
+        spectrumIn$,
+        spectrumOut$,
+        spectrumScale$,
+      ]);
     return new ListValue<[number[], number[]]>([spectrumIn$, spectrumOut$]);
-  }, [spectrumIn$, spectrumOut$]);
+  }, [spectrumIn$, spectrumOut$, spectrumScale$]);
 
   // In/Out spectrum fills + output edge line (cut above / boost below).
   useEffect(() => {
@@ -752,23 +766,25 @@ export function MultibandChart(props: MultibandChartProps) {
     const outer = spectrumOuterRef.current;
     const mask = spectrumMaskRef.current;
     const edge = spectrumEdgeRef.current;
+    const axisFor = (scalePlain: number): SpectrumOverlayAxis => ({
+      ...MB_SPECTRUM_AXIS,
+      slopeDbPerOct: spectrumScaleSlope(scalePlain),
+    });
     const bindings = bindAuxOptions(outer, [
       {
         name: 'dots',
         backendValue: spectrumPair$,
         readonly: true,
         transformReceive: (pair: unknown) => {
-          const [inn, out] = (pair as [number[], number[]]) ?? [[], []];
+          const row = (pair as [number[], number[], number?]) ?? [[], []];
+          const inn = row[0] ?? [];
+          const out = row[1] ?? [];
+          const scalePlain = typeof row[2] === 'number' ? row[2] : 0;
+          const axis = axisFor(scalePlain);
           const w = spectrumWidthRef.current;
-          mask.set(
-            'dots',
-            spectrumOverlayDiffDots(inn, out, 'min', MB_SPECTRUM_AXIS, w),
-          );
-          edge.set(
-            'dots',
-            spectrumOverlayContourDots(out, MB_SPECTRUM_AXIS, w),
-          );
-          return spectrumOverlayDiffDots(inn, out, 'max', MB_SPECTRUM_AXIS, w);
+          mask.set('dots', spectrumOverlayDiffDots(inn, out, 'min', axis, w));
+          edge.set('dots', spectrumOverlayContourDots(out, axis, w));
+          return spectrumOverlayDiffDots(inn, out, 'max', axis, w);
         },
       },
     ]);

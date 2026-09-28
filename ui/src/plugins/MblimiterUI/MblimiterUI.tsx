@@ -8,6 +8,7 @@ import {
   Knob,
   LevelMeter,
   MultibandChart,
+  Select,
   Toggle,
   WithInfo,
   mblimiterHistorySeries,
@@ -17,6 +18,7 @@ import {
   LIMITER_CURVE_ENTRIES,
   MBLIMITER_MAX_BANDS,
   MBLIMITER_MIN_BANDS,
+  MBLIMITER_SCALE_ENTRIES,
   MBLIMITER_SLOPE_ENTRIES,
   mblimiterParamDefault,
   type IMblimiterBand,
@@ -240,7 +242,6 @@ export function MblimiterUI(props: MblimiterUIProps) {
       Math.round(useDynamicValueReadonly(host.numBands$, 4)),
     ),
   );
-  const slope = useDynamicValueReadonly(host.slope$, 48);
   const curve = useDynamicValueReadonly(host.curve$, 0);
 
   const setNumBands = useCallback(
@@ -285,14 +286,12 @@ export function MblimiterUI(props: MblimiterUIProps) {
           />
         </WithInfo>
         <WithInfo title={mblimiterInfo.slope} className="info-block slope">
-          <Buttons
-            entries={MBLIMITER_SLOPE_ENTRIES}
-            value={slope}
-            onChange={(v) => {
-              host.beginEdit(paramIds.slope);
-              host.slope$.set(v);
-              host.endEdit(paramIds.slope);
-            }}
+          <Select value$={host.slope$} entries={MBLIMITER_SLOPE_ENTRIES} />
+        </WithInfo>
+        <WithInfo title={mblimiterInfo.scale} className="info-block scale">
+          <Select
+            value$={host.scale$}
+            entries={[...MBLIMITER_SCALE_ENTRIES]}
           />
         </WithInfo>
         <WithInfo
@@ -322,6 +321,7 @@ export function MblimiterUI(props: MblimiterUIProps) {
         showThresholds={false}
         spectrumIn$={host.spectrumIn$}
         spectrumOut$={host.spectrumOut$}
+        spectrumScale$={host.scale$}
         xoverEdit={(index) => ({
           beginEdit: () => host.beginEdit(XOVER_PARAM_IDS[index]!),
           endEdit: () => host.endEdit(XOVER_PARAM_IDS[index]!),

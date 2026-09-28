@@ -66,6 +66,11 @@ function slopeDbPerOct(scale: number): number {
   return 0;
 }
 
+/** Analyzer / Multiband / Tamer display tilt → dB/oct (pivoted at 1 kHz). */
+export function spectrumScaleSlope(scale: number): number {
+  return slopeDbPerOct(scale);
+}
+
 /** Log-bin index → Hz (matches DSP binning 20…20k). */
 export function binToHz(i: number, bins: number): number {
   const t = (i + 0.5) / Math.max(1, bins);

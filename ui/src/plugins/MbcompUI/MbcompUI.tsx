@@ -22,6 +22,7 @@ import {
   MBCOMP_MIN_BANDS,
   MBCOMP_MODE_ENTRIES,
   MBCOMP_SLOPE_ENTRIES,
+  MBCOMP_SCALE_ENTRIES,
   type IMbcompBand,
   type IMbcompHost,
 } from '../../host/mbcompHost';
@@ -537,6 +538,9 @@ export function MbcompUI(props: MbcompUIProps) {
         <WithInfo title={mbcompInfo.slope} className="info-block slope">
           <Select value$={host.slope$} entries={MBCOMP_SLOPE_ENTRIES} />
         </WithInfo>
+        <WithInfo title={mbcompInfo.scale} className="info-block scale">
+          <Select value$={host.scale$} entries={[...MBCOMP_SCALE_ENTRIES]} />
+        </WithInfo>
         <WithInfo title={mbcompInfo.numBands} className="info-block bandcount">
           <div className="bandcount">
             <Button
@@ -565,6 +569,7 @@ export function MbcompUI(props: MbcompUIProps) {
         onSelectBand={selectBand}
         spectrumIn$={host.spectrumIn$}
         spectrumOut$={host.spectrumOut$}
+        spectrumScale$={host.scale$}
         thresholdEdit={(index) => ({
           beginEdit: () => host.bands[index]?.beginEdit('threshold'),
           endEdit: () => host.bands[index]?.endEdit('threshold'),

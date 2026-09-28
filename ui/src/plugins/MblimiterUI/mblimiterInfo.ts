@@ -16,6 +16,9 @@ export const mblimiterInfo = {
   slope:
     'Steepness of the Linkwitz-Riley crossovers. Steeper = tighter band separation (less bleed between bands) but more phase rotation — can sound more “processed.” Gentler slopes = smoother joins, bands influence each other more.',
 
+  scale:
+    'Display tilt for the background analyzer only (does not change the sound), pivoted at 1 kHz — same as the Analyzer. Linear = raw dBFS (natural treble roll-off). −3 dB/oct ≈ typical pop / general programme. −4.5 dB/oct ≈ modern, bass-heavy material. Helps you read band balance against a flatter-looking spectrum.',
+
   xover:
     'Crossover frequency between bands. Drag the vertical handles in the chart. Place splits where instruments live so each strip limiter works on a clear job.',
 

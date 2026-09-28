@@ -292,6 +292,17 @@
       "default": 0.0,
       "scale": "linear",
       "precision": 0
+    },
+    {
+      "id": "scale",
+      "name": "Scale",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 2.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
     }
   ]
 }

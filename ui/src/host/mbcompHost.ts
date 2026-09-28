@@ -18,6 +18,7 @@ import {
   postEnd,
 } from '../utils/bind_param';
 import { createHeaderIo, type IHeaderIo } from './headerMeters';
+import { ANALYZER_SCALE_ENTRIES } from './analyzerHost';
 import {
   COMPRESSOR_LINK_ENTRIES,
   COMPRESSOR_MODE_ENTRIES,
@@ -26,6 +27,8 @@ import {
 /** Detector / stereo-link choices are shared with the single-band Compressor. */
 export const MBCOMP_MODE_ENTRIES = COMPRESSOR_MODE_ENTRIES;
 export const MBCOMP_LINK_ENTRIES = COMPRESSOR_LINK_ENTRIES;
+/** Analyzer-style spectrum display tilt (Linear / −3 / −4.5). */
+export const MBCOMP_SCALE_ENTRIES = ANALYZER_SCALE_ENTRIES;
 
 export const MBCOMP_MAX_BANDS = MB_BAND_COUNT;
 export const MBCOMP_MIN_BANDS = 2;
@@ -94,6 +97,8 @@ export interface IMbcompHost {
   channel$: DynamicValue<number>;
   numBands$: DynamicValue<number>;
   slope$: DynamicValue<number>;
+  /** Analyzer-style spectrum tilt: 0 Linear / 1 −3 / 2 −4.5. */
+  scale$: DynamicValue<number>;
   xover$: DynamicValue<number>[];
   bands: IMbcompBand[];
   /** UI-only detail panel selection (not a VST parameter). */
@@ -224,6 +229,9 @@ export function createBoundMbcompHost(): IMbcompHost {
 
   const slope$ = DynamicValue.fromConstant(globalDefault('slope', 24));
   disposers.push(bindParamToHost(slope$, paramIds.slope));
+
+  const scale$ = DynamicValue.fromConstant(globalDefault('scale', 0));
+  disposers.push(bindParamToHost(scale$, paramIds.scale));
 
   const xoverIds = [
     paramIds.xover1,
@@ -361,6 +369,7 @@ export function createBoundMbcompHost(): IMbcompHost {
     channel$,
     numBands$,
     slope$,
+    scale$,
     xover$,
     bands,
     selectedBandIndex$,
