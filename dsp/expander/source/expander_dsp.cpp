@@ -20,7 +20,7 @@ namespace {
 constexpr uint32 kStateMagic = 0x434e5845u; // 'CNXE'
 constexpr uint32 kStateVersion = 2; // v2: + channel
 
-constexpr float kHistoryDisplayMs = 10000.f;
+constexpr float kHistoryDisplayMs = 8000.f;
 
 
 /** Inv closes only when louder than main. Equal levels → 0 (main wins). Soft ~6 dB. */

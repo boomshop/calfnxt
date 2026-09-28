@@ -31,7 +31,7 @@ const DB_GRID = 6;
 const DB_LABEL = 12;
 
 /** Fixed history window (ms) — keep in sync with DSP history display. */
-export const HISTORY_CHART_MS = 10000;
+export const HISTORY_CHART_MS = 8000;
 
 /** AUX Graph drawing modes (see aux-widgets Graph `options.mode`). */
 export type HistoryGraphMode =

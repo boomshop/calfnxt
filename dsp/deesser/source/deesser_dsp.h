@@ -55,7 +55,7 @@ protected:
 private:
   // History: trigger, GR, post-GR sum (no makeup), threshold, pre-GR sum.
   static constexpr int kHistChannels = 5;
-  static constexpr float kHistoryDisplayMs = 10000.f;
+  static constexpr float kHistoryDisplayMs = 8000.f;
   static constexpr float kFixedKneeDb = 9.f;
 
   struct BlockState

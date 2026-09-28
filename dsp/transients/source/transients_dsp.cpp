@@ -21,7 +21,7 @@ constexpr uint32 kStateMagic = 0x434e5854u; // 'CNXT'
 constexpr uint32 kStateVersion = 5;
 constexpr uint32 kStateVersionWithDisplay = 2;
 /** Fixed envelope plot window (ms) — keep in sync with EnvelopeChart. */
-constexpr float kEnvelopeWindowMs = 10000.f;
+constexpr float kEnvelopeWindowMs = 8000.f;
 
 /**
  * Soft ceiling into ±1: unity below the knee, no quiet-signal makeup.

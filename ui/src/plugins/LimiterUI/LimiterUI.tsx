@@ -124,7 +124,6 @@ export function LimiterUI(props: LimiterUIProps) {
         data$={host.historyData$}
         vizId="limiter"
         autoScale
-        windowMs={4000}
         series={limiterHistorySeries()}
         className="history"
       />

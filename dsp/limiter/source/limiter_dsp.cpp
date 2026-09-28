@@ -18,7 +18,7 @@ namespace {
 constexpr uint32 kStateMagic = 0x434e584cu; // 'CNXL'
 constexpr uint32 kStateVersion = 4;
 
-constexpr float kHistoryDisplayMs = 4000.f;
+constexpr float kHistoryDisplayMs = 8000.f;
 
 float ascCoeffFromPlain(float c)
 {

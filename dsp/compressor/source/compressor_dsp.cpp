@@ -20,7 +20,7 @@ constexpr uint32 kStateMagic = 0x434e5843u; // 'CNXC'
 constexpr uint32 kStateVersion = 7; // v7: + channel
 
 /** Fixed history plot window (ms) — keep in sync with CompressorHistoryChart. */
-constexpr float kHistoryDisplayMs = 10000.f;
+constexpr float kHistoryDisplayMs = 8000.f;
 } // namespace
 
 CompressorPlugin::CompressorPlugin()

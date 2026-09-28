@@ -29,7 +29,7 @@ const DB_GRID = 6;
 const DB_LABEL = 12;
 
 /** Fixed scroll window (ms) — matches wide top history layout. */
-export const ENVELOPE_WINDOW_MS = 10000;
+export const ENVELOPE_WINDOW_MS = 8000;
 
 const ENV_GRID_Y = {
   majorClass: 'env-grid-major',
