@@ -5,6 +5,7 @@
 #include "channel_mode.h"
 #include "compressor.h"
 #include "gr_meter.h"
+#include "seq_lock.h"
 #include "sidechain_filter.h"
 #include "viz_source.h"
 
@@ -98,9 +99,9 @@ private:
   int histSampleCount_ = 0;
   int histSamplesPerSlot_ = 1;
   /* Snapshot published once per block from the audio thread, read on the UI
-   * poll. Seqlock (odd/even sequence) — the audio thread never blocks; the
-   * reader retries on a torn read. */
-  std::atomic<uint32_t> histSeq_ {0};
+   * poll. Seqlock — the audio thread never blocks; the reader retries on a
+   * torn read. */
+  Dsp::SeqLock histLock_;
   float histSnapshot_[kHistBufSize] {};
   int histSnapshotPos_ = 0;
   int histSnapshotSampleCount_ = 0;

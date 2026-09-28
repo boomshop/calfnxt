@@ -89,12 +89,12 @@ void CompressorPlugin::resetProcessing()
   histSampleCount_ = 0;
   histSamplesPerSlot_ = 1;
   histVisibleSlots_ = 160;
-  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  histLock_.beginWrite();
   std::memset(histSnapshot_, 0, sizeof(histSnapshot_));
   histSnapshotPos_ = 0;
   histSnapshotSampleCount_ = 0;
   histSnapshotSamplesPerSlot_ = 1;
-  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
+  histLock_.endWrite();
   bypassSmooth_ = 1.f;
 }
 
@@ -158,12 +158,12 @@ void CompressorPlugin::publishHistSnapshot()
 {
   if (!vizConsumerActive())
     return;
-  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  histLock_.beginWrite();
   std::memcpy(histSnapshot_, histBuf_, sizeof(histBuf_));
   histSnapshotPos_ = histPos_;
   histSnapshotSampleCount_ = histSampleCount_;
   histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
-  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
+  histLock_.endWrite();
 }
 
 void CompressorPlugin::publishDynamicsPoint()
@@ -397,8 +397,8 @@ int CompressorPlugin::takeEnvelopeDisplay(float* out, int maxOut)
   // Seqlock read: retry while the audio thread is mid-publish.
   for (int attempt = 0; attempt < 8; ++attempt)
   {
-    const uint32_t s0 = histSeq_.load(std::memory_order_acquire);
-    if (s0 & 1u)
+    uint32_t s0 = 0;
+    if (!histLock_.tryBeginRead(s0))
       continue; // write in progress
     const int startPos =
       (kHistBufSize + histSnapshotPos_ - (slots - 1) * kHistChannels) % kHistBufSize;
@@ -418,8 +418,7 @@ int CompressorPlugin::takeEnvelopeDisplay(float* out, int maxOut)
         thr = Dsp::dbToLin(params_[kParamThreshold]);
       out[i * kHistChannels + 3] = std::clamp(thr, 1.0e-6f, 1.f);
     }
-    const uint32_t s1 = histSeq_.load(std::memory_order_acquire);
-    if (s0 == s1)
+    if (histLock_.tryEndRead(s0))
     {
       out[outCount] = std::clamp(phase, 0.f, 1.f);
       return outCount + 1;

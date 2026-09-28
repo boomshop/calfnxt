@@ -11,6 +11,7 @@ import {
   SPECTRUM_MAX_BINS,
   SPECTRUM_MIN_BINS,
 } from '../../utils/spectrum_bins';
+import { buildDbGridY as buildDbGridYBase } from '../../utils/chartGrid';
 import './SpectrumChart.scss';
 
 export {
@@ -206,19 +207,10 @@ export function buildDbGridY(
   step: number,
   labelStep: number,
 ) {
-  const lines: { pos: number; label?: string; class?: string }[] = [];
-  const start = Math.ceil(min / step) * step;
-  for (let db = start; db <= max; db += step) {
-    const major = db % labelStep === 0;
-    const base = db === 0;
-    const cls = '' + (major ? 'major ' : '') + (base ? 'base' : '');
-    lines.push({
-      pos: db,
-      label: major ? `${db}` : undefined,
-      class: cls,
-    });
-  }
-  return lines;
+  return buildDbGridYBase(min, max, step, labelStep, {
+    majorClass: 'major',
+    zeroClass: 'base',
+  });
 }
 
 /** Vertical freq lines — same decade marks as AUX Equalizer / FrequencyResponse. */

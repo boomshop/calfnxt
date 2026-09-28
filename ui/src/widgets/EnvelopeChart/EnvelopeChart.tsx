@@ -5,11 +5,12 @@ import { ListValue } from '@deutschesoft/awml';
 import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { bindAuxOptions } from '../../utils/aux_bindings';
-import { postToHost } from '../../utils/bridge';
 import {
   AUTO_SCALE_HARD_MIN,
   ChartYAutoScale,
 } from '../../utils/chartAutoScale';
+import { buildDbGridY, buildTimeGridX } from '../../utils/chartGrid';
+import { observeVizBins } from '../../utils/vizBins';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { addGraphClasses, GRAPH_STYLE } from '../../styles/graphStyles';
 import './EnvelopeChart.scss';
@@ -29,42 +30,11 @@ const DB_LABEL = 12;
 
 /** Fixed scroll window (ms) — matches wide top history layout. */
 export const ENVELOPE_WINDOW_MS = 10000;
-const GRID_STEP_MS = 1000;
 
-function buildDbGridY(min: number, max: number, step: number, labelStep: number) {
-  const lines: { pos: number; label?: string; class?: string }[] = [];
-  const start = Math.ceil(min / step) * step;
-  for (let db = start; db <= max; db += step) {
-    const major = db % labelStep === 0;
-    lines.push({
-      pos: db,
-      class: major ? 'env-grid-major' : 'env-grid-minor',
-      ...(major ? { label: `${db}` } : {}),
-    });
-  }
-  return lines;
-}
-
-function formatMsLabel(ms: number): string {
-  if (ms >= 1000) {
-    const s = ms / 1000;
-    return Number.isInteger(s) ? `${s}s` : `${s}s`;
-  }
-  return `${Math.round(ms)}`;
-}
-
-function buildTimeGridX(displayMs: number) {
-  const lines: { pos: number; label: string; class: string }[] = [];
-  for (let t = displayMs; t >= -1e-9; t -= GRID_STEP_MS) {
-    const pos = Math.round(t);
-    lines.push({
-      pos,
-      label: formatMsLabel(pos),
-      class: 'env-grid-time',
-    });
-  }
-  return lines;
-}
+const ENV_GRID_Y = {
+  majorClass: 'env-grid-major',
+  minorClass: 'env-grid-minor',
+} as const;
 
 const ChartBindings = {};
 const ChartOptions = {
@@ -75,8 +45,11 @@ const ChartOptions = {
   // Do not set reverse here — Chart.initialize forces range_y.reverse=true
   // (higher dB at the top). A later set(range_y,{reverse:false}) would flip it.
   range_y: { min: DB_MIN, max: DB_MAX },
-  grid_x: buildTimeGridX(ENVELOPE_WINDOW_MS),
-  grid_y: buildDbGridY(DB_MIN, DB_MAX, DB_GRID, DB_LABEL),
+  grid_x: buildTimeGridX(ENVELOPE_WINDOW_MS, {
+    everyClass: 'env-grid-time',
+    labelEvery: true,
+  }),
+  grid_y: buildDbGridY(DB_MIN, DB_MAX, DB_GRID, DB_LABEL, ENV_GRID_Y),
 };
 
 const ChartWidget = componentFromWidget(
@@ -261,7 +234,7 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
     result: null,
   });
   const graphBindingsRef = useRef<Bindings[]>([]);
-  const resizeRoRef = useRef<ResizeObserver | null>(null);
+  const vizBinsStopRef = useRef<(() => void) | null>(null);
   const autoScaleUnsubRef = useRef<(() => void) | null>(null);
   const viewUnsubRef = useRef<(() => void) | null>(null);
   const autoScaleRef = useRef(autoScale);
@@ -281,29 +254,23 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
     [data$, view$],
   );
 
-  const sendVizBins = useCallback(
-    (el: Element) => {
-      const width = Math.round(el.getBoundingClientRect().width);
-      const bins = Math.max(48, Math.min(512, width));
-      postToHost({ t: 'vizcfg', id: vizId, bins });
-    },
-    [vizId],
-  );
-
   const applyAutoScale = useCallback(
     (chart: AuxChartInstance, buf: Float32Array | null) => {
       if (!autoScaleRef.current) return;
       const deepest = envelopeDeepestDb(buf, view$.value ?? 0);
       yAutoScaleRef.current.apply(chart, deepest, DB_MAX, (min) => {
-        chart.set('grid_y', buildDbGridY(min, DB_MAX, DB_GRID, DB_LABEL));
+        chart.set(
+          'grid_y',
+          buildDbGridY(min, DB_MAX, DB_GRID, DB_LABEL, ENV_GRID_Y),
+        );
       });
     },
     [view$],
   );
 
   const detach = useCallback(() => {
-    resizeRoRef.current?.disconnect();
-    resizeRoRef.current = null;
+    vizBinsStopRef.current?.();
+    vizBinsStopRef.current = null;
     yAutoScaleRef.current.cancelAnim();
     autoScaleUnsubRef.current?.();
     autoScaleUnsubRef.current = null;
@@ -339,13 +306,22 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
         max: ENVELOPE_WINDOW_MS,
         reverse: true,
       });
-      chart.set('grid_x', buildTimeGridX(ENVELOPE_WINDOW_MS));
+      chart.set(
+        'grid_x',
+        buildTimeGridX(ENVELOPE_WINDOW_MS, {
+          everyClass: 'env-grid-time',
+          labelEvery: true,
+        }),
+      );
 
       const scaler = yAutoScaleRef.current;
       scaler.setEnabled(!!autoScale);
       const yMin = autoScale ? scaler.rangeMin : DB_MIN;
       chart.set('range_y', { min: yMin, max: DB_MAX, reverse: true });
-      chart.set('grid_y', buildDbGridY(yMin, DB_MAX, DB_GRID, DB_LABEL));
+      chart.set(
+        'grid_y',
+        buildDbGridY(yMin, DB_MAX, DB_GRID, DB_LABEL, ENV_GRID_Y),
+      );
 
       // Paint order = DOM order: outer (back) → mask → result (front).
       if (!graphsRef.current.outer) {
@@ -463,17 +439,11 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
 
       const el = chart.element ?? chart.svg;
       if (el) {
-        sendVizBins(el);
-        let raf = 0;
-        const ro = new ResizeObserver(() => {
-          if (raf) cancelAnimationFrame(raf);
-          raf = requestAnimationFrame(() => sendVizBins(el));
-        });
-        ro.observe(el);
-        resizeRoRef.current = ro;
+        vizBinsStopRef.current?.();
+        vizBinsStopRef.current = observeVizBins(el, vizId);
       }
     },
-    [applyAutoScale, autoScale, data$, resultSource$, sendVizBins, view$],
+    [applyAutoScale, autoScale, data$, resultSource$, view$, vizId],
   );
 
   const widgetRef = useCallback(

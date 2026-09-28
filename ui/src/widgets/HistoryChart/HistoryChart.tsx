@@ -7,13 +7,14 @@ import {
   useDynamicValueReadonly,
 } from '@deutschesoft/use-aux-widgets';
 import { bindAuxOptions } from '../../utils/aux_bindings';
-import { postToHost } from '../../utils/bridge';
-import { useChartGradient } from '../../hooks/useChartGradient';
-import { addGraphClasses } from '../../styles/graphStyles';
 import {
   AUTO_SCALE_HARD_MIN,
   ChartYAutoScale,
 } from '../../utils/chartAutoScale';
+import { buildDbGridY, buildTimeGridX } from '../../utils/chartGrid';
+import { observeVizBins } from '../../utils/vizBins';
+import { useChartGradient } from '../../hooks/useChartGradient';
+import { addGraphClasses } from '../../styles/graphStyles';
 import { Toggle } from '../Toggle';
 import './HistoryChart.scss';
 
@@ -31,7 +32,6 @@ const DB_LABEL = 12;
 
 /** Fixed history window (ms) — keep in sync with DSP history display. */
 export const HISTORY_CHART_MS = 10000;
-const HISTORY_GRID_STEP_MS = 1000;
 
 /** AUX Graph drawing modes (see aux-widgets Graph `options.mode`). */
 export type HistoryGraphMode =
@@ -144,35 +144,6 @@ export interface HistoryChartProps {
    */
   autoScale?: boolean;
   className?: string;
-}
-
-function buildDbGridY(min: number, max: number, step: number, labelStep: number) {
-  const lines: { pos: number; label?: string; class?: string }[] = [];
-  const start = Math.ceil(min / step) * step;
-  for (let db = start; db <= max; db += step) {
-    const major = db % labelStep === 0;
-    lines.push({
-      pos: db,
-      label: major ? `${db}` : undefined,
-      class: major ? 'major' : undefined,
-    });
-  }
-  return lines;
-}
-
-function buildTimeGridX(displayMs: number) {
-  const step = HISTORY_GRID_STEP_MS;
-  const lines: { pos: number; label?: string; class?: string }[] = [];
-  for (let t = displayMs; t >= -1e-9; t -= step) {
-    const pos = Math.round(t);
-    const major = pos === 0 || pos === displayMs || pos % (step * 2) === 0;
-    lines.push({
-      pos,
-      label: major ? (pos >= 1000 ? `${pos / 1000}s` : `${pos}`) : undefined,
-      class: major ? 'major' : undefined,
-    });
-  }
-  return lines;
 }
 
 /** Default: linear amplitude → dB (peaks and GR lin). Hard floor −60. */
@@ -604,7 +575,7 @@ export function HistoryChart(props: HistoryChartProps) {
   const auxGraphsRef = useRef<AuxGraph[]>([]);
   const graphBindingsRef = useRef<Bindings[]>([]);
   const visibleUnsubsRef = useRef<Array<() => void>>([]);
-  const resizeRoRef = useRef<ResizeObserver | null>(null);
+  const vizBinsStopRef = useRef<(() => void) | null>(null);
   /** Bumps on every attach/detach so interleaved rebuilds cannot double-add. */
   const attachGenRef = useRef(0);
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
@@ -628,15 +599,6 @@ export function HistoryChart(props: HistoryChartProps) {
   });
   const reassertRef = useRef(reassertGradStroke);
   reassertRef.current = reassertGradStroke;
-
-  const sendVizBins = useCallback(
-    (el: Element) => {
-      const width = Math.round(el.getBoundingClientRect().width);
-      const bins = Math.max(48, Math.min(512, width));
-      postToHost({ t: 'vizcfg', id: vizId, bins });
-    },
-    [vizId],
-  );
 
   /** Drop every Graph on the chart — tracked list can miss orphans after races. */
   const sweepGraphs = useCallback((chart: AuxChartInstance) => {
@@ -674,8 +636,8 @@ export function HistoryChart(props: HistoryChartProps) {
   const detach = useCallback(
     (clearChartRef = true) => {
       attachGenRef.current += 1;
-      resizeRoRef.current?.disconnect();
-      resizeRoRef.current = null;
+      vizBinsStopRef.current?.();
+      vizBinsStopRef.current = null;
       yAutoScaleRef.current.cancelAnim();
       autoScaleUnsubRef.current?.();
       autoScaleUnsubRef.current = null;
@@ -896,14 +858,8 @@ export function HistoryChart(props: HistoryChartProps) {
 
       const el = chart.element ?? chart.svg;
       if (el) {
-        sendVizBins(el);
-        let raf = 0;
-        const ro = new ResizeObserver(() => {
-          if (raf) cancelAnimationFrame(raf);
-          raf = requestAnimationFrame(() => sendVizBins(el));
-        });
-        ro.observe(el);
-        resizeRoRef.current = ro;
+        vizBinsStopRef.current?.();
+        vizBinsStopRef.current = observeVizBins(el, vizId);
       }
     },
     [
@@ -912,8 +868,8 @@ export function HistoryChart(props: HistoryChartProps) {
       data$,
       dbMax,
       dbMin,
-      sendVizBins,
       sweepGraphs,
+      vizId,
       windowMs,
       layoutKey,
     ],
