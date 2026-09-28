@@ -24,6 +24,8 @@ ui/node_modules/
 ui/dist/
 studio/node_modules/
 studio/dist/
+**/__pycache__/
+*.py[cod]
 
 # Legacy per-plugin UI output (replaced by ui/dist)
 dsp/*/web/
