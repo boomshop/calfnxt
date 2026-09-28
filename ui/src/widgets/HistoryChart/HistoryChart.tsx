@@ -10,6 +10,10 @@ import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { addGraphClasses } from '../../styles/graphStyles';
+import {
+  AUTO_SCALE_HARD_MIN,
+  ChartYAutoScale,
+} from '../../utils/chartAutoScale';
 import { Toggle } from '../Toggle';
 import './HistoryChart.scss';
 
@@ -24,19 +28,6 @@ const DB_MAX = 0;
 const DB_MIN = -48;
 const DB_GRID = 6;
 const DB_LABEL = 12;
-
-/** Auto-scale Y floor: hard limits, margin, snap, attack hold, release. */
-const AUTO_SCALE_HARD_MIN = -60;
-const AUTO_SCALE_SOFT_MIN = -12;
-const AUTO_SCALE_SNAP_DB = 6;
-/** Expand only after target stays below the floor this long (ignores spikes). */
-const AUTO_SCALE_ATTACK_MS = 200;
-const AUTO_SCALE_RELEASE_TAU_S = 2;
-/** Smooth range_y glide toward the snapped floor (seconds). */
-const AUTO_SCALE_ANIM_TAU_S = 0.22;
-const AUTO_SCALE_ANIM_EPS_DB = 0.08;
-/** Settle envelope onto target so soft-min is reachable despite asymp. release. */
-const AUTO_SCALE_SETTLE_DB = 0.35;
 
 /** Fixed history window (ms) — keep in sync with DSP history display. */
 export const HISTORY_CHART_MS = 10000;
@@ -216,15 +207,6 @@ function isCutTipsSeries(spec: HistorySeries): boolean {
   return spec.diffChannel != null || spec.diffGrChannel != null;
 }
 
-/** Snap a dB floor down onto the auto-scale grid, clamped to hard/soft limits. */
-function snapAutoScaleMin(envDb: number): number {
-  const clamped = Math.max(
-    AUTO_SCALE_HARD_MIN,
-    Math.min(AUTO_SCALE_SOFT_MIN, envDb),
-  );
-  return Math.floor(clamped / AUTO_SCALE_SNAP_DB) * AUTO_SCALE_SNAP_DB;
-}
-
 /**
  * Deepest plotted Y across all listed+visible series (cut tips: both edges).
  *
@@ -315,22 +297,6 @@ function seriesDeepestDb(
 
   if (!sawReal || !(deepest < Infinity)) return AUTO_SCALE_HARD_MIN;
   return deepest;
-}
-
-/**
- * 6 dB display snap with Schmitt hysteresis on the way up so the range does
- * not chatter when the envelope hovers on a step boundary.
- *
- * Release uses a small epsilon below the next step: the floor envelope
- * approaches its target asymptotically, and `Math.floor` maps (−18, −12) → −18,
- * so without ε the soft min would never unlock once the range had expanded.
- */
-function snapAutoScaleDisplay(envDb: number, currentDisplay: number): number {
-  const ideal = snapAutoScaleMin(envDb);
-  if (ideal < currentDisplay) return ideal;
-  if (envDb >= currentDisplay + AUTO_SCALE_SNAP_DB - AUTO_SCALE_SETTLE_DB)
-    return ideal;
-  return currentDisplay;
 }
 
 function seriesKey(series: HistorySeries[]): string {
@@ -629,19 +595,10 @@ export function HistoryChart(props: HistoryChartProps) {
   dbMaxRef.current = dbMax;
   const autoScaleRef = useRef(autoScale);
   autoScaleRef.current = autoScale;
-  /** Continuous floor envelope (dB); snapped value is the animation target. */
-  const floorEnvRef = useRef(AUTO_SCALE_SOFT_MIN);
-  const displayMinRef = useRef(snapAutoScaleMin(AUTO_SCALE_SOFT_MIN));
-  /** Currently applied range_y.min while gliding toward displayMinRef. */
-  const animMinRef = useRef(snapAutoScaleMin(AUTO_SCALE_SOFT_MIN));
-  const animRafRef = useRef(0);
-  const animLastTRef = useRef(0);
-  const floorInitRef = useRef(false);
-  const floorLastTRef = useRef(0);
-  /** ms target has stayed below env; expand only after AUTO_SCALE_ATTACK_MS. */
-  const attackHoldMsRef = useRef(0);
-  /** Deepest target seen during the current attack hold. */
-  const attackPendingRef = useRef(AUTO_SCALE_SOFT_MIN);
+  const yAutoScaleRef = useRef(new ChartYAutoScale());
+  yAutoScaleRef.current.onRangeMin = (min) => {
+    dbMinRef.current = min;
+  };
   const autoScaleUnsubRef = useRef<(() => void) | null>(null);
   const chartRef = useRef<AuxChartInstance | null>(null);
   const auxGraphsRef = useRef<AuxGraph[]>([]);
@@ -719,10 +676,7 @@ export function HistoryChart(props: HistoryChartProps) {
       attachGenRef.current += 1;
       resizeRoRef.current?.disconnect();
       resizeRoRef.current = null;
-      if (animRafRef.current) {
-        cancelAnimationFrame(animRafRef.current);
-        animRafRef.current = 0;
-      }
+      yAutoScaleRef.current.cancelAnim();
       autoScaleUnsubRef.current?.();
       autoScaleUnsubRef.current = null;
       for (const u of visibleUnsubsRef.current) u();
@@ -743,39 +697,9 @@ export function HistoryChart(props: HistoryChartProps) {
     [sweepGraphs],
   );
 
-  /** Glide range_y.min toward the snapped floor; grid jumps to the destination. */
-  const ensureRangeAnim = useCallback((chart: AuxChartInstance) => {
-    if (animRafRef.current) return;
-    animLastTRef.current = performance.now();
-    const tick = (now: number) => {
-      animRafRef.current = 0;
-      if (!autoScaleRef.current || chart.isDestructed?.()) return;
-      const dt = Math.min(
-        0.05,
-        Math.max(0, (now - animLastTRef.current) / 1000),
-      );
-      animLastTRef.current = now;
-      const dest = displayMinRef.current;
-      let cur = animMinRef.current;
-      if (dt > 0) {
-        cur += (dest - cur) * (1 - Math.exp(-dt / AUTO_SCALE_ANIM_TAU_S));
-      }
-      if (Math.abs(dest - cur) <= AUTO_SCALE_ANIM_EPS_DB) cur = dest;
-      animMinRef.current = cur;
-      dbMinRef.current = cur;
-      const yMax = dbMaxRef.current;
-      chart.set('range_y', { min: cur, max: yMax });
-      if (cur !== dest) {
-        animRafRef.current = requestAnimationFrame(tick);
-      }
-    };
-    animRafRef.current = requestAnimationFrame(tick);
-  }, []);
-
   const applyAutoScale = useCallback(
     (chart: AuxChartInstance, buf: Float32Array | null) => {
-      if (!autoScaleRef.current || chart.isDestructed?.()) return;
-
+      if (!autoScaleRef.current) return;
       const specs = seriesRef.current;
       const nCh = channelCountOf(specs);
       const clipped = clipHistoryBuf(
@@ -785,70 +709,12 @@ export function HistoryChart(props: HistoryChartProps) {
         sourceWindowMsRef.current,
       );
       const deepest = seriesDeepestDb(clipped, specs, nCh);
-      // No buffer yet (studio injects after first paint) — do not lock onto −60.
-      if (deepest == null) return;
-      let target = Math.max(
-        AUTO_SCALE_HARD_MIN,
-        Math.min(AUTO_SCALE_SOFT_MIN, deepest),
-      );
-
-      const now = performance.now();
-      if (!floorInitRef.current) {
-        floorEnvRef.current = target;
-        floorInitRef.current = true;
-        floorLastTRef.current = now;
-        attackHoldMsRef.current = 0;
-        attackPendingRef.current = target;
-        const snapped0 = snapAutoScaleMin(target);
-        displayMinRef.current = snapped0;
-        animMinRef.current = snapped0;
-        dbMinRef.current = snapped0;
-        const yMax0 = dbMaxRef.current;
-        chart.set('range_y', { min: snapped0, max: yMax0 });
-        chart.set('grid_y', buildDbGridY(snapped0, yMax0, DB_GRID, DB_LABEL));
-        return;
-      }
-
-      const dtMs = Math.min(100, Math.max(0, now - floorLastTRef.current));
-      floorLastTRef.current = now;
-      let env = floorEnvRef.current;
-      if (target < env) {
-        // Attack hold: ignore brief dips; commit deepest pending after X ms.
-        attackHoldMsRef.current += dtMs;
-        attackPendingRef.current = Math.min(attackPendingRef.current, target);
-        if (attackHoldMsRef.current >= AUTO_SCALE_ATTACK_MS) {
-          env = attackPendingRef.current;
-          attackHoldMsRef.current = 0;
-          attackPendingRef.current = env;
-        }
-      } else {
-        attackHoldMsRef.current = 0;
-        attackPendingRef.current = target;
-        if (dtMs > 0) {
-          const dt = dtMs / 1000;
-          env += (target - env) * (1 - Math.exp(-dt / AUTO_SCALE_RELEASE_TAU_S));
-        }
-        // Asymptotic release never quite hits the soft min; settle so it unlocks.
-        if (Math.abs(target - env) <= AUTO_SCALE_SETTLE_DB) env = target;
-      }
-      floorEnvRef.current = Math.max(
-        AUTO_SCALE_HARD_MIN,
-        Math.min(AUTO_SCALE_SOFT_MIN, env),
-      );
-
-      const prevSnap = displayMinRef.current;
-      const snapped = snapAutoScaleDisplay(floorEnvRef.current, prevSnap);
-      displayMinRef.current = snapped;
-      if (snapped !== prevSnap) {
-        const yMax = dbMaxRef.current;
-        // Grid snaps to destination; range_y glides via rAF.
-        chart.set('grid_y', buildDbGridY(snapped, yMax, DB_GRID, DB_LABEL));
-      }
-      if (Math.abs(animMinRef.current - snapped) > AUTO_SCALE_ANIM_EPS_DB) {
-        ensureRangeAnim(chart);
-      }
+      const yMax = dbMaxRef.current;
+      yAutoScaleRef.current.apply(chart, deepest, yMax, (min) => {
+        chart.set('grid_y', buildDbGridY(min, yMax, DB_GRID, DB_LABEL));
+      });
     },
-    [ensureRangeAnim],
+    [],
   );
 
   const attach = useCallback(
@@ -861,24 +727,20 @@ export function HistoryChart(props: HistoryChartProps) {
       sweepGraphs(chart);
 
       const gen = (attachGenRef.current += 1);
+      const scaler = yAutoScaleRef.current;
+      scaler.setEnabled(!!autoScale);
 
-      const yMin = autoScale ? animMinRef.current : dbMin;
+      const yMin = autoScale ? scaler.rangeMin : dbMin;
       const yMax = dbMax;
       if (!autoScale) {
-        floorInitRef.current = false;
-        attackHoldMsRef.current = 0;
-        if (animRafRef.current) {
-          cancelAnimationFrame(animRafRef.current);
-          animRafRef.current = 0;
-        }
         dbMinRef.current = dbMin;
       } else {
-        dbMinRef.current = animMinRef.current;
+        dbMinRef.current = scaler.rangeMin;
       }
 
       chart.set('range_x', { min: 0, max: windowMs, reverse: true });
       chart.set('grid_x', buildTimeGridX(windowMs));
-      chart.set('range_y', { min: yMin, max: yMax });
+      chart.set('range_y', { min: yMin, max: yMax, reverse: true });
       chart.set('grid_y', buildDbGridY(yMin, yMax, DB_GRID, DB_LABEL));
 
       const specs = seriesRef.current;

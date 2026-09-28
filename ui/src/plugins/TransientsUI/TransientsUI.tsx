@@ -142,7 +142,11 @@ export function TransientsUI(props: TransientsUIProps) {
       </Header>
 
       <div className="history">
-        <EnvelopeChart data$={host.envelopeData$} view$={host.view$} />
+        <EnvelopeChart
+          data$={host.envelopeData$}
+          view$={host.view$}
+          autoScale
+        />
       </div>
 
       <div className="block envelope">

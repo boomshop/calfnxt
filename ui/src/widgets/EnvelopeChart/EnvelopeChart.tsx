@@ -6,6 +6,10 @@ import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
+import {
+  AUTO_SCALE_HARD_MIN,
+  ChartYAutoScale,
+} from '../../utils/chartAutoScale';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { addGraphClasses, GRAPH_STYLE } from '../../styles/graphStyles';
 import './EnvelopeChart.scss';
@@ -68,7 +72,9 @@ const ChartOptions = {
   show_grid: true,
   label: false,
   range_x: { min: 0, max: ENVELOPE_WINDOW_MS, reverse: true },
-  range_y: { min: DB_MIN, max: DB_MAX, reverse: false },
+  // Do not set reverse here — Chart.initialize forces range_y.reverse=true
+  // (higher dB at the top). A later set(range_y,{reverse:false}) would flip it.
+  range_y: { min: DB_MIN, max: DB_MAX },
   grid_x: buildTimeGridX(ENVELOPE_WINDOW_MS),
   grid_y: buildDbGridY(DB_MIN, DB_MAX, DB_GRID, DB_LABEL),
 };
@@ -81,7 +87,11 @@ const ChartWidget = componentFromWidget(
 );
 
 function linToDb(lin: number): number {
-  return lin > 1e-10 ? 20 * Math.log10(lin) : DB_MIN;
+  if (!(lin > 1e-10)) return AUTO_SCALE_HARD_MIN;
+  return Math.max(
+    AUTO_SCALE_HARD_MIN,
+    Math.min(DB_MAX, 20 * Math.log10(lin)),
+  );
 }
 
 function resultChannelForView(view: number): number {
@@ -90,6 +100,35 @@ function resultChannelForView(view: number): number {
   if (v === 1) return CH_ENVELOPE;
   if (v === 2) return CH_ATTACK;
   return CH_RELEASE;
+}
+
+/**
+ * Deepest plotted Y across outer fill (max in/out) and the active result line.
+ * `null` when there is no buffer yet.
+ */
+function envelopeDeepestDb(
+  buf: Float32Array | null,
+  view: number,
+): number | null {
+  const u = unpackEnvBuf(buf, ENVELOPE_WINDOW_MS);
+  if (!u) return null;
+  const resultCh = resultChannelForView(view);
+  let deepest = Infinity;
+  let sawReal = false;
+  const consider = (y: number) => {
+    if (!(y > AUTO_SCALE_HARD_MIN)) return;
+    sawReal = true;
+    if (y < deepest) deepest = y;
+  };
+  for (let i = 0; i < u.slots; ++i) {
+    const base = i * ENV_CHANNELS;
+    const a = u.data[base + CH_ORIGINAL] ?? 0;
+    const b = u.data[base + CH_OUTPUT] ?? 0;
+    consider(linToDb(Math.max(a, b)));
+    consider(linToDb(u.data[base + resultCh] ?? 0));
+  }
+  if (!sawReal || !(deepest < Infinity)) return AUTO_SCALE_HARD_MIN;
+  return deepest;
 }
 
 type EnvDot = { x: number; y: number };
@@ -177,6 +216,11 @@ export interface EnvelopeChartProps {
   view$: DynamicValue<number>;
   /** Host vizcfg stream id (default `"env"`). */
   vizId?: string;
+  /**
+   * Glide `range_y.min` to the deepest visible envelope (HistoryChart-style).
+   * Default off so other callers keep the fixed −60…12 dB frame.
+   */
+  autoScale?: boolean;
   className?: string;
 }
 
@@ -209,7 +253,7 @@ type Graphs = {
  * Release via `view$`). Difference tips glow; line marks cut vs boost.
  */
 export function EnvelopeChart(props: EnvelopeChartProps) {
-  const { data$, view$, vizId = 'env', className } = props;
+  const { data$, view$, vizId = 'env', autoScale = false, className } = props;
   const chartRef = useRef<AuxChartInstance | null>(null);
   const graphsRef = useRef<Graphs>({
     outer: null,
@@ -218,6 +262,11 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
   });
   const graphBindingsRef = useRef<Bindings[]>([]);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
+  const autoScaleUnsubRef = useRef<(() => void) | null>(null);
+  const viewUnsubRef = useRef<(() => void) | null>(null);
+  const autoScaleRef = useRef(autoScale);
+  autoScaleRef.current = autoScale;
+  const yAutoScaleRef = useRef(new ChartYAutoScale());
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
 
   // CSS vars for fill-gradient on outer; no inline paint targets.
@@ -241,9 +290,25 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
     [vizId],
   );
 
+  const applyAutoScale = useCallback(
+    (chart: AuxChartInstance, buf: Float32Array | null) => {
+      if (!autoScaleRef.current) return;
+      const deepest = envelopeDeepestDb(buf, view$.value ?? 0);
+      yAutoScaleRef.current.apply(chart, deepest, DB_MAX, (min) => {
+        chart.set('grid_y', buildDbGridY(min, DB_MAX, DB_GRID, DB_LABEL));
+      });
+    },
+    [view$],
+  );
+
   const detach = useCallback(() => {
     resizeRoRef.current?.disconnect();
     resizeRoRef.current = null;
+    yAutoScaleRef.current.cancelAnim();
+    autoScaleUnsubRef.current?.();
+    autoScaleUnsubRef.current = null;
+    viewUnsubRef.current?.();
+    viewUnsubRef.current = null;
     for (const b of graphBindingsRef.current) b.dispose();
     graphBindingsRef.current = [];
     const chart = chartRef.current;
@@ -264,6 +329,10 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
 
       for (const b of graphBindingsRef.current) b.dispose();
       graphBindingsRef.current = [];
+      autoScaleUnsubRef.current?.();
+      autoScaleUnsubRef.current = null;
+      viewUnsubRef.current?.();
+      viewUnsubRef.current = null;
 
       chart.set('range_x', {
         min: 0,
@@ -271,6 +340,12 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
         reverse: true,
       });
       chart.set('grid_x', buildTimeGridX(ENVELOPE_WINDOW_MS));
+
+      const scaler = yAutoScaleRef.current;
+      scaler.setEnabled(!!autoScale);
+      const yMin = autoScale ? scaler.rangeMin : DB_MIN;
+      chart.set('range_y', { min: yMin, max: DB_MAX, reverse: true });
+      chart.set('grid_y', buildDbGridY(yMin, DB_MAX, DB_GRID, DB_LABEL));
 
       // Paint order = DOM order: outer (back) → mask → result (front).
       if (!graphsRef.current.outer) {
@@ -374,6 +449,16 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
       }
       graphBindingsRef.current = bindings;
 
+      if (autoScale) {
+        applyAutoScale(chart, data$.value as Float32Array | null);
+        autoScaleUnsubRef.current = data$.subscribe((v) => {
+          applyAutoScale(chart, v as Float32Array | null);
+        });
+        viewUnsubRef.current = view$.subscribe(() => {
+          applyAutoScale(chart, data$.value as Float32Array | null);
+        });
+      }
+
       setChartSvg(chart.svg ?? null);
 
       const el = chart.element ?? chart.svg;
@@ -388,7 +473,7 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
         resizeRoRef.current = ro;
       }
     },
-    [data$, resultSource$, sendVizBins],
+    [applyAutoScale, autoScale, data$, resultSource$, sendVizBins, view$],
   );
 
   const widgetRef = useCallback(
