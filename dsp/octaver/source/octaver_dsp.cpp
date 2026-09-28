@@ -33,11 +33,7 @@ float midiFromHz(float hz, float ref = 440.f)
   return 69.f + 12.f * std::log2(hz / ref);
 }
 
-float linToDbSafe(float x)
-{
-  return 20.f * std::log10(std::max(x, 1.0e-12f));
-}
-
+/** Pitch-roll diag floor — same as Dsp::linToDbSafe default. */
 /** Always '.' decimal — Ardour often runs under de_DE. */
 void diagFprintFloat(FILE* f, float v, int prec = 1)
 {
@@ -575,7 +571,7 @@ tresult PLUGIN_API OctaverPlugin::process(ProcessData& data)
         {
           const float tSec = float(sampleCounter_) / sr;
           const float m1Rms = diagM1N_ > 0
-                                ? linToDbSafe(float(std::sqrt(diagM1Acc_ / double(diagM1N_))))
+                                ? Dsp::linToDbSafe(float(std::sqrt(diagM1Acc_ / double(diagM1N_))))
                                 : -120.f;
           diagM1Acc_ = 0.0;
           diagM1N_ = 0;

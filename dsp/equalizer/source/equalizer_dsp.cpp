@@ -21,18 +21,6 @@ constexpr uint32 kStateVersionBandsOnly = 2;
 constexpr int32 kLegacyParamsPerBand = 12;
 constexpr int32 kParamsPerBandDynMode = 13;
 
-Dsp::DetectorMode detectorModeFromPlain(float v)
-{
-  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
-  {
-    case 1:
-      return Dsp::DetectorMode::Rms;
-    case 2:
-      return Dsp::DetectorMode::Opto;
-    default:
-      return Dsp::DetectorMode::Peak;
-  }
-}
 } // namespace
 
 EqualizerPlugin::EqualizerPlugin()
@@ -140,7 +128,7 @@ void EqualizerPlugin::applyBandTargetsFromParams()
     const float release = params_[bandParam(b, kBandDynRelease)];
     const float thresh = params_[bandParam(b, kBandDynThreshold)];
     const float ratio = params_[bandParam(b, kBandDynRatio)];
-    const auto mode = detectorModeFromPlain(params_[bandParam(b, kBandDynMode)]);
+    const auto mode = Dsp::detectorModeFromPlain(params_[bandParam(b, kBandDynMode)]);
     bands_[b].setDynParams(dyn, attack, release, thresh, ratio, mode);
     bands_[b].setChannelMode(
       Dsp::channelModeFromPlain(params_[bandParam(b, kBandChannel)]));

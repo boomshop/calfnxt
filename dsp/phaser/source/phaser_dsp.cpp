@@ -2,6 +2,7 @@
 
 #include "base/source/fstreamer.h"
 #include "channel_mode.h"
+#include "gain_util.h"
 
 #include <algorithm>
 #include <cmath>
@@ -16,13 +17,6 @@ using namespace Steinberg::Vst;
 namespace {
 constexpr uint32 kStateMagic = 0x434e5850u; // 'CNXP'
 constexpr uint32 kStateVersion = 2; // v2: + channel
-
-float linToDbSafe(float lin)
-{
-  if (!(lin > 1.0e-12f) || !std::isfinite(lin))
-    return -96.f;
-  return 20.f * std::log10(lin);
-}
 } // namespace
 
 PhaserPlugin::PhaserPlugin()
@@ -141,8 +135,8 @@ void PhaserPlugin::publishResponse()
       const float t = (static_cast<float>(i) + (static_cast<float>(s) + 0.5f) / kSub)
         / static_cast<float>(bins);
       const float hz = kFMin * std::exp(t * logSpan);
-      const float dL = linToDbSafe(left_.freqGain(hz));
-      const float dR = linToDbSafe(right_.freqGain(hz));
+      const float dL = Dsp::linToDbSafe(left_.freqGain(hz));
+      const float dR = Dsp::linToDbSafe(right_.freqGain(hz));
       if (s == 0 || std::fabs(dL) > std::fabs(bestL))
         bestL = dL;
       if (s == 0 || std::fabs(dR) > std::fabs(bestR))

@@ -41,18 +41,6 @@ float softClipSample(float x, float amount)
   return std::copysign(std::min(shaped, kCeiling), x);
 }
 
-Dsp::StereoLink stereoLinkFromPlain(float v)
-{
-  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
-  {
-    case 1:
-      return Dsp::StereoLink::Average;
-    case 2:
-      return Dsp::StereoLink::Mid;
-    default:
-      return Dsp::StereoLink::Max;
-  }
-}
 } // namespace
 
 TransientsPlugin::TransientsPlugin()
@@ -142,7 +130,7 @@ TransientsPlugin::BlockState TransientsPlugin::makeBlockState() const
   state.delta = params_[kParamDelta] >= 0.5f;
   state.bypass = params_[kParamBypass] >= 0.5f;
   state.neutral = transients_.isNeutral();
-  state.link = stereoLinkFromPlain(params_[kParamLink]);
+  state.link = Dsp::stereoLinkFromPlain(params_[kParamLink]);
   state.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   return state;
 }

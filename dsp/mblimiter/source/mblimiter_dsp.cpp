@@ -25,12 +25,6 @@ float ascCoeffFromPlain(float c)
   return std::pow(0.5f, (x - 0.5f) * -2.f);
 }
 
-float linToDbSafe(float lin)
-{
-  if (!(lin > 1.0e-12f))
-    return -96.f;
-  return 20.f * std::log10(lin);
-}
 
 /** Soft-clip sample to ±limit (signed), used for multi-band coefficient sum. */
 float clipToLimit(float x, float limitLin)
@@ -1101,7 +1095,7 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
       stripMeter_[b].process(safe);
       if (safe < deepestLin)
         deepestLin = safe;
-      lastGrDb_[b] = linToDbSafe(safe);
+      lastGrDb_[b] = Dsp::linToDbSafe(safe);
       bandOutHold_[b].accumulate(0, stripOutPeak[b]);
       // GR-only path: Cut expand = bandPeak; Limit line = display ceiling.
       histFeedSample(b, bandPeak[b] * safe, safe, displayLimit);

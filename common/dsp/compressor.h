@@ -53,6 +53,34 @@ enum class StereoLink : int
   Mid = 2,
 };
 
+/** Map VST plain 0/1/2 → DetectorMode (Peak/RMS/Opto). */
+inline DetectorMode detectorModeFromPlain(float v)
+{
+  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
+  {
+    case 1:
+      return DetectorMode::Rms;
+    case 2:
+      return DetectorMode::Opto;
+    default:
+      return DetectorMode::Peak;
+  }
+}
+
+/** Map VST plain 0/1/2 → StereoLink (Max/Average/Mid). */
+inline StereoLink stereoLinkFromPlain(float v)
+{
+  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
+  {
+    case 1:
+      return StereoLink::Average;
+    case 2:
+      return StereoLink::Mid;
+    default:
+      return StereoLink::Max;
+  }
+}
+
 /**
  * Feed-forward compressor gain reduction.
  * Soft knee configurable (default ~6 dB AUX width). Makeup is applied by the

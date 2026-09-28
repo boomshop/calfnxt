@@ -21,12 +21,6 @@ constexpr uint32 kStateVersion = 2; // v2: + channel
 
 constexpr float kHistoryDisplayMs = 10000.f;
 
-float linToDbSafe(float lin)
-{
-  if (!(lin > 1.0e-12f))
-    return -96.f;
-  return 20.f * std::log10(lin);
-}
 
 /** Inv closes only when louder than main. Equal levels → 0 (main wins). Soft ~6 dB. */
 float relativeInhibitDesire(float invLin, float mainLin, float threshDb)
@@ -35,37 +29,13 @@ float relativeInhibitDesire(float invLin, float mainLin, float threshDb)
   if (!(invLin >= thr))
     return 0.f;
   constexpr float kSoftDb = 6.f;
-  const float dom = linToDbSafe(invLin) - linToDbSafe(mainLin);
+  const float dom = Dsp::linToDbSafe(invLin) - Dsp::linToDbSafe(mainLin);
   if (dom <= 0.f)
     return 0.f;
   return std::clamp(dom / kSoftDb, 0.f, 1.f);
 }
 
-Dsp::DetectorMode detectorModeFromPlain(float v)
-{
-  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
-  {
-    case 1:
-      return Dsp::DetectorMode::Rms;
-    case 2:
-      return Dsp::DetectorMode::Opto;
-    default:
-      return Dsp::DetectorMode::Peak;
-  }
-}
 
-Dsp::StereoLink stereoLinkFromPlain(float v)
-{
-  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
-  {
-    case 1:
-      return Dsp::StereoLink::Average;
-    case 2:
-      return Dsp::StereoLink::Mid;
-    default:
-      return Dsp::StereoLink::Max;
-  }
-}
 
 std::pair<float, float> busAt(ProcessData& data, int32 bus, int32 i, float fallbackL,
                               float fallbackR)
@@ -168,7 +138,7 @@ ExpanderPlugin::BlockState ExpanderPlugin::makeBlockState() const
   state.bypass = params_[kParamBypass] >= 0.5f;
   state.listen = params_[kParamListen] >= 0.5f;
   state.sidechainActive = params_[kParamSidechainActive] >= 0.5f;
-  state.link = stereoLinkFromPlain(params_[kParamLink]);
+  state.link = Dsp::stereoLinkFromPlain(params_[kParamLink]);
   state.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
 
   const ParamID activeId[kInhibitCount] = {kParamInv1Active, kParamInv2Active};
@@ -440,7 +410,7 @@ void ExpanderPlugin::processSample(const BlockState& state, float& L, float& R, 
     R = dryR;
     grMeter_.forceZero();
     histFeedSample(detPeak, 1.f, dryProcessedPeak(), threshLin);
-    const float inDb = linToDbSafe(det);
+    const float inDb = Dsp::linToDbSafe(det);
     pointInDbPlain_ = inDb;
     pointOutDbPlain_ = inDb;
     return;
@@ -449,8 +419,8 @@ void ExpanderPlugin::processSample(const BlockState& state, float& L, float& R, 
   grMeter_.process(gr);
   histFeedSample(detPeak, gr, dryProcessedPeak() * gr, threshLin);
 
-  const float inDb = linToDbSafe(det);
-  const float grLawDb = linToDbSafe(grLaw);
+  const float inDb = Dsp::linToDbSafe(det);
+  const float grLawDb = Dsp::linToDbSafe(grLaw);
   pointInDbPlain_ = inDb;
   pointOutDbPlain_ = inDb + grLawDb;
 
@@ -593,8 +563,8 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
 {
   syncParamPlains(data, params_, kParamCount);
 
-  const auto mode = detectorModeFromPlain(params_[kParamMode]);
-  const auto link = stereoLinkFromPlain(params_[kParamLink]);
+  const auto mode = Dsp::detectorModeFromPlain(params_[kParamMode]);
+  const auto link = Dsp::stereoLinkFromPlain(params_[kParamLink]);
 
   sc_.setSampleRate(static_cast<float>(sampleRate_));
   sc_.setParams(

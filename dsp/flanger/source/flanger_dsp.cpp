@@ -2,6 +2,7 @@
 
 #include "base/source/fstreamer.h"
 #include "channel_mode.h"
+#include "gain_util.h"
 
 #include <algorithm>
 #include <cmath>
@@ -16,13 +17,6 @@ using namespace Steinberg::Vst;
 namespace {
 constexpr uint32 kStateMagic = 0x434e5846u; // 'CNXF'
 constexpr uint32 kStateVersion = 2; // v2: + channel
-
-float linToDbSafe(float lin)
-{
-  if (!(lin > 1.0e-12f) || !std::isfinite(lin))
-    return -96.f;
-  return 20.f * std::log10(lin);
-}
 
 /**
  * Fill (fHz, dB) pairs at comb peaks and notches.
@@ -49,8 +43,8 @@ int collectTeeth(const Dsp::SimpleFlanger& fx, float delaySamples, float sr, flo
                                   : (-1.f / std::max(1.e-6f, 1.f + fb));
   const float hNotch = (fb >= 0.f) ? (-1.f / std::max(1.e-6f, 1.f + fb))
                                    : (1.f / std::max(1.e-6f, 1.f - fb));
-  const float peakDb = linToDbSafe(std::fabs(dry + wet * hPeak));
-  const float notchDb = linToDbSafe(std::fabs(dry + wet * hNotch));
+  const float peakDb = Dsp::linToDbSafe(std::fabs(dry + wet * hPeak));
+  const float notchDb = Dsp::linToDbSafe(std::fabs(dry + wet * hNotch));
 
   int n = 0;
   // Start on a peak so even half-steps from peakOff = peaks, odd = notches.

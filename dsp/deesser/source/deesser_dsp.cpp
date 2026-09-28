@@ -20,18 +20,6 @@ constexpr uint32 kStateMagic = 0x434e5844u; // 'CNXD'
 // v1: pre-target; v2: +target (Ess/Rumble); v3: +channel.
 constexpr uint32 kStateVersion = 3;
 
-Dsp::DetectorMode detectorModeFromPlain(float v)
-{
-  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
-  {
-    case 1:
-      return Dsp::DetectorMode::Rms;
-    case 2:
-      return Dsp::DetectorMode::Opto;
-    default:
-      return Dsp::DetectorMode::Peak;
-  }
-}
 } // namespace
 
 DeesserPlugin::DeesserPlugin()
@@ -407,7 +395,7 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
   const float laxity = std::clamp(params_[kParamLaxity], 1.f, 100.f);
   const float attackMs = laxity;
   const float releaseMs = laxity * 1.33f;
-  const auto mode = detectorModeFromPlain(params_[kParamDetection]);
+  const auto mode = Dsp::detectorModeFromPlain(params_[kParamDetection]);
 
   gr_.setSampleRate(static_cast<float>(sampleRate_));
   gr_.setParams(

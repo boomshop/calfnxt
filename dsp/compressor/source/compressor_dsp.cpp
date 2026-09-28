@@ -20,39 +20,6 @@ constexpr uint32 kStateVersion = 7; // v7: + channel
 
 /** Fixed history plot window (ms) — keep in sync with CompressorHistoryChart. */
 constexpr float kHistoryDisplayMs = 10000.f;
-
-float linToDbSafe(float lin)
-{
-  if (!(lin > 1.0e-12f))
-    return -96.f;
-  return 20.f * std::log10(lin);
-}
-
-Dsp::DetectorMode detectorModeFromPlain(float v)
-{
-  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
-  {
-    case 1:
-      return Dsp::DetectorMode::Rms;
-    case 2:
-      return Dsp::DetectorMode::Opto;
-    default:
-      return Dsp::DetectorMode::Peak;
-  }
-}
-
-Dsp::StereoLink stereoLinkFromPlain(float v)
-{
-  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
-  {
-    case 1:
-      return Dsp::StereoLink::Average;
-    case 2:
-      return Dsp::StereoLink::Mid;
-    default:
-      return Dsp::StereoLink::Max;
-  }
-}
 } // namespace
 
 CompressorPlugin::CompressorPlugin()
@@ -122,7 +89,7 @@ CompressorPlugin::BlockState CompressorPlugin::makeBlockState() const
   state.bypass = params_[kParamBypass] >= 0.5f;
   state.listen = params_[kParamListen] >= 0.5f;
   state.sidechainActive = params_[kParamSidechainActive] >= 0.5f;
-  state.link = stereoLinkFromPlain(params_[kParamLink]);
+  state.link = Dsp::stereoLinkFromPlain(params_[kParamLink]);
   state.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   return state;
 }
@@ -295,7 +262,7 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
     R = dryR;
     grMeter_.forceZero();
     histFeedSample(detPeak, 1.f, dryProcessedPeak(), threshLin);
-    const float inDb = linToDbSafe(det);
+    const float inDb = Dsp::linToDbSafe(det);
     pointInDbPlain_ = inDb;
     pointOutDbPlain_ = inDb;
     return;
@@ -304,9 +271,9 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
   grMeter_.process(gr);
 
   // Operating point uses curve GR (not lagged audio GR) so it stays on the line.
-  const float inDb = linToDbSafe(det);
+  const float inDb = Dsp::linToDbSafe(det);
   const float outDb =
-    inDb + linToDbSafe(gr_.lastCurveGain()) + state.makeupDb;
+    inDb + Dsp::linToDbSafe(gr_.lastCurveGain()) + state.makeupDb;
   pointInDbPlain_ = inDb;
   pointOutDbPlain_ = outDb;
 
@@ -438,8 +405,8 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
 {
   syncParamPlains(data, params_, kParamCount);
 
-  const auto mode = detectorModeFromPlain(params_[kParamMode]);
-  const auto link = stereoLinkFromPlain(params_[kParamLink]);
+  const auto mode = Dsp::detectorModeFromPlain(params_[kParamMode]);
+  const auto link = Dsp::stereoLinkFromPlain(params_[kParamLink]);
 
   sc_.setSampleRate(static_cast<float>(sampleRate_));
   sc_.setParams(

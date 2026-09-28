@@ -9,6 +9,8 @@
 #include <atomic>
 #include <cmath>
 
+#include "gain_util.h"
+
 namespace calfNXT {
 namespace Dsp {
 
@@ -46,13 +48,6 @@ public:
   }
 
 private:
-  static float linToDbSafe(float lin)
-  {
-    if (!(lin > 1.0e-12f))
-      return -96.f;
-    return 20.f * std::log10(lin);
-  }
-
   std::atomic<float> holdAmt_ {0.f};
 };
 

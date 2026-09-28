@@ -19,12 +19,6 @@ constexpr uint32 kStateMagic = 0x434e584Du; // 'CNXM'
 constexpr uint32 kStateVersion = 2; // v2: + channel
 constexpr float kHistoryDisplayMs = 2000.f;
 
-float linToDbSafe(float lin)
-{
-  if (!(lin > 1.0e-12f))
-    return -96.f;
-  return 20.f * std::log10(lin);
-}
 
 /** Kill NaN/Inf and absurd peaks so a host anti-blast (Reaper automute) cannot latch. */
 void hardenSample(float& x)
@@ -33,31 +27,7 @@ void hardenSample(float& x)
     x = 0.f;
 }
 
-Dsp::DetectorMode detectorModeFromPlain(float v)
-{
-  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
-  {
-    case 1:
-      return Dsp::DetectorMode::Rms;
-    case 2:
-      return Dsp::DetectorMode::Opto;
-    default:
-      return Dsp::DetectorMode::Peak;
-  }
-}
 
-Dsp::StereoLink stereoLinkFromPlain(float v)
-{
-  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
-  {
-    case 1:
-      return Dsp::StereoLink::Average;
-    case 2:
-      return Dsp::StereoLink::Mid;
-    default:
-      return Dsp::StereoLink::Max;
-  }
-}
 } // namespace
 
 MbcompPlugin::MbcompPlugin()
@@ -356,13 +326,13 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     st.makeupDb = params_[bandParam(b, kBandMakeup)];
     st.makeupLin = Dsp::dbToLin(st.makeupDb);
     st.threshLin = Dsp::dbToLin(params_[bandParam(b, kBandThreshold)]);
-    st.link = stereoLinkFromPlain(params_[bandParam(b, kBandLink)]);
+    st.link = Dsp::stereoLinkFromPlain(params_[bandParam(b, kBandLink)]);
 
     if (st.listen)
       listenBand = b;
 
     // Keep compressors configured while soft-bypassing so un-bypass is seamless.
-    const auto mode = detectorModeFromPlain(params_[bandParam(b, kBandMode)]);
+    const auto mode = Dsp::detectorModeFromPlain(params_[bandParam(b, kBandMode)]);
     gr_[b].setSampleRate(static_cast<float>(sampleRate_));
     gr_[b].setParams(
       params_[bandParam(b, kBandAttack)],
@@ -726,7 +696,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
           bR = bL;
         grMeter_[b].forceZero();
         lastGrDb_[b] = 0.f;
-        const float inDb = linToDbSafe(bandPeak);
+        const float inDb = Dsp::linToDbSafe(bandPeak);
         pointInDbPlain_[b] = inDb;
         pointOutDbPlain_[b] = inDb;
       }
@@ -774,12 +744,12 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
           Dsp::sanitizeDenormal(bR);
         }
 
-        const float grDb = linToDbSafe(grLin);
+        const float grDb = Dsp::linToDbSafe(grLin);
         grMeter_[b].process(grLin);
         lastGrDb_[b] = grDb;
-        const float inDb = linToDbSafe(gr_[b].lastDetectorLin());
+        const float inDb = Dsp::linToDbSafe(gr_[b].lastDetectorLin());
         const float outDb =
-          inDb + linToDbSafe(gr_[b].lastCurveGain()) + st.makeupDb;
+          inDb + Dsp::linToDbSafe(gr_[b].lastCurveGain()) + st.makeupDb;
         pointInDbPlain_[b] = inDb;
         pointOutDbPlain_[b] = outDb;
       }

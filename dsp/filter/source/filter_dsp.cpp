@@ -18,18 +18,6 @@ namespace {
 constexpr uint32 kStateMagic = 0x434e5846u; // 'CNXF'
 constexpr uint32 kStateVersion = 7; // v7: + channel (trailing)
 
-Dsp::DetectorMode detectorModeFromPlain(float v)
-{
-  switch (static_cast<int>(std::lround(std::clamp(v, 0.f, 2.f))))
-  {
-    case 1:
-      return Dsp::DetectorMode::Rms;
-    case 2:
-      return Dsp::DetectorMode::Opto;
-    default:
-      return Dsp::DetectorMode::Peak;
-  }
-}
 } // namespace
 
 FilterPlugin::FilterPlugin()
@@ -96,7 +84,7 @@ FilterPlugin::BlockState FilterPlugin::makeBlockState() const
   s.activationLin = Dsp::dbToLin(params_[kParamActivation]);
   s.attackMs = params_[kParamAttack];
   s.releaseMs = params_[kParamRelease];
-  s.detection = detectorModeFromPlain(params_[kParamDetection]);
+  s.detection = Dsp::detectorModeFromPlain(params_[kParamDetection]);
   return s;
 }
 
