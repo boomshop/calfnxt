@@ -62,8 +62,10 @@ tresult PLUGIN_API EqualizerPlugin::setActive(TBool state)
       bands_[i].setSampleRate(sampleRate_);
       bands_[i].reset();
     }
-    spectrum_.setSampleRate(sampleRate_);
-    spectrum_.reset();
+    spectrumIn_.setSampleRate(sampleRate_);
+    spectrumIn_.reset();
+    spectrumOut_.setSampleRate(sampleRate_);
+    spectrumOut_.reset();
     applyBandTargetsFromParams();
   }
   return EffectBase::setActive(state);
@@ -74,7 +76,8 @@ tresult PLUGIN_API EqualizerPlugin::setupProcessing(ProcessSetup& newSetup)
   sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
   for (int i = 0; i < kEqBandCount; ++i)
     bands_[i].setSampleRate(sampleRate_);
-  spectrum_.setSampleRate(sampleRate_);
+  spectrumIn_.setSampleRate(sampleRate_);
+  spectrumOut_.setSampleRate(sampleRate_);
   return EffectBase::setupProcessing(newSetup);
 }
 
@@ -98,15 +101,26 @@ int EqualizerPlugin::takeSpectrum(float* out, int maxOut)
 {
   if (!spectrumActive_.load(std::memory_order_relaxed))
     return 0;
-  return spectrum_.takeSpectrum(out, maxOut);
+  return spectrumIn_.takeSpectrum(out, maxOut);
+}
+
+int EqualizerPlugin::takeOutputSpectrum(float* out, int maxOut)
+{
+  if (!spectrumActive_.load(std::memory_order_relaxed))
+    return 0;
+  return spectrumOut_.takeSpectrum(out, maxOut);
 }
 
 void EqualizerPlugin::configureVizBins(const char* id, int bins)
 {
   if (!id || bins < 1)
     return;
-  if (std::strcmp(id, "fft") == 0)
-    spectrum_.configureBins(bins);
+  if (std::strcmp(id, "fft_in") == 0 || std::strcmp(id, "fft_out") == 0 ||
+      std::strcmp(id, "fft") == 0)
+  {
+    spectrumIn_.configureBins(bins);
+    spectrumOut_.configureBins(bins);
+  }
 }
 
 void EqualizerPlugin::applyBandTargetsFromParams()
@@ -198,9 +212,12 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
 
   if (spectrumRun)
   {
-    spectrum_.setSampleRate(sampleRate_);
-    spectrum_.setFftSize(4096);
-    spectrum_.setHold(false);
+    spectrumIn_.setSampleRate(sampleRate_);
+    spectrumIn_.setFftSize(4096);
+    spectrumIn_.setHold(false);
+    spectrumOut_.setSampleRate(sampleRate_);
+    spectrumOut_.setFftSize(4096);
+    spectrumOut_.setHold(false);
   }
 
   int listenBand = -1;
@@ -225,6 +242,9 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
     {
       float L = nCh > 0 ? out[0][i] : 0.f;
       float R = nCh > 1 ? out[1][i] : L;
+      // Pre-EQ tap (post in_gain) — mono preview matches the post-EQ channel layout.
+      if (spectrumRun)
+        spectrumIn_.process(L, mono ? L : R);
       if (doEq)
       {
         if (mono)
@@ -250,7 +270,7 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
         R = L;
       // Post-EQ tap (before out_gain) — overlay shows the shaped signal.
       if (spectrumRun)
-        spectrum_.process(L, mono ? L : R);
+        spectrumOut_.process(L, mono ? L : R);
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)
@@ -264,6 +284,8 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
     {
       float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
       float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
+      if (spectrumRun)
+        spectrumIn_.process(L, mono ? L : R);
       if (doEq)
       {
         if (mono)
@@ -288,7 +310,7 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
       if (mono)
         R = L;
       if (spectrumRun)
-        spectrum_.process(L, mono ? L : R);
+        spectrumOut_.process(L, mono ? L : R);
       if (nCh > 0)
         out[0][i] = L;
       if (nCh > 1)
@@ -304,7 +326,10 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
   }
 
   if (spectrumRun)
-    spectrum_.publish();
+  {
+    spectrumIn_.publish();
+    spectrumOut_.publish();
+  }
 
   // This quiet block zero-fed the bands — further quiet blocks may skip.
   if (io_.inputWasQuiet() && !anyListen && !anyDynBusy)

@@ -52,8 +52,8 @@ protected:
   const char* editorHtml() const override { return kEditorHtml; }
 
 private:
-  // History: input peak, detector peak, GR (lin) + trailing phase.
-  static constexpr int kHistChannels = 3;
+  // History: trigger, GR, post-GR sum (no makeup), threshold, pre-GR sum.
+  static constexpr int kHistChannels = 5;
   static constexpr int kHistSlots = 512;
   static constexpr int kHistMinSlots = 48;
   static constexpr int kHistBufSize = kHistSlots * kHistChannels;
@@ -74,7 +74,8 @@ private:
   BlockState makeBlockState() const;
   void processSample(const BlockState& state, float& L, float& R);
   void resetProcessing();
-  void histFeedSample(float audioPeakLin, float detPeakLin, float grLin);
+  void histFeedSample(float triggerLin, float grLin, float outPeakLin,
+                      float threshLin, float prePeakLin);
   void publishHistSnapshot();
 
   float params_[kParamCount] {};

@@ -9,7 +9,6 @@
 
   > .HistoryChart {
     grid-area: hist;
-    background: var(--background-less);
   }
 
   > .filters {
@@ -20,6 +19,14 @@
     > .EQChart {
       flex: 1;
       background: var(--background);
+
+      /* Detection sum curve — same warn↔accent stroke as Filter / FrequencyRange. */
+      > svg > .aux-graphs > .aux-baseline {
+        stroke: var(
+          --graph-gradient,
+          var(--chart-level-stroke, var(--color-accent))
+        ) !important;
+      }
     }
 
     > .knobs {

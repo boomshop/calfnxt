@@ -56,8 +56,10 @@ void FilterPlugin::resetProcessing()
   filter_.reset();
   envelope_.setSampleRate(static_cast<float>(sampleRate_));
   envelope_.reset();
-  spectrum_.setSampleRate(sampleRate_);
-  spectrum_.reset();
+  spectrumIn_.setSampleRate(sampleRate_);
+  spectrumIn_.reset();
+  spectrumOut_.setSampleRate(sampleRate_);
+  spectrumOut_.reset();
   midi_.clear();
 }
 
@@ -162,9 +164,12 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
   const bool wantSpectrum = state.spectrumOn && vizConsumerActive();
   if (wantSpectrum)
   {
-    spectrum_.setSampleRate(sampleRate_);
-    spectrum_.setFftSize(4096);
-    spectrum_.setHold(false);
+    spectrumIn_.setSampleRate(sampleRate_);
+    spectrumIn_.setFftSize(4096);
+    spectrumIn_.setHold(false);
+    spectrumOut_.setSampleRate(sampleRate_);
+    spectrumOut_.setFftSize(4096);
+    spectrumOut_.setHold(false);
   }
 
   const int32 nFrames = data.numSamples;
@@ -189,6 +194,9 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
       float R = zeros || nCh <= 1 ? L : static_cast<float>(out[1][i]);
       if (zeros)
         R = 0.f;
+
+      if (wantSpectrum)
+        spectrumIn_.process(L, state.mono ? L : R);
 
       if (!state.bypass)
       {
@@ -300,7 +308,7 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
 
       // Post-filter tap (before out_gain) — overlay shows the filtered signal.
       if (wantSpectrum)
-        spectrum_.process(L, state.mono ? L : R);
+        spectrumOut_.process(L, state.mono ? L : R);
 
       if (nCh > 0)
         out[0][i] = L;
@@ -320,7 +328,10 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
     effectiveCutoffHz_.store(filter_.lastCutoffHz(), std::memory_order_relaxed);
 
   if (wantSpectrum)
-    spectrum_.publish();
+  {
+    spectrumIn_.publish();
+    spectrumOut_.publish();
+  }
 
   if (quietIn && envIdle)
     quietDrained_ = true;
@@ -341,15 +352,26 @@ int FilterPlugin::takeSpectrum(float* out, int maxOut)
 {
   if (!spectrumActive_.load(std::memory_order_relaxed))
     return 0;
-  return spectrum_.takeSpectrum(out, maxOut);
+  return spectrumIn_.takeSpectrum(out, maxOut);
+}
+
+int FilterPlugin::takeOutputSpectrum(float* out, int maxOut)
+{
+  if (!spectrumActive_.load(std::memory_order_relaxed))
+    return 0;
+  return spectrumOut_.takeSpectrum(out, maxOut);
 }
 
 void FilterPlugin::configureVizBins(const char* id, int bins)
 {
   if (!id || bins < 1)
     return;
-  if (std::strcmp(id, "fft") == 0)
-    spectrum_.configureBins(bins);
+  if (std::strcmp(id, "fft_in") == 0 || std::strcmp(id, "fft_out") == 0 ||
+      std::strcmp(id, "fft") == 0)
+  {
+    spectrumIn_.configureBins(bins);
+    spectrumOut_.configureBins(bins);
+  }
 }
 
 tresult PLUGIN_API FilterPlugin::setState(IBStream* state)

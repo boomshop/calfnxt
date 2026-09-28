@@ -131,13 +131,13 @@ export function FrequencyRange(props: FrequencyRangeProps) {
       const dynMode$ = DynamicValue.fromConstant(0);
       const bandListen$ = DynamicValue.fromConstant(false);
       const unsub = mode$.subscribe((v: number) => {
-        active$.set(v > 0);
-        if (v > 0) {
+        active$.set(Number(v) > 0);
+        if (Number(v) > 0) {
           const slope = slopeFromMode(v);
           slope$.set(slope);
           auxType$.set(toAuxEqType(type, slope));
         }
-      }, false);
+      }, true);
       return {
         index,
         id,
@@ -201,6 +201,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
         yRange={FREQ_RANGE_Y}
         zRange={FREQ_RANGE_Z}
         dbGrid={12}
+        hideEmptyBaseline={false}
       />
 
       <div className="left">

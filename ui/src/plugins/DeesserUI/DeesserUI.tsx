@@ -4,7 +4,7 @@ import {
   Buttons,
   EQChart,
   HistoryChart,
-  HISTORY_STYLE,
+  deesserHistorySeries,
   Knob,
   LevelMeter,
   Select,
@@ -90,7 +90,7 @@ const Q_LABELS = [
   { pos: 20, label: '20' },
 ];
 
-/** Presentational stub — layout/styling TBD. */
+/** Presentational — layout matches prior Deesser; history uses shared Cut stack. */
 export function DeesserUI(props: DeesserUIProps) {
   const { host } = props;
   const edit = (id: number) => ({
@@ -128,34 +128,8 @@ export function DeesserUI(props: DeesserUIProps) {
       <HistoryChart
         data$={host.historyData$}
         vizId="deess"
-        series={[
-          {
-            id: 'audio',
-            name: 'Input',
-            short: 'In',
-            channel: 0,
-            className: HISTORY_STYLE.audio,
-            mode: 'bottom',
-          },
-          {
-            id: 'detector',
-            name: 'Detector',
-            short: 'Det',
-            channel: 1,
-            className: HISTORY_STYLE.detector,
-            mode: 'bottom',
-          },
-          {
-            id: 'gr',
-            name: 'Gain reduction',
-            short: 'GR',
-            channel: 2,
-            className: HISTORY_STYLE.gr,
-            mode: 'line',
-            toFront: true,
-            gradient: true,
-          },
-        ]}
+        autoScale
+        series={deesserHistorySeries()}
       />
 
       <div className="block dynamics">

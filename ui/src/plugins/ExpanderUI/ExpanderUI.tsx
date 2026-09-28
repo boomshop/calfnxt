@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
-import type { DynamicValue } from '@deutschesoft/awml';
+import { DynamicValue } from '@deutschesoft/awml';
 import { Header } from '../../components';
 import {
   Button,
@@ -8,14 +8,17 @@ import {
   DynamicsChart,
   FrequencyRange,
   HistoryChart,
-  HISTORY_STYLE,
+  expanderHistorySeries,
   Knob,
   LevelMeter,
+  MultiMeter,
   Select,
   State,
   Toggle,
   WithInfo,
 } from '../../widgets';
+import { persistedHistoryVisible$ } from '../../prefs/historySeriesVisible';
+import { useDynamicValue } from '../../hooks/useDynamicValue';
 import { paramIds } from '../../generated/expanderModel';
 import {
   EXPANDER_CHANNEL_ENTRIES,
@@ -171,7 +174,6 @@ function InhibitControls(props: {
         <Toggle
           state$={inv.active$}
           icon="power"
-          {...edit(paramIds[`${prefix}_active`])}
           className="warn"
         />
       </WithInfo>
@@ -217,10 +219,10 @@ function InhibitControls(props: {
           dots={HOLD_DOTS}
           labels={HOLD_LABELS}
           size="small"
-          scale="log2"
-          log_factor={3}
           {...{ 'value.format': (v: number) => `${v.toFixed(0)}` }}
           {...edit(paramIds[`${prefix}_hold`])}
+          scale="log2"
+          log_factor={3}
         />
       </WithInfo>
       <WithInfo title={expanderInfo.invRelease}>
@@ -243,8 +245,7 @@ function InhibitControls(props: {
   );
 }
 
-export function ExpanderUI(props: ExpanderUIProps) {
-  const { host } = props;
+export function ExpanderUI({ host }: ExpanderUIProps) {
   const edit = (id: number) => ({
     beginEdit: () => host.beginEdit(id),
     endEdit: () => host.endEdit(id),
@@ -254,9 +255,96 @@ export function ExpanderUI(props: ExpanderUIProps) {
   const openThresh = useDynamicValueReadonly(host.threshold$, -32);
   const [panel, setPanel] = useState<ExpanderPanelId>('detector');
 
+  const [detListen, setDetListen] = useDynamicValue(host.listen$, false);
+  const [inv1Listen, setInv1Listen] = useDynamicValue(host.inv1.listen$, false);
+  const [inv2Listen, setInv2Listen] = useDynamicValue(host.inv2.listen$, false);
+  const inv1Active = useDynamicValueReadonly(host.inv1.active$, false);
+  const inv2Active = useDynamicValueReadonly(host.inv2.active$, false);
+
   const isDetector = panel === 'detector';
   const invPrefix = panel === 'inv2' ? 'inv2' : 'inv1';
   const inv = panel === 'inv2' ? host.inv2 : host.inv1;
+  const showKeyMeters = inv1Active || inv2Active;
+  const keyMeterLabels = useMemo(() => {
+    const labels = ['Trig'];
+    if (inv1Active) labels.push('I1', 'H1');
+    if (inv2Active) labels.push('I2', 'H2');
+    return labels;
+  }, [inv1Active, inv2Active]);
+
+  const detectorListed$ = useMemo(() => DynamicValue.fromConstant(true), []);
+  const inv1DetectorListed$ = useMemo(() => DynamicValue.fromConstant(false), []);
+  const inv2DetectorListed$ = useMemo(() => DynamicValue.fromConstant(false), []);
+  const inv1PanelListed$ = useMemo(() => DynamicValue.fromConstant(false), []);
+  const inv2PanelListed$ = useMemo(() => DynamicValue.fromConstant(false), []);
+  const threshFlatDb$ = useMemo(
+    () => DynamicValue.fromConstant<number | null>(null),
+    [],
+  );
+
+  useEffect(() => {
+    detectorListed$.set(panel === 'detector');
+    inv1DetectorListed$.set(panel === 'detector' && inv1Active);
+    inv2DetectorListed$.set(panel === 'detector' && inv2Active);
+    inv1PanelListed$.set(panel === 'inv1');
+    inv2PanelListed$.set(panel === 'inv2');
+  }, [
+    panel,
+    inv1Active,
+    inv2Active,
+    detectorListed$,
+    inv1DetectorListed$,
+    inv2DetectorListed$,
+    inv1PanelListed$,
+    inv2PanelListed$,
+  ]);
+
+  useEffect(() => {
+    if (panel === 'inv1') {
+      const sync = () => threshFlatDb$.set(host.inv1.threshold$.value ?? null);
+      sync();
+      return host.inv1.threshold$.subscribe(sync);
+    }
+    if (panel === 'inv2') {
+      const sync = () => threshFlatDb$.set(host.inv2.threshold$.value ?? null);
+      sync();
+      return host.inv2.threshold$.subscribe(sync);
+    }
+    threshFlatDb$.set(null);
+  }, [panel, host.inv1.threshold$, host.inv2.threshold$, threshFlatDb$]);
+
+  const selectPanel = (next: ExpanderPanelId) => {
+    if (next === panel) return;
+    // Leaving a panel clears that panel's Listen — only one Listen suite-wide.
+    if (panel === 'detector' && detListen) setDetListen(false);
+    if (panel === 'inv1' && inv1Listen) setInv1Listen(false);
+    if (panel === 'inv2' && inv2Listen) setInv2Listen(false);
+    setPanel(next);
+  };
+
+  const historySeries = useMemo(
+    () =>
+      expanderHistorySeries({
+        triggerVisible$: persistedHistoryVisible$('expander', 'trigger', false),
+        grVisible$: persistedHistoryVisible$('expander', 'gr', false),
+        inv1Visible$: persistedHistoryVisible$('expander', 'inv1', true),
+        inv2Visible$: persistedHistoryVisible$('expander', 'inv2', true),
+        detectorListed$,
+        inv1DetectorListed$,
+        inv2DetectorListed$,
+        inv1PanelListed$,
+        inv2PanelListed$,
+        threshFlatDb$,
+      }),
+    [
+      detectorListed$,
+      inv1DetectorListed$,
+      inv2DetectorListed$,
+      inv1PanelListed$,
+      inv2PanelListed$,
+      threshFlatDb$,
+    ],
+  );
 
   return (
     <div className="ExpanderUI PluginUI">
@@ -273,45 +361,24 @@ export function ExpanderUI(props: ExpanderUIProps) {
         <HistoryChart
           data$={host.historyData$}
           vizId="exp"
-          series={[
-            {
-              id: 'audio',
-              name: 'Input',
-              short: 'In',
-              channel: 0,
-              className: HISTORY_STYLE.audio,
-              mode: 'bottom',
-            },
-            {
-              id: 'detector',
-              name: 'Detector',
-              short: 'Det',
-              channel: 1,
-              className: HISTORY_STYLE.detector,
-              mode: 'bottom',
-            },
-            {
-              id: 'gr',
-              name: 'Gain reduction',
-              short: 'GR',
-              channel: 2,
-              className: HISTORY_STYLE.gr,
-              mode: 'line',
-              toFront: true,
-              gradient: true,
-            },
-            {
-              id: 'inhibit',
-              name: 'Inhibit',
-              short: 'Inv',
-              channel: 3,
-              className: HISTORY_STYLE.inhibit,
-              mode: 'line',
-              toFront: true,
-              visible$: host.inhibitHistVisible$,
-            },
-          ]}
+          autoScale
+          series={historySeries}
         />
+        {showKeyMeters ? (
+          <WithInfo title={expanderInfo.keyMeters} className="key-meters">
+            <MultiMeter
+              value$={host.keyMeters$}
+              count$={host.keyMeterCount$}
+              labels={keyMeterLabels}
+              min={-60}
+              max={0}
+              layout="right"
+              show_scale
+              scale="decibel"
+              log_factor={3}
+            />
+          </WithInfo>
+        ) : null}
       </div>
 
       <div className={`block panel panel-${panel}`}>
@@ -319,13 +386,13 @@ export function ExpanderUI(props: ExpanderUIProps) {
           <PanelTab
             label="Detector"
             selected={panel === 'detector'}
-            onSelect={() => setPanel('detector')}
+            onSelect={() => selectPanel('detector')}
             info={expanderInfo.panelDetector}
           />
           <PanelTab
             label="Inv 1"
             selected={panel === 'inv1'}
-            onSelect={() => setPanel('inv1')}
+            onSelect={() => selectPanel('inv1')}
             info={expanderInfo.panelInv1}
             led$={host.inv1.active$}
             firing$={host.inv1.amount$}
@@ -333,7 +400,7 @@ export function ExpanderUI(props: ExpanderUIProps) {
           <PanelTab
             label="Inv 2"
             selected={panel === 'inv2'}
-            onSelect={() => setPanel('inv2')}
+            onSelect={() => selectPanel('inv2')}
             info={expanderInfo.panelInv2}
             led$={host.inv2.active$}
             firing$={host.inv2.amount$}
@@ -510,7 +577,6 @@ export function ExpanderUI(props: ExpanderUIProps) {
             <Toggle
               state$={host.relThreshActive$}
               icon="power"
-              {...edit(paramIds.rel_thresh_active)}
             />
           </WithInfo>
           <WithInfo title={expanderInfo.releaseThreshold}>

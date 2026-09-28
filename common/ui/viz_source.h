@@ -148,6 +148,20 @@ public:
   /** Stream id for spectrum (nullptr = do not flush). */
   virtual const char* vizSpectrumId() const { return nullptr; }
 
+  /**
+   * Optional second spectrum (e.g. post-dynamics output for In/Out overlay).
+   * Same payload layout as {@link takeSpectrum}.
+   */
+  virtual int takeOutputSpectrum(float* out, int maxOut)
+  {
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
+  /** Stream id for output spectrum (nullptr = do not flush). */
+  virtual const char* vizOutputSpectrumId() const { return nullptr; }
+
   /** Optional UI→DSP viz sizing/config, e.g. visible chart bins/points. */
   virtual void configureVizBins(const char* id, int bins)
   {

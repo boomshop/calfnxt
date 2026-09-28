@@ -85,6 +85,14 @@
     > .EQChart {
       flex: 1;
       background: var(--background);
+
+      /* Main sum response only — Equalizer keeps solid --color. */
+      > svg > .aux-graphs > .aux-baseline {
+        stroke: var(
+          --graph-gradient,
+          var(--chart-level-stroke, var(--color-accent))
+        ) !important;
+      }
     }
   }
 

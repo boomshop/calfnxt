@@ -3,13 +3,29 @@
   min-height: 200px;
 
   > svg {
+    > .aux-graphs {
+      /* Response curve */
+      > .aux-graph.aux-response {
+        stroke-width: var(--graph-stroke-thicker); /* 2px */
+      }
+
+      /* Unity / null line — beat AUX .aux-steady + soft defaults. */
+      > .aux-graph.aux-steady {
+        stroke: var(--color);
+        stroke-opacity: var(--graph-stroke-opacity-semi);
+        stroke-dasharray: var(--graph-dash-dashed); /* 3 3 */
+        fill: none;
+        fill-opacity: var(--graph-fill-opacity-none);
+      }
+    }
+
     > .aux-handles {
       > .aux-charthandle.aux-operating {
         pointer-events: none;
 
         > .aux-handle {
           fill: var(--chart-level-stroke, var(--color-accent));
-          fill-opacity: 1;
+          fill-opacity: var(--graph-fill-opacity-full);
           stroke: var(--background);
           stroke-width: 1.5px;
           opacity: 1;

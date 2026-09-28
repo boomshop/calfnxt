@@ -12,7 +12,7 @@
 
   svg > .aux-graphs {
     > .aux-reverb {
-      fill-opacity: 0;
+      fill-opacity: var(--graph-fill-opacity-none);
       stroke: var(--graph-gradient, var(--chart-level-stroke, var(--color-accent)));
       stroke-width: var(--graph-stroke-medium);
       stroke-dasharray: var(--graph-dash-dashed);
@@ -20,7 +20,7 @@
 
     > .aux-graph.aux-reflection,
     > .aux-reflection {
-      fill-opacity: 0 !important;
+      fill-opacity: var(--graph-fill-opacity-none) !important;
       stroke: var(--color);
       stroke-width: var(--graph-stroke-medium);
       stroke-opacity: 0.33;

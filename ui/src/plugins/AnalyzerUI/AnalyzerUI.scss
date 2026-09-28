@@ -84,12 +84,14 @@
       font-size: var(--font-size-small);
       line-height: 1;
 
-      > .mom {
-        color: var(--color-accent);
-      }
-
+      /* ST color (working), M accent (live), TP warn, RMS faint. */
       > .st {
         color: var(--color);
+        font-weight: 600;
+      }
+
+      > .mom {
+        color: var(--color-accent);
       }
 
       > .tp {
@@ -98,7 +100,7 @@
 
       > .rms {
         color: var(--color);
-        opacity: 0.45;
+        opacity: 0.4;
       }
     }
   }

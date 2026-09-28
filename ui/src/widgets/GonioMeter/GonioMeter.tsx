@@ -5,6 +5,7 @@ import type { DynamicValue } from '@deutschesoft/awml';
 import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { themeColors$, type ThemeColors } from '../../theme/themeColors';
+import { addGraphClasses } from '../../styles/graphStyles';
 import './GonioMeter.scss';
 
 const EMPTY_SAMPLES: number[] = [];
@@ -33,6 +34,12 @@ const ChartWidget = componentFromWidget(
 /** Dot radius in SVG px. */
 const DOT_R = 1.25;
 
+/**
+ * Dot path paint: thin stroke (fill+stroke use the S→M→S paint server from
+ * {@link installMsGradient}; fill-opacity is forced to 1 in SCSS).
+ */
+const GONIO_DOT_STYLE = 'stroke-thinner';
+
 type AuxRange = { valueToPixel: (v: number) => number };
 
 type AuxGraphInstance = {
@@ -59,6 +66,7 @@ let gonioGradSeq = 0;
 /**
  * One horizontal paint server on the chart SVG: S → M → S (warn → accent → warn).
  * Dots stay a single path; the renderer samples the gradient (no per-dot color).
+ * Fill and stroke both use the same URL so a thin outline fattens the dots.
  */
 function installMsGradient(svg: SVGSVGElement): () => void {
   const ns = 'http://www.w3.org/2000/svg';
@@ -96,7 +104,7 @@ function installMsGradient(svg: SVGSVGElement): () => void {
   svg.setAttribute('id', scopeId);
   const style = document.createElementNS(ns, 'style');
   style.textContent =
-    `#${scopeId} .aux-graph.aux-filled{fill:url(#${gradId});stroke:none}` +
+    `#${scopeId} .aux-graph.aux-filled{fill:url(#${gradId});stroke:url(#${gradId})}` +
     `#${scopeId} .aux-graph.aux-outline{fill:none}`;
   svg.insertBefore(style, svg.firstChild);
 
@@ -339,8 +347,10 @@ export function GonioMeter(props: GonioMeterProps) {
           mode: 'line',
           color: '',
         });
-        if (graph.element)
+        if (graph.element) {
           graph.element.style.opacity = String(GONIO_TRAIL_OPACITIES[historyIdx]);
+          addGraphClasses(graph.element, GONIO_DOT_STYLE);
+        }
         layers[historyIdx] = graph;
       }
       graphRefs.current = layers;

@@ -17,7 +17,7 @@ using namespace Steinberg::Vst;
 namespace {
 constexpr uint32 kStateMagic = 0x434e584Du; // 'CNXM'
 constexpr uint32 kStateVersion = 2; // v2: + channel
-constexpr float kHistoryDisplayMs = 10000.f;
+constexpr float kHistoryDisplayMs = 2000.f;
 
 float linToDbSafe(float lin)
 {
@@ -133,11 +133,18 @@ tresult PLUGIN_API MbcompPlugin::setActive(TBool state)
 tresult PLUGIN_API MbcompPlugin::setupProcessing(ProcessSetup& newSetup)
 {
   sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  spectrumIn_.setSampleRate(sampleRate_);
+  spectrumOut_.setSampleRate(sampleRate_);
+  spectrumIn_.setFftSize(2048);
+  spectrumOut_.setFftSize(2048);
+  spectrumIn_.setHold(false);
+  spectrumOut_.setHold(false);
   resetProcessing();
   return EffectBase::setupProcessing(newSetup);
 }
 
-void MbcompPlugin::histFeedSample(int band, float fullPeak, float bandPeak, float grLin)
+void MbcompPlugin::histFeedSample(int band, float bandOutPeak, float grLin,
+                                  float threshLin)
 {
   if (!vizConsumerActive())
     return;
@@ -148,12 +155,12 @@ void MbcompPlugin::histFeedSample(int band, float fullPeak, float bandPeak, floa
   int& pos = histPos_[band];
   int& count = histSampleCount_[band];
 
-  buf[pos + 0] = std::max(buf[pos + 0], fullPeak);
-  buf[pos + 1] = std::max(buf[pos + 1], bandPeak);
+  buf[pos + 0] = std::max(buf[pos + 0], bandOutPeak);
   if (count == 0)
-    buf[pos + 2] = grLin;
+    buf[pos + 1] = grLin;
   else
-    buf[pos + 2] = std::min(buf[pos + 2], grLin);
+    buf[pos + 1] = std::min(buf[pos + 1], grLin);
+  buf[pos + 2] = threshLin;
 
   ++count;
   if (count >= sps)
@@ -161,8 +168,8 @@ void MbcompPlugin::histFeedSample(int band, float fullPeak, float bandPeak, floa
     pos = (pos + kHistChannels) % kHistBufSize;
     count = 0;
     buf[pos + 0] = 0.f;
-    buf[pos + 1] = 0.f;
-    buf[pos + 2] = 1.f;
+    buf[pos + 1] = 1.f;
+    buf[pos + 2] = threshLin;
   }
 }
 
@@ -249,7 +256,7 @@ int MbcompPlugin::takeDynamicsPoint(float* out, int maxOut)
 
 int MbcompPlugin::takeEnvelopeDisplay(float* out, int maxOut)
 {
-  // Layout: for each active band → [full, band, grLin] × slots, then one shared phase.
+  // Layout: for each active band → [bandOut, grLin, thresh] × slots, then one shared phase.
   const int bands = numBands();
   const int slots = std::max(kHistMinSlots, std::min(kHistSlots, histVisibleSlots_));
   const int perBand = slots * kHistChannels;
@@ -275,11 +282,14 @@ int MbcompPlugin::takeEnvelopeDisplay(float* out, int maxOut)
       {
         const int srcIdx = (startPos + i * kHistChannels) % kHistBufSize;
         dst[i * kHistChannels + 0] = std::fabs(histSnapshot_[b][srcIdx + 0]);
-        dst[i * kHistChannels + 1] = std::fabs(histSnapshot_[b][srcIdx + 1]);
-        float gr = histSnapshot_[b][srcIdx + 2];
+        float gr = histSnapshot_[b][srcIdx + 1];
         if (!(gr > 0.f))
           gr = 1.f;
-        dst[i * kHistChannels + 2] = std::clamp(gr, 1.0e-6f, 1.f);
+        dst[i * kHistChannels + 1] = std::clamp(gr, 1.0e-6f, 1.f);
+        float thr = histSnapshot_[b][srcIdx + 2];
+        if (!(thr > 0.f))
+          thr = 1.f;
+        dst[i * kHistChannels + 2] = std::clamp(thr, 1.0e-6f, 1.f);
       }
     }
     const uint32_t s1 = histSeq_.load(std::memory_order_acquire);
@@ -294,9 +304,32 @@ int MbcompPlugin::takeEnvelopeDisplay(float* out, int maxOut)
 
 void MbcompPlugin::configureVizBins(const char* id, int bins)
 {
-  if (!id || std::strcmp(id, vizEnvelopeId()) != 0)
+  if (!id)
+    return;
+  if (std::strcmp(id, "fft_in") == 0 || std::strcmp(id, "fft_out") == 0 ||
+      std::strcmp(id, "fft") == 0)
+  {
+    spectrumIn_.configureBins(bins);
+    spectrumOut_.configureBins(bins);
+    return;
+  }
+  if (std::strcmp(id, vizEnvelopeId()) != 0)
     return;
   histVisibleSlots_ = std::max(kHistMinSlots, std::min(kHistSlots, bins));
+}
+
+int MbcompPlugin::takeSpectrum(float* out, int maxOut)
+{
+  if (!vizConsumerActive())
+    return 0;
+  return spectrumIn_.takeSpectrum(out, maxOut);
+}
+
+int MbcompPlugin::takeOutputSpectrum(float* out, int maxOut)
+{
+  if (!vizConsumerActive())
+    return 0;
+  return spectrumOut_.takeSpectrum(out, maxOut);
 }
 
 tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
@@ -322,6 +355,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     st.dry = 1.f - st.mix;
     st.makeupDb = params_[bandParam(b, kBandMakeup)];
     st.makeupLin = Dsp::dbToLin(st.makeupDb);
+    st.threshLin = Dsp::dbToLin(params_[bandParam(b, kBandThreshold)]);
     st.link = stereoLinkFromPlain(params_[bandParam(b, kBandLink)]);
 
     if (st.listen)
@@ -354,9 +388,12 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     Dsp::bypassFadeCoeff(static_cast<float>(sampleRate_));
 
   const int nSamples = data.numSamples;
+  const int histSlots =
+    std::max(kHistMinSlots, std::min(kHistSlots, histVisibleSlots_));
   histSamplesPerSlot_ = std::max(
     1,
-    static_cast<int>(std::lround(sampleRate_ * (kHistoryDisplayMs * 0.001) / static_cast<double>(kHistSlots))));
+    static_cast<int>(std::lround(
+      sampleRate_ * (kHistoryDisplayMs * 0.001) / static_cast<double>(histSlots))));
 
   io_.setBypassGains(globalBypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
@@ -388,7 +425,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
         for (int i = 0; i < n; ++i)
         {
           for (int b = 0; b < bands; ++b)
-            histFeedSample(b, 0.f, 0.f, 1.f);
+            histFeedSample(b, 0.f, 1.f, bandState[b].threshLin);
         }
         publishHistSnapshot();
         publishDynamicsPoints();
@@ -488,6 +525,7 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
 
     float bandsL[kMaxBands];
     float bandsR[kMaxBands];
+    const bool spectrumRun = vizConsumerActive();
     for (int i = 0; i < nSamples; ++i)
     {
       float L = 0.f;
@@ -495,7 +533,8 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
       readLR(i, L, R);
       if (mono)
         R = L;
-      const float fullPeak = std::max(std::fabs(L), std::fabs(R));
+      if (spectrumRun)
+        spectrumIn_.process(L, R);
       splitL_.process(L, bandsL);
       if (mono)
       {
@@ -508,9 +547,16 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
       {
         const float bandPeak =
           std::max(std::fabs(bandsL[b]), std::fabs(bandsR[b]));
-        histFeedSample(b, fullPeak, bandPeak, 1.f);
+        histFeedSample(b, bandPeak, 1.f, bandState[b].threshLin);
       }
       writeLR(i, L, mono ? L : R);
+      if (spectrumRun)
+        spectrumOut_.process(L, mono ? L : R);
+    }
+    if (spectrumRun)
+    {
+      spectrumIn_.publish();
+      spectrumOut_.publish();
     }
     for (int b = 0; b < bands; ++b)
     {
@@ -551,6 +597,13 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
   float bandsL[kMaxBands];
   float bandsR[kMaxBands];
 
+  const bool spectrumRun = vizConsumerActive();
+  if (spectrumRun)
+  {
+    spectrumIn_.setSampleRate(sampleRate_);
+    spectrumOut_.setSampleRate(sampleRate_);
+  }
+
   for (int i = 0; i < nSamples; ++i)
   {
     float L = 0.f;
@@ -558,6 +611,8 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     readLR(i, L, R);
     if (mono)
       R = L;
+    if (spectrumRun)
+      spectrumIn_.process(L, R);
     const float dryL = L;
     const float dryR = R;
     float midHold = 0.f;
@@ -593,8 +648,6 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
           break;
       }
     }
-    const float fullPeak = std::max(std::fabs(dryL), std::fabs(dryR));
-
     // Mono duplicates; Stereo processes L/R; routed = proc + allpass complement.
     const bool linkedPath = mono;
 
@@ -733,8 +786,9 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
 
       bandOutHold_[b].accumulate(
         0, routeChannel ? std::fabs(bL) : std::max(std::fabs(bL), std::fabs(bR)));
-      // Always feed full + band peaks; GR history is unity while fully bypassed.
-      histFeedSample(b, fullPeak, bandPeak, act <= 0.f ? 1.f : grLin);
+      // Band-out = dry band × GR (no makeup/mix); Cut expand reconstructs pre.
+      const float grHist = act <= 0.f ? 1.f : grLin;
+      histFeedSample(b, bandPeak * grHist, grHist, st.threshLin);
 
       if (anyListen && b == listenBand)
       {
@@ -810,6 +864,14 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     }
 
     writeLR(i, outL, outR);
+    if (spectrumRun)
+      spectrumOut_.process(outL, outR);
+  }
+
+  if (spectrumRun)
+  {
+    spectrumIn_.publish();
+    spectrumOut_.publish();
   }
 
   publishHistSnapshot();

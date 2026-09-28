@@ -24,7 +24,9 @@ class LoudnessMeter
 {
 public:
   static constexpr int kVizFloats = 21;
-  static constexpr int kHistCap = 120;
+  /** ~12 s display at 40 Hz (25 ms). Gating blocks stay at 100 ms (BS.1770). */
+  static constexpr int kHistCap = 480;
+  static constexpr float kHistIntervalSec = 0.025f;
   static constexpr float kInvalidDb = -200.f;
 
   void setSampleRate(double sr)
@@ -32,8 +34,10 @@ public:
     sampleRate_ = sr > 8000.0 ? sr : 48000.0;
     designKWeight(sampleRate_);
     blockSamples_ = std::max(1, static_cast<int>(std::lround(sampleRate_ * 0.1)));
+    histSamples_ = std::max(1, static_cast<int>(std::lround(sampleRate_ * kHistIntervalSec)));
     // ~4 h of 100 ms gating blocks without reallocating on the audio thread.
     gatedPowers_.reserve(144000);
+    hist_.reserve(static_cast<size_t>(kHistCap));
   }
 
   void reset()
@@ -50,6 +54,7 @@ public:
     blockRing_.clear();
     gatedPowers_.clear();
     hist_.clear();
+    histCount_ = 0;
     std::fill(std::begin(lraHist_), std::end(lraHist_), 0);
     lraCount_ = 0;
     lraPowerSum_ = 0.0;
@@ -73,6 +78,12 @@ public:
       pushBlock(mean);
       blockSum_ = 0.0;
       blockCount_ = 0;
+    }
+
+    if (++histCount_ >= histSamples_)
+    {
+      pushHist();
+      histCount_ = 0;
     }
 
     const float rmsA = static_cast<float>(1.0 - std::exp(-1.0 / (0.3 * sampleRate_)));
@@ -115,7 +126,7 @@ public:
    *  lraLo, lraHi, histCount,
    *  then histCount × (M, S, true-peak dB, broadband RMS dB)].
    * lraLo / lraHi are the absolute short-term ends (10th and 95th percentile).
-   * Currents are since the previous take. History is the last ~12 s at 10 Hz.
+   * Currents are since the previous take. History is the last ~12 s at 40 Hz.
    */
   int take(float* out, int maxOut)
   {
@@ -257,13 +268,6 @@ private:
       if (lufs > -70.f && gatedPowers_.size() < gatedPowers_.capacity())
         gatedPowers_.push_back(static_cast<float>(m));
     }
-    const float tp = linToDb(std::max(tpCurL_, tpCurR_));
-    const float rms = linToDb(std::sqrt(std::max(0.f, 0.5f * (rmsSqL_ + rmsSqR_))));
-    const float mom = powerToLufs(windowPower(std::min(4, static_cast<int>(blockRing_.size()))));
-    const float st = powerToLufs(windowPower(std::min(30, static_cast<int>(blockRing_.size()))));
-    if (hist_.size() >= static_cast<size_t>(kHistCap))
-      hist_.erase(hist_.begin());
-    hist_.push_back(Hist{mom, st, tp, rms});
     if (blockRing_.size() >= 30)
     {
       const float st = powerToLufs(windowPower(30));
@@ -278,6 +282,19 @@ private:
         }
       }
     }
+  }
+
+  void pushHist()
+  {
+    if (paused_)
+      return;
+    const float tp = linToDb(std::max(tpCurL_, tpCurR_));
+    const float rms = linToDb(std::sqrt(std::max(0.f, 0.5f * (rmsSqL_ + rmsSqR_))));
+    const float mom = powerToLufs(windowPower(std::min(4, static_cast<int>(blockRing_.size()))));
+    const float st = powerToLufs(windowPower(std::min(30, static_cast<int>(blockRing_.size()))));
+    if (hist_.size() >= static_cast<size_t>(kHistCap))
+      hist_.erase(hist_.begin());
+    hist_.push_back(Hist{mom, st, tp, rms});
   }
 
   double windowPower(int blocks) const
@@ -402,6 +419,8 @@ private:
 
   double sampleRate_ = 48000.0;
   int blockSamples_ = 4800;
+  int histSamples_ = 1200;
+  int histCount_ = 0;
   bool paused_ = false;
   Biquad shelf_[2];
   Biquad hp_[2];

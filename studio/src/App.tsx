@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  DevShell,
   editorSizes,
   isPluginId,
   knownPluginIds,
@@ -39,7 +40,7 @@ export function App() {
   const id = pluginId as PluginId;
   const { width, height } = editorSizes[id];
 
-  return (
+  const frame = (
     <div
       className="StudioFrame"
       data-studio-frame=""
@@ -50,4 +51,8 @@ export function App() {
       <StudioPlugin pluginId={id} onReady={onReady} />
     </div>
   );
+
+  // Preview only. `vite preview` (screenshot capture) stays chrome-free.
+  if (import.meta.env.DEV) return <DevShell pluginId={id}>{frame}</DevShell>;
+  return frame;
 }

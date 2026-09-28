@@ -239,10 +239,6 @@ function BandControls(props: {
               scale="frequency"
               dots={EQ_FREQ_DOTS}
               labels={EQ_FREQ_LABELS}
-              {...{
-                'value.format': (v: number) =>
-                  v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0),
-              }}
             />
           </WithInfo>
           {!pass ? (
@@ -404,7 +400,11 @@ export function EqualizerUI(props: EqualizerUIProps) {
   const spectrumMode = useDynamicValueReadonly(host.spectrum$, 0);
   const mono = useDynamicValueReadonly(host.mono$, false);
   const [selectedBandId, setSelectedBandId] = useState(
-    () => bands[EQ_DEFAULT_SELECTED_INDEX]?.id ?? bands[0]?.id ?? '',
+    () =>
+      bands[Math.round(host.selectedBandIndex$.value)]?.id ??
+      bands[EQ_DEFAULT_SELECTED_INDEX]?.id ??
+      bands[0]?.id ??
+      '',
   );
 
   const selectedBand = useMemo(
@@ -413,13 +413,33 @@ export function EqualizerUI(props: EqualizerUIProps) {
   );
 
   useEffect(() => {
-    if (!bands.some((b) => b.id === selectedBandId) && bands[0])
-      setSelectedBandId(bands[EQ_DEFAULT_SELECTED_INDEX]?.id ?? bands[0].id);
-  }, [bands, selectedBandId]);
+    const unsub = host.selectedBandIndex$.subscribe((idx) => {
+      const i = Math.max(0, Math.min(bands.length - 1, Math.round(idx)));
+      const id = bands[i]?.id;
+      if (id) setSelectedBandId(id);
+    });
+    return () => unsub();
+  }, [host.selectedBandIndex$, bands]);
 
-  const selectBand = useCallback((id: string) => {
-    setSelectedBandId(id);
-  }, []);
+  useEffect(() => {
+    if (!bands.some((b) => b.id === selectedBandId) && bands[0]) {
+      const fallback =
+        bands[EQ_DEFAULT_SELECTED_INDEX]?.id ?? bands[0].id;
+      setSelectedBandId(fallback);
+      host.selectedBandIndex$.set(
+        bands.findIndex((b) => b.id === fallback),
+      );
+    }
+  }, [bands, selectedBandId, host.selectedBandIndex$]);
+
+  const selectBand = useCallback(
+    (id: string) => {
+      setSelectedBandId(id);
+      const idx = bands.findIndex((b) => b.id === id);
+      if (idx >= 0) host.selectedBandIndex$.set(idx);
+    },
+    [bands, host.selectedBandIndex$],
+  );
 
   return (
     <div className="EqualizerUI PluginUI">
@@ -449,7 +469,8 @@ export function EqualizerUI(props: EqualizerUIProps) {
         size="normal"
         selectedBandId={selectedBandId}
         onSelectBand={selectBand}
-        spectrum$={host.spectrumData$}
+        spectrumIn$={host.spectrumIn$}
+        spectrumOut$={host.spectrumOut$}
         spectrumMode={Math.round(spectrumMode)}
       />
 

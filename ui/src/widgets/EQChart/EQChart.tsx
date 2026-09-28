@@ -15,7 +15,7 @@ import {
   useWidgetsWithBindingsAndEvents,
 } from '@deutschesoft/use-aux-widgets';
 import type { EqFilterType, IEqualizerBand } from '../../host/equalizerHost';
-import { addGraphClasses } from '../../styles/graphStyles';
+import { addGraphClasses, GRAPH_STYLE } from '../../styles/graphStyles';
 import {
   EQ_FILTER_MODES,
   EQ_FREQ_MAX,
@@ -26,25 +26,19 @@ import {
   EQ_Q_MIN,
   bandSupportsDyn,
 } from '../../host/equalizerHost';
-import { DynamicValue } from '@deutschesoft/awml';
+import { DynamicValue, ListValue } from '@deutschesoft/awml';
 import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
+import { useChartGradient } from '../../hooks/useChartGradient';
 import {
-  useChartGradient,
-} from '../../hooks/useChartGradient';
-import {
-  SPECTRUM_DB_MIN,
   SPECTRUM_MAX_BINS,
   SPECTRUM_MIN_BINS,
-  SPECTRUM_VIZ_ID,
-  binToHz,
-  catmullRomDensify,
-  smoothSeriesY,
-  spectrumPxPerBin,
-  parseSpectrumPayload,
-  tiltDb,
 } from '../SpectrumChart/SpectrumChart';
+import {
+  spectrumOverlayContourDots,
+  spectrumOverlayDiffDots,
+} from '../../utils/spectrumDiffOverlay';
 import './EQChart.scss';
 
 const EqualizerBindings = {};
@@ -87,54 +81,40 @@ export interface EQChartProps {
   onSelectBand?: (id: string) => void;
   className?: string;
   /**
-   * Optional analyzer overlay. `spectrumMode`: 0 Off / 1 Linear / 2 −3 / 3 −4.5.
+   * Optional analyzer overlay (same In/Out mask + output edge as MultibandChart).
+   * `spectrumMode`: 0 Off / 1 Linear / 2 −3 / 3 −4.5.
    * When Off, no vizcfg and no graph updates (DSP also skips FFT).
    */
-  spectrum$?: DynamicValue<number[]>;
+  spectrumIn$?: DynamicValue<number[]>;
+  spectrumOut$?: DynamicValue<number[]>;
   spectrumMode?: number;
+  /**
+   * When true (default), deactivate the sum baseline if every band is off
+   * (Equalizer — grid highlight is the null). FrequencyRange keeps a flat
+   * 0 dB stroke with `false`.
+   */
+  hideEmptyBaseline?: boolean;
+  /**
+   * Level-gradient stop offsets for `useChartGradient`. Default is a normal
+   * full-height span (`0%`…`100%`). Override only for special layouts
+   * (e.g. SpectrumDiff mid flip).
+   */
+  gradientStops?: { cut: string; boost: string };
+  /**
+   * When true, swap primary ↔ inv (`--graph-gradient` = accent-top).
+   * Default false = suite standard (warn-top / accent-bottom).
+   */
+  gradientReverse?: boolean;
 }
 
 /**
- * Map spectrum dBFS onto the full EQ gain axis (same visual span as Analyzer,
- * just relabeled): −96 → yMin (−24), 0 → yMax (+24).
+ * Map spectrum mode → Analyzer-style pink tilt (dB/oct).
  */
-function spectrumDbToEqY(db: number, yMin: number, yMax: number): number {
-  const t = (db - SPECTRUM_DB_MIN) / (0 - SPECTRUM_DB_MIN);
-  return yMin + Math.min(1, Math.max(0, t)) * (yMax - yMin);
-}
-
 function spectrumSlope(mode: number): number {
   const m = Math.round(mode);
   if (m === 2) return 3;
   if (m === 3) return 4.5;
   return 0;
-}
-
-function spectrumSeriesDots(
-  data: Float32Array,
-  bins: number,
-  yMin: number,
-  yMax: number,
-  slope: number,
-  pxPerBin = 1,
-): { x: number; y: number }[] {
-  if (bins < 1) return [];
-  const ys: number[] = [];
-  const hz: number[] = [];
-  for (let i = 0; i < bins; ++i) {
-    const f = binToHz(i, bins);
-    if (f < EQ_FREQ_MIN || f > EQ_FREQ_MAX) continue;
-    const raw = data[i] ?? SPECTRUM_DB_MIN;
-    const db = tiltDb(raw, f, slope);
-    hz.push(f);
-    ys.push(spectrumDbToEqY(db, yMin, yMax));
-  }
-  const smoothed = smoothSeriesY(ys, hz, pxPerBin);
-  const pts: { x: number; y: number }[] = [];
-  for (let i = 0; i < smoothed.length; ++i)
-    pts.push({ x: hz[i]!, y: smoothed[i]! });
-  // Hz chart → spline in log(f); density ≤ ~1 pt/px.
-  return catmullRomDensify(pts, Math.max(1, pts.length * pxPerBin), 'log');
 }
 
 /**
@@ -153,8 +133,12 @@ export function EQChart(props: EQChartProps) {
     selectedBandId = null,
     onSelectBand,
     className,
-    spectrum$,
+    spectrumIn$,
+    spectrumOut$,
     spectrumMode = 0,
+    hideEmptyBaseline = true,
+    gradientStops,
+    gradientReverse = false,
   } = props;
   const qLocked = zRange.min === zRange.max;
 
@@ -162,15 +146,24 @@ export function EQChart(props: EQChartProps) {
   const isMini = size === 'mini';
   const spectrumOn = !isMini && Math.round(spectrumMode) >= 1;
   // High-rate spectrum must NOT go through React state — paint AUX Graph directly.
-  const spectrumGraphRef = useRef<{
+  const spectrumOuterRef = useRef<{
+    set: (k: string, v: unknown) => void;
+    element?: SVGElement;
+  } | null>(null);
+  const spectrumMaskRef = useRef<{
+    set: (k: string, v: unknown) => void;
+    element?: SVGElement;
+  } | null>(null);
+  const spectrumEdgeRef = useRef<{
     set: (k: string, v: unknown) => void;
     element?: SVGElement;
   } | null>(null);
   const spectrumBindingsRef = useRef<Bindings | null>(null);
   const spectrumModeRef = useRef(spectrumMode);
   const yRangeRef = useRef(yRange);
-  const spectrumLastRawRef = useRef<number[] | null>(null);
+  const spectrumLastPairRef = useRef<[number[], number[]] | null>(null);
   const spectrumWidthRef = useRef(0);
+  const spectrumResizeRoRef = useRef<ResizeObserver | null>(null);
   spectrumModeRef.current = spectrumMode;
   yRangeRef.current = yRange;
 
@@ -180,6 +173,21 @@ export function EQChart(props: EQChartProps) {
     baseline: { element: SVGElement };
     set: (key: string, value: unknown) => void;
   } | null;
+
+  const getEqHeight = useCallback(
+    (svg: SVGSVGElement) =>
+      eq?.range_y?.options?.basis || svg.clientHeight || 1,
+    [eq],
+  );
+
+  // Suite standard: warn↑ / accent↓ on `--graph-gradient` (reverse opt-in).
+  useChartGradient({
+    svg: eq?.svg,
+    enabled: !!eq && !isMini,
+    getHeight: getEqHeight,
+    reverse: gradientReverse,
+    stopOffsets: gradientStops,
+  });
 
   useEffect(() => {
     if (!eq || isMini) return;
@@ -195,21 +203,6 @@ export function EQChart(props: EQChartProps) {
       step: zRange.step ?? 0.1,
     });
   }, [eq, zRange.max, zRange.min, zRange.step]);
-
-  const baselineTargets = useMemo(
-    () => (eq?.baseline?.element ? [eq.baseline.element] : []),
-    [eq],
-  );
-  const getEqHeight = useCallback(
-    (svg: SVGSVGElement) => svg.clientHeight || 1,
-    [],
-  );
-  const reassertGradStroke = useChartGradient({
-    svg: eq?.svg,
-    enabled: !!eq && !isMini,
-    targets: baselineTargets,
-    getHeight: getEqHeight,
-  });
 
   const handleOptions = useMemo(
     () =>
@@ -264,7 +257,8 @@ export function EQChart(props: EQChartProps) {
           { name: 'gain', backendValue: band.gain$, ...fromModel },
           { name: 'freq', backendValue: band.frequency$, ...fromModel },
           { name: 'q', backendValue: band.q$, ...qFromModel },
-          { name: 'active', backendValue: active$, ...fromModel },
+          // Always readonly — EqBand defaults active:true and would stomp mode/toggle.
+          { name: 'active', backendValue: active$, readonly: true },
           {
             name: 'type',
             backendValue: band.auxType$,
@@ -335,7 +329,7 @@ export function EQChart(props: EQChartProps) {
       ghosts.map((ghost, index) => ({
         bands: [ghost],
         mode: 'center',
-        class: `eq-individual eq-band-${index} fill-color fill-ghost stroke-none`,
+        class: `eq-individual eq-band-${index} fill-gradient fill-ghost stroke-none`,
         // Tiny canvases miss high-Q needles unless we always densify between pixels
         // (threshold 0 → oversample every segment; see AUX EqualizerGraph.drawPath).
         ...(isMini
@@ -366,6 +360,8 @@ export function EQChart(props: EQChartProps) {
   // Individual graphs + baseline exclusively on ghosts (DSP effective gains).
   // Equalizer.addChild auto-adds every handle EqBand into baseline — that would
   // double-count handle+ghost (and re-runs after our set). Filter + re-sync.
+  // Inactive individuals stay attached; Widget `active` → `.aux-inactive`,
+  // CSS hides them (opacity 0).
   useEffect(() => {
     if (!eqWidget) return;
     const eq = eqWidget as {
@@ -393,6 +389,13 @@ export function EQChart(props: EQChartProps) {
       if (eq.isDestructed()) return;
       eq.baseline.set('rendering_filter', ghostOnly);
       eq.baseline.set('bands', ghosts.slice());
+      // Hide empty sum (flat 0 dB path) when no band is active — reveals grid
+      // aux-highlight null line (FrequencyResponse 0 dB). FrequencyRange keeps
+      // the flat stroke as the “both Off” response.
+      const anyActive = bandModels.some((b) =>
+        interactive ? !!b.active$.value : true,
+      );
+      eq.baseline.set('active', hideEmptyBaseline ? anyActive : true);
       // Same densify as individual graphs — baseline uses EqualizerGraph defaults
       // (oversampling 4 / threshold 10) which skip sub-pixel needles on minis.
       if (isMini) {
@@ -403,8 +406,6 @@ export function EQChart(props: EQChartProps) {
         eq.baseline.set('accuracy', 1);
         eq.baseline.set('oversampling', 5);
         eq.baseline.set('threshold', 3);
-        // Re-assert gradient stroke after AUX may touch the path.
-        reassertGradStroke();
       }
     };
 
@@ -424,13 +425,17 @@ export function EQChart(props: EQChartProps) {
       syncBaseline();
       bringBaselineFront();
     });
+    const unsubActive = interactive
+      ? bandModels.map((band) => band.active$.subscribe(syncBaseline, false))
+      : [];
     return () => {
       unsubBandAdded();
+      unsubActive.forEach((u) => u());
       if (eq.isDestructed()) return;
       graphs.forEach((graph) => eq.removeGraph(graph));
       eq.baseline.set('bands', []);
     };
-  }, [eqWidget, graphs, ghosts, isMini, reassertGradStroke]);
+  }, [eqWidget, graphs, ghosts, bandModels, interactive, isMini, hideEmptyBaseline]);
 
   useEffect(() => {
     type AuxEl = { element: Element };
@@ -465,9 +470,14 @@ export function EQChart(props: EQChartProps) {
     return () => unsubs.forEach((u) => u());
   }, [handles, graphs, bandModels, selectedBandId]);
 
-  // Spectrum fill: AWML Binding → AUX dots. No React on viz ticks.
+  // In/Out spectrum fills + output edge (same as MultibandChart crossover).
+  const spectrumPair$ = useMemo(() => {
+    if (!spectrumIn$ || !spectrumOut$) return null;
+    return new ListValue<[number[], number[]]>([spectrumIn$, spectrumOut$]);
+  }, [spectrumIn$, spectrumOut$]);
+
   useEffect(() => {
-    if (!eqWidget || isMini || !spectrum$) return;
+    if (!eqWidget || isMini || !spectrumPair$) return;
     const eq = eqWidget as {
       addGraph: (opts: unknown) => {
         set: (k: string, v: unknown) => void;
@@ -485,126 +495,198 @@ export function EQChart(props: EQChartProps) {
     spectrumBindingsRef.current = null;
 
     if (!spectrumOn) {
-      spectrumGraphRef.current?.set('dots', null);
-      spectrumLastRawRef.current = null;
+      spectrumOuterRef.current?.set('dots', null);
+      spectrumMaskRef.current?.set('dots', null);
+      spectrumEdgeRef.current?.set('dots', null);
+      spectrumLastPairRef.current = null;
       return;
     }
 
-    if (!spectrumGraphRef.current) {
-      const g = eq.addGraph({
+    if (!spectrumOuterRef.current) {
+      const outer = eq.addGraph({
         dots: null,
         type: 'L',
         mode: 'bottom',
-        class: 'eq-spectrum',
+        class: 'eq-spectrum-outer',
       });
       addGraphClasses(
-        g.element,
-        'eq-spectrum',
-        'fill-color fill-ghost stroke-none',
+        outer.element,
+        'eq-spectrum-outer',
+        GRAPH_STYLE.outerDiff,
       );
-      spectrumGraphRef.current = g;
-      eq.baseline?.toFront?.();
+      spectrumOuterRef.current = outer;
+    }
+    if (!spectrumMaskRef.current) {
+      const mask = eq.addGraph({
+        dots: null,
+        type: 'L',
+        mode: 'bottom',
+        class: 'eq-spectrum-mask',
+      });
+      addGraphClasses(
+        mask.element,
+        'eq-spectrum-mask',
+        GRAPH_STYLE.maskDiff,
+      );
+      spectrumMaskRef.current = mask;
+    }
+    if (!spectrumEdgeRef.current) {
+      const edge = eq.addGraph({
+        dots: null,
+        type: 'L',
+        mode: 'bottom',
+        class: 'eq-spectrum-edge',
+      });
+      addGraphClasses(
+        edge.element,
+        'eq-spectrum-edge',
+        GRAPH_STYLE.gainEdge,
+      );
+      spectrumEdgeRef.current = edge;
     }
 
-    const g = spectrumGraphRef.current;
-    if (!g) return;
+    // Keep spectrum under band curves / baseline.
+    const parent = spectrumOuterRef.current.element?.parentElement;
+    if (parent) {
+      parent.insertBefore(
+        spectrumOuterRef.current.element!,
+        parent.firstChild,
+      );
+      parent.insertBefore(
+        spectrumMaskRef.current.element!,
+        spectrumOuterRef.current.element!.nextSibling,
+      );
+      parent.insertBefore(
+        spectrumEdgeRef.current.element!,
+        spectrumMaskRef.current.element!.nextSibling,
+      );
+    }
+    eq.baseline?.toFront?.();
 
-    const bindings = bindAuxOptions(g, [
+    const outer = spectrumOuterRef.current;
+    const mask = spectrumMaskRef.current;
+    const edge = spectrumEdgeRef.current;
+    if (!outer || !mask || !edge) return;
+
+    const paintPair = (inn: number[], out: number[]) => {
+      const yr = yRangeRef.current;
+      const axis = {
+        fMin: EQ_FREQ_MIN,
+        fMax: EQ_FREQ_MAX,
+        yMin: yr.min,
+        yMax: yr.max,
+        slopeDbPerOct: spectrumSlope(spectrumModeRef.current),
+      };
+      const w = spectrumWidthRef.current;
+      mask.set('dots', spectrumOverlayDiffDots(inn, out, 'min', axis, w));
+      edge.set('dots', spectrumOverlayContourDots(out, axis, w));
+      return spectrumOverlayDiffDots(inn, out, 'max', axis, w);
+    };
+
+    const bindings = bindAuxOptions(outer, [
       {
         name: 'dots',
-        backendValue: spectrum$,
+        backendValue: spectrumPair$,
         readonly: true,
-        transformReceive: (raw: unknown) => {
-          if (!Array.isArray(raw) || !raw.length) {
-            spectrumLastRawRef.current = null;
+        transformReceive: (pair: unknown) => {
+          const [inn, out] = (pair as [number[], number[]]) ?? [[], []];
+          if (
+            (!Array.isArray(inn) || !inn.length) &&
+            (!Array.isArray(out) || !out.length)
+          ) {
+            spectrumLastPairRef.current = null;
+            mask.set('dots', null);
+            edge.set('dots', null);
             return null;
           }
-          spectrumLastRawRef.current = raw as number[];
-          const payload = parseSpectrumPayload(raw as number[]);
-          if (!payload) return null;
-          const yr = yRangeRef.current;
-          return spectrumSeriesDots(
-            payload.avg,
-            payload.bins,
-            yr.min,
-            yr.max,
-            spectrumSlope(spectrumModeRef.current),
-            spectrumPxPerBin(spectrumWidthRef.current, payload.bins),
-          );
+          spectrumLastPairRef.current = [inn ?? [], out ?? []];
+          return paintPair(inn ?? [], out ?? []);
         },
       },
     ]);
     spectrumBindingsRef.current = bindings;
 
     const el = eq.element ?? eq.svg;
-    let ro: ResizeObserver | null = null;
-    let resizeRaf = 0;
+    spectrumResizeRoRef.current?.disconnect();
+    spectrumResizeRoRef.current = null;
     if (el) {
       const sendBins = () => {
         const width = Math.round(el.getBoundingClientRect().width);
         spectrumWidthRef.current = Math.max(1, width);
-        const next = Math.max(SPECTRUM_MIN_BINS, Math.min(SPECTRUM_MAX_BINS, width));
-        postToHost({ t: 'vizcfg', id: SPECTRUM_VIZ_ID, bins: next });
+        const next = Math.max(
+          SPECTRUM_MIN_BINS,
+          Math.min(SPECTRUM_MAX_BINS, width),
+        );
+        postToHost({ t: 'vizcfg', id: 'fft_in', bins: next });
+        postToHost({ t: 'vizcfg', id: 'fft_out', bins: next });
       };
       sendBins();
-      ro = new ResizeObserver(() => {
-        if (resizeRaf) cancelAnimationFrame(resizeRaf);
-        resizeRaf = requestAnimationFrame(() => {
-          resizeRaf = 0;
+      let raf = 0;
+      const ro = new ResizeObserver(() => {
+        if (raf) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => {
+          raf = 0;
           sendBins();
         });
       });
       ro.observe(el);
+      spectrumResizeRoRef.current = ro;
     }
 
     return () => {
       bindings.dispose();
       if (spectrumBindingsRef.current === bindings)
         spectrumBindingsRef.current = null;
-      if (resizeRaf) cancelAnimationFrame(resizeRaf);
-      ro?.disconnect();
+      spectrumResizeRoRef.current?.disconnect();
+      spectrumResizeRoRef.current = null;
     };
-  }, [eqWidget, isMini, spectrum$, spectrumOn]);
+  }, [eqWidget, isMini, spectrumPair$, spectrumOn]);
 
-  // Rare: tilt / y-range change — re-apply last buffer through the same transform path.
+  // Rare: tilt / y-range change — re-apply last buffer through the same path.
   useEffect(() => {
     if (!spectrumOn) return;
-    const g = spectrumGraphRef.current;
-    const raw = spectrumLastRawRef.current;
-    if (!g || !raw) return;
-    const payload = parseSpectrumPayload(raw);
-    if (!payload) {
-      g.set('dots', null);
-      return;
-    }
+    const outer = spectrumOuterRef.current;
+    const mask = spectrumMaskRef.current;
+    const edge = spectrumEdgeRef.current;
+    const pair = spectrumLastPairRef.current;
+    if (!outer || !mask || !edge || !pair) return;
     const yr = yRangeRef.current;
-    g.set(
-      'dots',
-      spectrumSeriesDots(
-        payload.avg,
-        payload.bins,
-        yr.min,
-        yr.max,
-        spectrumSlope(spectrumMode),
-        spectrumPxPerBin(spectrumWidthRef.current, payload.bins),
-      ),
-    );
+    const axis = {
+      fMin: EQ_FREQ_MIN,
+      fMax: EQ_FREQ_MAX,
+      yMin: yr.min,
+      yMax: yr.max,
+      slopeDbPerOct: spectrumSlope(spectrumMode),
+    };
+    const w = spectrumWidthRef.current;
+    const [inn, out] = pair;
+    mask.set('dots', spectrumOverlayDiffDots(inn, out, 'min', axis, w));
+    edge.set('dots', spectrumOverlayContourDots(out, axis, w));
+    outer.set('dots', spectrumOverlayDiffDots(inn, out, 'max', axis, w));
   }, [spectrumMode, spectrumOn, yRange.min, yRange.max]);
 
-  // Detach spectrum graph on unmount / mini switch.
+  // Detach spectrum graphs on unmount / mini switch.
   useEffect(() => {
     return () => {
       spectrumBindingsRef.current?.dispose();
       spectrumBindingsRef.current = null;
+      spectrumResizeRoRef.current?.disconnect();
+      spectrumResizeRoRef.current = null;
       const eq = eqWidget as {
         removeGraph?: (g: unknown) => void;
         isDestructed?: () => boolean;
       } | null;
-      const g = spectrumGraphRef.current;
-      spectrumGraphRef.current = null;
-      spectrumLastRawRef.current = null;
-      if (!eq || !g || eq.isDestructed?.()) return;
-      eq.removeGraph?.(g);
+      const outer = spectrumOuterRef.current;
+      const mask = spectrumMaskRef.current;
+      const edge = spectrumEdgeRef.current;
+      spectrumOuterRef.current = null;
+      spectrumMaskRef.current = null;
+      spectrumEdgeRef.current = null;
+      spectrumLastPairRef.current = null;
+      if (!eq || eq.isDestructed?.()) return;
+      if (outer) eq.removeGraph?.(outer);
+      if (mask) eq.removeGraph?.(mask);
+      if (edge) eq.removeGraph?.(edge);
     };
   }, [eqWidget]);
 

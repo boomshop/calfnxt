@@ -19,6 +19,12 @@
           display: none;
         }
 
+        &.mb-spectrum-outer,
+        &.mb-spectrum-mask,
+        &.mb-spectrum-edge {
+          pointer-events: none;
+        }
+
         &.mb-bypassed {
           stroke-opacity: 0.33;
         }
@@ -26,14 +32,12 @@
         &.mb-selected {
           // Soft fill under the lobe (mode=bottom); beat `.fill-none`.
           stroke: var(--color);
-          fill: var(--color);
-          fill-opacity: 0.18;
         }
 
         // Listen solo — same warn treatment as mb-thresh.mb-listen (no thresh UI).
         &.mb-listen {
           stroke: var(--color-warn);
-          stroke-opacity: 1;
+          stroke-opacity: var(--graph-stroke-opacity-full);
           fill: var(--color-warn);
           fill-opacity: 0.18;
         }
@@ -47,12 +51,12 @@
         }
 
         > .aux-handle {
-          fill-opacity: 0.25;
+          fill-opacity: var(--graph-fill-opacity-ghost);
         }
 
         &.aux-active > .aux-handle,
         &.mb-selected > .aux-handle {
-          fill-opacity: 0.6;
+          fill-opacity: var(--graph-fill-opacity-soft);
         }
 
         &.mb-xover {
@@ -83,26 +87,37 @@
           }
 
           > .aux-handle {
-            fill: var(--color-accent);
+            fill-opacity: var(--graph-fill-opacity-ghost);
           }
 
-          > .aux-label {
-            fill-opacity: 0.9;
+          > .aux-line {
+            stroke-dasharray: var(--graph-dash-dashed);
+            stroke-width: var(--graph-stroke-medium);
           }
 
-          &.mb-selected > .aux-line {
-            stroke-opacity: 1;
-          }
-
-          &.mb-listen {
-            > .aux-line {
-              stroke: var(--color-warn);
-              stroke-opacity: 1;
-            }
-
+          &.aux-active {
             > .aux-handle {
-              fill: var(--color-warn);
+              fill-opacity: 0.25;
             }
+          }
+        }
+
+        > .aux-label {
+          fill-opacity: 0.9;
+        }
+
+        &.mb-selected > .aux-line {
+          stroke-opacity: var(--graph-stroke-opacity-full);
+        }
+
+        &.mb-listen {
+          > .aux-line {
+            stroke: var(--color-warn);
+            stroke-opacity: var(--graph-stroke-opacity-full);
+          }
+
+          > .aux-handle {
+            fill: var(--color-warn);
           }
         }
       }

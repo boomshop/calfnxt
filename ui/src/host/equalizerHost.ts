@@ -177,8 +177,8 @@ export const EQ_DYN_THRESH_MAX = 0;
 export const EQ_DYN_RATIO_MIN = 1;
 export const EQ_DYN_RATIO_MAX = 20;
 
-/** Default selection: band 9 (0-based index 8). */
-export const EQ_DEFAULT_SELECTED_INDEX = 0;
+/** Default selection: band 9 (1-based; 0-based index 8). */
+export const EQ_DEFAULT_SELECTED_INDEX = 8;
 
 export interface IEqualizerBand {
   /** Stable slot index 0…15 */
@@ -557,7 +557,15 @@ export interface IEqualizerHost {
   mono$: DynamicValue<boolean>;
   /** 0 Off / 1 Linear / 2 −3 dB/oct / 3 −4.5 dB/oct */
   spectrum$: DynamicValue<number>;
-  spectrumData$: DynamicValue<number[]>;
+  /** Pre-EQ spectrum (fft_in). */
+  spectrumIn$: DynamicValue<number[]>;
+  /** Post-EQ spectrum (fft_out). */
+  spectrumOut$: DynamicValue<number[]>;
+  /**
+   * Selected band slot (0…15). UI-only — not a VST parameter.
+   * Studio / demos may write this; user clicks update it.
+   */
+  selectedBandIndex$: DynamicValue<number>;
   bands: IEqualizerBand[];
   beginBypassEdit: () => void;
   endBypassEdit: () => void;
@@ -583,15 +591,21 @@ export function createBoundEqualizerHost(): IEqualizerHost {
   const spectrum$ = DynamicValue.fromConstant(0);
   const unbindSpectrum = bindParamToHost(spectrum$, paramIds.spectrum);
 
-  const spectrumData$ = DynamicValue.fromConstant<number[]>([]);
-  const unbindSpectrumData = bindVizSpectrum(spectrumData$, 'fft');
+  const spectrumIn$ = DynamicValue.fromConstant<number[]>([]);
+  const spectrumOut$ = DynamicValue.fromConstant<number[]>([]);
+  const unbindSpectrumIn = bindVizSpectrum(spectrumIn$, 'fft_in');
+  const unbindSpectrumOut = bindVizSpectrum(spectrumOut$, 'fft_out');
+
+  const selectedBandIndex$ = DynamicValue.fromConstant(EQ_DEFAULT_SELECTED_INDEX);
 
   const { bands, dispose: disposeBands } = createBoundEqualizerBands();
   return {
     bypass$,
     mono$,
     spectrum$,
-    spectrumData$,
+    spectrumIn$,
+    spectrumOut$,
+    selectedBandIndex$,
     bands,
     beginBypassEdit: () => postBegin(paramIds.bypass),
     endBypassEdit: () => postEnd(paramIds.bypass),
@@ -601,7 +615,8 @@ export function createBoundEqualizerHost(): IEqualizerHost {
       unbindBypass();
       unbindMono();
       unbindSpectrum();
-      unbindSpectrumData();
+      unbindSpectrumIn();
+      unbindSpectrumOut();
       disposeBands();
     },
   };

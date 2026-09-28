@@ -286,14 +286,14 @@ function useEchoPane(
       addGraphClasses(
         ghost.element,
         ghostCls === 'echo-l'
-          ? 'fill-accent fill-visible stroke-none'
-          : 'fill-warn fill-visible stroke-none',
+          ? 'fill-accent fill-rich stroke-none'
+          : 'fill-warn fill-rich stroke-none',
       );
       addGraphClasses(
         primary.element,
         primaryCls === 'echo-l'
-          ? 'fill-accent fill-visible stroke-none'
-          : 'fill-warn fill-visible stroke-none',
+          ? 'fill-accent fill-rich stroke-none'
+          : 'fill-warn fill-rich stroke-none',
       );
       ghostRef.current = ghost;
       primaryRef.current = primary;

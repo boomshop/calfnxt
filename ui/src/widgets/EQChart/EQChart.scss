@@ -4,25 +4,52 @@
 
   > svg {
     > .aux-graphs {
-      // CSS var from useChartGradient — survives AUX path redraws that clear
-      // inline stroke (two FrequencyRange charts fight over layout/size).
+      /* Beat suite `.aux-chart > … > .aux-baseline` (same specificity). */
       > .aux-baseline {
         fill: none;
-        stroke: var(--chart-level-stroke, var(--color-accent));
+        fill-opacity: var(--graph-fill-opacity-none);
+        stroke: var(--color) !important;
+        stroke-opacity: var(--graph-stroke-opacity-full);
         stroke-width: var(--graph-stroke-medium);
+
+        /* No active bands → hide flat 0 dB sum (grid aux-highlight is the null). */
+        &.aux-inactive {
+          opacity: 0;
+          filter: none;
+        }
       }
 
-      > .aux-graph {
+      /*
+       * Ghost band fills only — do not zero baseline stroke (also .aux-graph).
+       * Exclude In/Out spectrum overlay graphs (outer/mask/edge) so their
+       * fill-gradient / fill-background utilities are not stomped.
+       */
+      > .aux-graph:not(.aux-baseline):not(.eq-spectrum-outer):not(
+          .eq-spectrum-mask
+        ):not(.eq-spectrum-edge) {
         /* Fill-only ghosts; default .aux-graph stroke must not outline them. */
-        stroke-opacity: 0;
+        stroke-opacity: var(--graph-stroke-opacity-none);
         fill: var(--color);
         fill-opacity: var(--graph-fill-opacity-ghost);
 
         &.eq-selected {
           stroke: var(--color-least);
           stroke-width: var(--graph-stroke-thinner);
-          stroke-opacity: var(--graph-stroke-opacity-semi);
+          stroke-opacity: var(--graph-stroke-opacity-mostly);
         }
+
+        /* Inactive: hide flat 0 dB fill (beats suite `.aux-inactive` 0.5). */
+        &.aux-inactive {
+          opacity: 0;
+          filter: none;
+        }
+      }
+
+      /* In/Out spectrum overlay (outer / mask / edge) — same as MultibandChart. */
+      > .eq-spectrum-outer,
+      > .eq-spectrum-mask,
+      > .eq-spectrum-edge {
+        pointer-events: none;
       }
     }
 
@@ -35,18 +62,18 @@
           }
 
           > .aux-line1 {
-            stroke-opacity: 0.5;
+            stroke-opacity: var(--graph-stroke-opacity-semi);
           }
 
           > .aux-label {
-            fill-opacity: 1;
+            fill-opacity: var(--graph-fill-opacity-full);
           }
         }
 
         &.aux-block,
         &.aux-line {
           > .aux-handle {
-            fill-opacity: 0.1;
+            fill-opacity: var(--graph-fill-opacity-ghost);
           }
 
           &.aux-active,
@@ -59,9 +86,16 @@
 
         &.dyn {
           > .aux-handle {
-            // Set on eq.svg via useChartGradient (full url(#…) paint value).
-            stroke: var(--chart-level-stroke, var(--accent));
-            stroke-width: var(--graph-stroke-thicker);
+            fill: var(--color-warn);
+            fill-opacity: var(--graph-fill-opacity-semi);
+            stroke: none;
+          }
+
+          &.aux-active,
+          &.eq-selected {
+            > .aux-handle {
+              fill-opacity: var(--graph-fill-opacity-rich);
+            }
           }
         }
       }
@@ -90,14 +124,14 @@
           }
 
           > .aux-handle {
-            fill-opacity: 0.5;
+            fill-opacity: var(--graph-fill-opacity-semi);
             fill: var(--accent);
             stroke: none;
           }
 
           &.aux-circular {
             > .aux-handle {
-              fill-opacity: 1;
+              fill-opacity: var(--graph-fill-opacity-full);
             }
           }
         }

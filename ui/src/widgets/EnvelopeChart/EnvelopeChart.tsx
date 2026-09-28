@@ -13,7 +13,6 @@ import './EnvelopeChart.scss';
 /** Slot layout: original, filtered, output, envelope, attack, release. */
 const ENV_CHANNELS = 6;
 const CH_ORIGINAL = 0;
-const CH_FILTERED = 1;
 const CH_OUTPUT = 2;
 const CH_ENVELOPE = 3;
 const CH_ATTACK = 4;
@@ -95,12 +94,18 @@ function resultChannelForView(view: number): number {
 
 type EnvDot = { x: number; y: number };
 
-/** Unpack phase + build one channel’s dots (or null). */
-function envelopeChannelDots(
+type UnpackedEnv = {
+  data: Float32Array;
+  slots: number;
+  slotMs: number;
+  phaseShift: number;
+};
+
+/** Unpack optional trailing phase + slot geometry. */
+function unpackEnvBuf(
   buf: Float32Array | null,
-  channel: number,
   windowMs: number,
-): EnvDot[] | null {
+): UnpackedEnv | null {
   if (!buf || buf.length < ENV_CHANNELS) return null;
 
   let phase = 0;
@@ -114,13 +119,52 @@ function envelopeChannelDots(
   if (slots < 1) return null;
 
   const slotMs = slots > 1 ? windowMs / (slots - 1) : windowMs;
-  const phaseShift = phase * slotMs;
+  return { data, slots, slotMs, phaseShift: phase * slotMs };
+}
+
+function slotAge(i: number, slots: number, slotMs: number, phaseShift: number): number {
+  return i === slots - 1 ? 0 : slotMs * (slots - 1 - i) + phaseShift;
+}
+
+/** Unpack phase + build one channel’s dots (or null). */
+function envelopeChannelDots(
+  buf: Float32Array | null,
+  channel: number,
+  windowMs: number,
+): EnvDot[] | null {
+  const u = unpackEnvBuf(buf, windowMs);
+  if (!u) return null;
   const pts: EnvDot[] = [];
-  for (let i = 0; i < slots; ++i) {
-    const age = i === slots - 1 ? 0 : slotMs * (slots - 1 - i) + phaseShift;
+  for (let i = 0; i < u.slots; ++i) {
     pts.push({
-      x: age,
-      y: linToDb(data[i * ENV_CHANNELS + channel] ?? 0),
+      x: slotAge(i, u.slots, u.slotMs, u.phaseShift),
+      y: linToDb(u.data[i * ENV_CHANNELS + channel] ?? 0),
+    });
+  }
+  return pts;
+}
+
+/**
+ * Per-slot max or min of two linear channels → dB dots.
+ * Used for outer = max(in,out) / mask = min(in,out) paint stack.
+ */
+function envelopeMaxMinDots(
+  buf: Float32Array | null,
+  chA: number,
+  chB: number,
+  windowMs: number,
+  mode: 'max' | 'min',
+): EnvDot[] | null {
+  const u = unpackEnvBuf(buf, windowMs);
+  if (!u) return null;
+  const pts: EnvDot[] = [];
+  for (let i = 0; i < u.slots; ++i) {
+    const a = u.data[i * ENV_CHANNELS + chA] ?? 0;
+    const b = u.data[i * ENV_CHANNELS + chB] ?? 0;
+    const lin = mode === 'max' ? Math.max(a, b) : Math.min(a, b);
+    pts.push({
+      x: slotAge(i, u.slots, u.slotMs, u.phaseShift),
+      y: linToDb(lin),
     });
   }
   return pts;
@@ -152,41 +196,35 @@ type AuxChartInstance = {
 };
 
 type Graphs = {
-  original: AuxGraph | null;
-  filtered: AuxGraph | null;
+  outer: AuxGraph | null;
+  mask: AuxGraph | null;
   result: AuxGraph | null;
 };
 
 /**
- * Scrolling envelope display for the transient shaper.
+ * Scrolling envelope for the transient shaper.
  *
- * Graphs: original (blue, back), filtered detector (white), result overlay
- * (Output / Envelope / Attack / Release via `view$`). Paint via AWML Bindings.
+ * Paint (back→front): outer max(in,out) gradient fill → min mask
+ * (background/semi) → thin light result line (Output / Envelope / Attack /
+ * Release via `view$`). Difference tips glow; line marks cut vs boost.
  */
 export function EnvelopeChart(props: EnvelopeChartProps) {
   const { data$, view$, vizId = 'env', className } = props;
   const chartRef = useRef<AuxChartInstance | null>(null);
   const graphsRef = useRef<Graphs>({
-    original: null,
-    filtered: null,
+    outer: null,
+    mask: null,
     result: null,
   });
   const graphBindingsRef = useRef<Bindings[]>([]);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
-  const [resultPath, setResultPath] = useState<SVGElement | null>(null);
 
-  const curveTargets = useMemo(
-    () => (resultPath ? [resultPath] : []),
-    [resultPath],
-  );
-  const reassertGradStroke = useChartGradient({
+  // CSS vars for fill-gradient on outer; no inline paint targets.
+  useChartGradient({
     svg: chartSvg,
-    targets: curveTargets,
-    paint: 'stroke',
+    enabled: !!chartSvg,
   });
-  const reassertRef = useRef(reassertGradStroke);
-  reassertRef.current = reassertGradStroke;
 
   /** data$ × view$ for the result-channel Binding. */
   const resultSource$ = useMemo(
@@ -209,14 +247,13 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
     for (const b of graphBindingsRef.current) b.dispose();
     graphBindingsRef.current = [];
     const chart = chartRef.current;
-    const { original, filtered, result } = graphsRef.current;
-    graphsRef.current = { original: null, filtered: null, result: null };
+    const { outer, mask, result } = graphsRef.current;
+    graphsRef.current = { outer: null, mask: null, result: null };
     chartRef.current = null;
     setChartSvg(null);
-    setResultPath(null);
     if (!chart || chart.isDestructed?.()) return;
-    if (original) chart.removeGraph(original);
-    if (filtered) chart.removeGraph(filtered);
+    if (outer) chart.removeGraph(outer);
+    if (mask) chart.removeGraph(mask);
     if (result) chart.removeGraph(result);
   }, []);
 
@@ -235,30 +272,26 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
       });
       chart.set('grid_x', buildTimeGridX(ENVELOPE_WINDOW_MS));
 
-      // Paint order = DOM order: original (back) → filtered → result (front).
-      if (!graphsRef.current.original) {
+      // Paint order = DOM order: outer (back) → mask → result (front).
+      if (!graphsRef.current.outer) {
         const g = chart.addGraph({
           dots: null,
           type: 'L',
           mode: 'bottom',
-          class: 'env-original-graph',
+          class: 'env-outer-graph',
         });
-        addGraphClasses(g.element, 'env-original-graph', GRAPH_STYLE.audio);
-        graphsRef.current.original = g;
+        addGraphClasses(g.element, 'env-outer-graph', GRAPH_STYLE.outerDiff);
+        graphsRef.current.outer = g;
       }
-      if (!graphsRef.current.filtered) {
+      if (!graphsRef.current.mask) {
         const g = chart.addGraph({
           dots: null,
           type: 'L',
           mode: 'bottom',
-          class: 'env-filtered-graph',
+          class: 'env-mask-graph',
         });
-        addGraphClasses(
-          g.element,
-          'env-filtered-graph',
-          GRAPH_STYLE.detector,
-        );
-        graphsRef.current.filtered = g;
+        addGraphClasses(g.element, 'env-mask-graph', GRAPH_STYLE.maskDiff);
+        graphsRef.current.mask = g;
       }
       if (!graphsRef.current.result) {
         const g = chart.addGraph({
@@ -267,50 +300,54 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
           mode: 'line',
           class: 'env-result-graph',
         });
-        addGraphClasses(g.element, 'env-result-graph', GRAPH_STYLE.gr);
+        addGraphClasses(g.element, 'env-result-graph', GRAPH_STYLE.gainEdge);
         graphsRef.current.result = g;
       }
-      graphsRef.current.original?.element?.parentElement?.appendChild(
-        graphsRef.current.original.element,
+      graphsRef.current.outer?.element?.parentElement?.appendChild(
+        graphsRef.current.outer.element,
       );
-      graphsRef.current.filtered?.element?.parentElement?.appendChild(
-        graphsRef.current.filtered.element,
+      graphsRef.current.mask?.element?.parentElement?.appendChild(
+        graphsRef.current.mask.element,
       );
       graphsRef.current.result?.element?.parentElement?.appendChild(
         graphsRef.current.result.element,
       );
 
-      const { original, filtered, result } = graphsRef.current;
+      const { outer, mask, result } = graphsRef.current;
       const bindings: Bindings[] = [];
-      if (original) {
+      if (outer) {
         bindings.push(
-          bindAuxOptions(original, [
+          bindAuxOptions(outer, [
             {
               name: 'dots',
               backendValue: data$,
               readonly: true,
               transformReceive: (buf: unknown) =>
-                envelopeChannelDots(
+                envelopeMaxMinDots(
                   buf as Float32Array | null,
                   CH_ORIGINAL,
+                  CH_OUTPUT,
                   ENVELOPE_WINDOW_MS,
+                  'max',
                 ),
             },
           ]),
         );
       }
-      if (filtered) {
+      if (mask) {
         bindings.push(
-          bindAuxOptions(filtered, [
+          bindAuxOptions(mask, [
             {
               name: 'dots',
               backendValue: data$,
               readonly: true,
               transformReceive: (buf: unknown) =>
-                envelopeChannelDots(
+                envelopeMaxMinDots(
                   buf as Float32Array | null,
-                  CH_FILTERED,
+                  CH_ORIGINAL,
+                  CH_OUTPUT,
                   ENVELOPE_WINDOW_MS,
+                  'min',
                 ),
             },
           ]),
@@ -338,8 +375,6 @@ export function EnvelopeChart(props: EnvelopeChartProps) {
       graphBindingsRef.current = bindings;
 
       setChartSvg(chart.svg ?? null);
-      setResultPath(graphsRef.current.result?.element ?? null);
-      queueMicrotask(() => reassertRef.current());
 
       const el = chart.element ?? chart.svg;
       if (el) {

@@ -127,27 +127,30 @@ CompressorPlugin::BlockState CompressorPlugin::makeBlockState() const
   return state;
 }
 
-void CompressorPlugin::histFeedSample(float audioPeakLin, float detPeakLin, float grLin)
+void CompressorPlugin::histFeedSample(float triggerLin, float grLin,
+                                      float outPeakLin, float threshLin)
 {
   if (!vizConsumerActive())
     return;
   const int pos = histPos_;
-  histBuf_[pos + 0] = std::max(audioPeakLin, histBuf_[pos + 0]);
-  histBuf_[pos + 1] = std::max(detPeakLin, histBuf_[pos + 1]);
+  histBuf_[pos + 0] = std::max(triggerLin, histBuf_[pos + 0]);
   // Most reduction within the slot (smallest linear GR).
-  if (histBuf_[pos + 2] <= 0.f)
-    histBuf_[pos + 2] = grLin;
+  if (histBuf_[pos + 1] <= 0.f)
+    histBuf_[pos + 1] = grLin;
   else
-    histBuf_[pos + 2] = std::min(grLin, histBuf_[pos + 2]);
+    histBuf_[pos + 1] = std::min(grLin, histBuf_[pos + 1]);
+  histBuf_[pos + 2] = std::max(outPeakLin, histBuf_[pos + 2]);
+  histBuf_[pos + 3] = threshLin;
 
   histSampleCount_ += 1;
   if (histSampleCount_ >= histSamplesPerSlot_)
   {
     histPos_ = (pos + kHistChannels) % kHistBufSize;
     histSampleCount_ = 0;
-    histBuf_[histPos_ + 0] = audioPeakLin;
-    histBuf_[histPos_ + 1] = detPeakLin;
-    histBuf_[histPos_ + 2] = grLin;
+    histBuf_[histPos_ + 0] = triggerLin;
+    histBuf_[histPos_ + 1] = grLin;
+    histBuf_[histPos_ + 2] = outPeakLin;
+    histBuf_[histPos_ + 3] = threshLin;
   }
 }
 
@@ -174,7 +177,6 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
 {
   const float dryL = L;
   const float dryR = R;
-  const float audioPeak = std::max(std::fabs(dryL), std::fabs(dryR));
 
   // Channel selects detector feed and GR path (suite / FabFilter Mid default).
   float detL = 0.f;
@@ -235,19 +237,51 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
       break;
   }
 
+  // History "Out" / Cut tips: dry × GR only (makeup + mix stay out of the plot).
+  auto dryProcessedPeak = [&]() -> float {
+    switch (state.channel)
+    {
+      case Dsp::ChannelMode::Left:
+        return std::fabs(dryL);
+      case Dsp::ChannelMode::Right:
+        return std::fabs(dryR);
+      case Dsp::ChannelMode::Mid:
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        Dsp::encodeMs(dryL, dryR, mid, side);
+        (void)side;
+        return std::fabs(mid);
+      }
+      case Dsp::ChannelMode::Side:
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        Dsp::encodeMs(dryL, dryR, mid, side);
+        (void)mid;
+        return std::fabs(side);
+      }
+      case Dsp::ChannelMode::Stereo:
+      default:
+        return std::max(std::fabs(dryL), std::fabs(dryR));
+    }
+  };
+
   if (state.listen && !state.bypass)
   {
     Dsp::listenImage(state.channel, detL, detR, L, R);
     const float gr = gr_.processDetector(detL, detR);
     const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
+    const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);
     grMeter_.process(gr);
-    histFeedSample(audioPeak, detPeak, gr);
+    histFeedSample(detPeak, gr, dryProcessedPeak() * gr, threshLin);
     return;
   }
 
   const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
   const float gr = gr_.processDetector(detL, detR);
   const float det = gr_.lastDetectorLin();
+  const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);
 
   const float bypassTarget = state.bypass ? 0.f : 1.f;
   bypassSmooth_ = Dsp::slewToward(
@@ -260,7 +294,7 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
     L = dryL;
     R = dryR;
     grMeter_.forceZero();
-    histFeedSample(audioPeak, detPeak, 1.f);
+    histFeedSample(detPeak, 1.f, dryProcessedPeak(), threshLin);
     const float inDb = linToDbSafe(det);
     pointInDbPlain_ = inDb;
     pointOutDbPlain_ = inDb;
@@ -268,7 +302,6 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
   }
 
   grMeter_.process(gr);
-  histFeedSample(audioPeak, detPeak, gr);
 
   // Operating point uses curve GR (not lagged audio GR) so it stays on the line.
   const float inDb = linToDbSafe(det);
@@ -331,6 +364,8 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
     L = bypassSmooth_ * L + (1.f - bypassSmooth_) * dryL;
     R = bypassSmooth_ * R + (1.f - bypassSmooth_) * dryR;
   }
+
+  histFeedSample(detPeak, gr, dryProcessedPeak() * gr, threshLin);
 }
 
 int CompressorPlugin::takeGainReductionDb(float* out, int maxOut)
@@ -373,11 +408,15 @@ int CompressorPlugin::takeEnvelopeDisplay(float* out, int maxOut)
     {
       const int srcIdx = (startPos + i * kHistChannels) % kHistBufSize;
       out[i * kHistChannels + 0] = std::fabs(histSnapshot_[srcIdx + 0]);
-      out[i * kHistChannels + 1] = std::fabs(histSnapshot_[srcIdx + 1]);
-      float gr = histSnapshot_[srcIdx + 2];
+      float gr = histSnapshot_[srcIdx + 1];
       if (!(gr > 0.f))
         gr = 1.f;
-      out[i * kHistChannels + 2] = std::clamp(gr, 1.0e-6f, 1.f);
+      out[i * kHistChannels + 1] = std::clamp(gr, 1.0e-6f, 1.f);
+      out[i * kHistChannels + 2] = std::fabs(histSnapshot_[srcIdx + 2]);
+      float thr = histSnapshot_[srcIdx + 3];
+      if (!(thr > 0.f))
+        thr = Dsp::dbToLin(params_[kParamThreshold]);
+      out[i * kHistChannels + 3] = std::clamp(thr, 1.0e-6f, 1.f);
     }
     const uint32_t s1 = histSeq_.load(std::memory_order_acquire);
     if (s0 == s1)
@@ -462,8 +501,9 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
     if (hasHostAudio)
     {
       const int32 n = data.numSamples;
+      const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);
       for (int32 i = 0; i < n; ++i)
-        histFeedSample(0.f, 0.f, 1.f);
+        histFeedSample(0.f, 1.f, 0.f, threshLin);
     }
     publishHistSnapshot();
     publishDynamicsPoint();

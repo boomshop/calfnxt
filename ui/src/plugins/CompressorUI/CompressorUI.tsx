@@ -5,7 +5,7 @@ import {
   DynamicsChart,
   FrequencyRange,
   HistoryChart,
-  HISTORY_STYLE,
+  dynamicsHistorySeries,
   Knob,
   LevelMeter,
   Select,
@@ -124,34 +124,8 @@ export function CompressorUI(props: CompressorUIProps) {
         <HistoryChart
           data$={host.historyData$}
           vizId="comp"
-          series={[
-            {
-              id: 'audio',
-              name: 'Input',
-              short: 'In',
-              channel: 0,
-              className: HISTORY_STYLE.audio,
-              mode: 'bottom',
-            },
-            {
-              id: 'detector',
-              name: 'Detector',
-              short: 'Det',
-              channel: 1,
-              className: HISTORY_STYLE.detector,
-              mode: 'bottom',
-            },
-            {
-              id: 'gr',
-              name: 'Gain reduction',
-              short: 'GR',
-              channel: 2,
-              className: HISTORY_STYLE.gr,
-              mode: 'line',
-              toFront: true,
-              gradient: true,
-            },
-          ]}
+          autoScale
+          series={dynamicsHistorySeries()}
         />
       </div>
 

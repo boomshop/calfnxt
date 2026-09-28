@@ -233,7 +233,8 @@ export function FilterUI(props: FilterUIProps) {
           showLabels
           yRange={{ min: -60, max: 24 }}
           dbGrid={12}
-          spectrum$={host.spectrumData$}
+          spectrumIn$={host.spectrumIn$}
+          spectrumOut$={host.spectrumOut$}
           spectrumMode={Math.round(spectrumMode)}
         />
       </div>

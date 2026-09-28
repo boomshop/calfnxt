@@ -71,11 +71,30 @@
     background: var(--background);
 
     > svg > .aux-graphs {
-      > .aux-baseline,
+      /*
+       * One sum curve only (HP+LP bands on the baseline). Individual ghosts
+       * were showing as a leftover floor stroke after hideEmptyBaseline.
+       */
       > .eq-individual {
-        fill: none;
-        stroke: var(--chart-level-stroke, var(--color-accent));
-        stroke-width: var(--graph-stroke-medium);
+        display: none !important;
+      }
+
+      > .aux-baseline {
+        fill: none !important;
+        fill-opacity: var(--graph-fill-opacity-none) !important;
+        /* Suite standard: warn@svgTop → accent@svgBottom. */
+        stroke: var(
+          --graph-gradient,
+          var(--chart-level-stroke, var(--color-accent))
+        ) !important;
+        stroke-opacity: var(--graph-stroke-opacity-full) !important;
+        stroke-width: var(--graph-stroke-thicker); /* 2px */
+
+        /* Both Off → flat 0 dB (beats EQChart hide-empty). */
+        &.aux-inactive {
+          opacity: 1;
+          filter: none;
+        }
       }
     }
   }

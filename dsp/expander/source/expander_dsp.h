@@ -57,7 +57,7 @@ protected:
 
 private:
   static constexpr int kInhibitCount = 2;
-  static constexpr int kHistChannels = 4; // audio, det, gr, inhibit
+  static constexpr int kHistChannels = 8; // trig, gr, out, thresh, invAmt×2, invPeak×2
   static constexpr int kHistSlots = 512;
   static constexpr int kHistMinSlots = 48;
   static constexpr int kHistBufSize = kHistSlots * kHistChannels;
@@ -125,8 +125,8 @@ private:
   void processSample(const BlockState& state, float& L, float& R, float scL, float scR,
                      float inv1L, float inv1R, float inv2L, float inv2R);
   void resetProcessing();
-  void histFeedSample(float audioPeakLin, float detPeakLin, float grLin,
-                      float inhibitLin);
+  void histFeedSample(float triggerLin, float grLin, float outPeakLin,
+                      float threshLin);
   void publishHistSnapshot();
   void publishDynamicsPoint();
 
@@ -138,6 +138,12 @@ private:
   Dsp::SidechainFilter invSc_[kInhibitCount];
   InhibitEnv invEnv_[kInhibitCount];
   float invAmount_[kInhibitCount] {};
+  /** Post-filter inhibit key peak (linear), last sample. */
+  float invPeakLin_[kInhibitCount] {};
+  /** Peak hold until takeLfoActivity (viz flush). */
+  float invPeakHold_[kInhibitCount] {};
+  /** Detector post-filter peak hold until takeLfoActivity. */
+  float detPeakHold_ = 0.f;
   Dsp::GrMeter grMeter_;
   /* Operating point: plains per sample, atomics once per process(). */
   float pointInDbPlain_ = -96.f;

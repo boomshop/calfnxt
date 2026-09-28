@@ -49,5 +49,8 @@ export const expanderInfo = {
     'How fast the force-closed amount fades after Hold. Short = the main detector can reopen quickly once the competing hit is gone — snappy, can click if Range is deep. Longer = smoother hand-off, the gate eases back instead of jumping open. Match it to the competing drum’s tail; this is not the expander’s own Release knob.',
 
   invListen:
-    'Solos this inhibit path (after Gain and HP/LP) so you hear what the close-key actually is — not the gated track. Tune filters and Thresh until Listen is mostly the competing drum, then turn Listen off. Exclusive: Inv 1 Listen beats Inv 2, which beats the main Sidechain Listen. Does not arm Inv by itself.',
+    'Solos this inhibit path (after Gain and HP/LP) so you hear what the close-key actually is — not the gated track. Tune filters and Thresh until Listen is mostly the competing drum, then turn Listen off. Exclusive across Detector + Inv 1 + Inv 2 — only one Listen at a time. Leaving this panel also clears Listen so you never stay soloed by accident. Does not arm Inv by itself. Prefer the key meters (Trig / I / H) when the DAW fights sidechain Solo/Mute (Reaper).',
+
+  keyMeters:
+    'Blind Inv setup meters (stay visible on Detector once any Inv is armed). Trig = main detector after its HP/LP. I1/I2 = that inhibit key after Gain + HP/LP. H1/H2 = how hard that Inv is forcing the gate shut (same −60…0 scale: silence = idle, 0 dB = full hold). Use I against Thresh and H against real hits vs bleed — no Solo needed. Only the armed Inv’s I/H bars appear; both armed → all five.',
 };

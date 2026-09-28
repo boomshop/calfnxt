@@ -46,11 +46,10 @@
     }
   }
 
-  /* Scatter dots: fill from in-SVG linearGradient (S→M→S). */
+  /* Scatter dots: S→M→S paint server (TS) + `stroke-thinner`; fill fully opaque. */
   &.mode-dots {
     .aux-graph {
-      stroke: none;
-      opacity: 0.85;
+      fill-opacity: var(--graph-fill-opacity-full);
     }
   }
 

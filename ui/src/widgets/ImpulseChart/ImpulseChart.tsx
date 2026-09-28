@@ -14,7 +14,7 @@ import {
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
-import { addGraphClasses, GRAPH_STYLE } from '../../styles/graphStyles';
+import { addGraphClasses } from '../../styles/graphStyles';
 import './ImpulseChart.scss';
 
 const DB_MAX = 6;
@@ -60,7 +60,8 @@ function formatMs(ms: number): string {
 
 function buildTimeGridX(maxMs: number) {
   const span = Math.max(100, maxMs);
-  const step = span >= 8000 ? 2000 : span >= 4000 ? 1000 : span >= 2000 ? 500 : 250;
+  const step =
+    span >= 8000 ? 2000 : span >= 4000 ? 1000 : span >= 2000 ? 500 : 250;
   const lines: { pos: number; label?: string; class?: string }[] = [];
   for (let t = 0; t <= span + 1e-6; t += step) {
     const pos = Math.round(t);
@@ -159,8 +160,7 @@ function waveDecayDots(
     const t = i / SHAPE_POINTS;
     decayPts.push({ x: pre + t * usedMs, y: fadeDb(t, shape) });
   }
-  if (usedMs < capturedMs)
-    decayPts.push({ x: pre + capturedMs, y: DB_MIN });
+  if (usedMs < capturedMs) decayPts.push({ x: pre + capturedMs, y: DB_MIN });
   return decayPts;
 }
 
@@ -249,7 +249,8 @@ export interface ImpulseChartProps {
  * usedMs, db0…].
  */
 export function ImpulseChart(props: ImpulseChartProps) {
-  const { data$, decay$, predelay$, shape$, beginEdit, endEdit, className } = props;
+  const { data$, decay$, predelay$, shape$, beginEdit, endEdit, className } =
+    props;
   const dataRef = useRef<number[]>(EMPTY_WAVE);
   const decay = useDynamicValueReadonly(decay$, 1);
   const predelay = useDynamicValueReadonly(predelay$, 0);
@@ -313,10 +314,8 @@ export function ImpulseChart(props: ImpulseChartProps) {
     () => [
       {
         set_interacting: (on: unknown) => {
-          if (on)
-            beginEdit?.();
-          else
-            endEdit?.();
+          if (on) beginEdit?.();
+          else endEdit?.();
         },
       },
     ],
@@ -341,8 +340,7 @@ export function ImpulseChart(props: ImpulseChartProps) {
   reassertRef.current = reassertGrad;
 
   const waveFrame$ = useMemo(
-    () =>
-      new ListValue<WaveFrame>([data$, decay$, predelay$, shape$]),
+    () => new ListValue<WaveFrame>([data$, decay$, predelay$, shape$]),
     [data$, decay$, predelay$, shape$],
   );
 
@@ -459,22 +457,17 @@ export function ImpulseChart(props: ImpulseChartProps) {
     setChart(null);
     setChartSvg(null);
     setGradTarget(null);
-    if (!inst || inst.isDestructed?.())
-      return;
-    if (dec)
-      disposeGraph(inst, dec);
-    if (used)
-      disposeGraph(inst, used);
-    if (ir)
-      disposeGraph(inst, ir);
+    if (!inst || inst.isDestructed?.()) return;
+    if (dec) disposeGraph(inst, dec);
+    if (used) disposeGraph(inst, used);
+    if (ir) disposeGraph(inst, ir);
   }, [disposeGraphBindings]);
 
   const attach = useCallback(
     (inst: AuxChartInstance) => {
       chartRef.current = inst;
       setChart(inst);
-      if (inst.isDestructed?.())
-        return;
+      if (inst.isDestructed?.()) return;
 
       // Idempotent: use-aux-widgets re-calls widgetRef when the callback
       // identity changes, without nulling the old ref — never double-add.
@@ -485,7 +478,11 @@ export function ImpulseChart(props: ImpulseChartProps) {
           mode: 'bottom',
           class: 'ir-wave',
         });
-        addGraphClasses(ir.element, 'ir-wave', GRAPH_STYLE.audio);
+        addGraphClasses(
+          ir.element,
+          'ir-wave',
+          'fill-gradient fill-semi stroke-none',
+        );
         irGraphRef.current = ir;
       }
       if (!usedGraphRef.current) {
@@ -495,7 +492,11 @@ export function ImpulseChart(props: ImpulseChartProps) {
           mode: 'bottom',
           class: 'ir-used',
         });
-        addGraphClasses(used.element, 'ir-used', GRAPH_STYLE.detector);
+        addGraphClasses(
+          used.element,
+          'ir-used',
+          'fill-gradient fill-full stroke-none',
+        );
         usedGraphRef.current = used;
       }
       if (!decayGraphRef.current) {
@@ -523,8 +524,7 @@ export function ImpulseChart(props: ImpulseChartProps) {
           sendVizBins(el);
           let raf = 0;
           const ro = new ResizeObserver(() => {
-            if (raf)
-              cancelAnimationFrame(raf);
+            if (raf) cancelAnimationFrame(raf);
             raf = requestAnimationFrame(() => sendVizBins(el));
           });
           ro.observe(el);
@@ -541,8 +541,7 @@ export function ImpulseChart(props: ImpulseChartProps) {
         detach();
         return;
       }
-      if (chartRef.current && chartRef.current !== inst)
-        detach();
+      if (chartRef.current && chartRef.current !== inst) detach();
       attach(inst);
     },
     [attach, detach],
@@ -550,12 +549,10 @@ export function ImpulseChart(props: ImpulseChartProps) {
 
   useEffect(() => {
     const inst = chart;
-    if (!inst || !handle || inst.isDestructed?.())
-      return;
+    if (!inst || !handle || inst.isDestructed?.()) return;
     inst.addHandle?.(handle);
     return () => {
-      if (inst.isDestructed?.())
-        return;
+      if (inst.isDestructed?.()) return;
       inst.removeHandle?.(handle);
     };
   }, [chart, handle]);
@@ -569,10 +566,5 @@ export function ImpulseChart(props: ImpulseChartProps) {
   useEffect(() => () => detach(), [detach]);
 
   const cls = ['ImpulseChart', className ?? ''].filter(Boolean).join(' ');
-  return (
-    <ChartWidget
-      className={cls}
-      widgetRef={widgetRef}
-    />
-  );
+  return <ChartWidget className={cls} widgetRef={widgetRef} />;
 }

@@ -239,7 +239,7 @@ export function CrusherChart(props: CrusherChartProps) {
           <feGaussianBlur stdDeviation="2.25" />
         </filter>
       </defs>
-      <line className="axis stroke-color stroke-thinner stroke-faint" x1={padX} y1={midY} x2={w - padX} y2={midY} />
+      <line className="axis stroke-color stroke-thinner stroke-semi" x1={padX} y1={midY} x2={w - padX} y2={midY} />
 
       <g
         ref={heatLayerRef}
@@ -247,7 +247,7 @@ export function CrusherChart(props: CrusherChartProps) {
         filter={`url(#${blurId})`}
       />
 
-      <path className="wave-dry fill-none stroke-color stroke-faint stroke-thinner" d={pathDry} />
+      <path className="wave-dry fill-none stroke-color stroke-semi stroke-thinner" d={pathDry} />
       <path
         ref={setCurveEl}
         className="curve fill-gradient fill-ghost stroke-gradient stroke-thicker"

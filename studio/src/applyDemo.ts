@@ -38,6 +38,8 @@ export type VizFixture = {
   gr?: number;
   /** Transfer operating point [inDb, outDb]. */
   point?: number[];
+  /** Expander key meters unit stream [amt1, amt2, peak1, peak2, detPeak] 0…1. */
+  unit?: number[];
   corr?: number;
   gonio?: number[];
   tempo?: number[];
@@ -48,6 +50,10 @@ export type VizFixture = {
   shape?: number[];
   /** Spectrum: [bins, hold, avg×N, max×N, L×N, R×N] dBFS. */
   spectrum?: number[];
+  /** Pre-dynamics / pre-EQ spectrum (mbcomp / mblimiter / equalizer / filter). */
+  spectrumIn?: number[];
+  /** Post-dynamics / post-EQ spectrum (mbcomp / mblimiter / equalizer / filter). */
+  spectrumOut?: number[];
   /**
    * Analyzer loudness pack (BS.1770): scalars + histCount × (M, S, TP, RMS).
    * See `LoudnessMeter::take` / analyzerHost subscribe.
@@ -147,6 +153,13 @@ export function applyExpanderDemo(
   setNum(host.lpMode$, params.lp_mode);
   setBool(host.listen$, params.listen);
 
+  setBool(host.inv1.active$, params.inv1_active);
+  setBool(host.inv2.active$, params.inv2_active);
+  setNum(host.inv1.threshold$, params.inv1_threshold);
+  setNum(host.inv2.threshold$, params.inv2_threshold);
+  setNum(host.inv1.gain$, params.inv1_gain);
+  setNum(host.inv2.gain$, params.inv2_gain);
+
   applySharedViz(viz);
   if (viz.envelope)
     host.historyData$.set(new Float32Array(viz.envelope));
@@ -154,6 +167,28 @@ export function applyExpanderDemo(
     host.gr$.set(viz.gr);
   if (viz.point)
     host.point$.set(viz.point);
+
+  // Key MultiMeter: [amt1, amt2, peak1Unit, peak2Unit, detPeakUnit] → dB bars.
+  if (viz.unit && viz.unit.length >= 5) {
+    const peakToDb = (u: number) =>
+      Math.min(0, Math.max(-60, (Number.isFinite(u) ? u : 0) * 60 - 60));
+    const holdToDb = (a: number) =>
+      Math.min(0, Math.max(-60, (Number.isFinite(a) ? a : 0) * 60 - 60));
+    const amt1 = viz.unit[0] ?? 0;
+    const amt2 = viz.unit[1] ?? 0;
+    const i1 = peakToDb(viz.unit[2] ?? 0);
+    const i2 = peakToDb(viz.unit[3] ?? 0);
+    const trig = peakToDb(viz.unit[4] ?? 0);
+    host.inv1.amount$.set(amt1);
+    host.inv2.amount$.set(amt2);
+    host.inv1.levelDb$.set(i1);
+    host.inv2.levelDb$.set(i2);
+    const vals = [trig];
+    if (host.inv1.active$.value) vals.push(i1, holdToDb(amt1));
+    if (host.inv2.active$.value) vals.push(i2, holdToDb(amt2));
+    host.keyMeters$.set(vals);
+    host.keyMeterCount$.set(vals.length);
+  }
 }
 
 export function applyDeesserDemo(
@@ -582,10 +617,27 @@ export function applyEqualizerDemo(
   applySharedViz(viz);
   if (viz.gains)
     pushViz('eq', 'gains', viz.gains);
-  if (viz.spectrum) {
-    host.spectrumData$.set(viz.spectrum);
-    pushViz('fft', 'spectrum', viz.spectrum);
+  if (viz.spectrumIn) {
+    host.spectrumIn$.set(viz.spectrumIn);
+    pushViz('fft_in', 'spectrum', viz.spectrumIn);
   }
+  if (viz.spectrumOut) {
+    host.spectrumOut$.set(viz.spectrumOut);
+    pushViz('fft_out', 'spectrum', viz.spectrumOut);
+  } else if (viz.spectrum) {
+    // Legacy single-spectrum fixtures: show as identical in/out (no tips).
+    host.spectrumIn$.set(viz.spectrum);
+    host.spectrumOut$.set(viz.spectrum);
+    pushViz('fft_in', 'spectrum', viz.spectrum);
+    pushViz('fft_out', 'spectrum', viz.spectrum);
+  }
+
+  // Studio: band 7 = index 6 (1-based label).
+  const selected =
+    typeof params.selected_band === 'number' ? params.selected_band : 6;
+  host.selectedBandIndex$.set(
+    Math.max(0, Math.min(host.bands.length - 1, Math.round(selected))),
+  );
 }
 
 function applyMbcompMeters(host: IMbcompHost, viz: VizFixture) {
@@ -616,6 +668,14 @@ function applyMbcompMeters(host: IMbcompHost, viz: VizFixture) {
     pushViz('mbcomp', 'bandio', viz.bandio);
   }
   if (viz.point) host.point$.set(viz.point);
+  if (viz.spectrumIn) {
+    host.spectrumIn$.set(viz.spectrumIn);
+    pushViz('fft_in', 'spectrum', viz.spectrumIn);
+  }
+  if (viz.spectrumOut) {
+    host.spectrumOut$.set(viz.spectrumOut);
+    pushViz('fft_out', 'spectrum', viz.spectrumOut);
+  }
 }
 
 export function applyLimiterDemo(
@@ -721,6 +781,14 @@ function applyMblimiterMeters(host: IMblimiterHost, viz: VizFixture) {
       );
     }
     pushViz('mblimiter', 'bandio', viz.bandio);
+  }
+  if (viz.spectrumIn) {
+    host.spectrumIn$.set(viz.spectrumIn);
+    pushViz('fft_in', 'spectrum', viz.spectrumIn);
+  }
+  if (viz.spectrumOut) {
+    host.spectrumOut$.set(viz.spectrumOut);
+    pushViz('fft_out', 'spectrum', viz.spectrumOut);
   }
 }
 

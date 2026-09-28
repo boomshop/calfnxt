@@ -33,8 +33,10 @@ export type IExpanderInhibitHost = {
   hpMode$: DynamicValue<number>;
   lpMode$: DynamicValue<number>;
   listen$: DynamicValue<boolean>;
-  /** Live hold amount 0…1 from DSP (tab warn / Holding meter). */
+  /** Live hold amount 0…1 from DSP (tab warn / Hold meter). */
   amount$: DynamicValue<number>;
+  /** Post-filter Inv key peak in dBFS (−60…0) for LevelMeter. */
+  levelDb$: DynamicValue<number>;
 };
 
 export type IExpanderHost = {
@@ -61,8 +63,12 @@ export type IExpanderHost = {
   listen$: DynamicValue<boolean>;
   inv1: IExpanderInhibitHost;
   inv2: IExpanderInhibitHost;
-  /** True when either Inv is armed — HistoryChart inhibit series visibility. */
-  inhibitHistVisible$: DynamicValue<boolean>;
+  /**
+   * Key MultiMeter values in dBFS (−60…0): Trig post, then I1/H1 and/or I2/H2
+   * depending on which Inv paths are armed. Hold amount is mapped 0…1 → −60…0.
+   */
+  keyMeters$: DynamicValue<number[]>;
+  keyMeterCount$: DynamicValue<number>;
   gr$: DynamicValue<number>;
   point$: DynamicValue<number[]>;
   historyData$: DynamicValue<Float32Array | null>;
@@ -100,6 +106,7 @@ function bindBool(name: keyof typeof paramIds): DynamicValue<boolean> {
 function bindInhibit(
   prefix: 'inv1' | 'inv2',
   amount$: DynamicValue<number>,
+  levelDb$: DynamicValue<number>,
 ): IExpanderInhibitHost {
   return {
     active$: bindBool(`${prefix}_active`),
@@ -113,6 +120,7 @@ function bindInhibit(
     lpMode$: bindNum(`${prefix}_lp_mode`, 0),
     listen$: bindBool(`${prefix}_listen`),
     amount$,
+    levelDb$,
   };
 }
 
@@ -128,24 +136,36 @@ function wireExclusiveListen(listens: DynamicValue<boolean>[]): void {
   }
 }
 
+/** Peak unit 0…1 → dBFS (−60…0), matching ExpanderPlugin::takeLfoActivity. */
+function peakUnitToDb(u: number): number {
+  if (!Number.isFinite(u)) return -60;
+  return Math.min(0, Math.max(-60, u * 60 - 60));
+}
+
+/** Hold desire 0…1 → same −60…0 scale so it shares a MultiMeter. */
+function holdToDb(amt: number): number {
+  if (!Number.isFinite(amt)) return -60;
+  return Math.min(0, Math.max(-60, amt * 60 - 60));
+}
+
 export function createBoundExpanderHost(): IExpanderHost {
   const gr$ = DynamicValue.fromConstant(0);
   const point$ = DynamicValue.fromConstant<number[]>([-96, -96]);
   const historyData$ = DynamicValue.fromConstant<Float32Array | null>(null);
-  const inhibitAct$ = DynamicValue.fromConstant<number[]>([0, 0]);
+  const inhibitAct$ = DynamicValue.fromConstant<number[]>([0, 0, 0, 0, 0]);
   const inv1Amount$ = DynamicValue.fromConstant(0);
   const inv2Amount$ = DynamicValue.fromConstant(0);
-  const inhibitHistVisible$ = DynamicValue.fromConstant(false);
+  const inv1LevelDb$ = DynamicValue.fromConstant(-60);
+  const inv2LevelDb$ = DynamicValue.fromConstant(-60);
+  const triggerLevelDb$ = DynamicValue.fromConstant(-60);
+  const keyMeters$ = DynamicValue.fromConstant<number[]>([-60]);
+  const keyMeterCount$ = DynamicValue.fromConstant(1);
 
   bindVizGr(gr$, 'exp');
   bindVizPoint(point$, 'exp');
-  // Always 4-channel envelope — never strip; hide inhibit via visible$ on the graph.
+  // Always 6-channel envelope — Inv series use listed$/visible$ on the graph.
   bindVizEnvelope(historyData$, 'exp');
   bindVizUnitLevels(inhibitAct$, 'exp');
-  inhibitAct$.subscribe((v) => {
-    inv1Amount$.set(typeof v[0] === 'number' ? v[0] : 0);
-    inv2Amount$.set(typeof v[1] === 'number' ? v[1] : 0);
-  });
 
   const threshold$ = bindNum('threshold', -32);
   const releaseThreshold$ = bindNum('release_threshold', -32);
@@ -156,16 +176,33 @@ export function createBoundExpanderHost(): IExpanderHost {
   });
 
   const listen$ = bindBool('listen');
-  const inv1 = bindInhibit('inv1', inv1Amount$);
-  const inv2 = bindInhibit('inv2', inv2Amount$);
+  const inv1 = bindInhibit('inv1', inv1Amount$, inv1LevelDb$);
+  const inv2 = bindInhibit('inv2', inv2Amount$, inv2LevelDb$);
   wireExclusiveListen([listen$, inv1.listen$, inv2.listen$]);
 
-  const syncInhibitHistVisible = () => {
-    inhibitHistVisible$.set(!!(inv1.active$.value || inv2.active$.value));
+  const syncKeyMeters = () => {
+    const vals: number[] = [triggerLevelDb$.value ?? -60];
+    if (inv1.active$.value) {
+      vals.push(inv1LevelDb$.value ?? -60, holdToDb(inv1Amount$.value ?? 0));
+    }
+    if (inv2.active$.value) {
+      vals.push(inv2LevelDb$.value ?? -60, holdToDb(inv2Amount$.value ?? 0));
+    }
+    keyMeters$.set(vals);
+    keyMeterCount$.set(vals.length);
   };
-  inv1.active$.subscribe(syncInhibitHistVisible);
-  inv2.active$.subscribe(syncInhibitHistVisible);
-  syncInhibitHistVisible();
+
+  inhibitAct$.subscribe((v) => {
+    inv1Amount$.set(typeof v[0] === 'number' ? v[0] : 0);
+    inv2Amount$.set(typeof v[1] === 'number' ? v[1] : 0);
+    inv1LevelDb$.set(peakUnitToDb(typeof v[2] === 'number' ? v[2] : 0));
+    inv2LevelDb$.set(peakUnitToDb(typeof v[3] === 'number' ? v[3] : 0));
+    triggerLevelDb$.set(peakUnitToDb(typeof v[4] === 'number' ? v[4] : 0));
+    syncKeyMeters();
+  });
+  inv1.active$.subscribe(syncKeyMeters);
+  inv2.active$.subscribe(syncKeyMeters);
+  syncKeyMeters();
 
   return {
     meta: pluginMeta,
@@ -190,7 +227,8 @@ export function createBoundExpanderHost(): IExpanderHost {
     listen$,
     inv1,
     inv2,
-    inhibitHistVisible$,
+    keyMeters$,
+    keyMeterCount$,
     gr$,
     point$,
     historyData$,

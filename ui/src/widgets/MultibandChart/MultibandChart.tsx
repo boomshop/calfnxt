@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChartHandle as AuxChartHandle,
   Equalizer as AuxEqualizer,
@@ -9,7 +9,8 @@ import {
   componentFromWidget,
   useWidgetsWithBindingsAndEvents,
 } from '@deutschesoft/use-aux-widgets';
-import { DynamicValue } from '@deutschesoft/awml';
+import { DynamicValue, ListValue } from '@deutschesoft/awml';
+import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
 import {
   auxHighpassGain24,
   auxHighpassGain48,
@@ -19,6 +20,17 @@ import {
   auxLowpassGain96,
 } from '../../dsp/eqFilters';
 import { useChartGradient } from '../../hooks/useChartGradient';
+import { bindAuxOptions } from '../../utils/aux_bindings';
+import { postToHost } from '../../utils/bridge';
+import {
+  SPECTRUM_MAX_BINS,
+  SPECTRUM_MIN_BINS,
+} from '../SpectrumChart/SpectrumChart';
+import {
+  spectrumOverlayContourDots,
+  spectrumOverlayDiffDots,
+} from '../../utils/spectrumDiffOverlay';
+import { addGraphClasses, GRAPH_STYLE } from '../../styles/graphStyles';
 import type { EditGesture } from '../editGesture';
 import './MultibandChart.scss';
 
@@ -30,6 +42,13 @@ export const MB_GAIN_MIN = -60;
 export const MB_GAIN_MAX = 0;
 /** Linkwitz-Riley crossovers are Butterworth cascades. */
 const MB_XOVER_Q = 0.707;
+
+const MB_SPECTRUM_AXIS = {
+  fMin: MB_FREQ_MIN,
+  fMax: MB_FREQ_MAX,
+  yMin: MB_GAIN_MIN,
+  yMax: MB_GAIN_MAX,
+} as const;
 
 const EqualizerBindings = {};
 
@@ -98,6 +117,10 @@ export interface MultibandChartProps {
   xoverEdit?: (index: number) => EditGesture;
   /** When false, omit threshold ChartHandles (still show GR curves + xovers). */
   showThresholds?: boolean;
+  /** Pre-dynamics spectrum payload (fft_in). */
+  spectrumIn$?: DynamicValue<number[]>;
+  /** Post-dynamics spectrum payload (fft_out). */
+  spectrumOut$?: DynamicValue<number[]>;
   className?: string;
 }
 
@@ -216,10 +239,30 @@ export function MultibandChart(props: MultibandChartProps) {
     thresholdEdit,
     xoverEdit,
     showThresholds = true,
+    spectrumIn$,
+    spectrumOut$,
     className,
   } = props;
 
   const [eqWidget, setEqWidget] = useState<AuxEqualizerInstance | null>(null);
+  const spectrumOuterRef = useRef<{
+    set: (k: string, v: unknown) => void;
+    element?: SVGElement;
+    toFront?: () => void;
+  } | null>(null);
+  const spectrumMaskRef = useRef<{
+    set: (k: string, v: unknown) => void;
+    element?: SVGElement;
+    toFront?: () => void;
+  } | null>(null);
+  const spectrumEdgeRef = useRef<{
+    set: (k: string, v: unknown) => void;
+    element?: SVGElement;
+    toFront?: () => void;
+  } | null>(null);
+  const spectrumBindRef = useRef<Bindings | null>(null);
+  const spectrumWidthRef = useRef(0);
+  const spectrumResizeRoRef = useRef<ResizeObserver | null>(null);
   const bands = Math.max(2, Math.min(MB_MAX_BANDS, Math.round(bandCount)));
   const xoverCount = MB_MAX_BANDS - 1;
 
@@ -533,25 +576,8 @@ export function MultibandChart(props: MultibandChartProps) {
     threshEvents,
   );
 
-  // Individual band curves only — the dB sum of LR crossovers dips at every
-  // crossover, which reads as an artefact rather than the band layout.
-  useEffect(() => {
-    const eq = eqWidget;
-    if (!eq || eq.isDestructed()) return;
-
-    const clearBaseline = () => {
-      if (eq.isDestructed()) return;
-      eq.baseline.set('bands', []);
-    };
-
-    clearBaseline();
-    const unsubBandAdded = eq.subscribe('bandadded', clearBaseline);
-    return () => {
-      unsubBandAdded();
-      clearBaseline();
-    };
-  }, [eqWidget, shapes]);
-
+  // Individual band curves only — EqBands live on the graphs, not as Equalizer
+  // children (that would spawn circular handles + baseline membership).
   useEffect(() => {
     const eq = eqWidget;
     if (!eq || eq.isDestructed()) return;
@@ -561,6 +587,13 @@ export function MultibandChart(props: MultibandChartProps) {
       graphs.forEach((graph) => eq.removeGraph(graph));
     };
   }, [eqWidget, graphs]);
+
+  useEffect(() => {
+    const eq = eqWidget;
+    if (!eq || eq.isDestructed()) return;
+    // Keep sum baseline empty (no EqBand children on the Equalizer).
+    eq.baseline.set('bands', []);
+  }, [eqWidget]);
 
   useEffect(() => {
     const eq = eqWidget;
@@ -640,12 +673,170 @@ export function MultibandChart(props: MultibandChartProps) {
     getHeight: getEqHeight,
   });
 
+  const spectrumPair$ = useMemo(() => {
+    if (!spectrumIn$ || !spectrumOut$) return null;
+    return new ListValue<[number[], number[]]>([spectrumIn$, spectrumOut$]);
+  }, [spectrumIn$, spectrumOut$]);
+
+  // In/Out spectrum fills + output edge line (cut above / boost below).
+  useEffect(() => {
+    if (!eqWidget || !spectrumPair$) return;
+    const eq = eqWidget as {
+      addGraph: (opts: unknown) => {
+        set: (k: string, v: unknown) => void;
+        element?: SVGElement;
+        toFront?: () => void;
+      };
+      removeGraph: (g: unknown) => void;
+      isDestructed?: () => boolean;
+      element?: Element;
+      svg?: SVGSVGElement;
+    };
+    if (eq.isDestructed?.()) return;
+
+    spectrumBindRef.current?.dispose();
+    spectrumBindRef.current = null;
+
+    if (!spectrumOuterRef.current) {
+      const outer = eq.addGraph({
+        dots: null,
+        type: 'L',
+        mode: 'bottom',
+        class: 'mb-spectrum-outer',
+      });
+      addGraphClasses(
+        outer.element,
+        'mb-spectrum-outer',
+        GRAPH_STYLE.outerDiff,
+      );
+      spectrumOuterRef.current = outer;
+    }
+    if (!spectrumMaskRef.current) {
+      const mask = eq.addGraph({
+        dots: null,
+        type: 'L',
+        mode: 'bottom',
+        class: 'mb-spectrum-mask',
+      });
+      addGraphClasses(mask.element, 'mb-spectrum-mask', GRAPH_STYLE.maskDiff);
+      spectrumMaskRef.current = mask;
+    }
+    if (!spectrumEdgeRef.current) {
+      const edge = eq.addGraph({
+        dots: null,
+        type: 'L',
+        mode: 'line',
+        class: 'mb-spectrum-edge',
+      });
+      addGraphClasses(edge.element, 'mb-spectrum-edge', GRAPH_STYLE.gainEdge);
+      spectrumEdgeRef.current = edge;
+    }
+
+    // Back→front under band curves: outer → mask → edge.
+    const parent = spectrumOuterRef.current.element?.parentElement;
+    if (parent) {
+      parent.insertBefore(
+        spectrumOuterRef.current.element!,
+        parent.firstChild,
+      );
+      parent.insertBefore(
+        spectrumMaskRef.current.element!,
+        spectrumOuterRef.current.element!.nextSibling,
+      );
+      parent.insertBefore(
+        spectrumEdgeRef.current.element!,
+        spectrumMaskRef.current.element!.nextSibling,
+      );
+    }
+
+    const outer = spectrumOuterRef.current;
+    const mask = spectrumMaskRef.current;
+    const edge = spectrumEdgeRef.current;
+    const bindings = bindAuxOptions(outer, [
+      {
+        name: 'dots',
+        backendValue: spectrumPair$,
+        readonly: true,
+        transformReceive: (pair: unknown) => {
+          const [inn, out] = (pair as [number[], number[]]) ?? [[], []];
+          const w = spectrumWidthRef.current;
+          mask.set(
+            'dots',
+            spectrumOverlayDiffDots(inn, out, 'min', MB_SPECTRUM_AXIS, w),
+          );
+          edge.set(
+            'dots',
+            spectrumOverlayContourDots(out, MB_SPECTRUM_AXIS, w),
+          );
+          return spectrumOverlayDiffDots(inn, out, 'max', MB_SPECTRUM_AXIS, w);
+        },
+      },
+    ]);
+    spectrumBindRef.current = bindings;
+
+    const el = eq.element ?? eq.svg;
+    spectrumResizeRoRef.current?.disconnect();
+    spectrumResizeRoRef.current = null;
+    if (el) {
+      const sendBins = () => {
+        const width = Math.round(el.getBoundingClientRect().width);
+        spectrumWidthRef.current = Math.max(1, width);
+        const next = Math.max(
+          SPECTRUM_MIN_BINS,
+          Math.min(SPECTRUM_MAX_BINS, width),
+        );
+        postToHost({ t: 'vizcfg', id: 'fft_in', bins: next });
+        postToHost({ t: 'vizcfg', id: 'fft_out', bins: next });
+      };
+      sendBins();
+      let raf = 0;
+      const ro = new ResizeObserver(() => {
+        if (raf) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(sendBins);
+      });
+      ro.observe(el);
+      spectrumResizeRoRef.current = ro;
+    }
+
+    return () => {
+      spectrumBindRef.current?.dispose();
+      spectrumBindRef.current = null;
+      spectrumResizeRoRef.current?.disconnect();
+      spectrumResizeRoRef.current = null;
+    };
+  }, [eqWidget, spectrumPair$]);
+
+  useEffect(() => {
+    return () => {
+      const eq = eqWidget as
+        | { removeGraph: (g: unknown) => void; isDestructed?: () => boolean }
+        | null;
+      if (!eq || eq.isDestructed?.()) {
+        spectrumOuterRef.current = null;
+        spectrumMaskRef.current = null;
+        spectrumEdgeRef.current = null;
+        return;
+      }
+      if (spectrumOuterRef.current) {
+        eq.removeGraph(spectrumOuterRef.current);
+        spectrumOuterRef.current = null;
+      }
+      if (spectrumMaskRef.current) {
+        eq.removeGraph(spectrumMaskRef.current);
+        spectrumMaskRef.current = null;
+      }
+      if (spectrumEdgeRef.current) {
+        eq.removeGraph(spectrumEdgeRef.current);
+        spectrumEdgeRef.current = null;
+      }
+    };
+  }, [eqWidget]);
+
   const cls = ['MultibandChart', className ?? ''].filter(Boolean).join(' ');
 
   return (
     <EqualizerWidget
       widgetRef={setEqWidget}
-      bands={shapes}
       className={cls}
       show_grid
       show_handles

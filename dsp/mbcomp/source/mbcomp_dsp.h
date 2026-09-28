@@ -7,6 +7,7 @@
 #include "gr_meter.h"
 #include "band_splitter.h"
 #include "peak_hold.h"
+#include "spectrum_tap.h"
 #include "viz_source.h"
 
 #include "mbcomp_params.h"
@@ -48,6 +49,10 @@ public:
   const char* vizBandGainsId() const override { return "mbcomp"; }
   int takeBandIoLevelsDb(float* out, int maxOut) override;
   const char* vizBandIoLevelsId() const override { return "mbcomp"; }
+  int takeSpectrum(float* out, int maxOut) override;
+  const char* vizSpectrumId() const override { return "fft_in"; }
+  int takeOutputSpectrum(float* out, int maxOut) override;
+  const char* vizOutputSpectrumId() const override { return "fft_out"; }
   void configureVizBins(const char* id, int bins) override;
 
   OBJ_METHODS(MbcompPlugin, Plugin::EffectBase)
@@ -59,7 +64,7 @@ protected:
   const char* editorHtml() const override { return kEditorHtml; }
 
 private:
-  // Per-band history: fullband peak, crossover peak, GR lin.
+  // Per-band history: band post-GR (no makeup/mix), GR lin, thresh.
   static constexpr int kHistChannels = 3;
   static constexpr int kHistSlots = 512;
   static constexpr int kHistMinSlots = 48;
@@ -71,6 +76,7 @@ private:
     float dry = 0.f;
     float makeupLin = 1.f;
     float makeupDb = 0.f;
+    float threshLin = 1.f;
     bool active = true;
     bool bypass = false;
     bool listen = false;
@@ -78,7 +84,8 @@ private:
   };
 
   void resetProcessing();
-  void histFeedSample(int band, float fullPeak, float bandPeak, float grLin);
+  // Band-out × GR reconstructs pre via Cut expand — no separate trigger channel.
+  void histFeedSample(int band, float bandOutPeak, float grLin, float threshLin);
   void publishHistSnapshot();
   void publishDynamicsPoints();
   int numBands() const;
@@ -93,6 +100,8 @@ private:
   Dsp::GrMeter grMeter_[kMaxBands];
   Viz::LevelPeakHold bandInHold_[kMaxBands];
   Viz::LevelPeakHold bandOutHold_[kMaxBands];
+  Dsp::SpectrumTap spectrumIn_;
+  Dsp::SpectrumTap spectrumOut_;
 
   /* Operating points: plains per sample, atomics once per process(). */
   float pointInDbPlain_[kMaxBands] {};

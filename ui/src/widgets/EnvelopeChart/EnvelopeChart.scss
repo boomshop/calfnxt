@@ -13,7 +13,7 @@
 
       > .aux-gridline.env-grid-time {
         stroke: var(--color);
-        stroke-opacity: 0.12;
+        stroke-opacity: var(--graph-stroke-opacity-ghost);
       }
     }
   }

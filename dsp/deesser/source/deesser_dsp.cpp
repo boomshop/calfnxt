@@ -104,26 +104,33 @@ DeesserPlugin::BlockState DeesserPlugin::makeBlockState() const
   return state;
 }
 
-void DeesserPlugin::histFeedSample(float audioPeakLin, float detPeakLin, float grLin)
+void DeesserPlugin::histFeedSample(float triggerLin, float grLin,
+                                   float outPeakLin, float threshLin,
+                                   float prePeakLin)
 {
   if (!vizConsumerActive())
     return;
   const int pos = histPos_;
-  histBuf_[pos + 0] = std::max(audioPeakLin, histBuf_[pos + 0]);
-  histBuf_[pos + 1] = std::max(detPeakLin, histBuf_[pos + 1]);
-  if (histBuf_[pos + 2] <= 0.f)
-    histBuf_[pos + 2] = grLin;
+  histBuf_[pos + 0] = std::max(triggerLin, histBuf_[pos + 0]);
+  // Most reduction within the slot (smallest linear GR).
+  if (histBuf_[pos + 1] <= 0.f)
+    histBuf_[pos + 1] = grLin;
   else
-    histBuf_[pos + 2] = std::min(grLin, histBuf_[pos + 2]);
+    histBuf_[pos + 1] = std::min(grLin, histBuf_[pos + 1]);
+  histBuf_[pos + 2] = std::max(outPeakLin, histBuf_[pos + 2]);
+  histBuf_[pos + 3] = threshLin;
+  histBuf_[pos + 4] = std::max(prePeakLin, histBuf_[pos + 4]);
 
   histSampleCount_ += 1;
   if (histSampleCount_ >= histSamplesPerSlot_)
   {
     histPos_ = (pos + kHistChannels) % kHistBufSize;
     histSampleCount_ = 0;
-    histBuf_[histPos_ + 0] = audioPeakLin;
-    histBuf_[histPos_ + 1] = detPeakLin;
-    histBuf_[histPos_ + 2] = grLin;
+    histBuf_[histPos_ + 0] = triggerLin;
+    histBuf_[histPos_ + 1] = grLin;
+    histBuf_[histPos_ + 2] = outPeakLin;
+    histBuf_[histPos_ + 3] = threshLin;
+    histBuf_[histPos_ + 4] = prePeakLin;
   }
 }
 
@@ -143,7 +150,6 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
 {
   const float dryL = L;
   const float dryR = R;
-  const float audioPeak = std::max(std::fabs(dryL), std::fabs(dryR));
 
   // Detector follows Channel (same path as Wide/Split GR).
   float detInL = dryL;
@@ -202,6 +208,22 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
     return out * state.makeupLin;
   };
 
+  // History Out = full wet sum without makeup; Cut = pre vs post (works in Split).
+  auto prePeakOf = [&](float in, float lo, float hi) -> float {
+    if (state.split)
+      return std::fabs(lo + hi);
+    return std::fabs(in);
+  };
+  auto postPeakOf = [&](float in, float lo, float hi, float gain) -> float {
+    if (state.split)
+    {
+      if (state.rumble)
+        return std::fabs(lo * gain + hi);
+      return std::fabs(lo + hi * gain);
+    }
+    return std::fabs(in * gain);
+  };
+
   // Always feed LR splitters so Wide↔Split / channel switches stay continuous.
   float loL = 0.f;
   float hiL = 0.f;
@@ -214,12 +236,14 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
     splitR_.process2(dryR, loR, hiR);
     const float gr = gr_.processDetector(detL, detR);
     grMeter_.process(gr);
-    histFeedSample(audioPeak, detPeak, gr);
     Dsp::listenImage(state.channel, detL, detR, L, R);
+    const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);
+    histFeedSample(detPeak, gr, detPeak * gr, threshLin, detPeak);
     return;
   }
 
   const float gr = gr_.processDetector(detL, detR);
+  const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);
 
   const float bypassTarget = state.bypass ? 0.f : 1.f;
   bypassSmooth_ = Dsp::slewToward(
@@ -234,17 +258,18 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
     splitL_.process2(dryL, loL, hiL);
     splitR_.process2(dryR, loR, hiR);
     grMeter_.forceZero();
-    histFeedSample(audioPeak, detPeak, 1.f);
     L = dryL;
     R = dryR;
+    const float pre = prePeakOf(dryL, loL, hiL);
+    histFeedSample(detPeak, 1.f, pre, threshLin, pre);
     return;
   }
 
   grMeter_.process(gr);
-  histFeedSample(audioPeak, detPeak, gr);
-
   // Split: unused / complement path = band sum without GR ≈ LR allpass.
   // Wide: no crossover — raw complement is fine.
+  float histPre = 0.f;
+  float histPost = 0.f;
   switch (state.channel)
   {
     case Dsp::ChannelMode::Left:
@@ -252,12 +277,16 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
       splitR_.process2(dryR, loR, hiR);
       L = applySplit(dryL, loL, hiL, gr);
       R = state.split ? allpassSum(loR, hiR) : dryR;
+      histPre = prePeakOf(dryL, loL, hiL);
+      histPost = postPeakOf(dryL, loL, hiL, gr);
       break;
     case Dsp::ChannelMode::Right:
       splitL_.process2(dryL, loL, hiL);
       splitR_.process2(dryR, loR, hiR);
       L = state.split ? allpassSum(loL, hiL) : dryL;
       R = applySplit(dryR, loR, hiR, gr);
+      histPre = prePeakOf(dryR, loR, hiR);
+      histPost = postPeakOf(dryR, loR, hiR, gr);
       break;
     case Dsp::ChannelMode::Mid:
     {
@@ -266,6 +295,8 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
       Dsp::encodeMs(dryL, dryR, mid, side);
       splitL_.process2(mid, loL, hiL);
       splitR_.process2(side, loR, hiR);
+      histPre = prePeakOf(mid, loL, hiL);
+      histPost = postPeakOf(mid, loL, hiL, gr);
       mid = applySplit(mid, loL, hiL, gr);
       if (state.split)
         side = allpassSum(loR, hiR);
@@ -279,6 +310,8 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
       Dsp::encodeMs(dryL, dryR, mid, side);
       splitL_.process2(side, loL, hiL);
       splitR_.process2(mid, loR, hiR);
+      histPre = prePeakOf(side, loL, hiL);
+      histPost = postPeakOf(side, loL, hiL, gr);
       side = applySplit(side, loL, hiL, gr);
       if (state.split)
         mid = allpassSum(loR, hiR);
@@ -291,6 +324,9 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
       splitR_.process2(dryR, loR, hiR);
       L = applySplit(dryL, loL, hiL, gr);
       R = applySplit(dryR, loR, hiR, gr);
+      histPre = std::max(prePeakOf(dryL, loL, hiL), prePeakOf(dryR, loR, hiR));
+      histPost = std::max(postPeakOf(dryL, loL, hiL, gr),
+                          postPeakOf(dryR, loR, hiR, gr));
       break;
   }
 
@@ -302,6 +338,8 @@ void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
 
   Dsp::sanitizeDenormal(L);
   Dsp::sanitizeDenormal(R);
+
+  histFeedSample(detPeak, gr, histPost, threshLin, histPre);
 }
 
 int DeesserPlugin::takeGainReductionDb(float* out, int maxOut)
@@ -334,11 +372,16 @@ int DeesserPlugin::takeEnvelopeDisplay(float* out, int maxOut)
     {
       const int srcIdx = (startPos + i * kHistChannels) % kHistBufSize;
       out[i * kHistChannels + 0] = std::fabs(histSnapshot_[srcIdx + 0]);
-      out[i * kHistChannels + 1] = std::fabs(histSnapshot_[srcIdx + 1]);
-      float gr = histSnapshot_[srcIdx + 2];
+      float gr = histSnapshot_[srcIdx + 1];
       if (!(gr > 0.f))
         gr = 1.f;
-      out[i * kHistChannels + 2] = std::clamp(gr, 1.0e-6f, 1.f);
+      out[i * kHistChannels + 1] = std::clamp(gr, 1.0e-6f, 1.f);
+      out[i * kHistChannels + 2] = std::fabs(histSnapshot_[srcIdx + 2]);
+      float thr = histSnapshot_[srcIdx + 3];
+      if (!(thr > 0.f))
+        thr = Dsp::dbToLin(params_[kParamThreshold]);
+      out[i * kHistChannels + 3] = std::clamp(thr, 1.0e-6f, 1.f);
+      out[i * kHistChannels + 4] = std::fabs(histSnapshot_[srcIdx + 4]);
     }
     const uint32_t s1 = histSeq_.load(std::memory_order_acquire);
     if (s0 == s1)
@@ -416,8 +459,9 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
     if (hasHostAudio)
     {
       const int32 n = data.numSamples;
+      const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);
       for (int32 i = 0; i < n; ++i)
-        histFeedSample(0.f, 0.f, 1.f);
+        histFeedSample(0.f, 1.f, 0.f, threshLin, 0.f);
     }
     publishHistSnapshot();
     if (hasHostAudio)

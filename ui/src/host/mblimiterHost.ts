@@ -12,6 +12,7 @@ import {
   bindVizBandIo,
   bindVizEnvelope,
   bindVizGrArray,
+  bindVizSpectrum,
   postBegin,
   postEnd,
 } from '../utils/bind_param';
@@ -25,7 +26,7 @@ export const MBLIMITER_MIN_BANDS = 2;
 export const MBLIMITER_XOVER_COUNT = MB_BAND_COUNT - 1;
 export const MBLIMITER_FREQ_MIN = 20;
 export const MBLIMITER_FREQ_MAX = 20000;
-/** History channels per band: full-range peak, band peak, GR (linear). */
+/** History channels per band: band post-GR, GR lin, limit lin. */
 const MBLIMITER_HIST_CHANNELS = 3;
 const MBLIMITER_VIZ_ID = 'mblimiter';
 
@@ -95,6 +96,10 @@ export interface IMblimiterHost {
   bandIo$: DynamicValue<number[]>;
   /** Packed per-band history from DSP viz (split into band slices). */
   historyAll$: DynamicValue<Float32Array | null>;
+  /** Pre-dynamics spectrum (fft_in). */
+  spectrumIn$: DynamicValue<number[]>;
+  /** Post-dynamics spectrum (fft_out). */
+  spectrumOut$: DynamicValue<number[]>;
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
   dispose: () => void;
@@ -336,6 +341,11 @@ export function createBoundMblimiterHost(): IMblimiterHost {
   );
   disposers.push(bindVizEnvelope(historyAll$, MBLIMITER_VIZ_ID));
 
+  const spectrumIn$ = DynamicValue.fromConstant<number[]>([]);
+  const spectrumOut$ = DynamicValue.fromConstant<number[]>([]);
+  disposers.push(bindVizSpectrum(spectrumIn$, 'fft_in'));
+  disposers.push(bindVizSpectrum(spectrumOut$, 'fft_out'));
+
   return {
     meta: pluginMeta,
     io,
@@ -368,6 +378,8 @@ export function createBoundMblimiterHost(): IMblimiterHost {
     gr$,
     bandIo$,
     historyAll$,
+    spectrumIn$,
+    spectrumOut$,
     beginEdit: postBegin,
     endEdit: postEnd,
     dispose: () => disposers.forEach((d) => d()),

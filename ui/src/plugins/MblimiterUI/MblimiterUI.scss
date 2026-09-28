@@ -2,7 +2,7 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  gap: 2px;
+  gap: var(--gap);
 
   > .Header {
     > .children {
@@ -34,17 +34,12 @@
     flex: 1 1 auto;
   }
 
-  > .bridge {
-    flex: 0 0 auto;
-  }
-
   > .strips {
     display: flex;
     justify-content: center;
     align-items: stretch;
     gap: var(--gap);
     flex: 0 0 auto;
-    margin-bottom: 6px;
 
     > .strip {
       display: flex;
@@ -58,7 +53,7 @@
       border-radius: 2px;
 
       > .history {
-        flex: 0 0 72px;
+        flex: 0 0 96px;
         min-width: 0;
       }
 

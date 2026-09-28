@@ -1,21 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { DynamicValue } from '@deutschesoft/awml';
+import { useCallback, useMemo } from 'react';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { Header } from '../../components';
 import {
-  BandBridgeChart,
   Button,
   Buttons,
   HistoryChart,
-  HISTORY_STYLE,
   Knob,
   LevelMeter,
-  MB_FREQ_MAX,
-  MB_FREQ_MIN,
   MultibandChart,
   Toggle,
   WithInfo,
-  type BandBridgeSegment,
+  mblimiterHistorySeries,
 } from '../../widgets';
 import { paramIds } from '../../generated/mblimiterModel';
 import {
@@ -31,50 +26,6 @@ import '../PluginUI.scss';
 import './MblimiterUI.scss';
 import { mblimiterInfo } from './mblimiterInfo';
 import { isStudioCapture } from '../../utils/studioFlag';
-
-/** Band strips are capped so wide editors keep them readable, centered in the row. */
-const STRIP_MAX_PX = 256;
-/** `--gap` of the plugin theme: editor padding and strip spacing. */
-const GAP_PX = 8;
-
-const LOG_MIN = Math.log(MB_FREQ_MIN);
-const LOG_SPAN = Math.log(MB_FREQ_MAX) - LOG_MIN;
-
-/** Chart x position (0…1) of a frequency on the logarithmic axis. */
-function freqFraction(hz: number): number {
-  const f = Math.min(MB_FREQ_MAX, Math.max(MB_FREQ_MIN, hz));
-  return (Math.log(f) - LOG_MIN) / LOG_SPAN;
-}
-
-/**
- * Horizontal span (0…1 of the content width) of the flex strip for band
- * `index` of `count` — mirrors the flex row: equal widths capped at
- * `STRIP_MAX_PX`, `GAP_PX` between them, centered.
- */
-function stripSpan(index: number, count: number, editorWidth: number) {
-  const content = Math.max(1, editorWidth - 2 * GAP_PX);
-  const strip = Math.min(
-    STRIP_MAX_PX,
-    (content - (count - 1) * GAP_PX) / count,
-  );
-  const row = count * strip + (count - 1) * GAP_PX;
-  const left = (content - row) * 0.5 + index * (strip + GAP_PX);
-  return { from: left / content, to: (left + strip) / content };
-}
-
-/** Plain values of a fixed list of models (crossovers) as React state. */
-function useNumberValues(models: DynamicValue<number>[]): number[] {
-  const [values, setValues] = useState(() => models.map((dv) => dv.value));
-
-  useEffect(() => {
-    const sync = () => setValues(models.map((dv) => dv.value));
-    sync();
-    const unsubs = models.map((dv) => dv.subscribe(sync, false));
-    return () => unsubs.forEach((u) => u());
-  }, [models]);
-
-  return values;
-}
 
 const COEFF_DOTS = [-1, -0.5, 0, 0.5, 1];
 const COEFF_LABELS = [
@@ -180,34 +131,10 @@ function BandStrip(props: { band: IMblimiterBand; compactKnobs: boolean }) {
         <HistoryChart
           data$={band.historyData$}
           vizId="mblimiter"
-          series={[
-            {
-              id: 'full',
-              name: 'Full-range input',
-              short: 'Full',
-              channel: 0,
-              className: HISTORY_STYLE.audio,
-              mode: 'bottom',
-            },
-            {
-              id: 'band',
-              name: 'Band signal',
-              short: 'Band',
-              channel: 1,
-              className: HISTORY_STYLE.detector,
-              mode: 'bottom',
-            },
-            {
-              id: 'gr',
-              name: 'Gain reduction',
-              short: 'GR',
-              channel: 2,
-              className: HISTORY_STYLE.gr,
-              mode: 'line',
-              toFront: true,
-              gradient: true,
-            },
-          ]}
+          autoScale
+          windowMs={2000}
+          sourceWindowMs={4000}
+          series={mblimiterHistorySeries()}
         />
       </div>
 
@@ -315,8 +242,6 @@ export function MblimiterUI(props: MblimiterUIProps) {
   );
   const slope = useDynamicValueReadonly(host.slope$, 48);
   const curve = useDynamicValueReadonly(host.curve$, 0);
-  const xoverValues = useNumberValues(host.xover$);
-  const editorWidth = host.meta.editor.width;
 
   const setNumBands = useCallback(
     (n: number) => {
@@ -341,27 +266,6 @@ export function MblimiterUI(props: MblimiterUIProps) {
   const listens$ = useMemo(
     () => host.bands.map((band) => band.listen$),
     [host.bands],
-  );
-
-  const bandEdges = useMemo(() => {
-    return Array.from({ length: numBands }, (_, b) => ({
-      lo: b === 0 ? MB_FREQ_MIN : (xoverValues[b - 1] ?? MB_FREQ_MIN),
-      hi: b >= numBands - 1 ? MB_FREQ_MAX : (xoverValues[b] ?? MB_FREQ_MAX),
-    }));
-  }, [numBands, xoverValues]);
-
-  const bridgeSegments = useMemo<BandBridgeSegment[]>(
-    () =>
-      bandEdges.map((edge, b) => {
-        const strip = stripSpan(b, numBands, editorWidth);
-        return {
-          in1: freqFraction(edge.lo),
-          in2: freqFraction(edge.hi),
-          out1: strip.from,
-          out2: strip.to,
-        };
-      }),
-    [bandEdges, editorWidth, numBands],
   );
 
   return (
@@ -416,13 +320,13 @@ export function MblimiterUI(props: MblimiterUIProps) {
         xover$={host.xover$}
         listen$={listens$}
         showThresholds={false}
+        spectrumIn$={host.spectrumIn$}
+        spectrumOut$={host.spectrumOut$}
         xoverEdit={(index) => ({
           beginEdit: () => host.beginEdit(XOVER_PARAM_IDS[index]!),
           endEdit: () => host.endEdit(XOVER_PARAM_IDS[index]!),
         })}
       />
-
-      <BandBridgeChart segments={bridgeSegments} className="bridge" />
 
       <div className="strips">
         {host.bands.slice(0, numBands).map((band) => (

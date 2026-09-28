@@ -259,6 +259,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 - Default layout: B1 HP@30, B2 LS@120, B3–B14 peaking 60…5k, B15 HS@5k, B16 LP@10k.
 - Chart curves use RBJ factories in `ui/src/dsp/eqFilters.ts` (same math as `common/dsp/biquad.h`); band-pass applies gain.
 - Editor viz flush rate (suite-wide): Header prefs → `{t:"vizhz"}` / `ui/src/prefs/vizHz.ts` (30/25/20/15/10, default 30, localStorage). Optional env: `CALFNXT_VIZ_HZ`.
+- Spectrum overlay: Dual In/Out taps (`fft_in` / `fft_out`) with MultibandChart-style max/min mask + output edge; Off / Linear / −3 / −4.5 tilt modes still apply.
 
 ---
 
@@ -275,7 +276,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
   channels `[fullPeak, bandPeak, grLin]` (split into per-band `historyData$`).
 - UI: `MultibandChart` (AUX Equalizer; one stroked HP/LP curve per band whose dB offset is
   the band's GR, vertical crossover handles, one threshold handle at each band's geometric
-  center) → `BandBridgeChart` → band strips → `BandBridgeChart` → detail panel for the
+  center) → band strips → detail panel for the
   selected band (Compressor controls without FrequencyRange).
 - Band curves use the gain-carrying pass factories in `ui/src/dsp/eqFilters.ts`
   (`auxLowpassGain12/24/48`, `auxHighpassGain12/24/48`).
@@ -290,7 +291,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 - Per-band release is a **relative coefficient** (−1…1) on the master release
   (`rel = master * 0.25^(-coeff)`); weight likewise (`weightLin = 0.25^(-w)`).
 - UI: header slope + band −/+ → `MultibandChart` (GR curves, xovers, **no** thresholds)
-  → one `BandBridgeChart` → strips (history / In-Out-GR / Rel / Listen / Weight) →
+  → strips (history / In-Out-GR / Rel / Listen / Weight) →
   Limiter-style Limit / Attenuation / Character (incl. Min Release).
 - Viz id `"mblimiter"`: `gr` array (N band combined + 1 master), `gains`, `bandio`,
   `envelope` like mbcomp (`[full, band, grLin]` × slots).
@@ -378,7 +379,7 @@ Ideas only if explicitly revived — do not start these unprompted:
 | DeEsser DSP                 | `dsp/deesser/source/*_dsp.*`, `common/dsp/deesser_detector.h`, `common/dsp/band_splitter.h` (Ess/Rumble target)                                                                                     |
 | Delay DSP                   | `dsp/delay/source/*_dsp.*`, `common/dsp/sidechain_filter.h`, `common/dsp/smooth_gain.h`                                                                                                             |
 | Reverb DSP                  | `dsp/reverb/source/*_dsp.*`, `common/dsp/reverb_*.h`, `common/dsp/delay_line.h`                                                                                                                     |
-| Multiband Compressor        | `dsp/mbcomp/source/*_dsp.*`, `common/dsp/band_splitter.h`, `common/dsp/compressor.h`; UI `ui/src/plugins/MbcompUI/*`, `host/mbcompHost.ts`, `widgets/MultibandChart/*`, `widgets/BandBridgeChart/*` |
+| Multiband Compressor        | `dsp/mbcomp/source/*_dsp.*`, `common/dsp/band_splitter.h`, `common/dsp/compressor.h`; UI `ui/src/plugins/MbcompUI/*`, `host/mbcompHost.ts`, `widgets/MultibandChart/*` |
 | Limiter                     | `dsp/limiter/source/*_dsp.*`, `common/dsp/lookahead_limiter.h`, `common/dsp/resample_n.h`; UI `ui/src/plugins/LimiterUI/*`, `host/limiterHost.ts`                                                   |
 | Multiband Limiter           | `dsp/mblimiter/source/*_dsp.*`, `band_splitter.h`, `lookahead_limiter.h`; UI `ui/src/plugins/MblimiterUI/*`, `host/mblimiterHost.ts`                                                                |
 | Harmonics                   | `dsp/harmonics/source/*_dsp.*`, `common/dsp/tap_distortion.h`; UI `ui/src/plugins/HarmonicsUI/*`, `host/harmonicsHost.ts`                                                                           |

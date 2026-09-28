@@ -13,7 +13,7 @@ import {
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
-import { addGraphClasses, GRAPH_STYLE } from '../../styles/graphStyles';
+import { addGraphClasses } from '../../styles/graphStyles';
 import {
   tamerAuxHpType,
   tamerAuxLpType,
@@ -218,9 +218,8 @@ export interface TamerChartProps {
 }
 
 /**
- * Input spectrum (blue) + out spectrum (white, UI = in+GR) + GR curve
- * (reverse level gradient). Search HP/LP as EqBand block handles + white
- * EqualizerGraph overlay (detection filter shape).
+ * Input spectrum (fill-gradient) + out spectrum + GR (stroke-color, thick).
+ * Search HP/LP as EqBand block handles + dashed EqualizerGraph overlay.
  */
 export function TamerChart(props: TamerChartProps) {
   const {
@@ -254,7 +253,6 @@ export function TamerChart(props: TamerChartProps) {
 
   const [chart, setChart] = useState<AuxChartInstance | null>(null);
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
-  const [gradTargets, setGradTargets] = useState<SVGElement[]>([]);
 
   // Keep lo < hi while dragging either edge (only these limits change).
   const loMax$ = useMemo(() => DynamicValue.fromConstant(F_MAX), []);
@@ -310,10 +308,8 @@ export function TamerChart(props: TamerChartProps) {
   const reassert = useChartGradient({
     svg: chartSvg,
     enabled: true,
-    targets: gradTargets,
-    paint: 'stroke',
-    // Same as HistoryChart GR: top accent blue → bottom warn pink.
-    reverse: true,
+    // CSS vars for input fill-gradient + search-eq stroke-gradient.
+    reverse: false,
   });
   const reassertRef = useRef(reassert);
   reassertRef.current = reassert;
@@ -661,7 +657,6 @@ export function TamerChart(props: TamerChartProps) {
     chartRef.current = null;
     setChart(null);
     setChartSvg(null);
-    setGradTargets([]);
     if (!c || c.isDestructed?.()) return;
     for (const g of [...harmBands, ...graphs]) c.removeGraph(g);
   }, [disposeBindings]);
@@ -703,7 +698,11 @@ export function TamerChart(props: TamerChartProps) {
           mode: 'bottom',
           class: 'tamer-in',
         });
-        addGraphClasses(gIn.element, 'tamer-in', GRAPH_STYLE.audio);
+        addGraphClasses(
+          gIn.element,
+          'tamer-in',
+          'fill-gradient fill-full stroke-none',
+        );
         const gOut = inst.addGraph({
           dots: null,
           type: 'L',
@@ -713,7 +712,7 @@ export function TamerChart(props: TamerChartProps) {
         addGraphClasses(
           gOut.element,
           'tamer-out',
-          'fill-color fill-faint stroke-color stroke-semi',
+          'fill-background fill-semi stroke-none',
         );
         const gGr = inst.addGraph({
           dots: null,
@@ -721,9 +720,12 @@ export function TamerChart(props: TamerChartProps) {
           mode: 'line',
           class: 'tamer-gr',
         });
-        addGraphClasses(gGr.element, 'tamer-gr', GRAPH_STYLE.gr);
+        addGraphClasses(
+          gGr.element,
+          'tamer-gr',
+          'fill-none stroke-color stroke-thick',
+        );
         graphsRef.current = [gIn, gOut, gGr];
-        setGradTargets(gGr.element ? [gGr.element as SVGElement] : []);
       }
 
       setChartSvg(inst.svg ?? null);
@@ -758,9 +760,10 @@ export function TamerChart(props: TamerChartProps) {
       (
         inst as AuxChartInstance & { addGraph: (g: unknown) => unknown }
       ).addGraph(g);
-      (g as AuxGraph).element?.classList.add(
+      addGraphClasses(
+        (g as AuxGraph).element,
         'tamer-search-eq',
-        ...'fill-none stroke-color stroke-semi stroke-dashed'.split(' '),
+        'fill-none stroke-gradient stroke-dashed',
       );
     }
     return () => {

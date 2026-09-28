@@ -219,21 +219,21 @@ export function WaveshapeChart(props: WaveshapeChartProps) {
         </filter>
       </defs>
       <line
-        className="axis stroke-color stroke-thinner stroke-faint"
+        className="axis stroke-color stroke-thinner stroke-semi"
         x1={toX(0, w)}
         y1={pad}
         x2={toX(0, w)}
         y2={h - pad}
       />
       <line
-        className="axis stroke-color stroke-thinner stroke-faint"
+        className="axis stroke-color stroke-thinner stroke-semi"
         x1={pad}
         y1={toY(0, h)}
         x2={w - pad}
         y2={toY(0, h)}
       />
       <path
-        className="unity fill-none stroke-color stroke-faint stroke-thinner stroke-dashed"
+        className="unity fill-none stroke-color stroke-semi stroke-thinner stroke-dashed"
         d={`M${toX(-1, w)},${toY(-1, h)} L${toX(1, w)},${toY(1, h)}`}
       />
 

@@ -520,7 +520,11 @@ function waterfallPixel(
   if (db <= WF_BLACK_DB) return [0, 0, 0, 0];
   if (db >= WF_WHITE_DB) return [255, 255, 255, 255];
   if (db < WF_ACCENT_DB)
-    return mix(WF_BLACK, accent, (db - WF_BLACK_DB) / (WF_ACCENT_DB - WF_BLACK_DB));
+    return mix(
+      WF_BLACK,
+      accent,
+      (db - WF_BLACK_DB) / (WF_ACCENT_DB - WF_BLACK_DB),
+    );
   if (db < WF_WARN_DB)
     return mix(accent, warn, (db - WF_ACCENT_DB) / (WF_WARN_DB - WF_ACCENT_DB));
   return mix(warn, WF_WHITE, (db - WF_WARN_DB) / (WF_WHITE_DB - WF_WARN_DB));
@@ -552,7 +556,9 @@ function parseCssColor(c: string): [number, number, number] {
     document.documentElement.appendChild(probe);
     const computed = getComputedStyle(probe).color;
     probe.remove();
-    const m = computed.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
+    const m = computed.match(
+      /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i,
+    );
     if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
   }
   return [0, 102, 255];
@@ -617,14 +623,16 @@ export function SpectrumChart(props: SpectrumChartProps) {
   const corridorElRef = useRef<HTMLDivElement | null>(null);
   const isSpectralizer = Math.round(mode) === SPECTRUM_MODE.Spectralizer;
   const isStereo = Math.round(mode) === SPECTRUM_MODE.Stereo;
-  // Level hue gradient for Average/Max stroke; Stereo uses solid L/R colors.
-  const useLevelGrad = !isSpectralizer && !isStereo;
+  // Average/Max (+ monitor RMS body): level hue. Stereo L/R stay solid accent/warn.
+  // Analyzer uses monitor+Stereo — still need CSS vars for the RMS fill/stroke.
+  const useLevelGrad = !isSpectralizer && (!isStereo || monitor);
 
   const reassert = useChartGradient({
     svg: chartSvg,
     enabled: useLevelGrad,
+    // Both paints: fill-gradient + stroke-gradient (CSS + inline on targets).
     targets: gradTargets,
-    paint: 'stroke',
+    paint: 'both',
   });
   const reassertRef = useRef(reassert);
   reassertRef.current = reassert;
@@ -890,30 +898,30 @@ export function SpectrumChart(props: SpectrumChartProps) {
       // Idempotent: use-aux-widgets re-calls widgetRef when the callback
       // identity changes, without nulling the old ref — never double-add.
       if (graphsRef.current.length === 0) {
-          const specs = monitorRef.current
+        const specs = monitorRef.current
           ? [
               {
                 className:
-                  'spec-rms fill-none stroke-color stroke-thin stroke-dashed',
+                  'spec-rms fill-gradient fill-some stroke-semi stroke-thinner',
+                mode: 'bottom' as const,
+                gradient: true,
+                type: 'L',
+              },
+              {
+                className: 'spec-primary fill-none stroke-accent',
                 mode: 'line' as const,
                 gradient: false,
                 type: 'L',
               },
               {
-                className: 'spec-primary fill-none stroke-accent stroke-thin',
-                mode: 'line' as const,
-                gradient: false,
-                type: 'L',
-              },
-              {
-                className: 'spec-secondary fill-none stroke-warn stroke-thin',
+                className: 'spec-secondary fill-none stroke-warn',
                 mode: 'line' as const,
                 gradient: false,
                 type: 'L',
               },
               {
                 className:
-                  'spec-hold fill-none stroke-color stroke-thin stroke-faint',
+                  'spec-hold fill-none stroke-color stroke-soft stroke-thicker',
                 mode: 'line' as const,
                 gradient: false,
                 type: 'L',
@@ -923,21 +931,20 @@ export function SpectrumChart(props: SpectrumChartProps) {
               // L + Y-smooth + densify. AUX T (quadratic Bézier) grain/rings on dense dots.
               {
                 className:
-                  'spec-primary fill-color fill-ghost stroke-gradient',
+                  'spec-primary fill-gradient fill-ghost stroke-gradient',
                 mode: 'bottom' as const,
                 gradient: true,
                 type: 'L',
               },
               {
-                className:
-                  'spec-secondary fill-color fill-ghost stroke-color',
+                className: 'spec-secondary fill-color fill-ghost stroke-color',
                 mode: 'bottom' as const,
                 gradient: false,
                 type: 'L',
               },
               {
                 className:
-                  'spec-hold fill-none stroke-color stroke-thinner stroke-faint stroke-dashed',
+                  'spec-hold fill-none stroke-color stroke-thinner stroke-full stroke-dashed',
                 mode: 'line' as const,
                 gradient: false,
                 type: 'L',

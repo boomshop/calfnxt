@@ -326,10 +326,14 @@ textarea::selection {
 
   > svg {
     > .aux-grid {
+      /* DOM order (see chartPaintOrder.ts) puts this above fills; don't steal hits. */
+      pointer-events: none;
+
       > .aux-gridlabel {
-        fill: var(--color-least);
+        fill: var(--color);
         font-size: 9px;
         font-family: Oswald;
+        opacity: 0.33;
       }
 
       > .aux-gridlabel.aux-vertical {
@@ -341,8 +345,15 @@ textarea::selection {
       }
 
       > .aux-gridline {
-        stroke: var(--background-least);
-        stroke-opacity: 0.7;
+        stroke: var(--color);
+        stroke-opacity: 0.15;
+      }
+
+      /* 0 dB / unity reference (FrequencyResponse + Dynamics grid). */
+      > .aux-gridline.aux-highlight {
+        stroke: var(--color);
+        stroke-opacity: 0.33;
+        stroke-width: var(--graph-stroke-thinner); /* 1px */
       }
     }
 
@@ -350,7 +361,7 @@ textarea::selection {
       > .aux-baseline {
         fill: none;
         stroke-width: var(--graph-stroke-medium);
-        stroke: var(--color-accent);
+        stroke: var(--color);
       }
     }
 
@@ -358,12 +369,12 @@ textarea::selection {
       > .aux-charthandle {
         > .aux-handle {
           fill: var(--color);
-          fill-opacity: 0.25;
+          fill-opacity: var(--graph-fill-opacity-faint);
         }
 
         > .aux-line1 {
           stroke: var(--color);
-          stroke-opacity: 0.25;
+          stroke-opacity: var(--graph-stroke-opacity-faint);
         }
 
         > .aux-label {
@@ -377,11 +388,11 @@ textarea::selection {
           }
 
           > .aux-line1 {
-            stroke-opacity: 0.5;
+            stroke-opacity: var(--graph-stroke-opacity-semi);
           }
 
           > .aux-label {
-            fill-opacity: 1;
+            fill-opacity: var(--graph-fill-opacity-full);
           }
         }
       }
@@ -420,6 +431,10 @@ textarea::selection {
     > .aux-bar {
       align-self: center;
     }
+  }
+
+  &.aux-vertical {
+    min-height: 48px !important;
   }
 }
 

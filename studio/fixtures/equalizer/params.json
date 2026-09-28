@@ -1,18 +1,92 @@
 {
   "bypass": false,
   "spectrum": 2,
+  "selected_band": 6,
   "bands": [
-    { "index": 0, "active": true, "type": "parametric", "frequency": 80, "gain": 3, "q": 1, "dyn": true },
-    { "index": 1, "active": false },
-    { "index": 2, "active": true, "type": "parametric", "frequency": 350, "gain": -6, "q": 5 },
-    { "index": 3, "active": false },
-    { "index": 4, "active": false },
-    { "index": 5, "active": false },
-    { "index": 6, "active": true, "type": "parametric", "frequency": 1200, "gain": 6, "q": 0.5, "dyn": true },
-    { "index": 7, "active": true, "type": "parametric", "frequency": 2800, "gain": -24, "q": 10 },
-    { "index": 8, "active": true, "type": "parametric", "frequency": 2000, "gain": -3, "q": 2 },
-    { "index": 9, "active": false },
-    { "index": 14, "active": true, "type": "highshelf", "frequency": 6000, "gain": 4, "q": 3 },
-    { "index": 15, "active": false }
+    {
+      "index": 0,
+      "active": true,
+      "type": "parametric",
+      "frequency": 80,
+      "gain": 3,
+      "q": 1,
+      "dyn": true,
+      "channel": 0
+    },
+    {
+      "index": 1,
+      "active": true,
+      "type": "highpass",
+      "frequency": 50,
+      "gain": 0,
+      "q": 1,
+      "channel": 0
+    },
+    {
+      "index": 2,
+      "active": true,
+      "type": "parametric",
+      "frequency": 350,
+      "gain": -12,
+      "q": 5,
+      "channel": 1
+    },
+    {
+      "index": 3,
+      "active": false
+    },
+    {
+      "index": 4,
+      "active": false
+    },
+    {
+      "index": 5,
+      "active": false
+    },
+    {
+      "index": 6,
+      "active": true,
+      "type": "parametric",
+      "frequency": 1200,
+      "gain": 12,
+      "q": 0.5,
+      "dyn": true,
+      "channel": 2
+    },
+    {
+      "index": 7,
+      "active": true,
+      "type": "parametric",
+      "frequency": 2800,
+      "gain": -24,
+      "q": 10,
+      "channel": 3
+    },
+    {
+      "index": 8,
+      "active": true,
+      "type": "parametric",
+      "frequency": 2000,
+      "gain": -3,
+      "q": 2,
+      "channel": 4
+    },
+    {
+      "index": 9,
+      "active": false
+    },
+    {
+      "index": 14,
+      "active": true,
+      "type": "highshelf",
+      "frequency": 6000,
+      "gain": 4,
+      "q": 3,
+      "channel": 0
+    },
+    {
+      "index": 15,
+      "active": false
+    }
   ]
 }

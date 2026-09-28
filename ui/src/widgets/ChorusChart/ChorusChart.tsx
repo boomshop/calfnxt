@@ -217,7 +217,7 @@ export function ChorusChart(props: ChorusChartProps) {
           preserveAspectRatio="none"
         >
           <line
-            className="grid stroke-color stroke-thinner stroke-faint"
+            className="grid stroke-color stroke-thinner stroke-semi"
             x1={padX}
             x2={depthSize.w - padX}
             y1={mapDepthY(0, depthSize.h)}
@@ -254,7 +254,7 @@ export function ChorusChart(props: ChorusChartProps) {
           preserveAspectRatio="none"
         >
           <line
-            className="grid stroke-color stroke-thinner stroke-faint"
+            className="grid stroke-color stroke-thinner stroke-semi"
             x1={padX}
             x2={rateSize.w - padX}
             y1={mapRateY(0, rateSize.h)}
@@ -263,7 +263,7 @@ export function ChorusChart(props: ChorusChartProps) {
           {curves.map((pts, v) => (
             <path
               key={`c${v}`}
-              className="wave fill-none stroke-color stroke-semi"
+              className="wave fill-none stroke-color stroke-rich"
               d={pathThrough(
                 pts,
                 (x) => mapRateX(x, rateSize.w),

@@ -79,7 +79,10 @@ export type IFilterHost = {
   release$: DynamicValue<number>;
   detection$: DynamicValue<number>;
   spectrum$: DynamicValue<number>;
-  spectrumData$: DynamicValue<number[]>;
+  /** Pre-filter spectrum (fft_in). */
+  spectrumIn$: DynamicValue<number[]>;
+  /** Post-filter spectrum (fft_out). */
+  spectrumOut$: DynamicValue<number[]>;
   /** Main response + optional Target handle when envelope is on. */
   filterBands: IEqualizerBand[];
   beginEdit: (id: number) => void;
@@ -349,9 +352,14 @@ export function createBoundFilterHost(): IFilterHost {
     release$: bindNum('release', 200),
     detection$: bindNum('detection', 2),
     spectrum$: bindNum('spectrum', 0),
-    spectrumData$: (() => {
+    spectrumIn$: (() => {
       const dv = DynamicValue.fromConstant<number[]>([]);
-      bindVizSpectrum(dv, 'fft');
+      bindVizSpectrum(dv, 'fft_in');
+      return dv;
+    })(),
+    spectrumOut$: (() => {
+      const dv = DynamicValue.fromConstant<number[]>([]);
+      bindVizSpectrum(dv, 'fft_out');
       return dv;
     })(),
     filterBands: makeFilterBands(

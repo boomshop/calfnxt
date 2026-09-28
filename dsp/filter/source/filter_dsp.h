@@ -38,7 +38,9 @@ public:
   int takeFilterCutoffHz(float* out, int maxOut) override;
   const char* vizFilterCutoffId() const override { return "filt"; }
   int takeSpectrum(float* out, int maxOut) override;
-  const char* vizSpectrumId() const override { return "fft"; }
+  const char* vizSpectrumId() const override { return "fft_in"; }
+  int takeOutputSpectrum(float* out, int maxOut) override;
+  const char* vizOutputSpectrumId() const override { return "fft_out"; }
   void configureVizBins(const char* id, int bins) override;
   bool handleMidiCommand(const char* json) override;
 
@@ -82,7 +84,8 @@ private:
 
   Dsp::MultimodeFilter filter_;
   Dsp::LevelEnvelope envelope_;
-  Dsp::SpectrumTap spectrum_;
+  Dsp::SpectrumTap spectrumIn_;
+  Dsp::SpectrumTap spectrumOut_;
   Dsp::MidiNoteHold midi_;
   std::atomic<bool> spectrumActive_{false};
   std::atomic<float> effectiveCutoffHz_ { 1000.f };

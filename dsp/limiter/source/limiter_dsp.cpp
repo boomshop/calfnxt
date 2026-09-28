@@ -18,7 +18,7 @@ namespace {
 constexpr uint32 kStateMagic = 0x434e584cu; // 'CNXL'
 constexpr uint32 kStateVersion = 4;
 
-constexpr float kHistoryDisplayMs = 10000.f;
+constexpr float kHistoryDisplayMs = 4000.f;
 
 float ascCoeffFromPlain(float c)
 {
@@ -223,24 +223,26 @@ void LimiterPlugin::applyParams(bool force)
   updateLatency(false);
 }
 
-void LimiterPlugin::histFeedSample(float audioPeakLin, float grLin)
+void LimiterPlugin::histFeedSample(float outPeakLin, float grLin, float limitLin)
 {
   if (!vizConsumerActive())
     return;
   const int pos = histPos_;
-  histBuf_[pos + 0] = std::max(histBuf_[pos + 0], audioPeakLin);
+  histBuf_[pos + 0] = std::max(histBuf_[pos + 0], outPeakLin);
   if (histSampleCount_ == 0)
     histBuf_[pos + 1] = grLin;
   else
     histBuf_[pos + 1] = std::min(histBuf_[pos + 1], grLin);
+  histBuf_[pos + 2] = limitLin;
 
   histSampleCount_ += 1;
   if (histSampleCount_ >= histSamplesPerSlot_)
   {
     histPos_ = (pos + kHistChannels) % kHistBufSize;
     histSampleCount_ = 0;
-    histBuf_[histPos_ + 0] = audioPeakLin;
+    histBuf_[histPos_ + 0] = outPeakLin;
     histBuf_[histPos_ + 1] = grLin;
+    histBuf_[histPos_ + 2] = limitLin;
   }
 }
 
@@ -315,6 +317,10 @@ int LimiterPlugin::takeEnvelopeDisplay(float* out, int maxOut)
       if (!(gr > 0.f))
         gr = 1.f;
       out[i * kHistChannels + 1] = std::clamp(gr, 1.0e-6f, 1.f);
+      float lim = histSnapshot_[srcIdx + 2];
+      if (!(lim > 0.f))
+        lim = 1.f;
+      out[i * kHistChannels + 2] = std::clamp(lim, 1.0e-6f, 1.f);
     }
     const uint32_t s1 = histSeq_.load(std::memory_order_acquire);
     if (s0 == s1)
@@ -347,6 +353,8 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
   io_.setBypassGains(bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
+  const float displayLimit = Dsp::dbToLin(params_[kParamLimit]);
+
   const bool hasHostAudio = io_.begin(data);
   if (!hasHostAudio)
   {
@@ -374,7 +382,7 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
     {
       const int32 n = data.numSamples;
       for (int32 i = 0; i < n; ++i)
-        histFeedSample(0.f, 1.f);
+        histFeedSample(0.f, 1.f, displayLimit);
     }
     publishHistSnapshot();
     io_.end(data);
@@ -390,7 +398,6 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
     bypassXfadePos_ = 0;
   }
 
-  const float displayLimit = Dsp::dbToLin(params_[kParamLimit]);
   const bool autoLevel = params_[kParamAutoLevel] >= 0.5f;
   const bool diffListen = params_[kParamDiffListen] >= 0.5f;
   const float color = params_[kParamColorEnable] >= 0.5f
@@ -515,14 +522,16 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
 
     if (bypass)
     {
-      histFeedSample(inPeak, 1.f);
+      // Bypass: show input as Out, GR=1 (no Cut).
+      histFeedSample(inPeak, 1.f, displayLimit);
       grMeter_.forceZero();
       ascHold = 0;
       return;
     }
 
     const float grLin = limiter_.attenuation();
-    histFeedSample(inPeak, grLin);
+    // GR-only path (pre auto-level): Cut = expand Out÷GR like compressor.
+    histFeedSample(inPeak * grLin, grLin, displayLimit);
     grMeter_.process(grLin);
   };
 

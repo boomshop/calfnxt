@@ -3,7 +3,9 @@
   width: 100%;
   height: 100%;
   min-height: 80px;
-  background: var(--background);
+  /* Chrome lives on `.HistoryChart-chart.aux-chart` (suite background-less + border),
+   * same as SpectrumDiffChart — not flat `--background`. */
+  background: transparent;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -13,46 +15,31 @@
     min-height: 0;
     width: 100%;
     height: 100%;
-    background: transparent !important;
-    border: none !important;
-    border-radius: 0;
   }
 
   /* Hidden via listed$ / visible$ — keep path node, kill paint. */
   .history-hidden {
     opacity: 0 !important;
-    stroke-opacity: 0 !important;
-    fill-opacity: 0 !important;
+    stroke-opacity: var(--graph-stroke-opacity-none) !important;
+    fill-opacity: var(--graph-fill-opacity-none) !important;
   }
 
   > .history-toggles {
     position: absolute;
     left: var(--gap);
-    bottom: var(--gap);
+    top: var(--gap);
     z-index: 2;
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    pointer-events: none;
+    align-items: center;
 
-    > .history-toggle {
-      pointer-events: auto;
-      appearance: none;
-      border: 1px solid var(--background-least);
-      border-radius: var(--border-radius);
-      background: var(--background-lesser);
-      color: var(--color-least);
-      font: inherit;
-      font-size: var(--font-size-tiny);
-      line-height: 1;
-      padding: 3px 6px;
-      cursor: pointer;
-      opacity: 0.55;
+    > .Toggle {
+      padding: 2;
+      height: auto;
 
-      &.is-on {
-        opacity: 1;
-        color: var(--color);
-        border-color: var(--color-least);
+      > .aux-label {
+        font-size: var(--font-size-tiny);
       }
     }
   }

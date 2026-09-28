@@ -246,7 +246,7 @@
               > .aux-graphs {
                 > .aux-baseline {
                   stroke: var(--color);
-                  stroke-opacity: 1;
+                  stroke-opacity: var(--graph-stroke-opacity-full);
                 }
               }
             }

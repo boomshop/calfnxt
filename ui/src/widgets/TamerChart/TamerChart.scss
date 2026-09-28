@@ -17,29 +17,42 @@
     .tamer-harmonics-boom {
       fill: var(--color-warn);
       fill-opacity: 0.18;
-      stroke-opacity: 0;
+      stroke-opacity: var(--graph-stroke-opacity-none);
     }
 
+    /* Search handles: same --color look as EQ block handles. */
     > svg > .aux-handles > .aux-charthandle {
       &.tamer-search-lo,
       &.tamer-search-hi {
         > .aux-handle {
-          fill: var(--color-accent);
-          fill-opacity: 0.18;
+          fill: var(--color);
+          fill-opacity: var(--graph-fill-opacity-ghost);
         }
 
         &.aux-active > .aux-handle {
-          fill-opacity: 0.35;
+          fill-opacity: 0.2;
         }
 
         > .aux-line1,
         > .aux-line2 {
           stroke: var(--color);
-          stroke-opacity: 0.66;
+          stroke-opacity: var(--graph-stroke-opacity-faint);
         }
 
         > .aux-label {
-          fill-opacity: 0.75;
+          fill: var(--color);
+          fill-opacity: 0.33;
+        }
+
+        &.aux-active {
+          > .aux-line1,
+          > .aux-line2 {
+            stroke-opacity: var(--graph-stroke-opacity-semi);
+          }
+
+          > .aux-label {
+            fill-opacity: var(--graph-fill-opacity-full);
+          }
         }
       }
     }

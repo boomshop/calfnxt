@@ -5,16 +5,29 @@
  * utility classes can override). Compose modifiers on any SVG paint node:
  *   class="aux-graph stroke-thick stroke-accent fill-none"
  *
+ * AUX Graph toggles `.aux-filled` / `.aux-outline` / `.aux-steady` and theme
+ * CSS sets stroke-width from `--aux-graph-*` (outline = 2px). Those two-class
+ * rules beat a bare `.aux-graph` default — so we (1) remap the AUX vars onto
+ * our medium width and (2) restated the mode selectors here. Utilities stay
+ * dual: `.stroke-thin` (custom SVG) + `.aux-graph.stroke-thin` (tops modes).
+ *
  * Recommended baseline when composing from scratch:
- *   stroke-medium, stroke-visible, stroke-color, stroke-solid,
+ *   stroke-medium (width), stroke-full, stroke-color, stroke-solid,
  *   fill-semi, fill-color
  *
+ * Opacity tiers (identical for fill and stroke):
+ *   full 1 | rich 0.75 | mostly 0.63 | semi 0.5 | soft 0.37 | faint 0.25 | ghost 0.12 | none 0
+ *
+ * Note: `.stroke-medium` is stroke-*width* (1.5px). Opacity uses `.stroke-mostly`
+ * / `.fill-mostly` so the names do not collide.
+ *
  * Gradients need a paint server on the chart SVG (`useChartGradient`).
- * The hook sets `--graph-gradient: url(#…)` (and mirrors `--chart-level-stroke`).
- * Then `.stroke-gradient` / `.fill-gradient` just consume that var — same idea
- * as solids, with the hook as the one-time installer per chart.
- *   gradient     = top accent → bottom warn  (hook `reverse: true`)
- *   gradient-inv = top warn → bottom accent
+ * The hook always installs:
+ *   --graph-gradient / -inv       vivid warn↔accent
+ *   --graph-grad-light / -inv     same stops mixed toward white (pastel)
+ * (`reverse: true` swaps which URL is bound to which var — legacy accent-top
+ * as primary.) Utilities: `.stroke-gradient` / `.fill-gradient` (+ `-inv`),
+ * and `.stroke-grad-light` / `.fill-grad-light` (+ `-inv`).
  */
 
 :root {
@@ -27,141 +40,267 @@
   --graph-stroke-thicker: 2px;
   --graph-stroke-thickest: 2.25px;
 
-  /* stroke-opacity */
-  --graph-stroke-opacity-visible: 1;
-  --graph-stroke-opacity-semi: 0.75;
-  --graph-stroke-opacity-faint: 0.5;
-  --graph-stroke-opacity-none: 0;
+  /*
+   * AUX theme (basics.css) sizes graphs via these tokens. Do not `unset` —
+   * `stroke-width: var(--aux-graph-outline)` then inherits junk. Point them
+   * at our medium so filled/outline/steady match without a width utility.
+   */
+  --aux-graph-stroke: var(--graph-stroke-medium);
+  --aux-graph-filled: var(--graph-stroke-medium);
+  --aux-graph-outline: var(--graph-stroke-medium);
+  --aux-graph-steady: var(--graph-stroke-medium);
 
-  /* fill-opacity */
-  --graph-fill-opacity-visible: 0.75;
-  --graph-fill-opacity-semi: 0.5;
-  --graph-fill-opacity-faint: 0.25;
-  --graph-fill-opacity-ghost: 0.1;
-  --graph-fill-opacity-none: 0;
+  /* Shared opacity ladder (fill + stroke use the same numbers). */
+  --graph-opacity-full: 1;
+  --graph-opacity-rich: 0.75;
+  --graph-opacity-mostly: 0.63;
+  --graph-opacity-semi: 0.5;
+  --graph-opacity-soft: 0.37;
+  --graph-opacity-faint: 0.25;
+  --graph-opacity-ghost: 0.1;
+  --graph-opacity-none: 0;
+
+  /* stroke-opacity aliases */
+  --graph-stroke-opacity-full: var(--graph-opacity-full);
+  --graph-stroke-opacity-rich: var(--graph-opacity-rich);
+  --graph-stroke-opacity-mostly: var(--graph-opacity-mostly);
+  --graph-stroke-opacity-semi: var(--graph-opacity-semi);
+  --graph-stroke-opacity-soft: var(--graph-opacity-soft);
+  --graph-stroke-opacity-faint: var(--graph-opacity-faint);
+  --graph-stroke-opacity-ghost: var(--graph-opacity-ghost);
+  --graph-stroke-opacity-none: var(--graph-opacity-none);
+
+  /* fill-opacity aliases */
+  --graph-fill-opacity-full: var(--graph-opacity-full);
+  --graph-fill-opacity-rich: var(--graph-opacity-rich);
+  --graph-fill-opacity-mostly: var(--graph-opacity-mostly);
+  --graph-fill-opacity-semi: var(--graph-opacity-semi);
+  --graph-fill-opacity-soft: var(--graph-opacity-soft);
+  --graph-fill-opacity-faint: var(--graph-opacity-faint);
+  --graph-fill-opacity-ghost: var(--graph-opacity-ghost);
+  --graph-fill-opacity-none: var(--graph-opacity-none);
 
   /* stroke-dasharray */
   --graph-dash-dashed: 3 3;
   --graph-dash-dotted: 1.5 1.5;
 }
 
-/* Soft defaults — yield to any more specific chart rule or utility class. */
-.aux-graph {
+/*
+ * Soft defaults. Mode selectors match AUX specificity so outline/filled no
+ * longer force 2px / 1.2px when no stroke-*width* utility is present.
+ * Do not force stroke-dasharray here — that would fight `.stroke-dashed` on
+ * the same two-class tier (e.g. DynamicsChart `.aux-steady`).
+ */
+.aux-graph,
+.aux-graph.aux-filled,
+.aux-graph.aux-outline,
+.aux-graph.aux-steady {
   stroke-width: var(--graph-stroke-medium);
-  stroke-opacity: var(--graph-stroke-opacity-visible);
+  stroke-opacity: var(--graph-stroke-opacity-full);
   stroke: var(--color);
-  stroke-dasharray: none;
   fill: var(--color);
   fill-opacity: var(--graph-fill-opacity-semi);
 }
 
+.aux-graph {
+  stroke-dasharray: none;
+}
+
 /* ---- stroke-width ---- */
 
-.stroke-thinnest {
+.stroke-thinnest,
+.aux-graph.stroke-thinnest {
   stroke-width: var(--graph-stroke-thinnest);
 }
-.stroke-thinner {
+.stroke-thinner,
+.aux-graph.stroke-thinner {
   stroke-width: var(--graph-stroke-thinner);
 }
-.stroke-thin {
+.stroke-thin,
+.aux-graph.stroke-thin {
   stroke-width: var(--graph-stroke-thin);
 }
-.stroke-medium {
+.stroke-medium,
+.aux-graph.stroke-medium {
   stroke-width: var(--graph-stroke-medium);
 }
-.stroke-thick {
+.stroke-thick,
+.aux-graph.stroke-thick {
   stroke-width: var(--graph-stroke-thick);
 }
-.stroke-thicker {
+.stroke-thicker,
+.aux-graph.stroke-thicker {
   stroke-width: var(--graph-stroke-thicker);
 }
-.stroke-thickest {
+.stroke-thickest,
+.aux-graph.stroke-thickest {
   stroke-width: var(--graph-stroke-thickest);
 }
 
 /* ---- stroke-opacity ---- */
 
-.stroke-visible {
-  stroke-opacity: var(--graph-stroke-opacity-visible);
+.stroke-full,
+.aux-graph.stroke-full {
+  stroke-opacity: var(--graph-stroke-opacity-full);
 }
-.stroke-semi {
+.stroke-rich,
+.aux-graph.stroke-rich {
+  stroke-opacity: var(--graph-stroke-opacity-rich);
+}
+.stroke-mostly,
+.aux-graph.stroke-mostly {
+  stroke-opacity: var(--graph-stroke-opacity-mostly);
+}
+.stroke-semi,
+.aux-graph.stroke-semi {
   stroke-opacity: var(--graph-stroke-opacity-semi);
 }
-.stroke-faint {
+.stroke-soft,
+.aux-graph.stroke-soft {
+  stroke-opacity: var(--graph-stroke-opacity-soft);
+}
+.stroke-faint,
+.aux-graph.stroke-faint {
   stroke-opacity: var(--graph-stroke-opacity-faint);
 }
-.stroke-none {
+.stroke-ghost,
+.aux-graph.stroke-ghost {
+  stroke-opacity: var(--graph-stroke-opacity-ghost);
+}
+.stroke-none,
+.aux-graph.stroke-none {
   stroke-opacity: var(--graph-stroke-opacity-none);
 }
 
 /* ---- fill-opacity ---- */
 
-.fill-visible {
-  fill-opacity: var(--graph-fill-opacity-visible);
+.fill-full,
+.aux-graph.fill-full {
+  fill-opacity: var(--graph-fill-opacity-full);
 }
-.fill-semi {
+.fill-rich,
+.aux-graph.fill-rich {
+  fill-opacity: var(--graph-fill-opacity-rich);
+}
+.fill-mostly,
+.aux-graph.fill-mostly {
+  fill-opacity: var(--graph-fill-opacity-mostly);
+}
+.fill-semi,
+.aux-graph.fill-semi {
   fill-opacity: var(--graph-fill-opacity-semi);
 }
-.fill-faint {
+.fill-soft,
+.aux-graph.fill-soft {
+  fill-opacity: var(--graph-fill-opacity-soft);
+}
+.fill-faint,
+.aux-graph.fill-faint {
   fill-opacity: var(--graph-fill-opacity-faint);
 }
-.fill-ghost {
+.fill-ghost,
+.aux-graph.fill-ghost {
   fill-opacity: var(--graph-fill-opacity-ghost);
 }
-.fill-none {
+.fill-none,
+.aux-graph.fill-none {
   fill-opacity: var(--graph-fill-opacity-none);
 }
 
 /* ---- fill ---- */
 
-.fill-color {
+.fill-color,
+.aux-graph.fill-color {
   fill: var(--color);
 }
-.fill-accent {
+.fill-background,
+.aux-graph.fill-background {
+  fill: var(--background);
+}
+.fill-accent,
+.aux-graph.fill-accent {
   fill: var(--color-accent);
 }
-.fill-warn {
+.fill-warn,
+.aux-graph.fill-warn {
   fill: var(--color-warn);
 }
-.fill-gradient {
+.fill-gradient,
+.aux-graph.fill-gradient {
   fill: var(--graph-gradient, var(--chart-level-stroke, var(--color-accent)));
 }
-.fill-gradient-inv {
+.fill-gradient-inv,
+.aux-graph.fill-gradient-inv {
   fill: var(
     --graph-gradient-inv,
     var(--chart-level-stroke-inv, var(--color-warn))
   );
 }
+.fill-grad-light,
+.aux-graph.fill-grad-light {
+  fill: var(--graph-grad-light, var(--graph-gradient, var(--color-accent)));
+}
+.fill-grad-light-inv,
+.aux-graph.fill-grad-light-inv {
+  fill: var(
+    --graph-grad-light-inv,
+    var(--graph-gradient-inv, var(--color-warn))
+  );
+}
 
 /* ---- stroke ---- */
 
-.stroke-color {
+.stroke-color,
+.aux-graph.stroke-color {
   stroke: var(--color);
 }
-.stroke-accent {
+.stroke-background,
+.aux-graph.stroke-background {
+  stroke: var(--background);
+}
+.stroke-accent,
+.aux-graph.stroke-accent {
   stroke: var(--color-accent);
 }
-.stroke-warn {
+.stroke-warn,
+.aux-graph.stroke-warn {
   stroke: var(--color-warn);
 }
-.stroke-gradient {
+.stroke-gradient,
+.aux-graph.stroke-gradient {
   stroke: var(--graph-gradient, var(--chart-level-stroke, var(--color-accent)));
 }
-.stroke-gradient-inv {
+.stroke-gradient-inv,
+.aux-graph.stroke-gradient-inv {
   stroke: var(
     --graph-gradient-inv,
     var(--chart-level-stroke-inv, var(--color-warn))
   );
 }
+.stroke-grad-light,
+.aux-graph.stroke-grad-light {
+  stroke: var(--graph-grad-light, var(--graph-gradient, var(--color-accent)));
+}
+.stroke-grad-light-inv,
+.aux-graph.stroke-grad-light-inv {
+  stroke: var(
+    --graph-grad-light-inv,
+    var(--graph-gradient-inv, var(--color-warn))
+  );
+}
 
 /* ---- stroke-dasharray ---- */
 
-.stroke-solid {
+.stroke-solid,
+.aux-graph.stroke-solid {
   stroke-dasharray: none;
 }
-.stroke-dashed {
+.stroke-dashed,
+.aux-graph.stroke-dashed {
   stroke-dasharray: var(--graph-dash-dashed);
 }
-.stroke-dotted {
+.stroke-dotted,
+.aux-graph.stroke-dotted {
   stroke-dasharray: var(--graph-dash-dotted);
+  stroke-linecap: butt;
 }

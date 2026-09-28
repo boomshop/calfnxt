@@ -1,4 +1,5 @@
 import { DynamicValue } from '@deutschesoft/awml';
+import '../utils/chartPaintOrder';
 
 /** Appearance prefs: day/night surfaces + accent pair (calfnxt / lime / fire / sea / slick). */
 

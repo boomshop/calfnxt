@@ -17,7 +17,7 @@
 
         > .aux-gridline.echo-grid-unit {
           stroke: var(--color);
-          stroke-opacity: 0.1;
+          stroke-opacity: var(--graph-stroke-opacity-ghost);
         }
       }
     }

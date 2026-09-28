@@ -36,7 +36,9 @@ public:
   int takeOutputLevelsDb(float* out, int maxOut) override { return io_.takeOutputLevelsDb(out, maxOut); }
   int takeBandGainsDb(float* out, int maxOut) override;
   int takeSpectrum(float* out, int maxOut) override;
-  const char* vizSpectrumId() const override { return "fft"; }
+  const char* vizSpectrumId() const override { return "fft_in"; }
+  int takeOutputSpectrum(float* out, int maxOut) override;
+  const char* vizOutputSpectrumId() const override { return "fft_out"; }
   void configureVizBins(const char* id, int bins) override;
 
   OBJ_METHODS(EqualizerPlugin, Plugin::EffectBase)
@@ -56,7 +58,8 @@ private:
   float displayGainsDb_[kEqBandCount] {};
   Dsp::IoStage io_;
   Dsp::EqBandProcessor bands_[kEqBandCount];
-  Dsp::SpectrumTap spectrum_;
+  Dsp::SpectrumTap spectrumIn_;
+  Dsp::SpectrumTap spectrumOut_;
   std::atomic<bool> spectrumActive_{false};
   double sampleRate_ = 44100.0;
   /** After one quiet block of zero-feed, IIR state is drained — further quiet can skip. */

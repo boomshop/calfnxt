@@ -53,7 +53,8 @@ protected:
   const char* editorHtml() const override { return kEditorHtml; }
 
 private:
-  static constexpr int kHistChannels = 2;
+  /** [outPeak, grLin, limitLin] — Out/Cut via expand, Limit as thresh line. */
+  static constexpr int kHistChannels = 3;
   static constexpr int kHistSlots = 512;
   static constexpr int kHistMinSlots = 48;
   static constexpr int kHistBufSize = kHistSlots * kHistChannels;
@@ -71,7 +72,7 @@ private:
   int oversamplingFactor() const;
   int effectiveOversampling() const;
   Dsp::LimitCurve curveFromPlain(float v) const;
-  void histFeedSample(float audioPeakLin, float grLin);
+  void histFeedSample(float outPeakLin, float grLin, float limitLin);
   void publishHistSnapshot();
   static float applyColor(float x, float amount);
 

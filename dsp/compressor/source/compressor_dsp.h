@@ -53,8 +53,8 @@ protected:
   const char* editorHtml() const override { return kEditorHtml; }
 
 private:
-  // History: audio peak, sidechain/detector peak, GR (lin) — same layout as DeEsser.
-  static constexpr int kHistChannels = 3;
+  // History: trigger (SC/detector), GR (lin), post-GR peak (no makeup/mix), threshold.
+  static constexpr int kHistChannels = 4;
   static constexpr int kHistSlots = 512;
   static constexpr int kHistMinSlots = 48;
   static constexpr int kHistBufSize = kHistSlots * kHistChannels;
@@ -75,7 +75,8 @@ private:
   BlockState makeBlockState() const;
   void processSample(const BlockState& state, float& L, float& R, float scL, float scR);
   void resetProcessing();
-  void histFeedSample(float audioPeakLin, float detPeakLin, float grLin);
+  void histFeedSample(float triggerLin, float grLin, float outPeakLin,
+                      float threshLin);
   void publishHistSnapshot();
   void publishDynamicsPoint();
 

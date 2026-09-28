@@ -17,7 +17,7 @@ using namespace Steinberg::Vst;
 namespace {
 constexpr uint32 kStateMagic = 0x434e584Eu; // 'CNXE'
 constexpr uint32 kStateVersion = 1;
-constexpr float kHistoryDisplayMs = 10000.f;
+constexpr float kHistoryDisplayMs = 2000.f;
 
 float ascCoeffFromPlain(float c)
 {
@@ -501,7 +501,8 @@ void MblimiterPlugin::applyParams(bool force)
   updateLatency(false);
 }
 
-void MblimiterPlugin::histFeedSample(int band, float fullPeak, float bandPeak, float grLin)
+void MblimiterPlugin::histFeedSample(int band, float bandOutPeak, float grLin,
+                                     float limitLin)
 {
   if (!vizConsumerActive())
     return;
@@ -512,12 +513,12 @@ void MblimiterPlugin::histFeedSample(int band, float fullPeak, float bandPeak, f
   int& pos = histPos_[band];
   int& count = histSampleCount_[band];
 
-  buf[pos + 0] = std::max(buf[pos + 0], fullPeak);
-  buf[pos + 1] = std::max(buf[pos + 1], bandPeak);
+  buf[pos + 0] = std::max(buf[pos + 0], bandOutPeak);
   if (count == 0)
-    buf[pos + 2] = grLin;
+    buf[pos + 1] = grLin;
   else
-    buf[pos + 2] = std::min(buf[pos + 2], grLin);
+    buf[pos + 1] = std::min(buf[pos + 1], grLin);
+  buf[pos + 2] = limitLin;
 
   ++count;
   if (count >= sps)
@@ -525,8 +526,8 @@ void MblimiterPlugin::histFeedSample(int band, float fullPeak, float bandPeak, f
     pos = (pos + kHistChannels) % kHistBufSize;
     count = 0;
     buf[pos + 0] = 0.f;
-    buf[pos + 1] = 0.f;
-    buf[pos + 2] = 1.f;
+    buf[pos + 1] = 1.f;
+    buf[pos + 2] = limitLin;
   }
 }
 
@@ -615,11 +616,14 @@ int MblimiterPlugin::takeEnvelopeDisplay(float* out, int maxOut)
       {
         const int srcIdx = (startPos + i * kHistChannels) % kHistBufSize;
         dst[i * kHistChannels + 0] = std::fabs(histSnapshot_[b][srcIdx + 0]);
-        dst[i * kHistChannels + 1] = std::fabs(histSnapshot_[b][srcIdx + 1]);
-        float gr = histSnapshot_[b][srcIdx + 2];
+        float gr = histSnapshot_[b][srcIdx + 1];
         if (!(gr > 0.f))
           gr = 1.f;
-        dst[i * kHistChannels + 2] = std::clamp(gr, 1.0e-6f, 1.f);
+        dst[i * kHistChannels + 1] = std::clamp(gr, 1.0e-6f, 1.f);
+        float lim = histSnapshot_[b][srcIdx + 2];
+        if (!(lim > 0.f))
+          lim = 1.f;
+        dst[i * kHistChannels + 2] = std::clamp(lim, 1.0e-6f, 1.f);
       }
     }
     const uint32_t s1 = histSeq_.load(std::memory_order_acquire);
@@ -634,9 +638,32 @@ int MblimiterPlugin::takeEnvelopeDisplay(float* out, int maxOut)
 
 void MblimiterPlugin::configureVizBins(const char* id, int bins)
 {
-  if (!id || std::strcmp(id, vizEnvelopeId()) != 0)
+  if (!id)
+    return;
+  if (std::strcmp(id, "fft_in") == 0 || std::strcmp(id, "fft_out") == 0 ||
+      std::strcmp(id, "fft") == 0)
+  {
+    spectrumIn_.configureBins(bins);
+    spectrumOut_.configureBins(bins);
+    return;
+  }
+  if (std::strcmp(id, vizEnvelopeId()) != 0)
     return;
   histVisibleSlots_ = std::max(kHistMinSlots, std::min(kHistSlots, bins));
+}
+
+int MblimiterPlugin::takeSpectrum(float* out, int maxOut)
+{
+  if (!vizConsumerActive())
+    return 0;
+  return spectrumIn_.takeSpectrum(out, maxOut);
+}
+
+int MblimiterPlugin::takeOutputSpectrum(float* out, int maxOut)
+{
+  if (!vizConsumerActive())
+    return 0;
+  return spectrumOut_.takeSpectrum(out, maxOut);
 }
 
 tresult PLUGIN_API MblimiterPlugin::setActive(TBool state)
@@ -662,6 +689,12 @@ tresult PLUGIN_API MblimiterPlugin::setupProcessing(ProcessSetup& newSetup)
   if (result != kResultOk)
     return result;
   sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  spectrumIn_.setSampleRate(sampleRate_);
+  spectrumOut_.setSampleRate(sampleRate_);
+  spectrumIn_.setFftSize(2048);
+  spectrumOut_.setFftSize(2048);
+  spectrumIn_.setHold(false);
+  spectrumOut_.setHold(false);
   resetProcessing();
   return kResultOk;
 }
@@ -691,6 +724,8 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
 
   io_.setBypassGains(bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
+
+  const float displayLimit = Dsp::dbToLin(params_[kParamLimit]);
 
   const bool hasHostAudio = io_.begin(data);
   if (!hasHostAudio)
@@ -733,7 +768,7 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
       for (int32 i = 0; i < n; ++i)
       {
         for (int b = 0; b < bands; ++b)
-          histFeedSample(b, 0.f, 0.f, 1.f);
+          histFeedSample(b, 0.f, 1.f, displayLimit);
       }
     }
     publishHistSnapshot();
@@ -752,7 +787,6 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
     bypassXfadePos_ = 0;
   }
 
-  const float displayLimit = Dsp::dbToLin(params_[kParamLimit]);
   const bool truePeak = params_[kParamTruePeak] >= 0.5f;
   const float marginDb = std::clamp(params_[kParamMargin], 0.f, 3.f);
   const float limitLin =
@@ -779,12 +813,20 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
 
   const int32 nFrames = data.numSamples;
   float blockPeak = 0.f;
+  const bool spectrumRun = vizConsumerActive();
+  if (spectrumRun)
+  {
+    spectrumIn_.setSampleRate(sampleRate_);
+    spectrumOut_.setSampleRate(sampleRate_);
+  }
 
   auto processFrame = [&](float& outL, float& outR) {
     if (mono)
       outR = outL;
     const float inL = outL;
     const float inR = outR;
+    if (spectrumRun)
+      spectrumIn_.process(inL, inR);
 
     if (color > 0.f)
     {
@@ -795,7 +837,6 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
         outR = outL;
     }
 
-    const float fullPeak = std::max(std::fabs(outL), std::fabs(outR));
     float bandsL[kMaxBands] {};
     float bandsR[kMaxBands] {};
     splitL_.process(outL, bandsL);
@@ -1020,6 +1061,9 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
     Dsp::sanitizeDenormal(outL);
     Dsp::sanitizeDenormal(outR);
 
+    if (spectrumRun)
+      spectrumOut_.process(outL, outR);
+
     const float op = std::max(std::fabs(outL), std::fabs(outR));
     if (op > blockPeak)
       blockPeak = op;
@@ -1031,7 +1075,7 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
         stripMeter_[b].forceZero();
         lastGrDb_[b] = 0.f;
         bandOutHold_[b].accumulate(0, bandPeak[b]);
-        histFeedSample(b, fullPeak, bandPeak[b], 1.f);
+        histFeedSample(b, bandPeak[b], 1.f, displayLimit);
       }
       bbMeter_.forceZero();
       overallMeter_.forceZero();
@@ -1059,7 +1103,8 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
         deepestLin = safe;
       lastGrDb_[b] = linToDbSafe(safe);
       bandOutHold_[b].accumulate(0, stripOutPeak[b]);
-      histFeedSample(b, fullPeak, bandPeak[b], safe);
+      // GR-only path: Cut expand = bandPeak; Limit line = display ceiling.
+      histFeedSample(b, bandPeak[b] * safe, safe, displayLimit);
     }
     overallMeter_.process(deepestLin);
     for (int b = bands; b < kMaxBands; ++b)
@@ -1101,6 +1146,12 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
   }
 
   lastOutPeak_ = blockPeak;
+
+  if (spectrumRun)
+  {
+    spectrumIn_.publish();
+    spectrumOut_.publish();
+  }
 
   if (ascHold > static_cast<uint32_t>(std::max(0, nFrames)))
     ascHold -= static_cast<uint32_t>(nFrames);

@@ -13,6 +13,7 @@ import {
   bindVizGrArray,
   bindVizEnvelope,
   bindVizPoint,
+  bindVizSpectrum,
   postBegin,
   postEnd,
 } from '../utils/bind_param';
@@ -31,7 +32,7 @@ export const MBCOMP_MIN_BANDS = 2;
 export const MBCOMP_XOVER_COUNT = MB_BAND_COUNT - 1;
 export const MBCOMP_FREQ_MIN = 20;
 export const MBCOMP_FREQ_MAX = 20000;
-/** History channels per band: full-range peak, band peak, GR (linear). */
+/** History channels per band: band post-GR, GR lin, thresh lin. */
 const MBCOMP_HIST_CHANNELS = 3;
 const MBCOMP_VIZ_ID = 'mbcomp';
 
@@ -105,6 +106,10 @@ export interface IMbcompHost {
   historyAll$: DynamicValue<Float32Array | null>;
   /** Transfer operating point [inDb, outDb] of the listened / first band. */
   point$: DynamicValue<number[]>;
+  /** Pre-dynamics spectrum (fft_in). */
+  spectrumIn$: DynamicValue<number[]>;
+  /** Post-dynamics spectrum (fft_out). */
+  spectrumOut$: DynamicValue<number[]>;
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
   dispose: () => void;
@@ -343,6 +348,11 @@ export function createBoundMbcompHost(): IMbcompHost {
   disposers.push(selectedBandIndex$.subscribe(syncPoint, false));
   syncPoint();
 
+  const spectrumIn$ = DynamicValue.fromConstant<number[]>([]);
+  const spectrumOut$ = DynamicValue.fromConstant<number[]>([]);
+  disposers.push(bindVizSpectrum(spectrumIn$, 'fft_in'));
+  disposers.push(bindVizSpectrum(spectrumOut$, 'fft_out'));
+
   return {
     meta: pluginMeta,
     io,
@@ -358,6 +368,8 @@ export function createBoundMbcompHost(): IMbcompHost {
     bandIo$,
     historyAll$,
     point$,
+    spectrumIn$,
+    spectrumOut$,
     beginEdit: postBegin,
     endEdit: postEnd,
     dispose: () => disposers.forEach((d) => d()),

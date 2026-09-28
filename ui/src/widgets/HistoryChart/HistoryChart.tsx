@@ -10,6 +10,7 @@ import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { addGraphClasses } from '../../styles/graphStyles';
+import { Toggle } from '../Toggle';
 import './HistoryChart.scss';
 
 export {
@@ -19,9 +20,23 @@ export {
 } from '../../styles/graphStyles';
 
 const DB_MAX = 0;
+/** Default fixed range when `autoScale` is off (Analyzer / …). */
 const DB_MIN = -48;
 const DB_GRID = 6;
 const DB_LABEL = 12;
+
+/** Auto-scale Y floor: hard limits, margin, snap, attack hold, release. */
+const AUTO_SCALE_HARD_MIN = -60;
+const AUTO_SCALE_SOFT_MIN = -12;
+const AUTO_SCALE_SNAP_DB = 6;
+/** Expand only after target stays below the floor this long (ignores spikes). */
+const AUTO_SCALE_ATTACK_MS = 200;
+const AUTO_SCALE_RELEASE_TAU_S = 2;
+/** Smooth range_y glide toward the snapped floor (seconds). */
+const AUTO_SCALE_ANIM_TAU_S = 0.22;
+const AUTO_SCALE_ANIM_EPS_DB = 0.08;
+/** Settle envelope onto target so soft-min is reachable despite asymp. release. */
+const AUTO_SCALE_SETTLE_DB = 0.35;
 
 /** Fixed history window (ms) — keep in sync with DSP history display. */
 export const HISTORY_CHART_MS = 10000;
@@ -47,11 +62,32 @@ export type HistorySeries = {
   /** Channel index in `data$` (`[ch0…chN] × slots` + optional phase). */
   channel: number;
   /**
+   * Optional second amplitude channel: closed fill between `transform(channel)`
+   * (upper) and `transform(diffChannel)` (lower) — “cut tips” (input − output).
+   * Ignored when `diffGrChannel` is set.
+   */
+  diffChannel?: number;
+  /**
+   * Optional GR (linear) channel paired with `channel`:
+   * - `attenuate` (default): upper = channel, lower = channel × gr
+   * - `expand`: upper = channel / gr, lower = channel
+   *   (channel = post-GR peak without makeup/mix; tip height = GR in dB)
+   */
+  diffGrChannel?: number;
+  diffGrMode?: 'attenuate' | 'expand';
+  /**
+   * Single-envelope GR scale (not cut tips). With `mode: 'bottom'` this plots
+   * the full pre/post level: expand → channel/gr, attenuate → channel×gr.
+   * Mutually exclusive with `diffChannel` / `diffGrChannel`.
+   */
+  scaleGrChannel?: number;
+  scaleGrMode?: 'attenuate' | 'expand';
+  /**
    * Graph utility classes from `styles/graph.scss`, e.g.
    * `"stroke-thin stroke-accent fill-faint"`.
    */
   className?: string;
-  /** AUX path mode. Default `bottom`. */
+  /** AUX path mode. Default `bottom`. Cut-tips series should use `fill`. */
   mode?: HistoryGraphMode;
   /** Map blob sample → plot Y (default: linear amplitude → dB). */
   transform?: (value: number) => number;
@@ -60,7 +96,7 @@ export type HistorySeries = {
   /**
    * Install the vertical accent→warn paint server on the chart SVG.
    * Also implied when `className` contains `stroke-gradient` / `fill-gradient`
-   * (non-inv). Style the path with `stroke-gradient` / `fill-gradient`.
+   * / `*-grad-light` (non-inv). Style the path with those utilities.
    */
   gradient?: boolean;
   /**
@@ -75,6 +111,12 @@ export type HistorySeries = {
   visible$?: DynamicValue<boolean>;
   /** Show a legend chip that toggles `visible$`. */
   toggle?: boolean;
+  /**
+   * When set to a finite number, draw a horizontal line at that dB and ignore
+   * the blob channel (e.g. Inv threshold while on an Inv panel). `null` /
+   * undefined → normal channel transform.
+   */
+  flatDb$?: DynamicValue<number | null>;
 };
 
 export interface HistoryChartProps {
@@ -89,13 +131,27 @@ export interface HistoryChartProps {
   vizId: string;
   windowMs?: number;
   /**
+   * When the blob still spans a longer capture than `windowMs` (legacy DSP /
+   * fixtures), keep only the newest `windowMs/sourceWindowMs` fraction of
+   * slots and stretch that across the axis — right-aligned clip.
+   */
+  sourceWindowMs?: number;
+  /**
    * Fixed spacing between samples. Partial buffers then sit at “now”
    * (the right edge) instead of being stretched across `windowMs`.
    */
   slotMs?: number;
-  /** Plot range in dB. Defaults to −48…0 (peaks and gain reduction). */
+  /**
+   * Plot range in dB when `autoScale` is off.
+   * Defaults to −48…0 (peaks and gain reduction).
+   */
   dbMin?: number;
   dbMax?: number;
+  /**
+   * Follow all series Y values with a floor envelope (fast down, slow up),
+   * snapped to 6 dB steps within −60…−12. Ready for Limiter / Mbcomp / …
+   */
+  autoScale?: boolean;
   className?: string;
 }
 
@@ -128,15 +184,13 @@ function buildTimeGridX(displayMs: number) {
   return lines;
 }
 
-/** Default: linear amplitude → dB (peaks and GR lin). */
+/** Default: linear amplitude → dB (peaks and GR lin). Hard floor −60. */
 export function historyLinToDb(lin: number): number {
-  if (!(lin > 1e-12)) return DB_MIN;
-  return Math.max(DB_MIN, Math.min(DB_MAX, 20 * Math.log10(lin)));
-}
-
-function splitClassNames(className: string | undefined): string[] {
-  if (!className) return [];
-  return className.split(/\s+/).filter(Boolean);
+  if (!(lin > 1e-12)) return AUTO_SCALE_HARD_MIN;
+  return Math.max(
+    AUTO_SCALE_HARD_MIN,
+    Math.min(DB_MAX, 20 * Math.log10(lin)),
+  );
 }
 
 function wantsGradient(spec: HistorySeries): boolean {
@@ -144,8 +198,139 @@ function wantsGradient(spec: HistorySeries): boolean {
   const cls = spec.className ?? '';
   return (
     /\bstroke-gradient\b/.test(cls) ||
-    /\bfill-gradient\b/.test(cls)
+    /\bfill-gradient\b/.test(cls) ||
+    /\bstroke-grad-light\b/.test(cls) ||
+    /\bfill-grad-light\b/.test(cls)
   );
+}
+
+/** Inline stroke paint targets — fill grads use CSS vars only. */
+function wantsStrokeGradientPaint(spec: HistorySeries): boolean {
+  const cls = spec.className ?? '';
+  return (
+    /\bstroke-gradient\b/.test(cls) || /\bstroke-grad-light\b/.test(cls)
+  );
+}
+
+function isCutTipsSeries(spec: HistorySeries): boolean {
+  return spec.diffChannel != null || spec.diffGrChannel != null;
+}
+
+/** Snap a dB floor down onto the auto-scale grid, clamped to hard/soft limits. */
+function snapAutoScaleMin(envDb: number): number {
+  const clamped = Math.max(
+    AUTO_SCALE_HARD_MIN,
+    Math.min(AUTO_SCALE_SOFT_MIN, envDb),
+  );
+  return Math.floor(clamped / AUTO_SCALE_SNAP_DB) * AUTO_SCALE_SNAP_DB;
+}
+
+/**
+ * Deepest plotted Y across all listed+visible series (cut tips: both edges).
+ *
+ * Returns `null` when there is no buffer yet (studio / first paint) so the
+ * floor envelope does not lock onto −60 and then crawl up via slow release.
+ *
+ * Near-zero lin maps to HARD_MIN (−60) for drawing; those silence sentinels are
+ * skipped for auto-scale when any real sample exists — otherwise sparse zeros
+ * in the 10 s window yank the floor with nothing visible in a zoomed range.
+ * All-silence buffer → HARD_MIN.
+ */
+function seriesDeepestDb(
+  buf: Float32Array | null,
+  specs: HistorySeries[],
+  nCh: number,
+): number | null {
+  if (!buf || nCh < 1 || buf.length < nCh) return null;
+
+  let data = buf;
+  if (buf.length % nCh === 1) data = buf.subarray(0, buf.length - 1);
+  const slots = Math.floor(data.length / nCh);
+  if (slots < 1) return null;
+
+  let deepest = Infinity;
+  let sawReal = false;
+
+  const consider = (y: number) => {
+    // Silence sentinel from historyLinToDb(≈0) — ignore unless buffer is empty of content.
+    if (!(y > AUTO_SCALE_HARD_MIN)) return;
+    sawReal = true;
+    if (y < deepest) deepest = y;
+  };
+
+  for (const spec of specs) {
+    const listed = spec.listed$ ? !!spec.listed$.value : true;
+    const visible = spec.visible$ ? !!spec.visible$.value : true;
+    if (!listed || !visible) continue;
+
+    const transform = spec.transform ?? historyLinToDb;
+    if (isCutTipsSeries(spec)) {
+      const grCh = spec.diffGrChannel;
+      const diffCh = spec.diffChannel;
+      const grMode = spec.diffGrMode ?? 'attenuate';
+      for (let i = 0; i < slots; ++i) {
+        const baseLin = data[i * nCh + spec.channel] ?? 0;
+        let inLin: number;
+        let outLin: number;
+        if (grCh != null) {
+          const gr = Math.min(1, Math.max(1e-6, data[i * nCh + grCh] ?? 1));
+          if (grMode === 'expand') {
+            outLin = baseLin;
+            inLin = baseLin / gr;
+          } else {
+            inLin = baseLin;
+            outLin = baseLin * gr;
+          }
+        } else {
+          inLin = baseLin;
+          outLin = data[i * nCh + (diffCh as number)] ?? 0;
+        }
+        let yHi = transform(inLin);
+        let yLo = transform(outLin);
+        if (yLo > yHi) yLo = yHi;
+        consider(yHi);
+        consider(yLo);
+      }
+    } else if (spec.scaleGrChannel != null) {
+      const grCh = spec.scaleGrChannel;
+      const grMode = spec.scaleGrMode ?? 'attenuate';
+      for (let i = 0; i < slots; ++i) {
+        const baseLin = data[i * nCh + spec.channel] ?? 0;
+        const gr = Math.min(1, Math.max(1e-6, data[i * nCh + grCh] ?? 1));
+        const lin =
+          grMode === 'expand' ? baseLin / gr : baseLin * gr;
+        consider(transform(lin));
+      }
+    } else {
+      const flat = spec.flatDb$?.value;
+      if (typeof flat === 'number' && Number.isFinite(flat)) {
+        consider(flat);
+        continue;
+      }
+      for (let i = 0; i < slots; ++i) {
+        consider(transform(data[i * nCh + spec.channel] ?? 0));
+      }
+    }
+  }
+
+  if (!sawReal || !(deepest < Infinity)) return AUTO_SCALE_HARD_MIN;
+  return deepest;
+}
+
+/**
+ * 6 dB display snap with Schmitt hysteresis on the way up so the range does
+ * not chatter when the envelope hovers on a step boundary.
+ *
+ * Release uses a small epsilon below the next step: the floor envelope
+ * approaches its target asymptotically, and `Math.floor` maps (−18, −12) → −18,
+ * so without ε the soft min would never unlock once the range had expanded.
+ */
+function snapAutoScaleDisplay(envDb: number, currentDisplay: number): number {
+  const ideal = snapAutoScaleMin(envDb);
+  if (ideal < currentDisplay) return ideal;
+  if (envDb >= currentDisplay + AUTO_SCALE_SNAP_DB - AUTO_SCALE_SETTLE_DB)
+    return ideal;
+  return currentDisplay;
 }
 
 function seriesKey(series: HistorySeries[]): string {
@@ -155,12 +340,18 @@ function seriesKey(series: HistorySeries[]): string {
         [
           s.id,
           s.channel,
+          s.diffChannel ?? '',
+          s.diffGrChannel ?? '',
+          s.diffGrMode ?? '',
+          s.scaleGrChannel ?? '',
+          s.scaleGrMode ?? '',
           s.className ?? '',
           s.mode ?? 'bottom',
           wantsGradient(s) ? 1 : 0,
           s.toggle ? 1 : 0,
           s.listed$ ? 1 : 0,
           s.visible$ ? 1 : 0,
+          s.flatDb$ ? 1 : 0,
         ].join(':'),
     )
     .join('|');
@@ -168,7 +359,12 @@ function seriesKey(series: HistorySeries[]): string {
 
 function channelCountOf(series: HistorySeries[]): number {
   let n = 0;
-  for (const s of series) n = Math.max(n, s.channel + 1);
+  for (const s of series) {
+    n = Math.max(n, s.channel + 1);
+    if (s.diffChannel != null) n = Math.max(n, s.diffChannel + 1);
+    if (s.diffGrChannel != null) n = Math.max(n, s.diffGrChannel + 1);
+    if (s.scaleGrChannel != null) n = Math.max(n, s.scaleGrChannel + 1);
+  }
   return n;
 }
 
@@ -200,12 +396,58 @@ type AuxChartInstance = {
   isDestructed?: () => boolean;
   element?: Element;
   svg?: SVGSVGElement;
+  /** SVG group `.aux-graphs` (AUX Chart private, used as DOM sweep fallback). */
+  _graphs?: Element;
   set: (k: string, v: unknown) => void;
   addGraph: (opts: unknown) => AuxGraph;
   removeGraph: (g: AuxGraph) => void;
+  getGraphs?: () => AuxGraph[];
 };
 
 type HistDot = { x: number; y: number };
+
+/**
+ * Drop older slots so the remaining span matches `windowMs` of a blob that was
+ * recorded over `sourceWindowMs`. Phase sample (trailing float) is preserved.
+ */
+function clipHistoryBuf(
+  buf: Float32Array | null,
+  nCh: number,
+  windowMs: number,
+  sourceWindowMs: number | undefined,
+): Float32Array | null {
+  if (!buf || nCh < 1 || buf.length < nCh) return buf;
+  if (
+    sourceWindowMs == null ||
+    !(sourceWindowMs > windowMs) ||
+    !(windowMs > 0)
+  )
+    return buf;
+
+  let phase: number | null = null;
+  let data = buf;
+  if (buf.length % nCh === 1) {
+    phase = buf[buf.length - 1] ?? 0;
+    data = buf.subarray(0, buf.length - 1);
+  }
+  const slots = Math.floor(data.length / nCh);
+  if (slots < 2) return buf;
+
+  const keep = Math.max(
+    1,
+    Math.min(slots, Math.round((slots * windowMs) / sourceWindowMs)),
+  );
+  if (keep >= slots) return buf;
+
+  const start = (slots - keep) * nCh;
+  const clipped = data.subarray(start, start + keep * nCh);
+  if (phase == null) return clipped;
+
+  const out = new Float32Array(clipped.length + 1);
+  out.set(clipped);
+  out[clipped.length] = phase;
+  return out;
+}
 
 /** Build one channel’s AUX dots from the interleaved history buffer. */
 function historyChannelDots(
@@ -216,6 +458,7 @@ function historyChannelDots(
   transform: (v: number) => number,
   fixedSlotMs?: number,
   floorY?: number,
+  scaleGr?: { channel: number; mode: 'attenuate' | 'expand' },
 ): HistDot[] | null {
   if (!buf || nCh < 1 || buf.length < nCh) return null;
 
@@ -239,13 +482,99 @@ function historyChannelDots(
   const pts: HistDot[] = [];
   for (let i = 0; i < slots; ++i) {
     const age = i === slots - 1 ? 0 : slotMs * (slots - 1 - i) + phaseShift;
-    const y =
-      floorY != null
-        ? floorY
-        : transform(data[i * nCh + channel] ?? 0);
+    let y: number;
+    if (floorY != null) {
+      y = floorY;
+    } else {
+      let lin = data[i * nCh + channel] ?? 0;
+      if (scaleGr) {
+        const gr = Math.min(
+          1,
+          Math.max(1e-6, data[i * nCh + scaleGr.channel] ?? 1),
+        );
+        lin = scaleGr.mode === 'expand' ? lin / gr : lin * gr;
+      }
+      y = transform(lin);
+    }
     pts.push({ x: age, y });
   }
   return pts;
+}
+
+/**
+ * Closed polygon between an upper and lower envelope — the “cut tips”
+ * shaved by gain reduction.
+ *
+ * - `diffChannel`: upper = channel, lower = diffChannel
+ * - `diffGrChannel` + attenuate: upper = channel, lower = channel × gr
+ * - `diffGrChannel` + expand: upper = channel / gr, lower = channel
+ */
+function historyCutTipsDots(
+  buf: Float32Array | null,
+  upperCh: number,
+  diffCh: number | undefined,
+  grCh: number | undefined,
+  grMode: 'attenuate' | 'expand',
+  nCh: number,
+  windowMs: number,
+  transform: (v: number) => number,
+  fixedSlotMs?: number,
+  floorY?: number,
+): HistDot[] | null {
+  if (!buf || nCh < 1 || buf.length < nCh) return null;
+  if (diffCh == null && grCh == null) return null;
+
+  let phase = 0;
+  let data = buf;
+  if (buf.length % nCh === 1) {
+    phase = buf[buf.length - 1] ?? 0;
+    data = buf.subarray(0, buf.length - 1);
+  }
+
+  const slots = Math.floor(data.length / nCh);
+  if (slots < 1) return null;
+
+  const slotMs =
+    fixedSlotMs != null && fixedSlotMs > 0
+      ? fixedSlotMs
+      : slots > 1
+        ? windowMs / (slots - 1)
+        : windowMs;
+  const phaseShift = phase * slotMs;
+  const upper: HistDot[] = [];
+  const lower: HistDot[] = [];
+  for (let i = 0; i < slots; ++i) {
+    const age = i === slots - 1 ? 0 : slotMs * (slots - 1 - i) + phaseShift;
+    if (floorY != null) {
+      upper.push({ x: age, y: floorY });
+      lower.push({ x: age, y: floorY });
+      continue;
+    }
+    const baseLin = data[i * nCh + upperCh] ?? 0;
+    let inLin: number;
+    let outLin: number;
+    if (grCh != null) {
+      const gr = Math.min(1, Math.max(1e-6, data[i * nCh + grCh] ?? 1));
+      if (grMode === 'expand') {
+        // `channel` is post-GR peak → reconstruct pre-GR tip.
+        outLin = baseLin;
+        inLin = baseLin / gr;
+      } else {
+        inLin = baseLin;
+        outLin = baseLin * gr;
+      }
+    } else {
+      inLin = baseLin;
+      outLin = data[i * nCh + (diffCh as number)] ?? 0;
+    }
+    let yHi = transform(inLin);
+    let yLo = transform(outLin);
+    // Makeup / boost: no tip. Collapse to a zero-height edge.
+    if (yLo > yHi) yLo = yHi;
+    upper.push({ x: age, y: yHi });
+    lower.push({ x: age, y: yLo });
+  }
+  return upper.concat(lower.reverse());
 }
 
 const alwaysTrue$ = DynamicValue.fromConstant(true);
@@ -253,25 +582,15 @@ const alwaysTrue$ = DynamicValue.fromConstant(true);
 function SeriesToggle(props: { series: HistorySeries }) {
   const { series } = props;
   const listed = useDynamicValueReadonly(series.listed$ ?? alwaysTrue$);
-  const visible = useDynamicValueReadonly(series.visible$ ?? alwaysTrue$);
-  if (!series.toggle || !listed) return null;
+  if (!series.toggle || !listed || !series.visible$) return null;
 
-  const visible$ = series.visible$;
   return (
-    <button
-      type="button"
-      className={['history-toggle', visible && 'is-on']
-        .filter(Boolean)
-        .join(' ')}
+    <Toggle
+      state$={series.visible$}
+      label={series.short}
       title={series.name}
-      aria-pressed={visible}
-      aria-label={series.name}
-      onClick={() => {
-        if (!visible$) return;
-        visible$.set(!visible$.value);
-      }}>
-      {series.short}
-    </button>
+      className="history-toggle"
+    />
   );
 }
 
@@ -285,9 +604,11 @@ export function HistoryChart(props: HistoryChartProps) {
     series,
     vizId,
     windowMs = HISTORY_CHART_MS,
+    sourceWindowMs,
     slotMs,
     dbMin = DB_MIN,
     dbMax = DB_MAX,
+    autoScale = false,
     className,
   } = props;
 
@@ -296,17 +617,42 @@ export function HistoryChart(props: HistoryChartProps) {
   seriesRef.current = series;
   const windowMsRef = useRef(windowMs);
   windowMsRef.current = windowMs;
+  const sourceWindowMsRef = useRef(sourceWindowMs);
+  sourceWindowMsRef.current = sourceWindowMs;
   const slotMsRef = useRef(slotMs);
   slotMsRef.current = slotMs;
   const dbMinRef = useRef(dbMin);
-  dbMinRef.current = dbMin;
+  // When auto-scaling, `dbMinRef` tracks the live floor — do not stomp it from props
+  // (Analyzer re-renders often from meters and would reset the glide).
+  if (!autoScale) dbMinRef.current = dbMin;
+  const dbMaxRef = useRef(dbMax);
+  dbMaxRef.current = dbMax;
+  const autoScaleRef = useRef(autoScale);
+  autoScaleRef.current = autoScale;
+  /** Continuous floor envelope (dB); snapped value is the animation target. */
+  const floorEnvRef = useRef(AUTO_SCALE_SOFT_MIN);
+  const displayMinRef = useRef(snapAutoScaleMin(AUTO_SCALE_SOFT_MIN));
+  /** Currently applied range_y.min while gliding toward displayMinRef. */
+  const animMinRef = useRef(snapAutoScaleMin(AUTO_SCALE_SOFT_MIN));
+  const animRafRef = useRef(0);
+  const animLastTRef = useRef(0);
+  const floorInitRef = useRef(false);
+  const floorLastTRef = useRef(0);
+  /** ms target has stayed below env; expand only after AUTO_SCALE_ATTACK_MS. */
+  const attackHoldMsRef = useRef(0);
+  /** Deepest target seen during the current attack hold. */
+  const attackPendingRef = useRef(AUTO_SCALE_SOFT_MIN);
+  const autoScaleUnsubRef = useRef<(() => void) | null>(null);
   const chartRef = useRef<AuxChartInstance | null>(null);
   const auxGraphsRef = useRef<AuxGraph[]>([]);
   const graphBindingsRef = useRef<Bindings[]>([]);
   const visibleUnsubsRef = useRef<Array<() => void>>([]);
   const resizeRoRef = useRef<ResizeObserver | null>(null);
+  /** Bumps on every attach/detach so interleaved rebuilds cannot double-add. */
+  const attachGenRef = useRef(0);
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
   const [gradTargets, setGradTargets] = useState<SVGElement[]>([]);
+  const [gradEnabled, setGradEnabled] = useState(false);
 
   const hasToggleChrome = useMemo(
     () => series.some((s) => s.toggle),
@@ -315,10 +661,13 @@ export function HistoryChart(props: HistoryChartProps) {
 
   const reassertGradStroke = useChartGradient({
     svg: chartSvg,
-    enabled: !!chartSvg && gradTargets.length > 0,
+    // CSS vars for fill-gradient even when no stroke targets.
+    enabled: !!chartSvg && gradEnabled,
     targets: gradTargets,
+    // Stroke only — fill uses `.fill-grad-light` / `.fill-gradient` CSS vars
+    // so inline paint cannot stomp the wash / stroke-none.
     paint: 'stroke',
-    reverse: true,
+    reverse: false,
   });
   const reassertRef = useRef(reassertGradStroke);
   reassertRef.current = reassertGradStroke;
@@ -332,36 +681,205 @@ export function HistoryChart(props: HistoryChartProps) {
     [vizId],
   );
 
-  const detach = useCallback(() => {
-    resizeRoRef.current?.disconnect();
-    resizeRoRef.current = null;
-    for (const u of visibleUnsubsRef.current) u();
-    visibleUnsubsRef.current = [];
-    for (const b of graphBindingsRef.current) b.dispose();
-    graphBindingsRef.current = [];
-    const chart = chartRef.current;
-    const aux = auxGraphsRef.current;
+  /** Drop every Graph on the chart — tracked list can miss orphans after races. */
+  const sweepGraphs = useCallback((chart: AuxChartInstance) => {
+    if (chart.isDestructed?.()) return;
+    const known = auxGraphsRef.current;
     auxGraphsRef.current = [];
-    chartRef.current = null;
-    setChartSvg(null);
-    setGradTargets([]);
-    if (!chart || chart.isDestructed?.()) return;
-    for (const g of aux) {
-      // Clear path before remove — AUX otherwise keeps the last stroke.
-      g.set('dots', null);
-      chart.removeGraph(g);
+    const all =
+      typeof chart.getGraphs === 'function'
+        ? (chart.getGraphs() as AuxGraph[])
+        : known;
+    const seen = new Set<AuxGraph>();
+    for (const g of [...all, ...known]) {
+      if (!g || seen.has(g)) continue;
+      seen.add(g);
+      try {
+        g.set('dots', null);
+      } catch {
+        /* already gone */
+      }
+      try {
+        chart.removeGraph(g);
+      } catch {
+        /* already gone */
+      }
+    }
+    // DOM fallback if AUX list and our ref both missed a node.
+    const host = chart._graphs ?? chart.svg?.querySelector(':scope > .aux-graphs');
+    if (host) {
+      for (const node of [...host.querySelectorAll(':scope > .aux-graph')]) {
+        node.remove();
+      }
     }
   }, []);
 
+  const detach = useCallback(
+    (clearChartRef = true) => {
+      attachGenRef.current += 1;
+      resizeRoRef.current?.disconnect();
+      resizeRoRef.current = null;
+      if (animRafRef.current) {
+        cancelAnimationFrame(animRafRef.current);
+        animRafRef.current = 0;
+      }
+      autoScaleUnsubRef.current?.();
+      autoScaleUnsubRef.current = null;
+      for (const u of visibleUnsubsRef.current) u();
+      visibleUnsubsRef.current = [];
+      for (const b of graphBindingsRef.current) b.dispose();
+      graphBindingsRef.current = [];
+      const chart = chartRef.current;
+      if (clearChartRef) chartRef.current = null;
+      setChartSvg(null);
+      setGradTargets([]);
+      setGradEnabled(false);
+      if (!chart || chart.isDestructed?.()) {
+        auxGraphsRef.current = [];
+        return;
+      }
+      sweepGraphs(chart);
+    },
+    [sweepGraphs],
+  );
+
+  /** Glide range_y.min toward the snapped floor; grid jumps to the destination. */
+  const ensureRangeAnim = useCallback((chart: AuxChartInstance) => {
+    if (animRafRef.current) return;
+    animLastTRef.current = performance.now();
+    const tick = (now: number) => {
+      animRafRef.current = 0;
+      if (!autoScaleRef.current || chart.isDestructed?.()) return;
+      const dt = Math.min(
+        0.05,
+        Math.max(0, (now - animLastTRef.current) / 1000),
+      );
+      animLastTRef.current = now;
+      const dest = displayMinRef.current;
+      let cur = animMinRef.current;
+      if (dt > 0) {
+        cur += (dest - cur) * (1 - Math.exp(-dt / AUTO_SCALE_ANIM_TAU_S));
+      }
+      if (Math.abs(dest - cur) <= AUTO_SCALE_ANIM_EPS_DB) cur = dest;
+      animMinRef.current = cur;
+      dbMinRef.current = cur;
+      const yMax = dbMaxRef.current;
+      chart.set('range_y', { min: cur, max: yMax });
+      if (cur !== dest) {
+        animRafRef.current = requestAnimationFrame(tick);
+      }
+    };
+    animRafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  const applyAutoScale = useCallback(
+    (chart: AuxChartInstance, buf: Float32Array | null) => {
+      if (!autoScaleRef.current || chart.isDestructed?.()) return;
+
+      const specs = seriesRef.current;
+      const nCh = channelCountOf(specs);
+      const clipped = clipHistoryBuf(
+        buf,
+        nCh,
+        windowMsRef.current,
+        sourceWindowMsRef.current,
+      );
+      const deepest = seriesDeepestDb(clipped, specs, nCh);
+      // No buffer yet (studio injects after first paint) — do not lock onto −60.
+      if (deepest == null) return;
+      let target = Math.max(
+        AUTO_SCALE_HARD_MIN,
+        Math.min(AUTO_SCALE_SOFT_MIN, deepest),
+      );
+
+      const now = performance.now();
+      if (!floorInitRef.current) {
+        floorEnvRef.current = target;
+        floorInitRef.current = true;
+        floorLastTRef.current = now;
+        attackHoldMsRef.current = 0;
+        attackPendingRef.current = target;
+        const snapped0 = snapAutoScaleMin(target);
+        displayMinRef.current = snapped0;
+        animMinRef.current = snapped0;
+        dbMinRef.current = snapped0;
+        const yMax0 = dbMaxRef.current;
+        chart.set('range_y', { min: snapped0, max: yMax0 });
+        chart.set('grid_y', buildDbGridY(snapped0, yMax0, DB_GRID, DB_LABEL));
+        return;
+      }
+
+      const dtMs = Math.min(100, Math.max(0, now - floorLastTRef.current));
+      floorLastTRef.current = now;
+      let env = floorEnvRef.current;
+      if (target < env) {
+        // Attack hold: ignore brief dips; commit deepest pending after X ms.
+        attackHoldMsRef.current += dtMs;
+        attackPendingRef.current = Math.min(attackPendingRef.current, target);
+        if (attackHoldMsRef.current >= AUTO_SCALE_ATTACK_MS) {
+          env = attackPendingRef.current;
+          attackHoldMsRef.current = 0;
+          attackPendingRef.current = env;
+        }
+      } else {
+        attackHoldMsRef.current = 0;
+        attackPendingRef.current = target;
+        if (dtMs > 0) {
+          const dt = dtMs / 1000;
+          env += (target - env) * (1 - Math.exp(-dt / AUTO_SCALE_RELEASE_TAU_S));
+        }
+        // Asymptotic release never quite hits the soft min; settle so it unlocks.
+        if (Math.abs(target - env) <= AUTO_SCALE_SETTLE_DB) env = target;
+      }
+      floorEnvRef.current = Math.max(
+        AUTO_SCALE_HARD_MIN,
+        Math.min(AUTO_SCALE_SOFT_MIN, env),
+      );
+
+      const prevSnap = displayMinRef.current;
+      const snapped = snapAutoScaleDisplay(floorEnvRef.current, prevSnap);
+      displayMinRef.current = snapped;
+      if (snapped !== prevSnap) {
+        const yMax = dbMaxRef.current;
+        // Grid snaps to destination; range_y glides via rAF.
+        chart.set('grid_y', buildDbGridY(snapped, yMax, DB_GRID, DB_LABEL));
+      }
+      if (Math.abs(animMinRef.current - snapped) > AUTO_SCALE_ANIM_EPS_DB) {
+        ensureRangeAnim(chart);
+      }
+    },
+    [ensureRangeAnim],
+  );
+
   const attach = useCallback(
     (chart: AuxChartInstance) => {
-      chartRef.current = chart;
       if (chart.isDestructed?.()) return;
+      // Always own the chart ref before sweeping — rebuild paths pass the same
+      // instance without going through widgetRef(null).
+      chartRef.current = chart;
+      // Kill orphans from a previous attach that lost its tracking set.
+      sweepGraphs(chart);
+
+      const gen = (attachGenRef.current += 1);
+
+      const yMin = autoScale ? animMinRef.current : dbMin;
+      const yMax = dbMax;
+      if (!autoScale) {
+        floorInitRef.current = false;
+        attackHoldMsRef.current = 0;
+        if (animRafRef.current) {
+          cancelAnimationFrame(animRafRef.current);
+          animRafRef.current = 0;
+        }
+        dbMinRef.current = dbMin;
+      } else {
+        dbMinRef.current = animMinRef.current;
+      }
 
       chart.set('range_x', { min: 0, max: windowMs, reverse: true });
       chart.set('grid_x', buildTimeGridX(windowMs));
-      chart.set('range_y', { min: dbMin, max: dbMax });
-      chart.set('grid_y', buildDbGridY(dbMin, dbMax, DB_GRID, DB_LABEL));
+      chart.set('range_y', { min: yMin, max: yMax });
+      chart.set('grid_y', buildDbGridY(yMin, yMax, DB_GRID, DB_LABEL));
 
       const specs = seriesRef.current;
       const nCh = channelCountOf(specs);
@@ -371,21 +889,33 @@ export function HistoryChart(props: HistoryChartProps) {
       const visibleUnsubs: Array<() => void> = [];
 
       for (const spec of specs) {
-        const classes = splitClassNames(spec.className);
+        if (attachGenRef.current !== gen) break;
+        const seriesClass = `history-${spec.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
         const g = chart.addGraph({
           dots: null,
           type: 'L',
-          mode: spec.mode ?? 'bottom',
-          class: classes[0] ?? '',
+          mode: spec.mode ?? (isCutTipsSeries(spec) ? 'fill' : 'bottom'),
+          class: seriesClass,
         });
         addGraphClasses(g.element, spec.className);
-        if (wantsGradient(spec) && g.element) grads.push(g.element);
+        if (g.element) {
+          g.element.setAttribute('data-history', spec.id);
+          g.element.setAttribute('data-history-name', spec.name);
+        }
+        if (wantsStrokeGradientPaint(spec) && g.element) grads.push(g.element);
         aux.push(g);
 
         const channel = spec.channel;
+        const diffChannel = spec.diffChannel;
+        const diffGrChannel = spec.diffGrChannel;
+        const diffGrMode = spec.diffGrMode ?? 'attenuate';
+        const scaleGrChannel = spec.scaleGrChannel;
+        const scaleGrMode = spec.scaleGrMode ?? 'attenuate';
+        const cutTips = isCutTipsSeries(spec);
         const transform = spec.transform ?? historyLinToDb;
         const listed$ = spec.listed$;
         const visible$ = spec.visible$;
+        const flatDb$ = spec.flatDb$;
 
         const isShown = () => {
           const listed = listed$ ? !!listed$.value : true;
@@ -396,26 +926,50 @@ export function HistoryChart(props: HistoryChartProps) {
         const dotsFromBuf = (buf: unknown): HistDot[] | null => {
           const shown = isShown();
           g.element?.classList.toggle('history-hidden', !shown);
-          if (!shown) {
-            // Floor line (not null) so AUX replaces the previous path.
-            return historyChannelDots(
-              buf as Float32Array | null,
+          const floor = shown ? undefined : dbMinRef.current;
+          const raw = buf as Float32Array | null;
+          const clipped = clipHistoryBuf(
+            raw,
+            nCh,
+            windowMsRef.current,
+            sourceWindowMsRef.current,
+          );
+          if (cutTips) {
+            return historyCutTipsDots(
+              clipped,
               channel,
+              diffChannel,
+              diffGrChannel,
+              diffGrMode,
               nCh,
               windowMsRef.current,
               transform,
               slotMsRef.current,
-              dbMinRef.current,
+              floor,
             );
           }
+          const flat = flatDb$?.value;
+          const yTransform =
+            typeof flat === 'number' && Number.isFinite(flat)
+              ? () => flat
+              : transform;
           return historyChannelDots(
-            buf as Float32Array | null,
+            clipped,
             channel,
             nCh,
             windowMsRef.current,
-            transform,
+            yTransform,
             slotMsRef.current,
+            floor,
+            scaleGrChannel != null
+              ? { channel: scaleGrChannel, mode: scaleGrMode }
+              : undefined,
           );
+        };
+
+        const safeDots = (buf: unknown) => {
+          const dots = dotsFromBuf(buf);
+          return dots && dots.length > 0 ? dots : null;
         };
 
         const bindings = bindAuxOptions(g, [
@@ -423,17 +977,36 @@ export function HistoryChart(props: HistoryChartProps) {
             name: 'dots',
             backendValue: data$,
             readonly: true,
-            transformReceive: dotsFromBuf,
+            transformReceive: safeDots,
           },
         ]);
         bindingsList.push(bindings);
 
         const onVisibility = () => {
-          g.set('dots', dotsFromBuf(data$.value));
+          g.set('dots', safeDots(data$.value));
+          if (autoScaleRef.current) {
+            applyAutoScale(chart, data$.value as Float32Array | null);
+          }
         };
         if (listed$) visibleUnsubs.push(listed$.subscribe(onVisibility));
         if (visible$) visibleUnsubs.push(visible$.subscribe(onVisibility));
+        if (flatDb$) visibleUnsubs.push(flatDb$.subscribe(onVisibility));
         g.element?.classList.toggle('history-hidden', !isShown());
+      }
+
+      if (attachGenRef.current !== gen) {
+        // A newer detach/attach won the race — drop what we just created.
+        for (const b of bindingsList) b.dispose();
+        for (const u of visibleUnsubs) u();
+        for (const g of aux) {
+          try {
+            g.set('dots', null);
+            chart.removeGraph(g);
+          } catch {
+            /* ignore */
+          }
+        }
+        return;
       }
 
       auxGraphsRef.current = aux;
@@ -443,9 +1016,21 @@ export function HistoryChart(props: HistoryChartProps) {
         if (specs[i]?.toFront) aux[i]?.toFront?.();
       }
 
+      if (autoScale) {
+        applyAutoScale(chart, data$.value as Float32Array | null);
+        autoScaleUnsubRef.current?.();
+        autoScaleUnsubRef.current = data$.subscribe((v) => {
+          if (attachGenRef.current !== gen) return;
+          applyAutoScale(chart, v as Float32Array | null);
+        });
+      }
+
       setChartSvg(chart.svg ?? null);
+      setGradEnabled(specs.some(wantsGradient));
       setGradTargets(grads);
-      queueMicrotask(() => reassertRef.current());
+      queueMicrotask(() => {
+        if (attachGenRef.current === gen) reassertRef.current();
+      });
 
       const el = chart.element ?? chart.svg;
       if (el) {
@@ -459,16 +1044,27 @@ export function HistoryChart(props: HistoryChartProps) {
         resizeRoRef.current = ro;
       }
     },
-    [data$, dbMax, dbMin, sendVizBins, windowMs, layoutKey],
+    [
+      applyAutoScale,
+      autoScale,
+      data$,
+      dbMax,
+      dbMin,
+      sendVizBins,
+      sweepGraphs,
+      windowMs,
+      layoutKey,
+    ],
   );
 
   const widgetRef = useCallback(
     (chart: AuxChartInstance | null) => {
       if (!chart) {
-        detach();
+        detach(true);
         return;
       }
-      detach();
+      // Rebuild in place — keep chartRef, sweep inside attach.
+      detach(false);
       attach(chart);
     },
     [attach, detach],
@@ -478,11 +1074,11 @@ export function HistoryChart(props: HistoryChartProps) {
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || chart.isDestructed?.()) return;
-    detach();
+    detach(false);
     attach(chart);
   }, [attach, detach, layoutKey]);
 
-  useEffect(() => () => detach(), [detach]);
+  useEffect(() => () => detach(true), [detach]);
 
   const rootCls = ['HistoryChart', className ?? ''].filter(Boolean).join(' ');
 

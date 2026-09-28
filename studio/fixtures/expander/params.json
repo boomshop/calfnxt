@@ -14,5 +14,7 @@
   "lopass": 20000,
   "hp_mode": 0,
   "lp_mode": 0,
-  "listen": false
+  "listen": false,
+  "inv1_active": true,
+  "inv2_active": true
 }

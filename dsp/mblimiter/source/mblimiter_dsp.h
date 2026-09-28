@@ -8,6 +8,7 @@
 #include "lookahead_limiter.h"
 #include "peak_hold.h"
 #include "resample_n.h"
+#include "spectrum_tap.h"
 #include "viz_source.h"
 
 #include "mblimiter_params.h"
@@ -50,6 +51,10 @@ public:
   const char* vizDynamicsId() const override { return "mblimiter"; }
   const char* vizEnvelopeId() const override { return "mblimiter"; }
   const char* vizBandIoLevelsId() const override { return "mblimiter"; }
+  int takeSpectrum(float* out, int maxOut) override;
+  const char* vizSpectrumId() const override { return "fft_in"; }
+  int takeOutputSpectrum(float* out, int maxOut) override;
+  const char* vizOutputSpectrumId() const override { return "fft_out"; }
   void configureVizBins(const char* id, int bins) override;
 
   OBJ_METHODS(MblimiterPlugin, Plugin::EffectBase)
@@ -61,7 +66,8 @@ protected:
   const char* editorHtml() const override { return kEditorHtml; }
 
 private:
-  static constexpr int kHistChannels = 3; // full / band / grLin
+  // Per-band history: band post-GR, GR lin, display limit (same as Limiter).
+  static constexpr int kHistChannels = 3;
   static constexpr int kHistSlots = 512;
   static constexpr int kHistMinSlots = 48;
   static constexpr int kHistBufSize = kHistSlots * kHistChannels;
@@ -88,7 +94,7 @@ private:
   /** Calf min-release floor: 2.5 periods of the band's lowest edge (ms). */
   float stripReleaseWithMinMs(int band, float masterMs, float relCoeff) const;
   static float applyColor(float x, float amount);
-  void histFeedSample(int band, float fullPeak, float bandPeak, float grLin);
+  void histFeedSample(int band, float bandOutPeak, float grLin, float limitLin);
   void publishHistSnapshot();
   void ensureMultiBuffer();
   /** Light denormal scrub for OS filters when all limiters are sleeping. */
@@ -114,6 +120,8 @@ private:
   Dsp::GrMeter overallMeter_;
   Viz::LevelPeakHold bandInHold_[kMaxBands];
   Viz::LevelPeakHold bandOutHold_[kMaxBands];
+  Dsp::SpectrumTap spectrumIn_;
+  Dsp::SpectrumTap spectrumOut_;
 
   std::vector<float> multiBuf_;
   float weightLin_[kMaxBands] {};

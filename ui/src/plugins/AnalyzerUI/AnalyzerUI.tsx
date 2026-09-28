@@ -12,7 +12,7 @@ import {
   CorrelationMeter,
   GonioMeter,
   HistoryChart,
-  HISTORY_STYLE,
+  GRAPH_STYLE,
   LevelMeter,
   MultiMeter,
   SpectrumChart,
@@ -36,30 +36,22 @@ import { Scale } from '../../widgets/Scale';
 
 const LOUD_DB_MIN = -48;
 const LOUD_DB_MAX = 6;
+/** Hard floor for history transform / auto-scale silence (matches HistoryChart). */
+const LOUD_HIST_FLOOR = -60;
 
 function loudHistoryDb(v: number): number {
-  if (!Number.isFinite(v) || v < -90) return LOUD_DB_MIN;
-  return Math.max(LOUD_DB_MIN, Math.min(LOUD_DB_MAX, v));
+  if (!Number.isFinite(v) || v < -90) return LOUD_HIST_FLOOR;
+  return Math.max(LOUD_HIST_FLOOR, Math.min(LOUD_DB_MAX, v));
 }
 
-/** Slot order matches the loudness history: M, S, true peak, RMS. */
+/** Paint back→front: RMS → TP → M → ST (ST is the working-loudness hero). */
 const LOUD_SERIES = [
   {
-    id: 'mom',
-    name: 'Momentary',
-    short: 'M',
-    channel: 0,
-    className: HISTORY_STYLE.loudMom,
-    mode: 'line' as const,
-    transform: loudHistoryDb,
-    toFront: true,
-  },
-  {
-    id: 'st',
-    name: 'Short-term',
-    short: 'ST',
-    channel: 1,
-    className: HISTORY_STYLE.loudSt,
+    id: 'rms',
+    name: 'RMS',
+    short: 'RMS',
+    channel: 3,
+    className: GRAPH_STYLE.loudRms,
     mode: 'line' as const,
     transform: loudHistoryDb,
   },
@@ -68,18 +60,28 @@ const LOUD_SERIES = [
     name: 'True peak',
     short: 'TP',
     channel: 2,
-    className: HISTORY_STYLE.loudTp,
+    className: GRAPH_STYLE.loudTp,
     mode: 'line' as const,
     transform: loudHistoryDb,
   },
   {
-    id: 'rms',
-    name: 'RMS',
-    short: 'RMS',
-    channel: 3,
-    className: HISTORY_STYLE.loudRms,
+    id: 'mom',
+    name: 'Momentary',
+    short: 'M',
+    channel: 0,
+    className: GRAPH_STYLE.loudMom,
     mode: 'line' as const,
     transform: loudHistoryDb,
+  },
+  {
+    id: 'st',
+    name: 'Short-term',
+    short: 'ST',
+    channel: 1,
+    className: GRAPH_STYLE.loudSt,
+    mode: 'line' as const,
+    transform: loudHistoryDb,
+    toFront: true,
   },
 ];
 
@@ -247,15 +249,16 @@ export function AnalyzerUI(props: AnalyzerUIProps) {
             data$={host.loudnessHistory$}
             vizId="loud"
             windowMs={12000}
-            slotMs={100}
+            slotMs={25}
             dbMin={LOUD_DB_MIN}
             dbMax={LOUD_DB_MAX}
+            autoScale
             series={LOUD_SERIES}
           />
         </WithInfo>
         <div className="hist-legend">
-          <span className="mom">M</span>
           <span className="st">ST</span>
+          <span className="mom">M</span>
           <span className="tp">TP</span>
           <span className="rms">RMS</span>
         </div>

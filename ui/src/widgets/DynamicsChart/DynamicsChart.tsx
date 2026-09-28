@@ -187,7 +187,12 @@ export function DynamicsChart(props: DynamicsChartProps) {
   reassertRef.current = reassertGradStroke;
 
   useEffect(() => {
-    addGraphClasses(chart?.response?.element, 'fill-none', 'stroke-gradient');
+    addGraphClasses(
+      chart?.response?.element,
+      'fill-none',
+      'stroke-gradient',
+      'stroke-thicker',
+    );
     const steady = chart?.svg?.querySelector(
       '.aux-graphs > .aux-steady',
     ) as SVGElement | null;
@@ -196,7 +201,7 @@ export function DynamicsChart(props: DynamicsChartProps) {
       'fill-none',
       'stroke-color',
       'stroke-thinner',
-      'stroke-faint',
+      'stroke-semi',
       'stroke-dashed',
     );
   }, [chart]);
@@ -352,7 +357,7 @@ export function DynamicsChart(props: DynamicsChartProps) {
         releaseCurveRef.current = w.addGraph({
           class: 'aux-response-release',
           mode: 'line',
-          dots: [],
+          dots: null,
           visible: isRelThreshActive(),
         });
         addGraphClasses(
@@ -364,7 +369,8 @@ export function DynamicsChart(props: DynamicsChartProps) {
         bandRef.current = w.addGraph({
           class: 'aux-hysteresis-band',
           mode: 'fill',
-          dots: [],
+          // Empty [] crashes AUX Graph fill path (dots[0].type). Use null.
+          dots: null,
           visible: isRelThreshActive(),
         });
         addGraphClasses(

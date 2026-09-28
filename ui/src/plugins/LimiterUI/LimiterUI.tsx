@@ -3,11 +3,11 @@ import { Header } from '../../components';
 import {
   Buttons,
   HistoryChart,
-  HISTORY_STYLE,
   Knob,
   LevelMeter,
   Toggle,
   WithInfo,
+  limiterHistorySeries,
 } from '../../widgets';
 import { paramIds } from '../../generated/limiterModel';
 import {
@@ -123,26 +123,9 @@ export function LimiterUI(props: LimiterUIProps) {
       <HistoryChart
         data$={host.historyData$}
         vizId="limiter"
-        series={[
-          {
-            id: 'audio',
-            name: 'Input',
-            short: 'In',
-            channel: 0,
-            className: HISTORY_STYLE.detector,
-            mode: 'bottom',
-          },
-          {
-            id: 'gr',
-            name: 'Gain reduction',
-            short: 'GR',
-            channel: 1,
-            className: HISTORY_STYLE.gr,
-            mode: 'line',
-            toFront: true,
-            gradient: true,
-          },
-        ]}
+        autoScale
+        windowMs={4000}
+        series={limiterHistorySeries()}
         className="history"
       />
 
