@@ -1,13 +1,11 @@
 import { DynamicValue } from '@deutschesoft/awml';
 import { paramIds, pluginMeta } from '../generated/deesserModel';
+import { postBegin, postEnd } from '../utils/bind_param';
 import {
-  bindBoolParamToHost,
-  bindParamToHost,
-  bindVizEnvelope,
-  bindVizGr,
-  postBegin,
-  postEnd,
-} from '../utils/bind_param';
+  bindDynamicsHostViz,
+  makeHostParamBinders,
+  makeParamDefault,
+} from '../utils/hostParamBind';
 import {
   type EqFilterType,
   type EqPassSlope,
@@ -75,10 +73,7 @@ export type IDeesserHost = {
   endEdit: (id: number) => void;
 };
 
-function paramDefault(name: keyof typeof paramIds, fallback = 0): number {
-  const meta = pluginMeta.parameters.find((p) => p.id === name);
-  return typeof meta?.default === 'number' ? meta.default : fallback;
-}
+const paramDefault = makeParamDefault(pluginMeta.parameters);
 
 export function deesserParamDefault(
   name: keyof typeof paramIds,
@@ -87,17 +82,7 @@ export function deesserParamDefault(
   return paramDefault(name, fallback);
 }
 
-function bindNum(name: keyof typeof paramIds, fallback = 0): DynamicValue<number> {
-  const dv = DynamicValue.fromConstant(paramDefault(name, fallback));
-  bindParamToHost(dv, paramIds[name]);
-  return dv;
-}
-
-function bindBool(name: keyof typeof paramIds): DynamicValue<boolean> {
-  const dv = DynamicValue.fromConstant(paramDefault(name, 0) >= 0.5);
-  bindBoolParamToHost(dv, paramIds[name]);
-  return dv;
-}
+const { bindNum, bindBool } = makeHostParamBinders(paramIds, paramDefault);
 
 function snapSlope(v: number): EqPassSlope {
   if (v >= 36) return 48;
@@ -188,8 +173,7 @@ function makeFilterBands(
 export function createBoundDeesserHost(): IDeesserHost {
   const gr$ = DynamicValue.fromConstant(0);
   const historyData$ = DynamicValue.fromConstant<Float32Array | null>(null);
-  bindVizGr(gr$, 'deess');
-  bindVizEnvelope(historyData$, 'deess');
+  bindDynamicsHostViz('deess', { gr$, historyData$ });
 
   const splitFreq$ = bindNum('split_freq', 4000);
   const hpQ$ = bindNum('hp_q', 0.707);

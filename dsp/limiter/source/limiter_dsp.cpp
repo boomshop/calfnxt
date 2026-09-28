@@ -146,17 +146,7 @@ void LimiterPlugin::resetProcessing()
   bypassXfadeLen_ = 0;
   ascLed_.store(0.f, std::memory_order_relaxed);
 
-  std::memset(histBuf_, 0, sizeof(histBuf_));
-  histPos_ = 0;
-  histSampleCount_ = 0;
-  histSamplesPerSlot_ = 1;
-  histVisibleSlots_ = 160;
-  histLock_.beginWrite();
-  std::memset(histSnapshot_, 0, sizeof(histSnapshot_));
-  histSnapshotPos_ = 0;
-  histSnapshotSampleCount_ = 0;
-  histSnapshotSamplesPerSlot_ = 1;
-  histLock_.endWrite();
+  hist_.reset();
 
   applyParams(true);
   updateLatency(false);
@@ -227,35 +217,22 @@ void LimiterPlugin::histFeedSample(float outPeakLin, float grLin, float limitLin
 {
   if (!vizConsumerActive())
     return;
-  const int pos = histPos_;
-  histBuf_[pos + 0] = std::max(histBuf_[pos + 0], outPeakLin);
-  if (histSampleCount_ == 0)
-    histBuf_[pos + 1] = grLin;
+  float* s = hist_.slot();
+  s[0] = std::max(s[0], outPeakLin);
+  if (hist_.sampleCount() == 0)
+    s[1] = grLin;
   else
-    histBuf_[pos + 1] = std::min(histBuf_[pos + 1], grLin);
-  histBuf_[pos + 2] = limitLin;
-
-  histSampleCount_ += 1;
-  if (histSampleCount_ >= histSamplesPerSlot_)
-  {
-    histPos_ = (pos + kHistChannels) % kHistBufSize;
-    histSampleCount_ = 0;
-    histBuf_[histPos_ + 0] = outPeakLin;
-    histBuf_[histPos_ + 1] = grLin;
-    histBuf_[histPos_ + 2] = limitLin;
-  }
+    s[1] = std::min(s[1], grLin);
+  s[2] = limitLin;
+  const float seed[kHistChannels] = {outPeakLin, grLin, limitLin};
+  hist_.endSample(seed);
 }
 
 void LimiterPlugin::publishHistSnapshot()
 {
   if (!vizConsumerActive())
     return;
-  histLock_.beginWrite();
-  std::memcpy(histSnapshot_, histBuf_, sizeof(histBuf_));
-  histSnapshotPos_ = histPos_;
-  histSnapshotSampleCount_ = histSampleCount_;
-  histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
-  histLock_.endWrite();
+  hist_.publish();
 }
 
 tresult PLUGIN_API LimiterPlugin::setActive(TBool state)
@@ -293,49 +270,24 @@ int LimiterPlugin::takeGainReductionDb(float* out, int maxOut)
 
 int LimiterPlugin::takeEnvelopeDisplay(float* out, int maxOut)
 {
-  const int slots = std::max(kHistMinSlots, std::min(kHistSlots, histVisibleSlots_));
-  const int outCount = slots * kHistChannels;
-  if (maxOut < outCount + 1)
-    return 0;
-
-  float phase = 0.f;
-  // Seqlock read: retry while the audio thread is mid-publish.
-  for (int attempt = 0; attempt < 8; ++attempt)
-  {
-    uint32_t s0 = 0;
-    if (!histLock_.tryBeginRead(s0))
-      continue; // write in progress
-    const int startPos =
-      (kHistBufSize + histSnapshotPos_ - (slots - 1) * kHistChannels) % kHistBufSize;
-    const int sps = std::max(1, histSnapshotSamplesPerSlot_);
-    phase = static_cast<float>(histSnapshotSampleCount_) / static_cast<float>(sps);
-    for (int i = 0; i < slots; ++i)
-    {
-      const int srcIdx = (startPos + i * kHistChannels) % kHistBufSize;
-      out[i * kHistChannels + 0] = std::fabs(histSnapshot_[srcIdx + 0]);
-      float gr = histSnapshot_[srcIdx + 1];
-      if (!(gr > 0.f))
-        gr = 1.f;
-      out[i * kHistChannels + 1] = std::clamp(gr, 1.0e-6f, 1.f);
-      float lim = histSnapshot_[srcIdx + 2];
-      if (!(lim > 0.f))
-        lim = 1.f;
-      out[i * kHistChannels + 2] = std::clamp(lim, 1.0e-6f, 1.f);
-    }
-    if (histLock_.tryEndRead(s0))
-    {
-      out[outCount] = std::clamp(phase, 0.f, 1.f);
-      return outCount + 1;
-    }
-  }
-  return 0; // contended; skip this frame
+  return hist_.take(out, maxOut, [](const float* src, float* dst) {
+    dst[0] = std::fabs(src[0]);
+    float gr = src[1];
+    if (!(gr > 0.f))
+      gr = 1.f;
+    dst[1] = std::clamp(gr, 1.0e-6f, 1.f);
+    float lim = src[2];
+    if (!(lim > 0.f))
+      lim = 1.f;
+    dst[2] = std::clamp(lim, 1.0e-6f, 1.f);
+  });
 }
 
 void LimiterPlugin::configureVizBins(const char* id, int bins)
 {
   if (!id || std::strcmp(id, vizEnvelopeId()) != 0)
     return;
-  histVisibleSlots_ = std::max(kHistMinSlots, std::min(kHistSlots, bins));
+  hist_.setVisibleSlots(bins);
 }
 
 tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
@@ -345,9 +297,7 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
   const bool bypass = params_[kParamBypass] >= 0.5f;
   applyParams(false);
 
-  const int slots = std::max(kHistMinSlots, std::min(kHistSlots, histVisibleSlots_));
-  histSamplesPerSlot_ = std::max(
-    1, static_cast<int>(sampleRate_ * kHistoryDisplayMs * 0.001f / static_cast<float>(slots)));
+  hist_.setDisplayWindow(sampleRate_, kHistoryDisplayMs);
 
   io_.setBypassGains(bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);

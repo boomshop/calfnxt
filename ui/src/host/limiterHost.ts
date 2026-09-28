@@ -1,13 +1,11 @@
 import { DynamicValue } from '@deutschesoft/awml';
 import { paramIds, pluginMeta } from '../generated/limiterModel';
+import { postBegin, postEnd } from '../utils/bind_param';
 import {
-  bindBoolParamToHost,
-  bindParamToHost,
-  bindVizEnvelope,
-  bindVizGr,
-  postBegin,
-  postEnd,
-} from '../utils/bind_param';
+  bindDynamicsHostViz,
+  makeHostParamBinders,
+  makeParamDefault,
+} from '../utils/hostParamBind';
 
 export const LIMITER_CURVE_ENTRIES = [
   { label: 'Lin', value: 0 },
@@ -42,10 +40,7 @@ export type ILimiterHost = {
   endEdit: (id: number) => void;
 };
 
-function paramDefault(name: keyof typeof paramIds, fallback = 0): number {
-  const meta = pluginMeta.parameters.find((p) => p.id === name);
-  return typeof meta?.default === 'number' ? meta.default : fallback;
-}
+const paramDefault = makeParamDefault(pluginMeta.parameters);
 
 export function limiterParamDefault(
   name: keyof typeof paramIds,
@@ -54,23 +49,12 @@ export function limiterParamDefault(
   return paramDefault(name, fallback);
 }
 
-function bindNum(name: keyof typeof paramIds, fallback = 0): DynamicValue<number> {
-  const dv = DynamicValue.fromConstant(paramDefault(name, fallback));
-  bindParamToHost(dv, paramIds[name]);
-  return dv;
-}
-
-function bindBool(name: keyof typeof paramIds): DynamicValue<boolean> {
-  const dv = DynamicValue.fromConstant(paramDefault(name, 0) >= 0.5);
-  bindBoolParamToHost(dv, paramIds[name]);
-  return dv;
-}
+const { bindNum, bindBool } = makeHostParamBinders(paramIds, paramDefault);
 
 export function createBoundLimiterHost(): ILimiterHost {
   const gr$ = DynamicValue.fromConstant(0);
   const historyData$ = DynamicValue.fromConstant<Float32Array | null>(null);
-  bindVizGr(gr$, 'limiter');
-  bindVizEnvelope(historyData$, 'limiter');
+  bindDynamicsHostViz('limiter', { gr$, historyData$ });
 
   return {
     meta: pluginMeta,

@@ -2,6 +2,7 @@
 
 #include "base/source/fstreamer.h"
 #include "channel_mode.h"
+#include "detector_routing.h"
 #include "gain_util.h"
 
 #include <algorithm>
@@ -51,17 +52,7 @@ void CompressorPlugin::resetProcessing()
   pointInDb_.store(-96.f, std::memory_order_relaxed);
   pointOutDb_.store(-96.f, std::memory_order_relaxed);
 
-  std::memset(histBuf_, 0, sizeof(histBuf_));
-  histPos_ = 0;
-  histSampleCount_ = 0;
-  histSamplesPerSlot_ = 1;
-  histVisibleSlots_ = 160;
-  histLock_.beginWrite();
-  std::memset(histSnapshot_, 0, sizeof(histSnapshot_));
-  histSnapshotPos_ = 0;
-  histSnapshotSampleCount_ = 0;
-  histSnapshotSamplesPerSlot_ = 1;
-  histLock_.endWrite();
+  hist_.reset();
   bypassSmooth_ = 1.f;
 }
 
@@ -99,38 +90,24 @@ void CompressorPlugin::histFeedSample(float triggerLin, float grLin,
 {
   if (!vizConsumerActive())
     return;
-  const int pos = histPos_;
-  histBuf_[pos + 0] = std::max(triggerLin, histBuf_[pos + 0]);
+  float* s = hist_.slot();
+  s[0] = std::max(triggerLin, s[0]);
   // Most reduction within the slot (smallest linear GR).
-  if (histBuf_[pos + 1] <= 0.f)
-    histBuf_[pos + 1] = grLin;
+  if (s[1] <= 0.f)
+    s[1] = grLin;
   else
-    histBuf_[pos + 1] = std::min(grLin, histBuf_[pos + 1]);
-  histBuf_[pos + 2] = std::max(outPeakLin, histBuf_[pos + 2]);
-  histBuf_[pos + 3] = threshLin;
-
-  histSampleCount_ += 1;
-  if (histSampleCount_ >= histSamplesPerSlot_)
-  {
-    histPos_ = (pos + kHistChannels) % kHistBufSize;
-    histSampleCount_ = 0;
-    histBuf_[histPos_ + 0] = triggerLin;
-    histBuf_[histPos_ + 1] = grLin;
-    histBuf_[histPos_ + 2] = outPeakLin;
-    histBuf_[histPos_ + 3] = threshLin;
-  }
+    s[1] = std::min(grLin, s[1]);
+  s[2] = std::max(outPeakLin, s[2]);
+  s[3] = threshLin;
+  const float seed[kHistChannels] = {triggerLin, grLin, outPeakLin, threshLin};
+  hist_.endSample(seed);
 }
 
 void CompressorPlugin::publishHistSnapshot()
 {
   if (!vizConsumerActive())
     return;
-  histLock_.beginWrite();
-  std::memcpy(histSnapshot_, histBuf_, sizeof(histBuf_));
-  histSnapshotPos_ = histPos_;
-  histSnapshotSampleCount_ = histSampleCount_;
-  histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
-  histLock_.endWrite();
+  hist_.publish();
 }
 
 void CompressorPlugin::publishDynamicsPoint()
@@ -148,90 +125,11 @@ void CompressorPlugin::processSample(const BlockState& state, float& L, float& R
   // Channel selects detector feed and GR path (suite / FabFilter Mid default).
   float detL = 0.f;
   float detR = 0.f;
-  switch (state.channel)
-  {
-    case Dsp::ChannelMode::Left:
-    {
-      const float x = sc_.processChannel(0, scL);
-      (void)sc_.processChannel(1, scR);
-      detL = x;
-      detR = x;
-      break;
-    }
-    case Dsp::ChannelMode::Right:
-    {
-      (void)sc_.processChannel(0, scL);
-      const float x = sc_.processChannel(1, scR);
-      detL = x;
-      detR = x;
-      break;
-    }
-    case Dsp::ChannelMode::Mid:
-    {
-      float mid = 0.f;
-      float side = 0.f;
-      Dsp::encodeMs(scL, scR, mid, side);
-      (void)side;
-      const float x = sc_.processMono(mid);
-      detL = x;
-      detR = x;
-      break;
-    }
-    case Dsp::ChannelMode::Side:
-    {
-      float mid = 0.f;
-      float side = 0.f;
-      Dsp::encodeMs(scL, scR, mid, side);
-      (void)mid;
-      const float x = sc_.processMono(side);
-      detL = x;
-      detR = x;
-      break;
-    }
-    case Dsp::ChannelMode::Stereo:
-    default:
-      if (state.link == Dsp::StereoLink::Mid)
-      {
-        const float mid = sc_.processMono(0.5f * (scL + scR));
-        detL = mid;
-        detR = mid;
-      }
-      else
-      {
-        detL = sc_.processChannel(0, scL);
-        detR = sc_.processChannel(1, scR);
-      }
-      break;
-  }
+  Dsp::processDetectorStereo(sc_, state.channel, state.link, scL, scR, detL, detR);
 
   // History "Out" / Cut tips: dry × GR only (makeup + mix stay out of the plot).
-  auto dryProcessedPeak = [&]() -> float {
-    switch (state.channel)
-    {
-      case Dsp::ChannelMode::Left:
-        return std::fabs(dryL);
-      case Dsp::ChannelMode::Right:
-        return std::fabs(dryR);
-      case Dsp::ChannelMode::Mid:
-      {
-        float mid = 0.f;
-        float side = 0.f;
-        Dsp::encodeMs(dryL, dryR, mid, side);
-        (void)side;
-        return std::fabs(mid);
-      }
-      case Dsp::ChannelMode::Side:
-      {
-        float mid = 0.f;
-        float side = 0.f;
-        Dsp::encodeMs(dryL, dryR, mid, side);
-        (void)mid;
-        return std::fabs(side);
-      }
-      case Dsp::ChannelMode::Stereo:
-      default:
-        return std::max(std::fabs(dryL), std::fabs(dryR));
-    }
+  const auto dryProcessedPeak = [&]() -> float {
+    return Dsp::channelAbsPeak(state.channel, dryL, dryR);
   };
 
   if (state.listen && !state.bypass)
@@ -355,50 +253,26 @@ int CompressorPlugin::takeDynamicsPoint(float* out, int maxOut)
 
 int CompressorPlugin::takeEnvelopeDisplay(float* out, int maxOut)
 {
-  const int slots = std::max(kHistMinSlots, std::min(kHistSlots, histVisibleSlots_));
-  const int outCount = slots * kHistChannels;
-  if (maxOut < outCount + 1)
-    return 0;
-
-  float phase = 0.f;
-  // Seqlock read: retry while the audio thread is mid-publish.
-  for (int attempt = 0; attempt < 8; ++attempt)
-  {
-    uint32_t s0 = 0;
-    if (!histLock_.tryBeginRead(s0))
-      continue; // write in progress
-    const int startPos =
-      (kHistBufSize + histSnapshotPos_ - (slots - 1) * kHistChannels) % kHistBufSize;
-    const int sps = std::max(1, histSnapshotSamplesPerSlot_);
-    phase = static_cast<float>(histSnapshotSampleCount_) / static_cast<float>(sps);
-    for (int i = 0; i < slots; ++i)
-    {
-      const int srcIdx = (startPos + i * kHistChannels) % kHistBufSize;
-      out[i * kHistChannels + 0] = std::fabs(histSnapshot_[srcIdx + 0]);
-      float gr = histSnapshot_[srcIdx + 1];
-      if (!(gr > 0.f))
-        gr = 1.f;
-      out[i * kHistChannels + 1] = std::clamp(gr, 1.0e-6f, 1.f);
-      out[i * kHistChannels + 2] = std::fabs(histSnapshot_[srcIdx + 2]);
-      float thr = histSnapshot_[srcIdx + 3];
-      if (!(thr > 0.f))
-        thr = Dsp::dbToLin(params_[kParamThreshold]);
-      out[i * kHistChannels + 3] = std::clamp(thr, 1.0e-6f, 1.f);
-    }
-    if (histLock_.tryEndRead(s0))
-    {
-      out[outCount] = std::clamp(phase, 0.f, 1.f);
-      return outCount + 1;
-    }
-  }
-  return 0; // contended; skip this frame
+  const float thrFallback = Dsp::dbToLin(params_[kParamThreshold]);
+  return hist_.take(out, maxOut, [&](const float* src, float* dst) {
+    dst[0] = std::fabs(src[0]);
+    float gr = src[1];
+    if (!(gr > 0.f))
+      gr = 1.f;
+    dst[1] = std::clamp(gr, 1.0e-6f, 1.f);
+    dst[2] = std::fabs(src[2]);
+    float thr = src[3];
+    if (!(thr > 0.f))
+      thr = thrFallback;
+    dst[3] = std::clamp(thr, 1.0e-6f, 1.f);
+  });
 }
 
 void CompressorPlugin::configureVizBins(const char* id, int bins)
 {
   if (!id || std::strcmp(id, vizEnvelopeId()) != 0)
     return;
-  histVisibleSlots_ = std::max(kHistMinSlots, std::min(kHistSlots, bins));
+  hist_.setVisibleSlots(bins);
 }
 
 tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
@@ -428,9 +302,7 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
 
   const BlockState state = makeBlockState();
 
-  const int slots = std::max(kHistMinSlots, std::min(kHistSlots, histVisibleSlots_));
-  histSamplesPerSlot_ = std::max(
-    1, static_cast<int>(sampleRate_ * kHistoryDisplayMs * 0.001f / static_cast<float>(slots)));
+  hist_.setDisplayWindow(sampleRate_, kHistoryDisplayMs);
 
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);

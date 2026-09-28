@@ -5,15 +5,14 @@
 #include "channel_mode.h"
 #include "compressor.h"
 #include "gr_meter.h"
-#include "seq_lock.h"
 #include "sidechain_filter.h"
+#include "viz_history_ring.h"
 #include "viz_source.h"
 
 #include "compressor_params.h"
 
 #include <atomic>
 #include <cstring>
-#include <mutex>
 
 namespace calfNXT {
 namespace Compressor {
@@ -56,9 +55,6 @@ protected:
 private:
   // History: trigger (SC/detector), GR (lin), post-GR peak (no makeup/mix), threshold.
   static constexpr int kHistChannels = 4;
-  static constexpr int kHistSlots = 512;
-  static constexpr int kHistMinSlots = 48;
-  static constexpr int kHistBufSize = kHistSlots * kHistChannels;
 
   struct BlockState
   {
@@ -94,19 +90,7 @@ private:
   std::atomic<float> pointInDb_ {-96.f};
   std::atomic<float> pointOutDb_ {-96.f};
 
-  float histBuf_[kHistBufSize] {};
-  int histPos_ = 0;
-  int histSampleCount_ = 0;
-  int histSamplesPerSlot_ = 1;
-  /* Snapshot published once per block from the audio thread, read on the UI
-   * poll. Seqlock — the audio thread never blocks; the reader retries on a
-   * torn read. */
-  Dsp::SeqLock histLock_;
-  float histSnapshot_[kHistBufSize] {};
-  int histSnapshotPos_ = 0;
-  int histSnapshotSampleCount_ = 0;
-  int histSnapshotSamplesPerSlot_ = 1;
-  int histVisibleSlots_ = 160;
+  Dsp::VizHistoryRing<kHistChannels> hist_;
   /** 1 = fully active, 0 = fully bypassed (soft crossfade). */
   float bypassSmooth_ = 1.f;
 };

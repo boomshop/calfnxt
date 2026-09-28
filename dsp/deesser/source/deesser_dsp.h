@@ -1,13 +1,13 @@
 #pragma once
 
 #include "effect_base.h"
-#include "seq_lock.h"
 #include "io_stage.h"
 #include "band_splitter.h"
 #include "channel_mode.h"
 #include "compressor.h"
 #include "deesser_detector.h"
 #include "gr_meter.h"
+#include "viz_history_ring.h"
 #include "viz_source.h"
 
 #include "deesser_params.h"
@@ -55,9 +55,6 @@ protected:
 private:
   // History: trigger, GR, post-GR sum (no makeup), threshold, pre-GR sum.
   static constexpr int kHistChannels = 5;
-  static constexpr int kHistSlots = 512;
-  static constexpr int kHistMinSlots = 48;
-  static constexpr int kHistBufSize = kHistSlots * kHistChannels;
   static constexpr float kHistoryDisplayMs = 10000.f;
   static constexpr float kFixedKneeDb = 9.f;
 
@@ -89,19 +86,7 @@ private:
   Dsp::BandSplitter splitR_;
   Dsp::GrMeter grMeter_;
 
-  float histBuf_[kHistBufSize] {};
-  int histPos_ = 0;
-  int histSampleCount_ = 0;
-  int histSamplesPerSlot_ = 1;
-  /* Snapshot published once per block from the audio thread, read on the UI
-   * poll. Seqlock (odd/even sequence) — the audio thread never blocks; the
-   * reader retries on a torn read. */
-  Dsp::SeqLock histLock_;
-  float histSnapshot_[kHistBufSize] {};
-  int histSnapshotPos_ = 0;
-  int histSnapshotSampleCount_ = 0;
-  int histSnapshotSamplesPerSlot_ = 1;
-  int histVisibleSlots_ = 160;
+  Dsp::VizHistoryRing<kHistChannels> hist_;
   /** 1 = fully active, 0 = fully bypassed (soft crossfade). */
   float bypassSmooth_ = 1.f;
 };

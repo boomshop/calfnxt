@@ -1,12 +1,12 @@
 #pragma once
 
 #include "delay_line.h"
-#include "seq_lock.h"
 #include "effect_base.h"
 #include "gr_meter.h"
 #include "io_stage.h"
 #include "lookahead_limiter.h"
 #include "resample_n.h"
+#include "viz_history_ring.h"
 #include "viz_source.h"
 
 #include "limiter_params.h"
@@ -56,10 +56,6 @@ protected:
 private:
   /** [outPeak, grLin, limitLin] — Out/Cut via expand, Limit as thresh line. */
   static constexpr int kHistChannels = 3;
-  static constexpr int kHistSlots = 512;
-  static constexpr int kHistMinSlots = 48;
-  static constexpr int kHistBufSize = kHistSlots * kHistChannels;
-
   /** Matches attack parameter max in limiter.plugin.json. */
   static constexpr float kMaxLookaheadMs = 10.f;
   static constexpr int kLatencyDelaySize = 8192;
@@ -107,19 +103,7 @@ private:
 
   std::atomic<float> ascLed_ {0.f};
 
-  float histBuf_[kHistBufSize] {};
-  int histPos_ = 0;
-  int histSampleCount_ = 0;
-  int histSamplesPerSlot_ = 1;
-  /* Snapshot published once per block from the audio thread, read on the UI
-   * poll. Seqlock (odd/even sequence) — the audio thread never blocks; the
-   * reader retries on a torn read. */
-  Dsp::SeqLock histLock_;
-  float histSnapshot_[kHistBufSize] {};
-  int histSnapshotPos_ = 0;
-  int histSnapshotSampleCount_ = 0;
-  int histSnapshotSamplesPerSlot_ = 1;
-  int histVisibleSlots_ = 160;
+  Dsp::VizHistoryRing<kHistChannels> hist_;
 };
 
 } // namespace Limiter

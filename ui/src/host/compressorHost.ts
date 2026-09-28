@@ -1,14 +1,11 @@
 import { DynamicValue } from '@deutschesoft/awml';
 import { paramIds, pluginMeta } from '../generated/compressorModel';
+import { postBegin, postEnd } from '../utils/bind_param';
 import {
-  bindBoolParamToHost,
-  bindParamToHost,
-  bindVizEnvelope,
-  bindVizGr,
-  bindVizPoint,
-  postBegin,
-  postEnd,
-} from '../utils/bind_param';
+  bindDynamicsHostViz,
+  makeHostParamBinders,
+  makeParamDefault,
+} from '../utils/hostParamBind';
 
 export const COMPRESSOR_MODE_ENTRIES = [
   { label: 'Peak', value: 0 },
@@ -62,10 +59,7 @@ export type ICompressorHost = {
   endEdit: (id: number) => void;
 };
 
-function paramDefault(name: keyof typeof paramIds, fallback = 0): number {
-  const meta = pluginMeta.parameters.find((p) => p.id === name);
-  return typeof meta?.default === 'number' ? meta.default : fallback;
-}
+const paramDefault = makeParamDefault(pluginMeta.parameters);
 
 /** DSP descriptor default (plain) for AUX Knob double-click reset. */
 export function compressorParamDefault(
@@ -75,25 +69,13 @@ export function compressorParamDefault(
   return paramDefault(name, fallback);
 }
 
-function bindNum(name: keyof typeof paramIds, fallback = 0): DynamicValue<number> {
-  const dv = DynamicValue.fromConstant(paramDefault(name, fallback));
-  bindParamToHost(dv, paramIds[name]);
-  return dv;
-}
-
-function bindBool(name: keyof typeof paramIds): DynamicValue<boolean> {
-  const dv = DynamicValue.fromConstant(paramDefault(name, 0) >= 0.5);
-  bindBoolParamToHost(dv, paramIds[name]);
-  return dv;
-}
+const { bindNum, bindBool } = makeHostParamBinders(paramIds, paramDefault);
 
 export function createBoundCompressorHost(): ICompressorHost {
   const gr$ = DynamicValue.fromConstant(0);
   const point$ = DynamicValue.fromConstant<number[]>([-96, -96]);
   const historyData$ = DynamicValue.fromConstant<Float32Array | null>(null);
-  bindVizGr(gr$, 'comp');
-  bindVizPoint(point$, 'comp');
-  bindVizEnvelope(historyData$, 'comp');
+  bindDynamicsHostViz('comp', { gr$, point$, historyData$ });
 
   return {
     meta: pluginMeta,

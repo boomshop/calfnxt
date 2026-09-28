@@ -1,12 +1,10 @@
 import { DynamicValue } from '@deutschesoft/awml';
 import { paramIds, pluginMeta } from '../generated/chorusModel';
+import { bindVizLfo, postBegin, postEnd } from '../utils/bind_param';
 import {
-  bindBoolParamToHost,
-  bindParamToHost,
-  bindVizLfo,
-  postBegin,
-  postEnd,
-} from '../utils/bind_param';
+  makeHostParamBinders,
+  makeParamDefault,
+} from '../utils/hostParamBind';
 
 /** Stereo / L / R / Mid / Side (matches `Dsp::ChannelMode`). */
 export const CHORUS_CHANNEL_ENTRIES = [
@@ -44,10 +42,7 @@ export type IChorusHost = {
   pulseReset: () => void;
 };
 
-function paramDefault(name: keyof typeof paramIds, fallback = 0): number {
-  const meta = pluginMeta.parameters.find((p) => p.id === name);
-  return typeof meta?.default === 'number' ? meta.default : fallback;
-}
+const paramDefault = makeParamDefault(pluginMeta.parameters);
 
 export function chorusParamDefault(
   name: keyof typeof paramIds,
@@ -56,17 +51,7 @@ export function chorusParamDefault(
   return paramDefault(name, fallback);
 }
 
-function bindNum(name: keyof typeof paramIds, fallback = 0): DynamicValue<number> {
-  const dv = DynamicValue.fromConstant(paramDefault(name, fallback));
-  bindParamToHost(dv, paramIds[name]);
-  return dv;
-}
-
-function bindBool(name: keyof typeof paramIds): DynamicValue<boolean> {
-  const dv = DynamicValue.fromConstant(paramDefault(name, 0) >= 0.5);
-  bindBoolParamToHost(dv, paramIds[name]);
-  return dv;
-}
+const { bindNum, bindBool } = makeHostParamBinders(paramIds, paramDefault);
 
 export function createBoundChorusHost(): IChorusHost {
   const reset$ = bindNum('reset', 0);

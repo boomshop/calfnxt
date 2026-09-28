@@ -1,15 +1,11 @@
 import { DynamicValue } from '@deutschesoft/awml';
 import { paramIds, pluginMeta } from '../generated/expanderModel';
+import { bindVizUnitLevels, postBegin, postEnd } from '../utils/bind_param';
 import {
-  bindBoolParamToHost,
-  bindParamToHost,
-  bindVizEnvelope,
-  bindVizGr,
-  bindVizPoint,
-  bindVizUnitLevels,
-  postBegin,
-  postEnd,
-} from '../utils/bind_param';
+  bindDynamicsHostViz,
+  makeHostParamBinders,
+  makeParamDefault,
+} from '../utils/hostParamBind';
 import {
   COMPRESSOR_CHANNEL_ENTRIES,
   COMPRESSOR_LINK_ENTRIES,
@@ -76,10 +72,7 @@ export type IExpanderHost = {
   endEdit: (id: number) => void;
 };
 
-function paramDefault(name: keyof typeof paramIds, fallback = 0): number {
-  const meta = pluginMeta.parameters.find((p) => p.id === name);
-  return typeof meta?.default === 'number' ? meta.default : fallback;
-}
+const paramDefault = makeParamDefault(pluginMeta.parameters);
 
 export function expanderParamDefault(
   name: keyof typeof paramIds,
@@ -88,20 +81,7 @@ export function expanderParamDefault(
   return paramDefault(name, fallback);
 }
 
-function bindNum(
-  name: keyof typeof paramIds,
-  fallback = 0,
-): DynamicValue<number> {
-  const dv = DynamicValue.fromConstant(paramDefault(name, fallback));
-  bindParamToHost(dv, paramIds[name]);
-  return dv;
-}
-
-function bindBool(name: keyof typeof paramIds): DynamicValue<boolean> {
-  const dv = DynamicValue.fromConstant(paramDefault(name, 0) >= 0.5);
-  bindBoolParamToHost(dv, paramIds[name]);
-  return dv;
-}
+const { bindNum, bindBool } = makeHostParamBinders(paramIds, paramDefault);
 
 function bindInhibit(
   prefix: 'inv1' | 'inv2',
@@ -161,10 +141,8 @@ export function createBoundExpanderHost(): IExpanderHost {
   const keyMeters$ = DynamicValue.fromConstant<number[]>([-60]);
   const keyMeterCount$ = DynamicValue.fromConstant(1);
 
-  bindVizGr(gr$, 'exp');
-  bindVizPoint(point$, 'exp');
   // Always 6-channel envelope — Inv series use listed$/visible$ on the graph.
-  bindVizEnvelope(historyData$, 'exp');
+  bindDynamicsHostViz('exp', { gr$, point$, historyData$ });
   bindVizUnitLevels(inhibitAct$, 'exp');
 
   const threshold$ = bindNum('threshold', -32);

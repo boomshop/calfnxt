@@ -52,17 +52,7 @@ void DeesserPlugin::resetProcessing()
   splitR_.reset();
   grMeter_.reset(static_cast<float>(sampleRate_));
 
-  std::memset(histBuf_, 0, sizeof(histBuf_));
-  histPos_ = 0;
-  histSampleCount_ = 0;
-  histSamplesPerSlot_ = 1;
-  histVisibleSlots_ = 160;
-  histLock_.beginWrite();
-  std::memset(histSnapshot_, 0, sizeof(histSnapshot_));
-  histSnapshotPos_ = 0;
-  histSnapshotSampleCount_ = 0;
-  histSnapshotSamplesPerSlot_ = 1;
-  histLock_.endWrite();
+  hist_.reset();
   bypassSmooth_ = 1.f;
 }
 
@@ -98,40 +88,26 @@ void DeesserPlugin::histFeedSample(float triggerLin, float grLin,
 {
   if (!vizConsumerActive())
     return;
-  const int pos = histPos_;
-  histBuf_[pos + 0] = std::max(triggerLin, histBuf_[pos + 0]);
+  float* s = hist_.slot();
+  s[0] = std::max(triggerLin, s[0]);
   // Most reduction within the slot (smallest linear GR).
-  if (histBuf_[pos + 1] <= 0.f)
-    histBuf_[pos + 1] = grLin;
+  if (s[1] <= 0.f)
+    s[1] = grLin;
   else
-    histBuf_[pos + 1] = std::min(grLin, histBuf_[pos + 1]);
-  histBuf_[pos + 2] = std::max(outPeakLin, histBuf_[pos + 2]);
-  histBuf_[pos + 3] = threshLin;
-  histBuf_[pos + 4] = std::max(prePeakLin, histBuf_[pos + 4]);
-
-  histSampleCount_ += 1;
-  if (histSampleCount_ >= histSamplesPerSlot_)
-  {
-    histPos_ = (pos + kHistChannels) % kHistBufSize;
-    histSampleCount_ = 0;
-    histBuf_[histPos_ + 0] = triggerLin;
-    histBuf_[histPos_ + 1] = grLin;
-    histBuf_[histPos_ + 2] = outPeakLin;
-    histBuf_[histPos_ + 3] = threshLin;
-    histBuf_[histPos_ + 4] = prePeakLin;
-  }
+    s[1] = std::min(grLin, s[1]);
+  s[2] = std::max(outPeakLin, s[2]);
+  s[3] = threshLin;
+  s[4] = std::max(prePeakLin, s[4]);
+  const float seed[kHistChannels] = {
+    triggerLin, grLin, outPeakLin, threshLin, prePeakLin};
+  hist_.endSample(seed);
 }
 
 void DeesserPlugin::publishHistSnapshot()
 {
   if (!vizConsumerActive())
     return;
-  histLock_.beginWrite();
-  std::memcpy(histSnapshot_, histBuf_, sizeof(histBuf_));
-  histSnapshotPos_ = histPos_;
-  histSnapshotSampleCount_ = histSampleCount_;
-  histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
-  histLock_.endWrite();
+  hist_.publish();
 }
 
 void DeesserPlugin::processSample(const BlockState& state, float& L, float& R)
@@ -340,51 +316,27 @@ int DeesserPlugin::takeGainReductionDb(float* out, int maxOut)
 
 int DeesserPlugin::takeEnvelopeDisplay(float* out, int maxOut)
 {
-  const int slots = std::max(kHistMinSlots, std::min(kHistSlots, histVisibleSlots_));
-  const int outCount = slots * kHistChannels;
-  if (maxOut < outCount + 1)
-    return 0;
-
-  float phase = 0.f;
-  // Seqlock read: retry while the audio thread is mid-publish.
-  for (int attempt = 0; attempt < 8; ++attempt)
-  {
-    uint32_t s0 = 0;
-    if (!histLock_.tryBeginRead(s0))
-      continue; // write in progress
-    const int startPos =
-      (kHistBufSize + histSnapshotPos_ - (slots - 1) * kHistChannels) % kHistBufSize;
-    const int sps = std::max(1, histSnapshotSamplesPerSlot_);
-    phase = static_cast<float>(histSnapshotSampleCount_) / static_cast<float>(sps);
-    for (int i = 0; i < slots; ++i)
-    {
-      const int srcIdx = (startPos + i * kHistChannels) % kHistBufSize;
-      out[i * kHistChannels + 0] = std::fabs(histSnapshot_[srcIdx + 0]);
-      float gr = histSnapshot_[srcIdx + 1];
-      if (!(gr > 0.f))
-        gr = 1.f;
-      out[i * kHistChannels + 1] = std::clamp(gr, 1.0e-6f, 1.f);
-      out[i * kHistChannels + 2] = std::fabs(histSnapshot_[srcIdx + 2]);
-      float thr = histSnapshot_[srcIdx + 3];
-      if (!(thr > 0.f))
-        thr = Dsp::dbToLin(params_[kParamThreshold]);
-      out[i * kHistChannels + 3] = std::clamp(thr, 1.0e-6f, 1.f);
-      out[i * kHistChannels + 4] = std::fabs(histSnapshot_[srcIdx + 4]);
-    }
-    if (histLock_.tryEndRead(s0))
-    {
-      out[outCount] = std::clamp(phase, 0.f, 1.f);
-      return outCount + 1;
-    }
-  }
-  return 0; // contended; skip this frame
+  const float thrFallback = Dsp::dbToLin(params_[kParamThreshold]);
+  return hist_.take(out, maxOut, [&](const float* src, float* dst) {
+    dst[0] = std::fabs(src[0]);
+    float gr = src[1];
+    if (!(gr > 0.f))
+      gr = 1.f;
+    dst[1] = std::clamp(gr, 1.0e-6f, 1.f);
+    dst[2] = std::fabs(src[2]);
+    float thr = src[3];
+    if (!(thr > 0.f))
+      thr = thrFallback;
+    dst[3] = std::clamp(thr, 1.0e-6f, 1.f);
+    dst[4] = std::fabs(src[4]);
+  });
 }
 
 void DeesserPlugin::configureVizBins(const char* id, int bins)
 {
   if (!id || std::strcmp(id, vizEnvelopeId()) != 0)
     return;
-  histVisibleSlots_ = std::max(kHistMinSlots, std::min(kHistSlots, bins));
+  hist_.setVisibleSlots(bins);
 }
 
 tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
@@ -428,9 +380,7 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
     state.rumble);
   detector_.prepareBlock();
 
-  const int slots = std::max(kHistMinSlots, std::min(kHistSlots, histVisibleSlots_));
-  histSamplesPerSlot_ = std::max(
-    1, static_cast<int>(sampleRate_ * kHistoryDisplayMs * 0.001f / static_cast<float>(slots)));
+  hist_.setDisplayWindow(sampleRate_, kHistoryDisplayMs);
 
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
