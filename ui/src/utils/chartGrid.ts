@@ -1,9 +1,4 @@
-/**
- * Shared AUX Chart grid builders (dB Y / time X).
- *
- * Class names stay chart-specific via opts — History uses `major`, Envelope
- * uses `env-grid-*`, Spectrum marks 0 dB as `base`.
- */
+/** Shared AUX Chart dB-Y / time-X grid builders. */
 
 export type ChartGridLine = {
   pos: number;
@@ -12,12 +7,11 @@ export type ChartGridLine = {
 };
 
 export type DbGridOpts = {
-  /** Class on major (label) lines. Default `"major"`. */
   majorClass?: string;
-  /** Class on minor lines. Default omitted. */
   minorClass?: string;
-  /** Extra class on the 0 dB line (Spectrum). */
   zeroClass?: string;
+  /** Label every tick (not only majors). */
+  labelEvery?: boolean;
 };
 
 export function buildDbGridY(
@@ -30,6 +24,7 @@ export function buildDbGridY(
   const majorClass = opts.majorClass ?? 'major';
   const minorClass = opts.minorClass;
   const zeroClass = opts.zeroClass;
+  const labelEvery = !!opts.labelEvery;
   const lines: ChartGridLine[] = [];
   const start = Math.ceil(min / step) * step;
   for (let db = start; db <= max; db += step) {
@@ -41,7 +36,7 @@ export function buildDbGridY(
     const cls = parts.join(' ').trim();
     lines.push({
       pos: db,
-      ...(major ? { label: `${db}` } : {}),
+      ...(major || labelEvery ? { label: `${db}` } : {}),
       ...(cls ? { class: cls } : {}),
     });
   }
@@ -50,12 +45,11 @@ export function buildDbGridY(
 
 export type TimeGridOpts = {
   stepMs?: number;
-  /** Class on labeled majors. Default `"major"`. */
   majorClass?: string;
-  /** Class on every line (Envelope labels all ticks). */
   everyClass?: string;
-  /** When true, label every tick (Envelope). Default: majors only. */
   labelEvery?: boolean;
+  /** History scrolls right→left (default). Impulse grows left→right. */
+  ascending?: boolean;
 };
 
 function formatTimeLabel(ms: number): string {
@@ -74,7 +68,23 @@ export function buildTimeGridX(
   const majorClass = opts.majorClass ?? 'major';
   const everyClass = opts.everyClass;
   const labelEvery = !!opts.labelEvery;
+  const ascending = !!opts.ascending;
   const lines: ChartGridLine[] = [];
+  if (ascending) {
+    const span = Math.max(step, displayMs);
+    for (let t = 0; t <= span + 1e-6; t += step) {
+      const pos = Math.round(t);
+      const major =
+        labelEvery || pos === 0 || pos % (step * 2) === 0;
+      const cls = everyClass ?? (major ? majorClass : undefined);
+      lines.push({
+        pos,
+        ...(major ? { label: formatTimeLabel(pos) } : {}),
+        ...(cls ? { class: cls } : {}),
+      });
+    }
+    return lines;
+  }
   for (let t = displayMs; t >= -1e-9; t -= step) {
     const pos = Math.round(t);
     const major =
@@ -90,4 +100,13 @@ export function buildTimeGridX(
     });
   }
   return lines;
+}
+
+/** Adaptive ms step for forward time axes (Impulse). */
+export function timeGridStepMs(spanMs: number): number {
+  const span = Math.max(100, spanMs);
+  if (span >= 8000) return 2000;
+  if (span >= 4000) return 1000;
+  if (span >= 2000) return 500;
+  return 250;
 }

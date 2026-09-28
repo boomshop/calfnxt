@@ -13,6 +13,11 @@ import {
 } from '@deutschesoft/use-aux-widgets';
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
+import {
+  buildDbGridY,
+  buildTimeGridX,
+  timeGridStepMs,
+} from '../../utils/chartGrid';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { addGraphClasses } from '../../styles/graphStyles';
 import './ImpulseChart.scss';
@@ -27,16 +32,13 @@ const DECAY_MIN = 0.15;
 /** Stable empty wave header — never pass an inline `[]` to readonly hooks. */
 const EMPTY_WAVE: number[] = [0, 0, 0];
 
-function buildDbGridY() {
-  const lines: { pos: number; label?: string; class?: string }[] = [];
-  for (let db = 0; db >= DB_MIN; db -= 6) {
-    lines.push({
-      pos: db,
-      label: `${db}`,
-      class: db === 0 || db % 12 === 0 ? 'major' : undefined,
-    });
-  }
-  return lines;
+const IMPULSE_DB_GRID = buildDbGridY(DB_MIN, 0, 6, 12, { labelEvery: true });
+
+function impulseTimeGrid(maxMs: number) {
+  return buildTimeGridX(maxMs, {
+    ascending: true,
+    stepMs: timeGridStepMs(maxMs),
+  });
 }
 
 /** Decay overlay in dB. Matches `irDecayGainAt` — power on the dB ramp. */
@@ -50,42 +52,17 @@ function clampDb(y: number): number {
   return Math.min(DB_MAX, Math.max(DB_MIN, y));
 }
 
-function formatMs(ms: number): string {
-  if (ms >= 1000) {
-    const s = ms / 1000;
-    return Number.isInteger(s) ? `${s}s` : `${s.toFixed(1)}s`;
-  }
-  return `${Math.round(ms)}`;
-}
-
-function buildTimeGridX(maxMs: number) {
-  const span = Math.max(100, maxMs);
-  const step =
-    span >= 8000 ? 2000 : span >= 4000 ? 1000 : span >= 2000 ? 500 : 250;
-  const lines: { pos: number; label?: string; class?: string }[] = [];
-  for (let t = 0; t <= span + 1e-6; t += step) {
-    const pos = Math.round(t);
-    const major = pos === 0 || pos % (step * 2) === 0;
-    lines.push({
-      pos,
-      label: major ? formatMs(pos) : undefined,
-      class: major ? 'major' : undefined,
-    });
-  }
-  return lines;
-}
-
-function origMsFromWave(raw: number[] | undefined): number {
-  const v = raw && raw.length >= 3 ? raw : [0, 0, 0];
-  return Math.max(0, v[1] ?? 0) || 1000;
-}
-
 function clampPredelay(ms: number): number {
   return Math.max(0, Math.min(PREDELAY_MAX_MS, ms || 0));
 }
 
 function clampDecay(v: number): number {
   return Math.max(DECAY_MIN, Math.min(1, v));
+}
+
+function origMsFromWave(raw: number[] | undefined): number {
+  const v = raw && raw.length >= 3 ? raw : EMPTY_WAVE;
+  return Math.max(0, v[1] ?? 0) || 1000;
 }
 
 function decayToX(decay: number, origMs: number, predelay: number): number {
@@ -171,8 +148,8 @@ const ChartOptions = {
   label: false,
   range_x: { min: 0, max: 1000 },
   range_y: { min: DB_MIN, max: DB_MAX },
-  grid_x: buildTimeGridX(1000),
-  grid_y: buildDbGridY(),
+  grid_x: impulseTimeGrid(1000),
+  grid_y: IMPULSE_DB_GRID,
 };
 
 const ChartWidget = componentFromWidget(
@@ -364,7 +341,7 @@ export function ImpulseChart(props: ImpulseChartProps) {
     if (inst && !inst.isDestructed?.()) {
       const span = Math.max(PREDELAY_MAX_MS, capturedMs + PREDELAY_MAX_MS);
       inst.set('range_x', { min: 0, max: span });
-      inst.set('grid_x', buildTimeGridX(span));
+      inst.set('grid_x', impulseTimeGrid(span));
     }
 
     const h = handleRef.current;

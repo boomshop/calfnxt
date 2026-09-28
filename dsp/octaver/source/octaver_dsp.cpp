@@ -147,11 +147,11 @@ void OctaverPlugin::resetProcessing()
   std::memset(histBuf_, 0, sizeof(histBuf_));
   histPos_ = 0;
   histSampleCount_ = 0;
-  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  histLock_.beginWrite();
   std::memset(histSnapshot_, 0, sizeof(histSnapshot_));
   histSnapshotPos_ = 0;
   histSnapshotSampleCount_ = 0;
-  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
+  histLock_.endWrite();
   const BlockState st = makeBlockState();
   const float sr = static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0);
   hopSize_ = std::max(64, static_cast<int>(sr * 0.008));
@@ -275,7 +275,7 @@ void OctaverPlugin::histFeed(float inMidi, float layerBits, float conf, float fl
   if (histSampleCount_ >= histSamplesPerSlot_)
   {
     histSampleCount_ = 0;
-    histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+    histLock_.beginWrite();
     histSnapshot_[pos + 0] = inMidi;
     histSnapshot_[pos + 1] = layerBits;
     histSnapshot_[pos + 2] = conf;
@@ -284,7 +284,7 @@ void OctaverPlugin::histFeed(float inMidi, float layerBits, float conf, float fl
     histSnapshotPos_ = pos;
     histSnapshotSampleCount_ = 0;
     histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
-    histSeq_.fetch_add(1, std::memory_order_release); // even: stable
+    histLock_.endWrite();
     histPos_ = (histPos_ + kHistChannels) % kHistBufSize;
     histBuf_[histPos_ + 0] = inMidi;
     histBuf_[histPos_ + 1] = layerBits;
@@ -298,12 +298,12 @@ void OctaverPlugin::publishHistSnapshot()
 {
   if (!vizConsumerActive())
     return;
-  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  histLock_.beginWrite();
   std::memcpy(histSnapshot_, histBuf_, sizeof(histBuf_));
   histSnapshotPos_ = histPos_;
   histSnapshotSampleCount_ = histSampleCount_;
   histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
-  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
+  histLock_.endWrite();
 }
 
 int OctaverPlugin::takePitchHistory(float* out, int maxOut)
@@ -317,8 +317,8 @@ int OctaverPlugin::takePitchHistory(float* out, int maxOut)
   // Seqlock read: retry while the audio thread is mid-publish.
   for (int attempt = 0; attempt < 8; ++attempt)
   {
-    const uint32_t s0 = histSeq_.load(std::memory_order_acquire);
-    if (s0 & 1u)
+    uint32_t s0 = 0;
+    if (!histLock_.tryBeginRead(s0))
       continue; // write in progress
     const int startPos =
       (kHistBufSize + histSnapshotPos_ - (slots - 1) * kHistChannels) % kHistBufSize;
@@ -333,8 +333,7 @@ int OctaverPlugin::takePitchHistory(float* out, int maxOut)
       out[i * kHistChannels + 3] = histSnapshot_[srcIdx + 3];
       out[i * kHistChannels + 4] = histSnapshot_[srcIdx + 4];
     }
-    const uint32_t s1 = histSeq_.load(std::memory_order_acquire);
-    if (s0 == s1)
+    if (histLock_.tryEndRead(s0))
     {
       out[outCount] = std::clamp(phase, 0.f, 1.f);
       return outCount + 1;

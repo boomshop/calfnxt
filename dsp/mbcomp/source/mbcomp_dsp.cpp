@@ -82,7 +82,7 @@ void MbcompPlugin::resetProcessing()
     pointInDb_[b].store(-96.f, std::memory_order_relaxed);
     pointOutDb_[b].store(-96.f, std::memory_order_relaxed);
   }
-  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  histLock_.beginWrite();
   for (int b = 0; b < kMaxBands; ++b)
   {
     std::memset(histSnapshot_[b], 0, sizeof(histSnapshot_[b]));
@@ -90,7 +90,7 @@ void MbcompPlugin::resetProcessing()
     histSnapshotSampleCount_[b] = 0;
   }
   histSnapshotSamplesPerSlot_ = 1;
-  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
+  histLock_.endWrite();
 }
 
 tresult PLUGIN_API MbcompPlugin::setActive(TBool state)
@@ -147,7 +147,7 @@ void MbcompPlugin::publishHistSnapshot()
 {
   if (!vizConsumerActive())
     return;
-  histSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  histLock_.beginWrite();
   for (int b = 0; b < kMaxBands; ++b)
   {
     std::memcpy(histSnapshot_[b], histBuf_[b], sizeof(histBuf_[b]));
@@ -155,7 +155,7 @@ void MbcompPlugin::publishHistSnapshot()
     histSnapshotSampleCount_[b] = histSampleCount_[b];
   }
   histSnapshotSamplesPerSlot_ = histSamplesPerSlot_;
-  histSeq_.fetch_add(1, std::memory_order_release); // even: stable
+  histLock_.endWrite();
 }
 
 void MbcompPlugin::publishDynamicsPoints()
@@ -238,8 +238,8 @@ int MbcompPlugin::takeEnvelopeDisplay(float* out, int maxOut)
   // Seqlock read: retry while the audio thread is mid-publish.
   for (int attempt = 0; attempt < 8; ++attempt)
   {
-    const uint32_t s0 = histSeq_.load(std::memory_order_acquire);
-    if (s0 & 1u)
+    uint32_t s0 = 0;
+    if (!histLock_.tryBeginRead(s0))
       continue; // write in progress
     const int sps = std::max(1, histSnapshotSamplesPerSlot_);
     phase = static_cast<float>(histSnapshotSampleCount_[0]) / static_cast<float>(sps);
@@ -262,8 +262,7 @@ int MbcompPlugin::takeEnvelopeDisplay(float* out, int maxOut)
         dst[i * kHistChannels + 2] = std::clamp(thr, 1.0e-6f, 1.f);
       }
     }
-    const uint32_t s1 = histSeq_.load(std::memory_order_acquire);
-    if (s0 == s1)
+    if (histLock_.tryEndRead(s0))
     {
       out[outCount - 1] = std::clamp(phase, 0.f, 1.f);
       return outCount;

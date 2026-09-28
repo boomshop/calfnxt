@@ -12,6 +12,7 @@ import {
 } from '@deutschesoft/use-aux-widgets';
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
+import { buildDbGridY } from '../../utils/chartGrid';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { addGraphClasses } from '../../styles/graphStyles';
 import {
@@ -189,17 +190,9 @@ function buildFreqGridX() {
 }
 
 /** EQ-style: major dB lines every 6 dB (Tamer Y is −24…0). */
-function buildDbGridY() {
-  const lines: { pos: number; label?: string; class?: string }[] = [];
-  for (let db = TAMER_DB_MIN; db <= TAMER_DB_MAX; db += 6) {
-    lines.push({
-      pos: db,
-      label: `${db}`,
-      class: 'major',
-    });
-  }
-  return lines;
-}
+const TAMER_DB_GRID = buildDbGridY(TAMER_DB_MIN, TAMER_DB_MAX, 6, 6, {
+  labelEvery: true,
+});
 
 export interface TamerChartProps {
   spectrum$: DynamicValue<number[]>;
@@ -670,7 +663,7 @@ export function TamerChart(props: TamerChartProps) {
       inst.set('range_x', { min: F_MIN, max: F_MAX, scale: 'frequency' });
       inst.set('range_y', { min: TAMER_DB_MIN, max: TAMER_DB_MAX });
       inst.set('grid_x', buildFreqGridX());
-      inst.set('grid_y', buildDbGridY());
+      inst.set('grid_y', TAMER_DB_GRID);
 
       if (graphsRef.current.length === 0) {
         // Band fills first (back), then spectrum, GR in front. Graphs created

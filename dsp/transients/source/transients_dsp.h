@@ -1,6 +1,7 @@
 #pragma once
 
 #include "channel_mode.h"
+#include "seq_lock.h"
 #include "compressor.h" // StereoLink
 #include "effect_base.h"
 #include "io_stage.h"
@@ -103,7 +104,7 @@ private:
   /* Snapshot published once per block from the audio thread, read on the UI
    * poll. Seqlock (odd/even sequence) — the audio thread never blocks; the
    * reader retries on a torn read. */
-  std::atomic<uint32_t> envSeq_ {0};
+  Dsp::SeqLock envLock_;
   float envSnapshot_[kEnvBufSize] {};
   int envSnapshotPos_ = 0;
   int envSnapshotSampleCount_ = 0;

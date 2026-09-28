@@ -80,12 +80,12 @@ void TransientsPlugin::resetProcessing()
   envSlotMaxEnv_ = 0.f;
   envSlotMaxAtt_ = 0.f;
   envSlotMaxRel_ = 0.f;
-  envSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  envLock_.beginWrite();
   std::memset(envSnapshot_, 0, sizeof(envSnapshot_));
   envSnapshotPos_ = 0;
   envSnapshotSampleCount_ = 0;
   envSnapshotSamplesPerSlot_ = 1;
-  envSeq_.fetch_add(1, std::memory_order_release); // even: stable
+  envLock_.endWrite();
 }
 
 tresult PLUGIN_API TransientsPlugin::setActive(TBool state)
@@ -202,12 +202,12 @@ void TransientsPlugin::publishEnvSnapshot()
 {
   if (!vizConsumerActive())
     return;
-  envSeq_.fetch_add(1, std::memory_order_release); // odd: write in progress
+  envLock_.beginWrite();
   std::memcpy(envSnapshot_, envBuf_, sizeof(envBuf_));
   envSnapshotPos_ = envPos_;
   envSnapshotSampleCount_ = envSampleCount_;
   envSnapshotSamplesPerSlot_ = envSamplesPerSlot_;
-  envSeq_.fetch_add(1, std::memory_order_release); // even: stable
+  envLock_.endWrite();
 }
 
 void TransientsPlugin::processSample(const BlockState& state, float& L, float& R)
@@ -420,8 +420,8 @@ int TransientsPlugin::takeEnvelopeDisplay(float* out, int maxOut)
   // Seqlock read: retry while the audio thread is mid-publish.
   for (int attempt = 0; attempt < 8; ++attempt)
   {
-    const uint32_t s0 = envSeq_.load(std::memory_order_acquire);
-    if (s0 & 1u)
+    uint32_t s0 = 0;
+    if (!envLock_.tryBeginRead(s0))
       continue; // write in progress
     const int startPos =
       (kEnvBufSize + envSnapshotPos_ - (slots - 1) * kEnvChannels) % kEnvBufSize;
@@ -433,8 +433,7 @@ int TransientsPlugin::takeEnvelopeDisplay(float* out, int maxOut)
       for (int c = 0; c < kEnvChannels; ++c)
         out[i * kEnvChannels + c] = std::fabs(envSnapshot_[srcIdx + c]);
     }
-    const uint32_t s1 = envSeq_.load(std::memory_order_acquire);
-    if (s0 == s1)
+    if (envLock_.tryEndRead(s0))
     {
       out[outCount] = std::clamp(phase, 0.f, 1.f);
       return outCount + 1;

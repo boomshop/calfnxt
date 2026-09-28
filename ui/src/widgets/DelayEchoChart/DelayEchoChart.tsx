@@ -9,6 +9,7 @@ import {
   type DelayEchoTap,
   type DelayMixMode,
 } from '../../dsp/delayEchoTaps';
+import { buildDbGridY } from '../../utils/chartGrid';
 import { addGraphClasses } from '../../styles/graphStyles';
 import './DelayEchoChart.scss';
 
@@ -17,19 +18,6 @@ const DB_MAX = 12;
 const DB_GRID = 12;
 /** Fixed echo-bar width in CSS pixels (independent of time zoom). */
 const ECHO_BAR_WIDTH_PX = 4;
-
-function buildDbGridY(min: number, max: number, step: number) {
-  const lines: { pos: number; label?: string; class?: string }[] = [];
-  const start = Math.ceil(min / step) * step;
-  for (let db = start; db <= max; db += step) {
-    lines.push({
-      pos: db,
-      label: `${db}`,
-      class: db % (step * 2) === 0 ? 'major' : undefined,
-    });
-  }
-  return lines;
-}
 
 type GridLine = { pos: number; label?: string; class?: string };
 
@@ -138,7 +126,9 @@ const ChartOptions = {
   range_x: { min: 0, max: 2000 },
   range_y: { min: DB_MIN, max: DB_MAX },
   grid_x: buildMusicalGridX(120, 4, 2000),
-  grid_y: buildDbGridY(DB_MIN, DB_MAX, DB_GRID),
+  grid_y: buildDbGridY(DB_MIN, DB_MAX, DB_GRID, DB_GRID * 2, {
+    labelEvery: true,
+  }),
 };
 
 const ChartWidget = componentFromWidget(

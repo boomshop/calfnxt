@@ -1,30 +1,27 @@
 import { postToHost } from './bridge';
 
-/** Map chart CSS width → vizcfg bin count (suite default). */
 export function vizBinsFromWidth(
   width: number,
   minBins = 48,
   maxBins = 512,
 ): number {
-  const w = Math.round(width);
-  return Math.max(minBins, Math.min(maxBins, w));
+  return Math.max(minBins, Math.min(maxBins, Math.round(width)));
 }
 
-/** Post `{t:"vizcfg",id,bins}` from an element's current width. */
 export function postVizBins(
   vizId: string,
   el: Element,
   minBins = 48,
   maxBins = 512,
 ): void {
-  const width = el.getBoundingClientRect().width;
-  postToHost({ t: 'vizcfg', id: vizId, bins: vizBinsFromWidth(width, minBins, maxBins) });
+  postToHost({
+    t: 'vizcfg',
+    id: vizId,
+    bins: vizBinsFromWidth(el.getBoundingClientRect().width, minBins, maxBins),
+  });
 }
 
-/**
- * Observe `el` and re-post viz bins on resize (rAF-coalesced).
- * Returns a disconnect function.
- */
+/** Observe width → vizcfg bins (rAF-coalesced). Returns disconnect. */
 export function observeVizBins(
   el: Element,
   vizId: string,

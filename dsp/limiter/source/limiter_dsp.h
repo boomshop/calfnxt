@@ -1,6 +1,7 @@
 #pragma once
 
 #include "delay_line.h"
+#include "seq_lock.h"
 #include "effect_base.h"
 #include "gr_meter.h"
 #include "io_stage.h"
@@ -113,7 +114,7 @@ private:
   /* Snapshot published once per block from the audio thread, read on the UI
    * poll. Seqlock (odd/even sequence) — the audio thread never blocks; the
    * reader retries on a torn read. */
-  std::atomic<uint32_t> histSeq_ {0};
+  Dsp::SeqLock histLock_;
   float histSnapshot_[kHistBufSize] {};
   int histSnapshotPos_ = 0;
   int histSnapshotSampleCount_ = 0;
