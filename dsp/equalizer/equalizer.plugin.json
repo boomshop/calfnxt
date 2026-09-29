@@ -95,8 +95,8 @@
         "name": "Gain",
         "type": "float",
         "unit": "dB",
-        "min": -24.0,
-        "max": 24.0,
+        "min": -36.0,
+        "max": 36.0,
         "default": 0.0,
         "scale": "dB",
         "precision": 1
@@ -107,7 +107,7 @@
         "type": "float",
         "unit": "",
         "min": 0.1,
-        "max": 20.0,
+        "max": 30.0,
         "default": 0.707,
         "scale": "log",
         "precision": 2

@@ -56,15 +56,15 @@ const EQ_FREQ_LABELS = [
   { pos: 10000, label: '10k' },
   { pos: 20000, label: '20k' },
 ];
-const EQ_GAIN_DOTS = [-24, -18, -12, -6, 0, 6, 12, 18, 24];
+const EQ_GAIN_DOTS = [-36, -24, -12, -6, 0, 6, 12, 24, 36];
 const EQ_GAIN_LABELS = [
-  { pos: -24, label: '−24' },
-  { pos: -12, label: '12' },
+  { pos: -36, label: '−36' },
+  { pos: -18, label: '−18' },
   { pos: 0, label: '0' },
-  { pos: 12, label: '+12' },
-  { pos: 24, label: '+24' },
+  { pos: 18, label: '+18' },
+  { pos: 36, label: '+36' },
 ];
-const EQ_Q_DOTS = [0.1, 0.5, 0.707, 1, 2, 5, 10, 20];
+const EQ_Q_DOTS = [0.1, 0.5, 0.707, 1, 2, 5, 10, 20, 30];
 const EQ_Q_LABELS = [
   { pos: 0.1, label: '0.1' },
   { pos: 0.7, label: '0.7' },
@@ -72,7 +72,7 @@ const EQ_Q_LABELS = [
   { pos: 2, label: '2' },
   { pos: 5, label: '5' },
   { pos: 10, label: '10' },
-  { pos: 20, label: '20' },
+  { pos: 30, label: '30' },
 ];
 
 /** Dyn section — keep in sync with CompressorUI knob scales. */

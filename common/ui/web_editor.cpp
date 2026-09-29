@@ -1208,8 +1208,8 @@ void WebEditor::flushViz()
   }
 
   constexpr int kMaxBands = 32;
-  constexpr float kGainMin = -24.f;
-  constexpr float kGainMax = 24.f;
+  constexpr float kGainMin = -36.f;
+  constexpr float kGainMax = 36.f;
   float bandGains[kMaxBands];
   const int nGains = vizSource_->takeBandGainsDb(bandGains, kMaxBands);
   if (nGains > 0)

@@ -164,10 +164,10 @@ export function eqChannelClass(mode: number): string {
 export const EQ_MAX_BANDS = EQ_BAND_COUNT;
 export const EQ_FREQ_MIN = 20;
 export const EQ_FREQ_MAX = 20000;
-export const EQ_GAIN_MIN = -24;
-export const EQ_GAIN_MAX = 24;
+export const EQ_GAIN_MIN = -36;
+export const EQ_GAIN_MAX = 36;
 export const EQ_Q_MIN = 0.1;
-export const EQ_Q_MAX = 20;
+export const EQ_Q_MAX = 30;
 export const EQ_DYN_ATTACK_MIN = 0.1;
 export const EQ_DYN_ATTACK_MAX = 500;
 export const EQ_DYN_RELEASE_MIN = 1;

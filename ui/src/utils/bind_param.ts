@@ -233,7 +233,7 @@ export function bindVizGains(dv: DynamicValue<number[]>, id: string): () => void
     dv.set(mapVizSamples(v, (x) => {
       if (!Number.isFinite(x))
         return 0;
-      return Math.min(24, Math.max(-24, x));
+      return Math.min(36, Math.max(-36, x));
     }));
   });
   return () => {
