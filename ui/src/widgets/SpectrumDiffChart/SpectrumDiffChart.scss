@@ -13,6 +13,7 @@
   svg > .aux-grid > .aux-gridline.base,
   .aux-grid > .aux-gridline.base {
     stroke: var(--color);
+    stroke-opacity: var(--graph-stroke-opacity-semi) !important;
   }
 
   > .diff-tag {

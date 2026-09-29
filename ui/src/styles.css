@@ -352,7 +352,7 @@ textarea::selection {
       /* 0 dB / unity reference (FrequencyResponse + Dynamics grid). */
       > .aux-gridline.aux-highlight {
         stroke: var(--color);
-        stroke-opacity: 0.33;
+        stroke-opacity: var(--graph-stroke-opacity-semi) !important;
         stroke-width: var(--graph-stroke-thinner); /* 1px */
       }
     }
