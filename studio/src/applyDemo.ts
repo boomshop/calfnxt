@@ -67,6 +67,8 @@ export type VizFixture = {
   comb?: number[];
   /** Chorus / Pulsator LFO: [phaseL, valL, phaseR, valR]. */
   lfo?: number[];
+  /** Live filter cutoff viz (filt:hz): [hz]. */
+  hz?: number[];
 };
 
 function setNum(dv: DynamicValue<number> | undefined, v: unknown) {
@@ -335,7 +337,28 @@ export function applyFilterDemo(
   setNum(host.release$, params.release);
   setNum(host.detection$, params.detection);
   setNum(host.spectrum$, params.spectrum);
-  applySharedViz(viz);
+
+  const applyFilterViz = () => {
+    applySharedViz(viz);
+    if (viz.spectrumIn) {
+      host.spectrumIn$.set(viz.spectrumIn);
+      pushViz('fft_in', 'spectrum', viz.spectrumIn);
+    }
+    if (viz.spectrumOut) {
+      host.spectrumOut$.set(viz.spectrumOut);
+      pushViz('fft_out', 'spectrum', viz.spectrumOut);
+    } else if (viz.spectrum) {
+      host.spectrumIn$.set(viz.spectrum);
+      host.spectrumOut$.set(viz.spectrum);
+      pushViz('fft_in', 'spectrum', viz.spectrum);
+      pushViz('fft_out', 'spectrum', viz.spectrum);
+    }
+    if (viz.hz && viz.hz.length > 0)
+      pushViz('filt', 'hz', viz.hz);
+  };
+  applyFilterViz();
+  const hold = window.setInterval(applyFilterViz, 50);
+  return () => window.clearInterval(hold);
 }
 
 export function applyRingmodDemo(

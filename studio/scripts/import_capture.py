@@ -319,6 +319,7 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         ("flanger:response", "response"),
         ("chorus:response", "response"),
         ("crusher:shape", "shape"),
+        ("filt:hz", "hz"),
     ):
         if src in d and dst not in viz:
             viz[dst] = d[src]
@@ -393,6 +394,8 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         "spectrumOut",
         "lfo",
         "tempo",
+        "shape",
+        "hz",
     ):
         if k in d and k not in viz:
             viz[k] = d[k]
