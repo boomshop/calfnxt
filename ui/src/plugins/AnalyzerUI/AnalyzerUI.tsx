@@ -33,6 +33,7 @@ import '../PluginUI.scss';
 import './AnalyzerUI.scss';
 import { analyzerInfo } from './analyzerInfo';
 import { Scale } from '../../widgets/Scale';
+import { ANALYZER_LOUD_TOGGLES } from '../../prefs/historySeriesVisible';
 
 const LOUD_DB_MIN = -48;
 const LOUD_DB_MAX = 6;
@@ -44,7 +45,8 @@ function loudHistoryDb(v: number): number {
   return Math.max(LOUD_HIST_FLOOR, Math.min(LOUD_DB_MAX, v));
 }
 
-/** Paint back→front: RMS → TP → M → ST (ST is the working-loudness hero). */
+/** Paint back→front: RMS → TP → M → ST (ST is the working-loudness hero).
+ *  Legend chips use `toggleOrder`: ST → M → TP → RMS. */
 const LOUD_SERIES = [
   {
     id: 'rms',
@@ -54,6 +56,7 @@ const LOUD_SERIES = [
     className: GRAPH_STYLE.loudRms,
     mode: 'line' as const,
     transform: loudHistoryDb,
+    toggleOrder: 3,
   },
   {
     id: 'tp',
@@ -63,6 +66,7 @@ const LOUD_SERIES = [
     className: GRAPH_STYLE.loudTp,
     mode: 'line' as const,
     transform: loudHistoryDb,
+    toggleOrder: 2,
   },
   {
     id: 'mom',
@@ -72,6 +76,7 @@ const LOUD_SERIES = [
     className: GRAPH_STYLE.loudMom,
     mode: 'line' as const,
     transform: loudHistoryDb,
+    toggleOrder: 1,
   },
   {
     id: 'st',
@@ -82,6 +87,7 @@ const LOUD_SERIES = [
     mode: 'line' as const,
     transform: loudHistoryDb,
     toFront: true,
+    toggleOrder: 0,
   },
 ];
 
@@ -254,6 +260,7 @@ export function AnalyzerUI(props: AnalyzerUIProps) {
             dbMax={LOUD_DB_MAX}
             autoScale
             series={LOUD_SERIES}
+            persistToggles={ANALYZER_LOUD_TOGGLES}
           />
         </WithInfo>
         <div className="hist-legend">

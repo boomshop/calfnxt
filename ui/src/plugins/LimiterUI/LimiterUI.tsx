@@ -9,6 +9,7 @@ import {
   WithInfo,
   limiterHistorySeries,
 } from '../../widgets';
+import { LIMITER_HISTORY_TOGGLES } from '../../prefs/historySeriesVisible';
 import { paramIds } from '../../generated/limiterModel';
 import {
   LIMITER_CURVE_ENTRIES,
@@ -22,6 +23,8 @@ import { limiterInfo } from './limiterInfo';
 export interface LimiterUIProps {
   host: ILimiterHost;
 }
+
+const LIMITER_HISTORY_SERIES = limiterHistorySeries();
 
 const LIMIT_DOTS = [-24, -18, -12, -6, -3, 0];
 const LIMIT_LABELS = [
@@ -124,7 +127,8 @@ export function LimiterUI(props: LimiterUIProps) {
         data$={host.historyData$}
         vizId="limiter"
         autoScale
-        series={limiterHistorySeries()}
+        series={LIMITER_HISTORY_SERIES}
+        persistToggles={LIMITER_HISTORY_TOGGLES}
         className="history"
       />
 

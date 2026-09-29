@@ -15,6 +15,7 @@ import { buildDbGridY, buildTimeGridX } from '../../utils/chartGrid';
 import { observeVizBins } from '../../utils/vizBins';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { addGraphClasses } from '../../styles/graphStyles';
+import { attachPersistedHistoryToggles } from '../../prefs/historySeriesVisible';
 import { Toggle } from '../Toggle';
 import './HistoryChart.scss';
 
@@ -103,6 +104,11 @@ export type HistorySeries = {
   /** Show a legend chip that toggles `visible$`. */
   toggle?: boolean;
   /**
+   * Legend chip order (ascending). When omitted, series array order is used.
+   * Paint / z-order still follows the `series` array.
+   */
+  toggleOrder?: number;
+  /**
    * When set to a finite number, draw a horizontal line at that dB and ignore
    * the blob channel (e.g. Inv threshold while on an Inv panel). `null` /
    * undefined → normal channel transform.
@@ -143,6 +149,18 @@ export interface HistoryChartProps {
    * snapped to 6 dB steps within −60…−12. Ready for Limiter / Mbcomp / …
    */
   autoScale?: boolean;
+  /**
+   * Legend toggles for matching series ids, persisted under
+   * `calfnxt.historyVisible.<persistId ?? vizId>.<seriesId>`. Values are the
+   * default when nothing is stored yet (dynamics Trig/GR default off).
+   */
+  persistToggles?: Readonly<Record<string, boolean>>;
+  /**
+   * localStorage scope for `persistToggles` (defaults to `vizId`).
+   * Use when the storage key should differ from the host viz stream id
+   * (e.g. Expander viz `"exp"` vs prefs `"expander"`).
+   */
+  persistId?: string;
   className?: string;
 }
 
@@ -286,6 +304,7 @@ function seriesKey(series: HistorySeries[]): string {
           s.mode ?? 'bottom',
           wantsGradient(s) ? 1 : 0,
           s.toggle ? 1 : 0,
+          s.toggleOrder ?? '',
           s.listed$ ? 1 : 0,
           s.visible$ ? 1 : 0,
           s.flatDb$ ? 1 : 0,
@@ -538,7 +557,7 @@ function SeriesToggle(props: { series: HistorySeries }) {
 export function HistoryChart(props: HistoryChartProps) {
   const {
     data$,
-    series,
+    series: seriesIn,
     vizId,
     windowMs = HISTORY_CHART_MS,
     sourceWindowMs,
@@ -546,8 +565,22 @@ export function HistoryChart(props: HistoryChartProps) {
     dbMin = DB_MIN,
     dbMax = DB_MAX,
     autoScale = false,
+    persistToggles,
+    persistId,
     className,
   } = props;
+
+  const series = useMemo(
+    () =>
+      persistToggles
+        ? attachPersistedHistoryToggles(
+            seriesIn,
+            persistId ?? vizId,
+            persistToggles,
+          )
+        : seriesIn,
+    [seriesIn, vizId, persistId, persistToggles],
+  );
 
   const layoutKey = seriesKey(series);
   const seriesRef = useRef(series);
@@ -905,9 +938,18 @@ export function HistoryChart(props: HistoryChartProps) {
       <ChartWidget className="HistoryChart-chart" widgetRef={widgetRef} />
       {hasToggleChrome ? (
         <div className="history-toggles">
-          {series.map((s) => (
-            <SeriesToggle key={s.id} series={s} />
-          ))}
+          {series
+            .map((s, i) => ({ s, i }))
+            .sort((a, b) => {
+              const ao = a.s.toggleOrder;
+              const bo = b.s.toggleOrder;
+              if (ao != null || bo != null)
+                return (ao ?? a.i) - (bo ?? b.i);
+              return a.i - b.i;
+            })
+            .map(({ s }) => (
+              <SeriesToggle key={s.id} series={s} />
+            ))}
         </div>
       ) : null}
     </div>

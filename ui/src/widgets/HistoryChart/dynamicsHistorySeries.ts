@@ -297,8 +297,6 @@ export function mblimiterHistorySeries(): HistorySeries[] {
  * Inv panel: same Trig/GR toggles + that Inv’s post fill + hold stroke + Inv thresh.
  */
 export function expanderHistorySeries(opts: {
-  triggerVisible$: DynamicValue<boolean>;
-  grVisible$: DynamicValue<boolean>;
   inv1Visible$: DynamicValue<boolean>;
   inv2Visible$: DynamicValue<boolean>;
   /** Detector panel — In/Out. */
@@ -330,20 +328,10 @@ export function expanderHistorySeries(opts: {
         listed$: opts.detectorListed$,
       };
     }
-    if (s.id === 'trigger') {
-      // Same line style + toggle on Detector and Inv panels.
-      return {
-        ...s,
-        visible$: opts.triggerVisible$,
-        toggle: true,
-      };
-    }
     if (s.id === 'gr') {
       return {
         ...s,
         className: 'stroke-color stroke-mostly stroke-thinner fill-none',
-        visible$: opts.grVisible$,
-        toggle: true,
       };
     }
     if (s.id === 'thresh') {

@@ -12,6 +12,7 @@ import {
   Toggle,
   WithInfo,
 } from '../../widgets';
+import { DYNAMICS_TRIG_GR_TOGGLES } from '../../prefs/historySeriesVisible';
 import { paramIds } from '../../generated/compressorModel';
 import {
   COMPRESSOR_CHANNEL_ENTRIES,
@@ -50,6 +51,8 @@ const KNEE_LABELS = [
   { pos: 18, label: '18' },
   { pos: 24, label: '24' },
 ];
+
+const COMP_HISTORY_SERIES = dynamicsHistorySeries();
 
 const ATTACK_DOTS = [0.1, 1, 5, 10, 20, 50, 100, 250, 500];
 const ATTACK_LABELS = [
@@ -125,7 +128,8 @@ export function CompressorUI(props: CompressorUIProps) {
           data$={host.historyData$}
           vizId="comp"
           autoScale
-          series={dynamicsHistorySeries()}
+          series={COMP_HISTORY_SERIES}
+          persistToggles={DYNAMICS_TRIG_GR_TOGGLES}
         />
       </div>
 

@@ -11,6 +11,7 @@ import {
   Toggle,
   WithInfo,
 } from '../../widgets';
+import { DYNAMICS_TRIG_GR_TOGGLES } from '../../prefs/historySeriesVisible';
 import { paramIds } from '../../generated/deesserModel';
 import {
   DEESSER_CHANNEL_ENTRIES,
@@ -28,6 +29,8 @@ import './DeesserUI.scss';
 export interface DeesserUIProps {
   host: IDeesserHost;
 }
+
+const DEESS_HISTORY_SERIES = deesserHistorySeries();
 
 const RATIO_DOTS = [1, 2, 4, 8, 12, 20];
 const RATIO_LABELS = RATIO_DOTS.map((n) => ({ pos: n, label: String(n) }));
@@ -129,7 +132,8 @@ export function DeesserUI(props: DeesserUIProps) {
         data$={host.historyData$}
         vizId="deess"
         autoScale
-        series={deesserHistorySeries()}
+        series={DEESS_HISTORY_SERIES}
+        persistToggles={DYNAMICS_TRIG_GR_TOGGLES}
       />
 
       <div className="block dynamics">
