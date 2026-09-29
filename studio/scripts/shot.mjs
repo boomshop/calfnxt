@@ -150,6 +150,9 @@ async function forceStudioTheme(page) {
       localStorage.setItem('calfnxt.themeMode', 'night');
       localStorage.setItem('calfnxt.themeAccent', 'calfnxt');
       localStorage.setItem('calfnxt.showWidgetInfo', '0');
+      // Expander history: GR off for clean website shots (matches UI default).
+      localStorage.setItem('calfnxt.historyVisible.expander.gr', '0');
+      localStorage.setItem('calfnxt.historyVisible.expander.trigger', '0');
     } catch {
       /* ignore */
     }
@@ -191,6 +194,8 @@ async function shotPlugin(browser, id) {
       localStorage.setItem('calfnxt.showWidgetInfo', '0');
       localStorage.setItem('calfnxt.themeMode', 'night');
       localStorage.setItem('calfnxt.themeAccent', 'calfnxt');
+      localStorage.setItem('calfnxt.historyVisible.expander.gr', '0');
+      localStorage.setItem('calfnxt.historyVisible.expander.trigger', '0');
     } catch {
       /* ignore */
     }

@@ -69,10 +69,16 @@ export function attachPersistedHistoryToggles(
   });
 }
 
-/** Comp / Expander / Deesser — Trig off, GR on by default. */
+/** Comp / Deesser — Trig off, GR on by default. */
 export const DYNAMICS_TRIG_GR_TOGGLES = {
   trigger: false,
   gr: true,
+} as const;
+
+/** Expander — Trig and GR off by default (In/Out fills + thresh stay). */
+export const EXPANDER_HISTORY_TOGGLES = {
+  trigger: false,
+  gr: false,
 } as const;
 
 /** Limiter — GR on by default (no trigger channel). */

@@ -15,6 +15,14 @@ showWidgetInfo$.set(false);
 themeMode$.set('night');
 themeAccent$.set('calfnxt');
 
+// Expander history: GR/Trig off for studio shots (matches EXPANDER_HISTORY_TOGGLES).
+try {
+  localStorage.setItem('calfnxt.historyVisible.expander.gr', '0');
+  localStorage.setItem('calfnxt.historyVisible.expander.trigger', '0');
+} catch {
+  /* ignore */
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

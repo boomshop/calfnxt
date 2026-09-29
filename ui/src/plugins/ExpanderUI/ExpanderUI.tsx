@@ -17,7 +17,7 @@ import {
   Toggle,
   WithInfo,
 } from '../../widgets';
-import { persistedHistoryVisible$, DYNAMICS_TRIG_GR_TOGGLES } from '../../prefs/historySeriesVisible';
+import { persistedHistoryVisible$, EXPANDER_HISTORY_TOGGLES } from '../../prefs/historySeriesVisible';
 import { useDynamicValue } from '../../hooks/useDynamicValue';
 import { paramIds } from '../../generated/expanderModel';
 import {
@@ -362,7 +362,7 @@ export function ExpanderUI({ host }: ExpanderUIProps) {
           autoScale
           series={historySeries}
           persistId="expander"
-          persistToggles={DYNAMICS_TRIG_GR_TOGGLES}
+          persistToggles={EXPANDER_HISTORY_TOGGLES}
         />
         {showKeyMeters ? (
           <WithInfo title={expanderInfo.keyMeters} className="key-meters">
