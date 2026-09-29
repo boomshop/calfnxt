@@ -16,6 +16,7 @@ import { postToHost } from '../../utils/bridge';
 import {
   buildDbGridY,
   buildTimeGridX,
+  formatTimeLabel,
   timeGridStepMs,
 } from '../../utils/chartGrid';
 import { useChartGradient } from '../../hooks/useChartGradient';
@@ -253,7 +254,7 @@ export function ImpulseChart(props: ImpulseChartProps) {
         mode: 'line-vertical',
         class: 'ir-decay-handle',
         label: '',
-        format_label: (_l: string, x: number) => formatMs(x),
+        format_label: (_l: string, x: number) => formatTimeLabel(x),
         y: DB_MIN,
         z: 0.707,
         y_min: DB_MIN,

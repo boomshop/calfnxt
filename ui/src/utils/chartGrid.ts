@@ -52,10 +52,12 @@ export type TimeGridOpts = {
   ascending?: boolean;
 };
 
-function formatTimeLabel(ms: number): string {
+/** Axis / handle time labels (ms → `250` or `1.5s`). */
+export function formatTimeLabel(ms: number): string {
+  if (!(ms >= 0) || !Number.isFinite(ms)) return '—';
   if (ms >= 1000) {
     const s = ms / 1000;
-    return Number.isInteger(s) ? `${s}s` : `${s}s`;
+    return Number.isInteger(s) ? `${s}s` : `${s.toFixed(1)}s`;
   }
   return `${Math.round(ms)}`;
 }
