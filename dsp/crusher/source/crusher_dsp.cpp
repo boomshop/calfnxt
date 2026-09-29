@@ -59,6 +59,7 @@ tresult PLUGIN_API CrusherPlugin::setActive(TBool state)
 tresult PLUGIN_API CrusherPlugin::setupProcessing(ProcessSetup& newSetup)
 {
   sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  scratch64_.prepare(newSetup.maxSamplesPerBlock);
   bit_.setSampleRate(static_cast<uint32_t>(sampleRate_));
   resetProcessing();
   return EffectBase::setupProcessing(newSetup);
@@ -80,6 +81,63 @@ CrusherPlugin::BlockState CrusherPlugin::makeBlockState() const
 void CrusherPlugin::applyCrushParams(const BlockState& s)
 {
   bit_.setParams(s.bits, s.morph, s.mode, s.dcLin, s.aa);
+}
+
+void CrusherPlugin::processFloat(float* left, float* right, int32 nFrames, const BlockState& state)
+{
+  for (int32 i = 0; i < nFrames; ++i)
+  {
+    const float inL = left[i];
+    const float inR = right ? right[i] : inL;
+    float L = inL;
+    float R = inR;
+
+    switch (state.channel)
+    {
+      case Dsp::ChannelMode::Left:
+        observeSend(inL, 0.f);
+        L = bit_.process(inL);
+        R = inR;
+        break;
+      case Dsp::ChannelMode::Right:
+        observeSend(0.f, inR);
+        L = inL;
+        R = bit_.process(inR);
+        break;
+      case Dsp::ChannelMode::Mid:
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        Dsp::encodeMs(inL, inR, mid, side);
+        observeSend(mid, mid);
+        mid = bit_.process(mid);
+        Dsp::decodeMs(mid, side, L, R);
+        break;
+      }
+      case Dsp::ChannelMode::Side:
+      {
+        float mid = 0.f;
+        float side = 0.f;
+        Dsp::encodeMs(inL, inR, mid, side);
+        observeSend(side, side);
+        side = bit_.process(side);
+        Dsp::decodeMs(mid, side, L, R);
+        break;
+      }
+      case Dsp::ChannelMode::Stereo:
+      default:
+        observeSend(inL, inR);
+        L = bit_.process(inL);
+        R = bit_.process(inR);
+        break;
+    }
+
+    Dsp::sanitizeDenormal(L);
+    Dsp::sanitizeDenormal(R);
+    left[i] = L;
+    if (right)
+      right[i] = R;
+  }
 }
 
 void CrusherPlugin::observeSend(float sendL, float sendR)
@@ -128,66 +186,39 @@ tresult PLUGIN_API CrusherPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
-  auto** outs = data.outputs[0].channelBuffers32;
-  if (!outs || data.symbolicSampleSize != kSample32)
+  // channelBuffers32/64 share a union. A non-null 32-bit pointer is not proof
+  // the block is float — Reaper's 64-bit path used to bail out here.
+  const int32 nCh = data.outputs[0].numChannels;
+  if (data.symbolicSampleSize == kSample32)
+  {
+    auto** outs = data.outputs[0].channelBuffers32;
+    if (!outs || !outs[0])
+    {
+      io_.end(data);
+      return kResultOk;
+    }
+    float* right = (nCh > 1 && outs[1]) ? outs[1] : nullptr;
+    processFloat(outs[0], right, nFrames, state);
+  }
+  else if (data.symbolicSampleSize == kSample64)
+  {
+    auto** outs = data.outputs[0].channelBuffers64;
+    double* right = (outs && nCh > 1 && outs[1]) ? outs[1] : nullptr;
+    const bool ok = outs && outs[0]
+                    && scratch64_.process(outs[0], right, nFrames,
+                                          [&](float* left, float* rightF, int32 n) {
+                                            processFloat(left, rightF, n, state);
+                                          });
+    if (!ok)
+    {
+      io_.end(data);
+      return kResultOk;
+    }
+  }
+  else
   {
     io_.end(data);
     return kResultOk;
-  }
-
-  const int32 nCh = data.outputs[0].numChannels;
-  for (int32 i = 0; i < nFrames; ++i)
-  {
-    const float inL = outs[0][i];
-    const float inR = (nCh > 1 && outs[1]) ? outs[1][i] : inL;
-    float L = inL;
-    float R = inR;
-
-    switch (state.channel)
-    {
-      case Dsp::ChannelMode::Left:
-        observeSend(inL, 0.f);
-        L = bit_.process(inL);
-        R = inR;
-        break;
-      case Dsp::ChannelMode::Right:
-        observeSend(0.f, inR);
-        L = inL;
-        R = bit_.process(inR);
-        break;
-      case Dsp::ChannelMode::Mid:
-      {
-        float mid = 0.f;
-        float side = 0.f;
-        Dsp::encodeMs(inL, inR, mid, side);
-        observeSend(mid, mid);
-        mid = bit_.process(mid);
-        Dsp::decodeMs(mid, side, L, R);
-        break;
-      }
-      case Dsp::ChannelMode::Side:
-      {
-        float mid = 0.f;
-        float side = 0.f;
-        Dsp::encodeMs(inL, inR, mid, side);
-        observeSend(side, side);
-        side = bit_.process(side);
-        Dsp::decodeMs(mid, side, L, R);
-        break;
-      }
-      case Dsp::ChannelMode::Stereo:
-      default:
-        observeSend(inL, inR);
-        L = bit_.process(inL);
-        R = bit_.process(inR);
-        break;
-    }
-
-    Dsp::sanitizeDenormal(L);
-    Dsp::sanitizeDenormal(R);
-    outs[0][i] = L;
-    if (nCh > 1 && outs[1])
-      outs[1][i] = R;
   }
 
   io_.end(data);

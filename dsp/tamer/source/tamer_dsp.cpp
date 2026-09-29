@@ -84,6 +84,7 @@ tresult PLUGIN_API TamerPlugin::setActive(TBool state)
 tresult PLUGIN_API TamerPlugin::setupProcessing(ProcessSetup& newSetup)
 {
   sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  scratch64_.prepare(newSetup.maxSamplesPerBlock);
   tamer_.setSampleRate(sampleRate_);
   resetProcessing();
   return EffectBase::setupProcessing(newSetup);
@@ -137,16 +138,42 @@ tresult PLUGIN_API TamerPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
-  auto** outs = data.outputs[0].channelBuffers32;
-  if (!outs || data.symbolicSampleSize != kSample32)
+  // channelBuffers32/64 share a union. A non-null 32-bit pointer is not proof
+  // the block is float — Reaper's 64-bit path used to bail out here.
+  const int32 nCh = data.outputs[0].numChannels;
+  const bool is32 = data.symbolicSampleSize == kSample32;
+  const bool is64 = data.symbolicSampleSize == kSample64;
+  float* left32 = nullptr;
+  float* right32 = nullptr;
+  double* left64 = nullptr;
+  double* right64 = nullptr;
+  if (is32)
+  {
+    auto** outs = data.outputs[0].channelBuffers32;
+    if (!outs || !outs[0])
+    {
+      io_.end(data);
+      return kResultOk;
+    }
+    left32 = outs[0];
+    right32 = (nCh > 1 && outs[1]) ? outs[1] : nullptr;
+  }
+  else if (is64)
+  {
+    auto** outs = data.outputs[0].channelBuffers64;
+    if (!outs || !outs[0] || scratch64_.capacity() <= 0)
+    {
+      io_.end(data);
+      return kResultOk;
+    }
+    left64 = outs[0];
+    right64 = (nCh > 1 && outs[1]) ? outs[1] : nullptr;
+  }
+  else
   {
     io_.end(data);
     return kResultOk;
   }
-
-  const int32 nCh = data.outputs[0].numChannels;
-  float* left = outs[0];
-  float* right = (nCh > 1 && outs[1]) ? outs[1] : nullptr;
 
   const bool quiet = io_.inputWasQuiet();
   const bool depthOn = state.depth > 1.0e-3f;
@@ -170,10 +197,23 @@ tresult PLUGIN_API TamerPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
-  tamer_.process(left, right, nFrames, state.bypass, state.diffListen, runStft,
-                 state.channel);
+  bool ran = false;
+  if (is32)
+  {
+    tamer_.process(left32, right32, nFrames, state.bypass, state.diffListen, runStft,
+                   state.channel);
+    ran = true;
+  }
+  else
+  {
+    ran = scratch64_.process(left64, right64, nFrames,
+                             [&](float* left, float* right, int32 n) {
+                               tamer_.process(left, right, n, state.bypass, state.diffListen,
+                                              runStft, state.channel);
+                             });
+  }
 
-  if (wantViz)
+  if (ran && wantViz)
     tamer_.publish();
 
   io_.end(data);

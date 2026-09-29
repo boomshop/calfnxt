@@ -4,6 +4,7 @@
 #include "channel_mode.h"
 #include "effect_base.h"
 #include "io_stage.h"
+#include "sample64_scratch.h"
 #include "viz_source.h"
 
 #include "crusher_params.h"
@@ -61,9 +62,11 @@ private:
   void resetProcessing();
   void applyCrushParams(const BlockState& s);
   void observeSend(float sendL, float sendR);
+  void processFloat(float* left, float* right, Steinberg::int32 nFrames, const BlockState& state);
 
   float params_[kParamCount] {};
   Dsp::IoStage io_;
+  Dsp::Sample64Scratch scratch64_;
   double sampleRate_ = 44100.0;
   Dsp::BitReduction bit_;
 

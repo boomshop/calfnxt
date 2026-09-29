@@ -3,6 +3,7 @@
 #include "effect_base.h"
 #include "io_stage.h"
 #include "channel_mode.h"
+#include "sample64_scratch.h"
 #include "spectral_tamer.h"
 #include "viz_source.h"
 
@@ -75,6 +76,7 @@ private:
 
   float params_[kParamCount] {};
   Dsp::IoStage io_;
+  Dsp::Sample64Scratch scratch64_;
   Dsp::SpectralTamer tamer_;
   double sampleRate_ = 44100.0;
   Steinberg::uint32 latencySamples_ = 0;
