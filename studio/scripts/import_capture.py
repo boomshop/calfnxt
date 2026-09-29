@@ -347,6 +347,10 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         viz["tempo"] = d["pulsator:tempo"]
     elif "chorus:lfo" in d and "lfo" not in viz:
         viz["lfo"] = d["chorus:lfo"]
+    if "lfo:unit" in d:
+        viz["lfoActivity"] = d["lfo:unit"]
+    if "ringmod:ctrl" in d:
+        viz["ctrl"] = d["ringmod:ctrl"]
 
     for gr_key in ("comp:gr", "deess:gr", "exp:gr", "limiter:gr"):
         if gr_key in d:
@@ -393,6 +397,8 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         "spectrumIn",
         "spectrumOut",
         "lfo",
+        "lfoActivity",
+        "ctrl",
         "tempo",
         "shape",
         "hz",

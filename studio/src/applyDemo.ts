@@ -69,6 +69,10 @@ export type VizFixture = {
   lfo?: number[];
   /** Live filter cutoff viz (filt:hz): [hz]. */
   hz?: number[];
+  /** Ringmod LFO LED activity [lfo1, lfo2] 0…1 (`lfo:unit`). */
+  lfoActivity?: number[];
+  /** Ringmod effective ctrl [freq, detune, amount, lfo1Freq] (`ringmod:ctrl`). */
+  ctrl?: number[];
 };
 
 function setNum(dv: DynamicValue<number> | undefined, v: unknown) {
@@ -393,10 +397,19 @@ export function applyRingmodDemo(
   setBool(host.lfo2ModAmountActive$, params.lfo2_mod_amount_active);
   setNum(host.spectrum$, params.spectrum);
   applySharedViz(viz);
-  host.lfoActivity$.set([0.55, 0.4]);
-  host.lfo1Activity$.set(0.55);
-  host.lfo2Activity$.set(0.4);
-  const applySpectrum = () => {
+  const lfoAct = viz.lfoActivity ?? [0.55, 0.4];
+  const a1 = typeof lfoAct[0] === 'number' ? lfoAct[0] : 0.55;
+  const a2 = typeof lfoAct[1] === 'number' ? lfoAct[1] : 0.4;
+  host.lfoActivity$.set([a1, a2]);
+  host.lfo1Activity$.set(a1);
+  host.lfo2Activity$.set(a2);
+  const applyLive = () => {
+    if (viz.ctrl && viz.ctrl.length >= 4) {
+      pushViz('ringmod', 'ctrl', viz.ctrl);
+    }
+    if (viz.lfoActivity) {
+      pushViz('lfo', 'unit', viz.lfoActivity);
+    }
     if (viz.spectrumIn) {
       host.spectrumIn$.set(viz.spectrumIn);
       pushViz('fft_in', 'spectrum', viz.spectrumIn);
@@ -406,11 +419,11 @@ export function applyRingmodDemo(
       pushViz('fft_out', 'spectrum', viz.spectrumOut);
     }
   };
-  applySpectrum();
-  if (viz.spectrumIn || viz.spectrumOut) {
+  applyLive();
+  if (viz.spectrumIn || viz.spectrumOut || viz.ctrl) {
     const hold = window.setInterval(() => {
       applySharedViz(viz);
-      applySpectrum();
+      applyLive();
     }, 50);
     return () => window.clearInterval(hold);
   }
