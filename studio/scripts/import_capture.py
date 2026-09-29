@@ -330,12 +330,20 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         "limiter:envelope",
         "mbcomp:envelope",
         "mblimiter:envelope",
+        "pulsator:envelope",
         "tuner:pitch",
         "octaver:pitch",
     ):
         if env_key in d:
             viz["envelope"] = d[env_key]
             break
+
+    if "pulsator:lfo" in d:
+        viz["lfo"] = d["pulsator:lfo"]
+    if "pulsator:tempo" in d:
+        viz["tempo"] = d["pulsator:tempo"]
+    elif "chorus:lfo" in d and "lfo" not in viz:
+        viz["lfo"] = d["chorus:lfo"]
 
     for gr_key in ("comp:gr", "deess:gr", "exp:gr", "limiter:gr"):
         if gr_key in d:
@@ -381,6 +389,8 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         "spectrum",
         "spectrumIn",
         "spectrumOut",
+        "lfo",
+        "tempo",
     ):
         if k in d and k not in viz:
             viz[k] = d[k]
@@ -447,6 +457,7 @@ def main() -> int:
         "limiter": 3,
         "mbcomp": 3,
         "mblimiter": 3,
+        "pulsator": 4,
     }.get(args.plugin)
     if isinstance(env, list) and n_ch:
         # Mbcomp/mblimiter pack N bands × n_ch × slots (+ phase).

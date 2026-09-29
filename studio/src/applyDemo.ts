@@ -389,9 +389,12 @@ export function applyPulsatorDemo(
   setNum(host.bpm$, params.bpm);
   setNum(host.ms$, params.ms);
   applySharedViz(viz);
+  if (viz.envelope)
+    host.historyData$.set(new Float32Array(viz.envelope));
   // Shared phase (L+R advance together); Y differs by Offset L/R.
-  host.lfo$.set([0.22, 0, 0.22, 0]);
-  host.hostTempo$.set([1, 120]);
+  const lfo = viz.lfo ?? [0.22, 0, 0.22, 0];
+  host.lfo$.set(lfo);
+  host.hostTempo$.set(viz.tempo ?? [1, 120]);
 }
 
 export function applyCrusherDemo(
