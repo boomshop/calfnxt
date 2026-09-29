@@ -318,6 +318,7 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         ("phaser:response", "response"),
         ("flanger:response", "response"),
         ("chorus:response", "response"),
+        ("crusher:shape", "shape"),
     ):
         if src in d and dst not in viz:
             viz[dst] = d[src]
@@ -331,6 +332,7 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         "mbcomp:envelope",
         "mblimiter:envelope",
         "pulsator:envelope",
+        "crusher:envelope",
         "tuner:pitch",
         "octaver:pitch",
     ):
@@ -458,6 +460,7 @@ def main() -> int:
         "mbcomp": 3,
         "mblimiter": 3,
         "pulsator": 4,
+        "crusher": 4,
     }.get(args.plugin)
     if isinstance(env, list) and n_ch:
         # Mbcomp/mblimiter pack N bands × n_ch × slots (+ phase).

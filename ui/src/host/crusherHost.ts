@@ -1,6 +1,11 @@
 import { DynamicValue } from '@deutschesoft/awml';
 import { paramIds, pluginMeta } from '../generated/crusherModel';
-import { bindVizShape, postBegin, postEnd } from '../utils/bind_param';
+import {
+  bindVizEnvelope,
+  bindVizShape,
+  postBegin,
+  postEnd,
+} from '../utils/bind_param';
 import {
   makeHostParamBinders,
   makeParamDefault,
@@ -18,6 +23,8 @@ export type ICrusherHost = {
   aa$: DynamicValue<number>;
   /** Live [zone, …densityBins] for the Shape chart. */
   shapePoint$: DynamicValue<number[]>;
+  /** Bipolar In/Out history [inL, outL, inR, outR] × slots (+ phase). */
+  historyData$: DynamicValue<Float32Array | null>;
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
 };
@@ -45,6 +52,8 @@ const { bindNum, bindBool } = makeHostParamBinders(paramIds, paramDefault);
 export function createBoundCrusherHost(): ICrusherHost {
   const shapePoint$ = DynamicValue.fromConstant<number[]>([0]);
   bindVizShape(shapePoint$, 'crusher');
+  const historyData$ = DynamicValue.fromConstant<Float32Array | null>(null);
+  bindVizEnvelope(historyData$, 'crusher');
 
   return {
     meta: pluginMeta,
@@ -56,6 +65,7 @@ export function createBoundCrusherHost(): ICrusherHost {
     dc$: bindNum('dc', 0),
     aa$: bindNum('anti_aliasing', 0.5),
     shapePoint$,
+    historyData$,
     beginEdit: postBegin,
     endEdit: postEnd,
   };

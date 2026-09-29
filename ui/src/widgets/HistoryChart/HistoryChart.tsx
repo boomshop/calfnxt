@@ -63,6 +63,14 @@ export type HistorySeries = {
    */
   diffChannel?: number;
   /**
+   * Combine `channel` with this peer before `transform` (EnvelopeChart-style
+   * outer = max(in,out) / mask = min(in,out) stack). Ignored for cut-tips /
+   * scaleGr series.
+   */
+  pairChannel?: number;
+  /** With `pairChannel`: plot max or min of the two linear amplitudes. */
+  pairMode?: 'max' | 'min';
+  /**
    * Optional GR (linear) channel paired with `channel`:
    * - `attenuate` (default): upper = channel, lower = channel × gr
    * - `expand`: upper = channel / gr, lower = channel
@@ -287,8 +295,15 @@ function seriesDeepestDb(
         consider(flat);
         continue;
       }
+      const pairCh = spec.pairChannel;
+      const pairMode = spec.pairMode;
       for (let i = 0; i < slots; ++i) {
-        consider(transform(data[i * nCh + spec.channel] ?? 0));
+        let lin = data[i * nCh + spec.channel] ?? 0;
+        if (pairCh != null && pairMode) {
+          const b = data[i * nCh + pairCh] ?? 0;
+          lin = pairMode === 'max' ? Math.max(lin, b) : Math.min(lin, b);
+        }
+        consider(transform(lin));
       }
     }
   }
@@ -309,6 +324,8 @@ function seriesKey(series: HistorySeries[]): string {
           s.diffGrMode ?? '',
           s.scaleGrChannel ?? '',
           s.scaleGrMode ?? '',
+          s.pairChannel ?? '',
+          s.pairMode ?? '',
           s.className ?? '',
           s.mode ?? 'bottom',
           s.base ?? '',
@@ -330,6 +347,7 @@ function channelCountOf(series: HistorySeries[]): number {
     if (s.diffChannel != null) n = Math.max(n, s.diffChannel + 1);
     if (s.diffGrChannel != null) n = Math.max(n, s.diffGrChannel + 1);
     if (s.scaleGrChannel != null) n = Math.max(n, s.scaleGrChannel + 1);
+    if (s.pairChannel != null) n = Math.max(n, s.pairChannel + 1);
   }
   return n;
 }
@@ -427,6 +445,7 @@ function historyChannelDots(
   fixedSlotMs?: number,
   floorY?: number,
   scaleGr?: { channel: number; mode: 'attenuate' | 'expand' },
+  pair?: { channel: number; mode: 'max' | 'min' },
 ): HistDot[] | null {
   if (!buf || nCh < 1 || buf.length < nCh) return null;
 
@@ -455,6 +474,10 @@ function historyChannelDots(
       y = floorY;
     } else {
       let lin = data[i * nCh + channel] ?? 0;
+      if (pair) {
+        const b = data[i * nCh + pair.channel] ?? 0;
+        lin = pair.mode === 'max' ? Math.max(lin, b) : Math.min(lin, b);
+      }
       if (scaleGr) {
         const gr = Math.min(
           1,
@@ -782,6 +805,8 @@ export function HistoryChart(props: HistoryChartProps) {
         const diffGrMode = spec.diffGrMode ?? 'attenuate';
         const scaleGrChannel = spec.scaleGrChannel;
         const scaleGrMode = spec.scaleGrMode ?? 'attenuate';
+        const pairChannel = spec.pairChannel;
+        const pairMode = spec.pairMode;
         const cutTips = isCutTipsSeries(spec);
         const transform = spec.transform ?? historyLinToDb;
         const listed$ = spec.listed$;
@@ -834,6 +859,9 @@ export function HistoryChart(props: HistoryChartProps) {
             floor,
             scaleGrChannel != null
               ? { channel: scaleGrChannel, mode: scaleGrMode }
+              : undefined,
+            pairChannel != null && pairMode
+              ? { channel: pairChannel, mode: pairMode }
               : undefined,
           );
         };

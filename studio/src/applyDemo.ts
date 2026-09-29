@@ -410,6 +410,8 @@ export function applyCrusherDemo(
   setNum(host.dc$, params.dc);
   setNum(host.aa$, params.anti_aliasing);
   applySharedViz(viz);
+  if (viz.envelope)
+    host.historyData$.set(new Float32Array(viz.envelope));
   const applyShape = () => {
     if (!viz.shape) return;
     host.shapePoint$.set(viz.shape);
@@ -418,6 +420,8 @@ export function applyCrusherDemo(
   applyShape();
   const hold = window.setInterval(() => {
     applySharedViz(viz);
+    if (viz.envelope)
+      host.historyData$.set(new Float32Array(viz.envelope));
     applyShape();
   }, 50);
   return () => window.clearInterval(hold);

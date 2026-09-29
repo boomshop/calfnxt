@@ -1,9 +1,22 @@
 .CrusherUI {
   display: grid;
-  grid-template-areas: 'response bits shape';
+  grid-template-areas:
+    'history history history'
+    'response bits shape';
   grid-template-columns: 1fr 0.5fr auto;
-  grid-template-rows: 1fr;
+  grid-template-rows: 120px 1fr;
+  gap: var(--gap);
   align-items: stretch;
+
+  > .history {
+    grid-area: history;
+    min-width: 0;
+    min-height: 0;
+
+    > .HistoryChart {
+      height: 100%;
+    }
+  }
 
   > .response {
     grid-area: response;

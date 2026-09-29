@@ -5,6 +5,7 @@
 #include "effect_base.h"
 #include "io_stage.h"
 #include "sample64_scratch.h"
+#include "viz_history_ring.h"
 #include "viz_source.h"
 
 #include "crusher_params.h"
@@ -37,6 +38,9 @@ public:
   int takeOutputLevelsDb(float* out, int maxOut) override { return io_.takeOutputLevelsDb(out, maxOut); }
   int takeShapePoint(float* out, int maxOut) override;
   const char* vizShapeId() const override { return "crusher"; }
+  int takeEnvelopeDisplay(float* out, int maxOut) override;
+  const char* vizEnvelopeId() const override { return "crusher"; }
+  void configureVizBins(const char* id, int bins) override;
 
   OBJ_METHODS(CrusherPlugin, Plugin::EffectBase)
   DEFINE_INTERFACES
@@ -58,10 +62,16 @@ private:
     float aa = 0.5f;
   };
 
+  // History: abs peaks [inL, outL, inR, outR] (max-within-slot + boost/cut warp).
+  static constexpr int kHistChannels = 4;
+
   BlockState makeBlockState() const;
   void resetProcessing();
   void applyCrushParams(const BlockState& s);
   void observeSend(float sendL, float sendR);
+  void histFeedSample(float inL, float outL, float inR, float outR);
+  void histResetSlotScale(float inL, float outL, float inR, float outR);
+  void publishHistSnapshot();
   void processFloat(float* left, float* right, Steinberg::int32 nFrames, const BlockState& state);
 
   float params_[kParamCount] {};
@@ -74,6 +84,13 @@ private:
   float shapeZoneFall_ = 0.999f;
   float histAcc_[kShapeHistBins] {};
   float histDisp_[kShapeHistBins] {};
+
+  Dsp::VizHistoryRing<kHistChannels> hist_;
+  // Per-slot out/in ratios so soft crush tips show when peak(|out|)≈peak(|in|).
+  float histMaxBoostL_ = 1.f;
+  float histMinCutL_ = 1.f;
+  float histMaxBoostR_ = 1.f;
+  float histMinCutR_ = 1.f;
 };
 
 } // namespace Crusher

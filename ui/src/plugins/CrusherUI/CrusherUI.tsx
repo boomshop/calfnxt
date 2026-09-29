@@ -2,7 +2,15 @@ import { DynamicValue as DV } from '@deutschesoft/awml';
 import { useEffect, useMemo } from 'react';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { Header } from '../../components';
-import { CrusherChart, Knob, Select, Toggle, WithInfo } from '../../widgets';
+import {
+  CrusherChart,
+  HistoryChart,
+  Knob,
+  Select,
+  Toggle,
+  WithInfo,
+  crusherHistorySeries,
+} from '../../widgets';
 import { paramIds } from '../../generated/crusherModel';
 import {
   CRUSHER_CHANNEL_ENTRIES,
@@ -65,6 +73,8 @@ export function CrusherUI(props: CrusherUIProps) {
       modeNum$.set(next);
   }, [modeOn, modeNum$]);
 
+  const historySeries = useMemo(() => crusherHistorySeries(), []);
+
   return (
     <div className="CrusherUI PluginUI">
       <Header title="Crusher">
@@ -75,6 +85,16 @@ export function CrusherUI(props: CrusherUIProps) {
           <Select value$={host.channel$} entries={CRUSHER_CHANNEL_ENTRIES} />
         </WithInfo>
       </Header>
+
+      <div className="history">
+        <HistoryChart
+          data$={host.historyData$}
+          vizId="crusher"
+          dbMin={-60}
+          dbMax={60}
+          series={historySeries}
+        />
+      </div>
 
       <div className="block response">
         <div className="title">Response</div>

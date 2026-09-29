@@ -472,3 +472,84 @@ export function pulsatorHistorySeries(): HistorySeries[] {
     },
   ];
 }
+
+/**
+ * Crusher bipolar stereo history (4ch):
+ * Channels: [inL, outL, inR, outR] linear abs peaks (DSP warps out for soft crush).
+ * Same L↑/R↓ layout as Pulsator, but Transients-style outer=max / mask=min so
+ * both boost (quant spikes / DC) and cut (bit-collapse) tips glow.
+ */
+export function crusherHistorySeries(): HistorySeries[] {
+  const up = (lin: number) => bipolarHeightDb(lin);
+  const down = (lin: number) => -bipolarHeightDb(lin);
+  const outer = 'fill-gradient fill-full stroke-none';
+  const mask = 'fill-background fill-semi stroke-none';
+  const line = 'fill-none stroke-color stroke-thinner stroke-mostly';
+  return [
+    // Paint order: R outer → R mask → L outer → L mask → thin outs.
+    {
+      id: 'router',
+      name: 'Right envelope',
+      short: 'R',
+      channel: 2,
+      pairChannel: 3,
+      pairMode: 'max',
+      className: outer,
+      mode: 'center',
+      transform: down,
+    },
+    {
+      id: 'rmask',
+      name: 'Right shared',
+      short: 'R∩',
+      channel: 2,
+      pairChannel: 3,
+      pairMode: 'min',
+      className: mask,
+      mode: 'center',
+      transform: down,
+    },
+    {
+      id: 'louter',
+      name: 'Left envelope',
+      short: 'L',
+      channel: 0,
+      pairChannel: 1,
+      pairMode: 'max',
+      className: outer,
+      mode: 'center',
+      transform: up,
+    },
+    {
+      id: 'lmask',
+      name: 'Left shared',
+      short: 'L∩',
+      channel: 0,
+      pairChannel: 1,
+      pairMode: 'min',
+      className: mask,
+      mode: 'center',
+      transform: up,
+    },
+    {
+      id: 'rout',
+      name: 'Right output',
+      short: 'R Out',
+      channel: 3,
+      className: line,
+      mode: 'line',
+      transform: down,
+      toFront: true,
+    },
+    {
+      id: 'lout',
+      name: 'Left output',
+      short: 'L Out',
+      channel: 1,
+      className: line,
+      mode: 'line',
+      transform: up,
+      toFront: true,
+    },
+  ];
+}

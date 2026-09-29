@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace calfNXT {
 namespace Crusher {
@@ -17,6 +18,28 @@ using namespace Steinberg::Vst;
 namespace {
 constexpr uint32 kStateMagic = 0x434e5843u; // 'CNXC'
 constexpr uint32 kStateVersion = 3; // v3: + channel
+constexpr float kHistoryDisplayMs = 8000.f;
+/** Ignore near-silence when tracking out/in ratios (avoids 0/ε spikes). */
+constexpr float kHistRatioFloor = 1.e-4f;
+
+float warpOutDisp(float maxIn, float maxOut, float maxBoost, float minCut)
+{
+  float outDisp = maxOut;
+  if (maxBoost > 1.001f)
+    outDisp = std::max(outDisp, maxIn * maxBoost);
+  else if (minCut < 0.999f)
+    outDisp = std::min(outDisp, maxIn * minCut);
+  return outDisp;
+}
+
+void accumulateRatio(float inA, float outA, float& maxBoost, float& minCut)
+{
+  if (inA < kHistRatioFloor)
+    return;
+  const float scale = outA / inA;
+  maxBoost = std::max(maxBoost, std::max(1.f, scale));
+  minCut = std::min(minCut, std::min(1.f, scale));
+}
 } // namespace
 
 CrusherPlugin::CrusherPlugin()
@@ -36,6 +59,43 @@ tresult PLUGIN_API CrusherPlugin::initialize(FUnknown* context)
   return kResultOk;
 }
 
+void CrusherPlugin::histResetSlotScale(float inL, float outL, float inR, float outR)
+{
+  histMaxBoostL_ = 1.f;
+  histMinCutL_ = 1.f;
+  histMaxBoostR_ = 1.f;
+  histMinCutR_ = 1.f;
+  accumulateRatio(inL, outL, histMaxBoostL_, histMinCutL_);
+  accumulateRatio(inR, outR, histMaxBoostR_, histMinCutR_);
+}
+
+void CrusherPlugin::histFeedSample(float inL, float outL, float inR, float outR)
+{
+  // Always advance the ring so opening the editor shows recent history.
+  float* s = hist_.slot();
+  s[0] = std::max(inL, s[0]);
+  s[1] = std::max(outL, s[1]);
+  s[2] = std::max(inR, s[2]);
+  s[3] = std::max(outR, s[3]);
+  accumulateRatio(inL, outL, histMaxBoostL_, histMinCutL_);
+  accumulateRatio(inR, outR, histMaxBoostR_, histMinCutR_);
+  s[1] = warpOutDisp(s[0], s[1], histMaxBoostL_, histMinCutL_);
+  s[3] = warpOutDisp(s[2], s[3], histMaxBoostR_, histMinCutR_);
+
+  const float seed[kHistChannels] = {inL, outL, inR, outR};
+  const int before = hist_.sampleCount();
+  hist_.endSample(seed);
+  if (hist_.sampleCount() == 0 && before != 0)
+    histResetSlotScale(inL, outL, inR, outR);
+}
+
+void CrusherPlugin::publishHistSnapshot()
+{
+  if (!vizConsumerActive())
+    return;
+  hist_.publish();
+}
+
 void CrusherPlugin::resetProcessing()
 {
   shapeZone_ = 0.f;
@@ -46,6 +106,9 @@ void CrusherPlugin::resetProcessing()
     histAcc_[i] = 0.f;
     histDisp_[i] = 0.f;
   }
+  hist_.reset();
+  hist_.setDisplayWindow(sampleRate_, kHistoryDisplayMs);
+  histResetSlotScale(0.f, 0.f, 0.f, 0.f);
   applyCrushParams(makeBlockState());
 }
 
@@ -137,6 +200,7 @@ void CrusherPlugin::processFloat(float* left, float* right, int32 nFrames, const
     left[i] = L;
     if (right)
       right[i] = R;
+    histFeedSample(std::fabs(inL), std::fabs(L), std::fabs(inR), std::fabs(R));
   }
 }
 
@@ -179,9 +243,38 @@ tresult PLUGIN_API CrusherPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
+  hist_.setDisplayWindow(sampleRate_, kHistoryDisplayMs);
+
   if (state.bypass || io_.inputWasQuiet())
   {
     shapeZone_ *= std::pow(shapeZoneFall_, static_cast<float>(nFrames));
+
+    auto feedPassthrough = [&](auto** out) {
+      for (int32 i = 0; i < nFrames; ++i)
+      {
+        if (state.bypass && out && out[0])
+        {
+          const float L = static_cast<float>(out[0][i]);
+          const float R = (out[1]) ? static_cast<float>(out[1][i]) : L;
+          const float aL = std::fabs(L);
+          const float aR = std::fabs(R);
+          histFeedSample(aL, aL, aR, aR);
+        }
+        else
+          histFeedSample(0.f, 0.f, 0.f, 0.f);
+      }
+    };
+    if (data.symbolicSampleSize == kSample32)
+      feedPassthrough(data.outputs[0].channelBuffers32);
+    else if (data.symbolicSampleSize == kSample64)
+      feedPassthrough(data.outputs[0].channelBuffers64);
+    else
+    {
+      for (int32 i = 0; i < nFrames; ++i)
+        histFeedSample(0.f, 0.f, 0.f, 0.f);
+    }
+
+    publishHistSnapshot();
     io_.end(data);
     return kResultOk;
   }
@@ -221,6 +314,7 @@ tresult PLUGIN_API CrusherPlugin::process(ProcessData& data)
     return kResultOk;
   }
 
+  publishHistSnapshot();
   io_.end(data);
   return kResultOk;
 }
@@ -247,6 +341,23 @@ int CrusherPlugin::takeShapePoint(float* out, int maxOut)
   for (int i = 0; i < kShapeHistBins; ++i)
     out[1 + i] = std::clamp(histDisp_[i], 0.f, 1.f);
   return need;
+}
+
+int CrusherPlugin::takeEnvelopeDisplay(float* out, int maxOut)
+{
+  return hist_.take(out, maxOut, [](const float* src, float* dst) {
+    dst[0] = std::fabs(src[0]);
+    dst[1] = std::fabs(src[1]);
+    dst[2] = std::fabs(src[2]);
+    dst[3] = std::fabs(src[3]);
+  });
+}
+
+void CrusherPlugin::configureVizBins(const char* id, int bins)
+{
+  if (!id || std::strcmp(id, vizEnvelopeId()) != 0)
+    return;
+  hist_.setVisibleSlots(bins);
 }
 
 tresult PLUGIN_API CrusherPlugin::setState(IBStream* state)
