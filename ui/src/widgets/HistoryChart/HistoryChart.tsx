@@ -31,6 +31,9 @@ const DB_MIN = -48;
 const DB_GRID = 6;
 const DB_LABEL = 12;
 
+/** Match SpectrumDiffChart: emphasize the 0 dB / bipolar mid line. */
+const DB_GRID_OPTS = { zeroClass: 'base' } as const;
+
 /** Fixed history window (ms) — keep in sync with DSP history display. */
 export const HISTORY_CHART_MS = 8000;
 
@@ -81,6 +84,12 @@ export type HistorySeries = {
   className?: string;
   /** AUX path mode. Default `bottom`. Cut-tips series should use `fill`. */
   mode?: HistoryGraphMode;
+  /**
+   * AUX Graph `base` (0 = bottom … 1 = top). Only used with `mode: 'base'`.
+   * For bipolar charts with symmetric ±dB range, `0.5` matches the zero line
+   * (same pixel as `mode: 'center'`).
+   */
+  base?: number;
   /** Map blob sample → plot Y (default: linear amplitude → dB). */
   transform?: (value: number) => number;
   /** Raise this series after attach. */
@@ -302,6 +311,7 @@ function seriesKey(series: HistorySeries[]): string {
           s.scaleGrMode ?? '',
           s.className ?? '',
           s.mode ?? 'bottom',
+          s.base ?? '',
           wantsGradient(s) ? 1 : 0,
           s.toggle ? 1 : 0,
           s.toggleOrder ?? '',
@@ -330,9 +340,11 @@ const ChartOptions = {
   show_grid: true,
   label: false,
   range_x: { min: 0, max: HISTORY_CHART_MS, reverse: true },
-  range_y: { min: DB_MIN, max: DB_MAX },
+  // Symmetric seed so bipolar mounts (Pulsator ±60) don’t flash unipolar −48…0
+  // before attach() applies props. attach() always reasserts min/max/reverse.
+  range_y: { min: DB_MIN, max: DB_MAX, reverse: true },
   grid_x: buildTimeGridX(HISTORY_CHART_MS),
-  grid_y: buildDbGridY(DB_MIN, DB_MAX, DB_GRID, DB_LABEL),
+  grid_y: buildDbGridY(DB_MIN, DB_MAX, DB_GRID, DB_LABEL, DB_GRID_OPTS),
 };
 
 const ChartWidget = componentFromWidget(
@@ -706,7 +718,7 @@ export function HistoryChart(props: HistoryChartProps) {
       const deepest = seriesDeepestDb(clipped, specs, nCh);
       const yMax = dbMaxRef.current;
       yAutoScaleRef.current.apply(chart, deepest, yMax, (min) => {
-        chart.set('grid_y', buildDbGridY(min, yMax, DB_GRID, DB_LABEL));
+        chart.set('grid_y', buildDbGridY(min, yMax, DB_GRID, DB_LABEL, DB_GRID_OPTS));
       });
     },
     [],
@@ -736,7 +748,7 @@ export function HistoryChart(props: HistoryChartProps) {
       chart.set('range_x', { min: 0, max: windowMs, reverse: true });
       chart.set('grid_x', buildTimeGridX(windowMs));
       chart.set('range_y', { min: yMin, max: yMax, reverse: true });
-      chart.set('grid_y', buildDbGridY(yMin, yMax, DB_GRID, DB_LABEL));
+      chart.set('grid_y', buildDbGridY(yMin, yMax, DB_GRID, DB_LABEL, DB_GRID_OPTS));
 
       const specs = seriesRef.current;
       const nCh = channelCountOf(specs);
@@ -748,10 +760,12 @@ export function HistoryChart(props: HistoryChartProps) {
       for (const spec of specs) {
         if (attachGenRef.current !== gen) break;
         const seriesClass = `history-${spec.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+        const mode = spec.mode ?? (isCutTipsSeries(spec) ? 'fill' : 'bottom');
         const g = chart.addGraph({
           dots: null,
           type: 'L',
-          mode: spec.mode ?? (isCutTipsSeries(spec) ? 'fill' : 'bottom'),
+          mode,
+          ...(mode === 'base' && spec.base != null ? { base: spec.base } : {}),
           class: seriesClass,
         });
         addGraphClasses(g.element, spec.className);

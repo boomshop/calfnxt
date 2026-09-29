@@ -6,11 +6,13 @@ import { Header } from '../../components';
 import {
   Button,
   Buttons,
+  HistoryChart,
   Knob,
   PulsatorChart,
   Toggle,
   WaveformButtons,
   WithInfo,
+  pulsatorHistorySeries,
 } from '../../widgets';
 import { paramIds } from '../../generated/pulsatorModel';
 import {
@@ -148,6 +150,8 @@ export function PulsatorUI(props: PulsatorUIProps) {
     timingLocked,
   );
 
+  const historySeries = useMemo(() => pulsatorHistorySeries(), []);
+
   return (
     <div className="PulsatorUI PluginUI">
       <Header title="Pulsator">
@@ -161,6 +165,16 @@ export function PulsatorUI(props: PulsatorUIProps) {
           <Button label="Reset" onClick={() => host.pulseReset()} />
         </WithInfo>
       </Header>
+
+      <div className="history">
+        <HistoryChart
+          data$={host.historyData$}
+          vizId="pulsator"
+          dbMin={-60}
+          dbMax={60}
+          series={historySeries}
+        />
+      </div>
 
       <div className="block timing">
         <div className="title">Timing</div>

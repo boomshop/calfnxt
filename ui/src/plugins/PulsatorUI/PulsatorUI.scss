@@ -1,10 +1,22 @@
 .PulsatorUI {
   display: grid;
-  grid-template-areas: 'timing modulation pulse';
+  grid-template-areas:
+    'history history history'
+    'timing modulation pulse';
   grid-template-columns: auto auto 1fr;
-  grid-template-rows: 1fr;
+  grid-template-rows: 120px 1fr;
   gap: var(--gap);
   align-items: stretch;
+
+  > .history {
+    grid-area: history;
+    min-width: 0;
+    min-height: 0;
+
+    > .HistoryChart {
+      height: 100%;
+    }
+  }
 
   > .timing {
     grid-area: timing;

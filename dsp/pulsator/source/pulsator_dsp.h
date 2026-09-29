@@ -4,12 +4,14 @@
 #include "effect_base.h"
 #include "io_stage.h"
 #include "simple_lfo.h"
+#include "viz_history_ring.h"
 #include "viz_source.h"
 
 #include "pulsator_params.h"
 
 #include <algorithm>
 #include <atomic>
+#include <cstring>
 
 namespace calfNXT {
 namespace Pulsator {
@@ -68,6 +70,9 @@ public:
   const char* vizTempoId() const override { return "pulsator"; }
   int takePulsatorLfo(float* out, int maxOut) override;
   const char* vizPulsatorId() const override { return "pulsator"; }
+  int takeEnvelopeDisplay(float* out, int maxOut) override;
+  const char* vizEnvelopeId() const override { return "pulsator"; }
+  void configureVizBins(const char* id, int bins) override;
 
   OBJ_METHODS(PulsatorPlugin, Plugin::EffectBase)
   DEFINE_INTERFACES
@@ -93,11 +98,16 @@ private:
     float pw = 1.f;
   };
 
+  // History: abs peaks [inL, outL, inR, outR] (max-within-slot).
+  static constexpr int kHistChannels = 4;
+
   BlockState makeBlockState() const;
   void resetProcessing();
   void applyLfoParams(const BlockState& s);
   void handleReset();
   void publishLfoViz();
+  void histFeedSample(float inL, float outL, float inR, float outR);
+  void publishHistSnapshot();
   void updateHostTempo(Steinberg::Vst::ProcessData& data);
   static float pulseWidthFromEnum(int pw);
 
@@ -111,6 +121,8 @@ private:
   RateLimitedGain gainR_;
 
   bool resetArmed_ = false;
+
+  Dsp::VizHistoryRing<kHistChannels> hist_;
 
   std::atomic<float> phaseL_{0.f};
   std::atomic<float> phaseR_{0.f};

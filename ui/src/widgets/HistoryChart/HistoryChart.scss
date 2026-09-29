@@ -17,6 +17,13 @@
     height: 100%;
   }
 
+  /* Bipolar / 0 dB mid line — same cue as SpectrumDiffChart. */
+  svg > .aux-grid > .aux-gridline.base,
+  .aux-grid > .aux-gridline.base {
+    stroke: var(--color);
+    stroke-opacity: var(--graph-stroke-opacity-semi) !important;
+  }
+
   /* Hidden via listed$ / visible$ — keep path node, kill paint. */
   .history-hidden {
     opacity: 0 !important;

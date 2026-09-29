@@ -16,6 +16,7 @@ using namespace Steinberg::Vst;
 namespace {
 constexpr uint32 kStateMagic = 0x434e5850u; // 'CNXP'
 constexpr uint32 kStateVersion = 1;
+constexpr float kHistoryDisplayMs = 8000.f;
 } // namespace
 
 PulsatorPlugin::PulsatorPlugin()
@@ -48,6 +49,26 @@ float PulsatorPlugin::pulseWidthFromEnum(int pw)
   }
 }
 
+void PulsatorPlugin::histFeedSample(float inL, float outL, float inR, float outR)
+{
+  // Always advance the ring so opening the editor shows recent history.
+  // Publish stays gated on vizConsumerActive (UI poll).
+  float* s = hist_.slot();
+  s[0] = std::max(inL, s[0]);
+  s[1] = std::max(outL, s[1]);
+  s[2] = std::max(inR, s[2]);
+  s[3] = std::max(outR, s[3]);
+  const float seed[kHistChannels] = {inL, outL, inR, outR};
+  hist_.endSample(seed);
+}
+
+void PulsatorPlugin::publishHistSnapshot()
+{
+  if (!vizConsumerActive())
+    return;
+  hist_.publish();
+}
+
 void PulsatorPlugin::resetProcessing()
 {
   const float sr = static_cast<float>(sampleRate_);
@@ -57,6 +78,8 @@ void PulsatorPlugin::resetProcessing()
   gainR_.setSampleRate(sr, 1.5f);
   gainL_.reset(1.f);
   gainR_.reset(1.f);
+  hist_.reset();
+  hist_.setDisplayWindow(sampleRate_, kHistoryDisplayMs);
   applyLfoParams(makeBlockState());
   publishLfoViz();
 }
@@ -152,6 +175,8 @@ tresult PLUGIN_API PulsatorPlugin::process(ProcessData& data)
   const BlockState state = makeBlockState();
   applyLfoParams(state);
 
+  hist_.setDisplayWindow(sampleRate_, kHistoryDisplayMs);
+
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
@@ -175,15 +200,33 @@ tresult PLUGIN_API PulsatorPlugin::process(ProcessData& data)
     return (1.f - amount) + (lfoVal * 0.5f + amount * 0.5f);
   };
 
+  const int32 nCh = data.outputs[0].numChannels;
+
   // Quiet / bypass / dry: keep LFOs in phase for clickless return + chart.
   // Quiet with amount>0: also slew gain smoothers with the LFO (no freeze).
   if (state.bypass || state.amount <= 1.0e-6f)
   {
+    auto feedPassthrough = [&](auto** out) {
+      for (int32 i = 0; i < nFrames; ++i)
+      {
+        const float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
+        const float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
+        const float aL = std::fabs(L);
+        const float aR = std::fabs(R);
+        histFeedSample(aL, aL, aR, aR);
+      }
+    };
+    if (data.symbolicSampleSize == kSample32)
+      feedPassthrough(data.outputs[0].channelBuffers32);
+    else
+      feedPassthrough(data.outputs[0].channelBuffers64);
+
     lfoL_.advance(static_cast<uint32_t>(nFrames));
     lfoR_.advance(static_cast<uint32_t>(nFrames));
     gainL_.reset(1.f);
     gainR_.reset(1.f);
     publishLfoViz();
+    publishHistSnapshot();
     io_.end(data);
     return kResultOk;
   }
@@ -198,13 +241,13 @@ tresult PLUGIN_API PulsatorPlugin::process(ProcessData& data)
       gainR_.process(targetR);
       lfoL_.advance(1);
       lfoR_.advance(1);
+      histFeedSample(0.f, 0.f, 0.f, 0.f);
     }
     publishLfoViz();
+    publishHistSnapshot();
     io_.end(data);
     return kResultOk;
   }
-
-  const int32 nCh = data.outputs[0].numChannels;
 
   auto run = [&](auto** out) {
     for (int32 i = 0; i < nFrames; ++i)
@@ -219,6 +262,9 @@ tresult PLUGIN_API PulsatorPlugin::process(ProcessData& data)
         R = m;
       }
 
+      const float inL = std::fabs(L);
+      const float inR = std::fabs(R);
+
       const float targetL = modGain(lfoL_.getValue(), state.amount);
       const float targetR = modGain(lfoR_.getValue(), state.amount);
       const float gL = gainL_.process(targetL);
@@ -228,6 +274,8 @@ tresult PLUGIN_API PulsatorPlugin::process(ProcessData& data)
       float outR = R * gR;
       Dsp::sanitize(outL);
       Dsp::sanitize(outR);
+
+      histFeedSample(inL, std::fabs(outL), inR, std::fabs(outR));
 
       if (nCh > 0)
         out[0][i] = outL;
@@ -245,6 +293,7 @@ tresult PLUGIN_API PulsatorPlugin::process(ProcessData& data)
     run(data.outputs[0].channelBuffers64);
 
   publishLfoViz();
+  publishHistSnapshot();
   io_.end(data);
   return kResultOk;
 }
@@ -267,6 +316,23 @@ int PulsatorPlugin::takePulsatorLfo(float* out, int maxOut)
   out[2] = phaseR_.load(std::memory_order_relaxed);
   out[3] = valR_.load(std::memory_order_relaxed);
   return 4;
+}
+
+int PulsatorPlugin::takeEnvelopeDisplay(float* out, int maxOut)
+{
+  return hist_.take(out, maxOut, [](const float* src, float* dst) {
+    dst[0] = std::fabs(src[0]);
+    dst[1] = std::fabs(src[1]);
+    dst[2] = std::fabs(src[2]);
+    dst[3] = std::fabs(src[3]);
+  });
+}
+
+void PulsatorPlugin::configureVizBins(const char* id, int bins)
+{
+  if (!id || std::strcmp(id, vizEnvelopeId()) != 0)
+    return;
+  hist_.setVisibleSlots(bins);
 }
 
 tresult PLUGIN_API PulsatorPlugin::setState(IBStream* state)

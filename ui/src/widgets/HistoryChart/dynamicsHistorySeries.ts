@@ -1,5 +1,5 @@
 import type { DynamicValue } from '@deutschesoft/awml';
-import type { HistorySeries } from './HistoryChart';
+import { historyLinToDb, type HistorySeries } from './HistoryChart';
 
 /**
  * Experiment: Tamer-like full input/output fills instead of Cut tips.
@@ -406,6 +406,69 @@ export function expanderHistorySeries(opts: {
       listed$: opts.inv2DetectorListed$,
       visible$: opts.inv2Visible$,
       toggle: true,
+    },
+  ];
+}
+
+/**
+ * Linear abs peak → height above the bipolar zero line (dB).
+ * Silence / floor (−60) → 0; 0 dBFS → 60. L uses +h, R uses −h.
+ */
+function bipolarHeightDb(lin: number): number {
+  // historyLinToDb: −60…0 → lift so loud moves away from center.
+  return Math.min(60, Math.max(0, historyLinToDb(lin) + 60));
+}
+
+/**
+ * Pulsator bipolar stereo history (4ch):
+ * Channels: [inL, outL, inR, outR] linear abs peaks.
+ * Y is signed dB height from center (range −60…+60): L positive, R negative.
+ * Soft In under full Out so ducking tips glow.
+ * AUX `mode: 'center'` fills toward the chart mid (= 0 dB).
+ * (Graph `base` is a 0…1 canvas fraction, not a range-unit value.)
+ */
+export function pulsatorHistorySeries(): HistorySeries[] {
+  const up = (lin: number) => bipolarHeightDb(lin);
+  const down = (lin: number) => -bipolarHeightDb(lin);
+  const soft = 'fill-gradient fill-soft stroke-none';
+  const full = 'fill-gradient fill-full stroke-none';
+  return [
+    // Paint order: R first (under), then L — center fills meet at 0.
+    {
+      id: 'rin',
+      name: 'Right input',
+      short: 'R In',
+      channel: 2,
+      className: soft,
+      mode: 'center',
+      transform: down,
+    },
+    {
+      id: 'rout',
+      name: 'Right output',
+      short: 'R Out',
+      channel: 3,
+      className: full,
+      mode: 'center',
+      transform: down,
+    },
+    {
+      id: 'lin',
+      name: 'Left input',
+      short: 'L In',
+      channel: 0,
+      className: soft,
+      mode: 'center',
+      transform: up,
+    },
+    {
+      id: 'lout',
+      name: 'Left output',
+      short: 'L Out',
+      channel: 1,
+      className: full,
+      mode: 'center',
+      transform: up,
     },
   ];
 }

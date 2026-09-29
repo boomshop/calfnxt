@@ -3,6 +3,7 @@ import { paramIds, pluginMeta } from '../generated/pulsatorModel';
 import {
   bindBoolParamToHost,
   bindParamToHost,
+  bindVizEnvelope,
   bindVizLfo,
   bindVizTempo,
   postBegin,
@@ -33,6 +34,8 @@ export type IPulsatorHost = {
   hostTempo$: DynamicValue<number[]>;
   /** Live [phaseL, valL, phaseR, valR]. */
   lfo$: DynamicValue<number[]>;
+  /** Bipolar stereo history: [inL, outL, inR, outR] × slots + phase. */
+  historyData$: DynamicValue<Float32Array | null>;
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
   pulseReset: () => void;
@@ -94,8 +97,10 @@ export function createBoundPulsatorHost(): IPulsatorHost {
 
   const hostTempo$ = DynamicValue.fromConstant<number[]>([0, 120]);
   const lfo$ = DynamicValue.fromConstant<number[]>([0, 0, 0, 0]);
+  const historyData$ = DynamicValue.fromConstant<Float32Array | null>(null);
   bindVizTempo(hostTempo$, 'pulsator');
   bindVizLfo(lfo$, 'pulsator');
+  bindVizEnvelope(historyData$, 'pulsator');
 
   const pulseReset = () => {
     const id = paramIds.reset;
@@ -121,6 +126,7 @@ export function createBoundPulsatorHost(): IPulsatorHost {
     ms$,
     hostTempo$,
     lfo$,
+    historyData$,
     beginEdit: postBegin,
     endEdit: postEnd,
     pulseReset,
