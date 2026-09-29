@@ -1098,21 +1098,21 @@ export function applyImpulseDemo(
   setNum(host.source$, params.source);
   setNum(host.shape$, params.shape);
   setNum(host.quality$, params.quality);
-  host.root$.set('Lexicon 480L');
-  host.openDirs$.set(['Lexicon 480L']);
+  host.root$.set('IR');
+  host.openDirs$.set(['Reverb']);
   host.treeScroll$.set(0);
-  host.selected$.set('Lexicon 480L/Buck Ram.aif');
-  host.status$.set('Buck Ram.aif');
+  host.selected$.set('Reverb/03-5 Room Reverbs-26.wav');
+  host.status$.set('03-5 Room Reverbs-26.wav');
   host.tree$.set([
     {
-      n: 'Lexicon 480L',
+      n: 'Reverb',
       d: 1,
       c: [
-        { n: 'Buck Ram.aif', p: 'Lexicon 480L/Buck Ram.aif' },
-        { n: 'Drum Plate.aif', p: 'Lexicon 480L/Drum Plate.aif' },
-        { n: 'Jazz Hall.aif', p: 'Lexicon 480L/Jazz Hall.aif' },
-        { n: 'Large Hall.aif', p: 'Lexicon 480L/Large Hall.aif' },
-        { n: 'Large Plate.aif', p: 'Lexicon 480L/Large Plate.aif' },
+        { n: '03-5 Room Reverbs-24.wav', p: 'Reverb/03-5 Room Reverbs-24.wav' },
+        { n: '03-5 Room Reverbs-25.wav', p: 'Reverb/03-5 Room Reverbs-25.wav' },
+        { n: '03-5 Room Reverbs-26.wav', p: 'Reverb/03-5 Room Reverbs-26.wav' },
+        { n: '03-5 Room Reverbs-27.wav', p: 'Reverb/03-5 Room Reverbs-27.wav' },
+        { n: '03-5 Room Reverbs-28.wav', p: 'Reverb/03-5 Room Reverbs-28.wav' },
       ],
     },
   ]);
