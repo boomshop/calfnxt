@@ -132,13 +132,20 @@ public:
     publishLocked();
   }
 
+  /**
+   * Wipe spectrum and queue for one empty UI flush (host stop / quiet).
+   * takeSpectrum returns −1 once so the editor can push `[]` and clear the chart.
+   */
   void clearDisplay()
   {
     reset();
+    emptyDisplay_ = true;
+    needClearFlush_.store(true, std::memory_order_release);
   }
 
   void process(float L, float R)
   {
+    emptyDisplay_ = false;
     // Apply pending FFT size before writing the ring so UI changes take
     // effect on the next sample (not only on the next hop of the old size).
     const int wantFft = pendingFftSize_.load(std::memory_order_relaxed);
@@ -164,10 +171,15 @@ public:
 
   /**
    * Copy published spectrum into out[]. Returns float count, or 0 if none.
+   * Returns −1 once after clearDisplay() so the UI can null the overlay.
    * Layout: bins, hold, avg[N], max[N], L[N], R[N].
    */
   int takeSpectrum(float* out, int maxOut)
   {
+    if (needClearFlush_.exchange(false, std::memory_order_acq_rel))
+      return -1;
+    if (emptyDisplay_)
+      return 0;
     if (!out || maxOut < 2)
       return 0;
     std::lock_guard<std::mutex> lock(mutex_);
@@ -480,6 +492,9 @@ private:
   std::vector<float> pubL_;
   std::vector<float> pubR_;
   std::vector<float> pubRms_;
+
+  bool emptyDisplay_ = false;
+  std::atomic<bool> needClearFlush_{false};
 };
 
 } // namespace Dsp

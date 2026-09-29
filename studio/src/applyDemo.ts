@@ -374,6 +374,7 @@ export function applyRingmodDemo(
   setNum(host.modPhase$, params.mod_phase);
   setNum(host.modDetune$, params.mod_detune);
   setBool(host.modListen$, params.mod_listen);
+  setBool(host.modFreqLin$, params.mod_freq_lin);
   setNum(host.lfo1Mode$, params.lfo1_mode);
   setNum(host.lfo1Freq$, params.lfo1_freq);
   setNum(host.lfo1ModFreqLo$, params.lfo1_mod_freq_lo);
@@ -390,10 +391,29 @@ export function applyRingmodDemo(
   setNum(host.lfo2ModAmountLo$, params.lfo2_mod_amount_lo);
   setNum(host.lfo2ModAmountHi$, params.lfo2_mod_amount_hi);
   setBool(host.lfo2ModAmountActive$, params.lfo2_mod_amount_active);
+  setNum(host.spectrum$, params.spectrum);
   applySharedViz(viz);
   host.lfoActivity$.set([0.55, 0.4]);
   host.lfo1Activity$.set(0.55);
   host.lfo2Activity$.set(0.4);
+  const applySpectrum = () => {
+    if (viz.spectrumIn) {
+      host.spectrumIn$.set(viz.spectrumIn);
+      pushViz('fft_in', 'spectrum', viz.spectrumIn);
+    }
+    if (viz.spectrumOut) {
+      host.spectrumOut$.set(viz.spectrumOut);
+      pushViz('fft_out', 'spectrum', viz.spectrumOut);
+    }
+  };
+  applySpectrum();
+  if (viz.spectrumIn || viz.spectrumOut) {
+    const hold = window.setInterval(() => {
+      applySharedViz(viz);
+      applySpectrum();
+    }, 50);
+    return () => window.clearInterval(hold);
+  }
 }
 
 export function applyPulsatorDemo(

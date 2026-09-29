@@ -4,6 +4,7 @@
 #include "effect_base.h"
 #include "io_stage.h"
 #include "simple_lfo.h"
+#include "spectrum_tap.h"
 #include "viz_source.h"
 
 #include "ringmod_params.h"
@@ -37,6 +38,11 @@ public:
   const char* vizLfoActivityId() const override { return "lfo"; }
   int takeRingmodEffective(float* out, int maxOut) override;
   const char* vizRingmodEffectiveId() const override { return "ringmod"; }
+  int takeSpectrum(float* out, int maxOut) override;
+  const char* vizSpectrumId() const override { return "fft_in"; }
+  int takeOutputSpectrum(float* out, int maxOut) override;
+  const char* vizOutputSpectrumId() const override { return "fft_out"; }
+  void configureVizBins(const char* id, int bins) override;
 
   OBJ_METHODS(RingmodPlugin, Plugin::EffectBase)
   DEFINE_INTERFACES
@@ -51,10 +57,13 @@ private:
   {
     bool bypass = false;
     bool listen = false;
+    bool spectrumOn = false;
     bool lfo1FreqActive = false;
     bool lfo1DetuneActive = false;
     bool lfo2Lfo1Active = false;
     bool lfo2AmountActive = false;
+    /** true = linear Hz LFO freq sweeps (Calf legacy); false = log (default). */
+    bool freqLin = false;
     int modMode = 0;
     int lfo1Mode = 0;
     int lfo2Mode = 0;
@@ -91,6 +100,10 @@ private:
 
   bool lfo1ResetArmed_ = false;
   bool lfo2ResetArmed_ = false;
+
+  Dsp::SpectrumTap spectrumIn_;
+  Dsp::SpectrumTap spectrumOut_;
+  std::atomic<bool> spectrumActive_{false};
 
   std::atomic<float> lfo1Activity_{0.f};
   std::atomic<float> lfo2Activity_{0.f};

@@ -41,6 +41,13 @@ import {
 } from '../../utils/spectrumDiffOverlay';
 import './EQChart.scss';
 
+export type EQChartFreqGuide = {
+  freq$: DynamicValue<number>;
+  /** When false / omitted-as-always-on, hide the marker. */
+  visible$?: DynamicValue<boolean>;
+  className?: string;
+};
+
 const EqualizerBindings = {};
 
 const EqualizerOptions = {
@@ -105,6 +112,21 @@ export interface EQChartProps {
    * Default false = suite standard (warn-top / accent-bottom).
    */
   gradientReverse?: boolean;
+  /**
+   * When false, omit band response fills / baseline (handles + spectrum only).
+   * Used by Ringmod spectrum chart (Filter-style freq handles, no EQ curve).
+   */
+  showResponse?: boolean;
+  /**
+   * Read-only vertical frequency markers via AUX Graph (two dots, mode=line).
+   * Prefer this over ChartHandle for non-interactive lines (e.g. live carrier).
+   * Style via `className` + `.eq-freq-guide` in EQChart.scss.
+   */
+  freqGuides?: EQChartFreqGuide[];
+  /** Host automation gesture while dragging a handle (Filter / Ringmod). */
+  bandEdit?: (
+    bandId: string,
+  ) => { beginEdit?: () => void; endEdit?: () => void } | undefined;
 }
 
 /**
@@ -139,11 +161,15 @@ export function EQChart(props: EQChartProps) {
     hideEmptyBaseline = true,
     gradientStops,
     gradientReverse = false,
+    showResponse = true,
+    freqGuides,
+    bandEdit,
   } = props;
   const qLocked = zRange.min === zRange.max;
 
   const [eqWidget, setEqWidget] = useState<unknown>(null);
   const isMini = size === 'mini';
+  const drawResponse = showResponse && !isMini;
   const spectrumOn = !isMini && Math.round(spectrumMode) >= 1;
   // High-rate spectrum must NOT go through React state — paint AUX Graph directly.
   const spectrumOuterRef = useRef<{
@@ -209,18 +235,29 @@ export function EQChart(props: EQChartProps) {
       bandModels.map((band, i) => {
         const customLabel = band.handleLabel;
         const show =
-          showLabels || customLabel != null || band.formatHandleLabel != null;
+          !band.handleReadonly &&
+          (showLabels ||
+            customLabel != null ||
+            band.formatHandleLabel != null);
+        const cls = [
+          'eq-band',
+          `eq-band-${i}`,
+          band.handleClass ?? '',
+        ]
+          .filter(Boolean)
+          .join(' ');
         return {
           type: 'parametric',
-          label: customLabel ?? (showLabels ? `B${i + 1}` : ''),
+          label: customLabel ?? (showLabels && !band.handleReadonly ? `B${i + 1}` : ''),
           ...(band.formatHandleLabel
             ? { format_label: band.formatHandleLabel }
             : !show
               ? { format_label: false as const }
               : {}),
-          class: `eq-band eq-band-${i}`,
-          min_size: isMini ? 4 : 24,
-          max_size: isMini ? 10 : 64,
+          class: cls,
+          // Live markers: zero grab size — vertical line still fills y_min…y_max.
+          min_size: band.handleReadonly ? 0 : isMini ? 4 : 24,
+          max_size: band.handleReadonly ? 0 : isMini ? 10 : 64,
           y_min: yRange.min,
           y_max: yRange.max,
           show_axis: false,
@@ -231,17 +268,19 @@ export function EQChart(props: EQChartProps) {
 
   const ghostOptions = useMemo(
     () =>
-      bandModels.map((_, i) => ({
-        type: 'parametric',
-        label: '',
-        format_label: false as const,
-        show_handle: false,
-        class: `eq-ghost eq-band-${i}`,
-        y_min: yRange.min,
-        y_max: yRange.max,
-        show_axis: false,
-      })),
-    [bandModels, yRange.max, yRange.min],
+      drawResponse
+        ? bandModels.map((_, i) => ({
+            type: 'parametric',
+            label: '',
+            format_label: false as const,
+            show_handle: false,
+            class: `eq-ghost eq-band-${i}`,
+            y_min: yRange.min,
+            y_max: yRange.max,
+            show_axis: false,
+          }))
+        : [],
+    [bandModels, drawResponse, yRange.max, yRange.min],
   );
 
   const alwaysOn$ = useMemo(() => DynamicValue.fromConstant(true), []);
@@ -249,9 +288,10 @@ export function EQChart(props: EQChartProps) {
   const handleBindings = useMemo(
     () =>
       bandModels.map((band) => {
-        const fromModel = interactive ? {} : { readonly: true };
+        const canEdit = interactive && !band.handleReadonly;
+        const fromModel = canEdit ? {} : { readonly: true as const };
         const qFromModel =
-          interactive && !qLocked ? {} : { readonly: true as const };
+          canEdit && !qLocked ? {} : { readonly: true as const };
         const active$ = interactive ? band.active$ : alwaysOn$;
         return [
           { name: 'gain', backendValue: band.gain$, ...fromModel },
@@ -278,37 +318,54 @@ export function EQChart(props: EQChartProps) {
 
   const ghostBindings = useMemo(
     () =>
-      bandModels.map((band) => {
-        const active$ = interactive ? band.active$ : alwaysOn$;
-        return [
-          { name: 'gain', backendValue: band.effectiveGain$, readonly: true },
-          {
-            name: 'freq',
-            backendValue: band.effectiveFrequency$ ?? band.frequency$,
-            readonly: true,
-          },
-          { name: 'q', backendValue: band.q$, readonly: true },
-          { name: 'active', backendValue: active$, readonly: true },
-          {
-            name: 'type',
-            backendValue: band.auxType$,
-            readonly: true,
-          },
-        ];
-      }),
-    [bandModels, interactive, alwaysOn$],
+      drawResponse
+        ? bandModels.map((band) => {
+            const active$ = interactive ? band.active$ : alwaysOn$;
+            return [
+              {
+                name: 'gain',
+                backendValue: band.effectiveGain$,
+                readonly: true,
+              },
+              {
+                name: 'freq',
+                backendValue: band.effectiveFrequency$ ?? band.frequency$,
+                readonly: true,
+              },
+              { name: 'q', backendValue: band.q$, readonly: true },
+              { name: 'active', backendValue: active$, readonly: true },
+              {
+                name: 'type',
+                backendValue: band.auxType$,
+                readonly: true,
+              },
+            ];
+          })
+        : [],
+    [bandModels, interactive, alwaysOn$, drawResponse],
   );
 
   const handleEvents = useMemo(
     () =>
-      bandModels.map((band) =>
-        interactive && onSelectBand
-          ? {
-              handlegrabbed: () => onSelectBand(band.id),
-            }
-          : null,
-      ),
-    [bandModels, onSelectBand, interactive],
+      bandModels.map((band) => {
+        if (!interactive || band.handleReadonly) return null;
+        const gesture = bandEdit?.(band.id);
+        if (!onSelectBand && !gesture) return null;
+        return {
+          ...(onSelectBand
+            ? { handlegrabbed: () => onSelectBand(band.id) }
+            : {}),
+          ...(gesture
+            ? {
+                set_interacting: (on: unknown) => {
+                  if (on) gesture.beginEdit?.();
+                  else gesture.endEdit?.();
+                },
+              }
+            : {}),
+        };
+      }),
+    [bandModels, onSelectBand, interactive, bandEdit],
   );
 
   const handles = useWidgetsWithBindingsAndEvents(
@@ -341,14 +398,16 @@ export function EQChart(props: EQChartProps) {
 
   const graphsBindings = useMemo(
     () =>
-      bandModels.map((band) => [
-        {
-          name: 'active',
-          backendValue: interactive ? band.active$ : alwaysOn$,
-          readonly: true,
-        },
-      ]),
-    [bandModels, interactive, alwaysOn$],
+      drawResponse
+        ? bandModels.map((band) => [
+            {
+              name: 'active',
+              backendValue: interactive ? band.active$ : alwaysOn$,
+              readonly: true,
+            },
+          ])
+        : [],
+    [bandModels, interactive, alwaysOn$, drawResponse],
   );
 
   const graphs = useWidgetsWithBindingsAndEvents(
@@ -387,6 +446,11 @@ export function EQChart(props: EQChartProps) {
 
     const syncBaseline = () => {
       if (eq.isDestructed()) return;
+      if (!drawResponse) {
+        eq.baseline.set('bands', []);
+        eq.baseline.set('active', false);
+        return;
+      }
       eq.baseline.set('rendering_filter', ghostOnly);
       eq.baseline.set('bands', ghosts.slice());
       // Hide empty sum (flat 0 dB path) when no band is active — reveals grid
@@ -410,13 +474,13 @@ export function EQChart(props: EQChartProps) {
     };
 
     const bringBaselineFront = () => {
-      if (eq.isDestructed()) return;
+      if (eq.isDestructed() || !drawResponse) return;
       // Must run after addGraph — new graphs append and would cover the sum curve.
       eq.baseline.toFront();
     };
 
     syncBaseline();
-    graphs.forEach((graph) => eq.addGraph(graph));
+    if (drawResponse) graphs.forEach((graph) => eq.addGraph(graph));
     bringBaselineFront();
     // Handles re-added as children re-enter baseline — restore ghosts + z-order.
     // subscribe() skips removeEventListener when the Equalizer is already destroyed
@@ -425,17 +489,27 @@ export function EQChart(props: EQChartProps) {
       syncBaseline();
       bringBaselineFront();
     });
-    const unsubActive = interactive
-      ? bandModels.map((band) => band.active$.subscribe(syncBaseline, false))
-      : [];
+    const unsubActive =
+      interactive && drawResponse
+        ? bandModels.map((band) => band.active$.subscribe(syncBaseline, false))
+        : [];
     return () => {
       unsubBandAdded();
       unsubActive.forEach((u) => u());
       if (eq.isDestructed()) return;
-      graphs.forEach((graph) => eq.removeGraph(graph));
+      if (drawResponse) graphs.forEach((graph) => eq.removeGraph(graph));
       eq.baseline.set('bands', []);
     };
-  }, [eqWidget, graphs, ghosts, bandModels, interactive, isMini, hideEmptyBaseline]);
+  }, [
+    eqWidget,
+    graphs,
+    ghosts,
+    bandModels,
+    interactive,
+    isMini,
+    hideEmptyBaseline,
+    drawResponse,
+  ]);
 
   useEffect(() => {
     type AuxEl = { element: Element };
@@ -471,10 +545,26 @@ export function EQChart(props: EQChartProps) {
   }, [handles, graphs, bandModels, selectedBandId]);
 
   // In/Out spectrum fills + output edge (same as MultibandChart crossover).
+  // Include spectrumMode$ in the ListValue so tilt changes re-paint even when
+  // the FFT buffers are unchanged (MultibandChart scale$ pattern).
+  const spectrumMode$ = useMemo(
+    () => DynamicValue.fromConstant(spectrumMode),
+    // Stable DV — value synced below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  useEffect(() => {
+    spectrumMode$.set(spectrumMode);
+  }, [spectrumMode, spectrumMode$]);
+
   const spectrumPair$ = useMemo(() => {
     if (!spectrumIn$ || !spectrumOut$) return null;
-    return new ListValue<[number[], number[]]>([spectrumIn$, spectrumOut$]);
-  }, [spectrumIn$, spectrumOut$]);
+    return new ListValue<[number[], number[], number]>([
+      spectrumIn$,
+      spectrumOut$,
+      spectrumMode$,
+    ]);
+  }, [spectrumIn$, spectrumOut$, spectrumMode$]);
 
   useEffect(() => {
     if (!eqWidget || isMini || !spectrumPair$) return;
@@ -568,14 +658,14 @@ export function EQChart(props: EQChartProps) {
     const edge = spectrumEdgeRef.current;
     if (!outer || !mask || !edge) return;
 
-    const paintPair = (inn: number[], out: number[]) => {
+    const paintPair = (inn: number[], out: number[], modePlain: number) => {
       const yr = yRangeRef.current;
       const axis = {
         fMin: EQ_FREQ_MIN,
         fMax: EQ_FREQ_MAX,
         yMin: yr.min,
         yMax: yr.max,
-        slopeDbPerOct: spectrumSlope(spectrumModeRef.current),
+        slopeDbPerOct: spectrumSlope(modePlain),
       };
       const w = spectrumWidthRef.current;
       mask.set('dots', spectrumOverlayDiffDots(inn, out, 'min', axis, w));
@@ -589,7 +679,11 @@ export function EQChart(props: EQChartProps) {
         backendValue: spectrumPair$,
         readonly: true,
         transformReceive: (pair: unknown) => {
-          const [inn, out] = (pair as [number[], number[]]) ?? [[], []];
+          const row = (pair as [number[], number[], number?]) ?? [[], []];
+          const inn = row[0] ?? [];
+          const out = row[1] ?? [];
+          const modePlain =
+            typeof row[2] === 'number' ? row[2] : spectrumModeRef.current;
           if (
             (!Array.isArray(inn) || !inn.length) &&
             (!Array.isArray(out) || !out.length)
@@ -599,8 +693,8 @@ export function EQChart(props: EQChartProps) {
             edge.set('dots', null);
             return null;
           }
-          spectrumLastPairRef.current = [inn ?? [], out ?? []];
-          return paintPair(inn ?? [], out ?? []);
+          spectrumLastPairRef.current = [inn, out];
+          return paintPair(inn, out, modePlain);
         },
       },
     ]);
@@ -642,7 +736,7 @@ export function EQChart(props: EQChartProps) {
     };
   }, [eqWidget, isMini, spectrumPair$, spectrumOn]);
 
-  // Rare: tilt / y-range change — re-apply last buffer through the same path.
+  // Rare: y-range change — re-apply last buffer (tilt rides ListValue + mode$).
   useEffect(() => {
     if (!spectrumOn) return;
     const outer = spectrumOuterRef.current;
@@ -656,14 +750,14 @@ export function EQChart(props: EQChartProps) {
       fMax: EQ_FREQ_MAX,
       yMin: yr.min,
       yMax: yr.max,
-      slopeDbPerOct: spectrumSlope(spectrumMode),
+      slopeDbPerOct: spectrumSlope(spectrumModeRef.current),
     };
     const w = spectrumWidthRef.current;
     const [inn, out] = pair;
     mask.set('dots', spectrumOverlayDiffDots(inn, out, 'min', axis, w));
     edge.set('dots', spectrumOverlayContourDots(out, axis, w));
     outer.set('dots', spectrumOverlayDiffDots(inn, out, 'max', axis, w));
-  }, [spectrumMode, spectrumOn, yRange.min, yRange.max]);
+  }, [spectrumOn, yRange.min, yRange.max]);
 
   // Detach spectrum graphs on unmount / mini switch.
   useEffect(() => {
@@ -689,6 +783,73 @@ export function EQChart(props: EQChartProps) {
       if (edge) eq.removeGraph?.(edge);
     };
   }, [eqWidget]);
+
+  // Vertical freq markers as AUX Graphs (line through y_min…y_max at freq).
+  const guideList = useMemo(() => freqGuides ?? [], [freqGuides]);
+  useEffect(() => {
+    const eq = eqWidget as {
+      addGraph: (opts: unknown) => {
+        set: (k: string, v: unknown) => void;
+        element?: SVGElement;
+      };
+      removeGraph: (g: unknown) => void;
+      isDestructed?: () => boolean;
+    } | null;
+    if (!eq || eq.isDestructed?.() || !guideList.length) return;
+
+    type GuideGraph = {
+      set: (k: string, v: unknown) => void;
+      element?: SVGElement;
+    };
+    const graphs: GuideGraph[] = guideList.map((g, i) => {
+      const graph = eq.addGraph({
+        dots: null,
+        type: 'L',
+        mode: 'line',
+        class: `eq-freq-guide eq-freq-guide-${i}`,
+      });
+      addGraphClasses(
+        graph.element,
+        'eq-freq-guide',
+        'fill-none',
+        'stroke-color',
+        'stroke-thicker',
+        'stroke-dashed',
+        g.className,
+      );
+      return graph;
+    });
+
+    const paint = (index: number) => {
+      const g = guideList[index];
+      const graph = graphs[index];
+      if (!g || !graph) return;
+      const on = g.visible$ ? !!g.visible$.value : true;
+      const f = g.freq$.value;
+      if (!on || !Number.isFinite(f)) {
+        graph.set('dots', null);
+        return;
+      }
+      const yr = yRangeRef.current;
+      graph.set('dots', [
+        { x: f, y: yr.min },
+        { x: f, y: yr.max },
+      ]);
+    };
+
+    const unsubs = guideList.flatMap((g, i) => {
+      paint(i);
+      const uFreq = g.freq$.subscribe(() => paint(i), false);
+      const uVis = g.visible$?.subscribe(() => paint(i), false);
+      return [uFreq, uVis].filter(Boolean) as Array<() => void>;
+    });
+
+    return () => {
+      unsubs.forEach((u) => u());
+      if (eq.isDestructed?.()) return;
+      graphs.forEach((g) => eq.removeGraph(g));
+    };
+  }, [eqWidget, guideList, yRange.min, yRange.max]);
 
   const cls = ['EQChart', size, className ?? ''].filter(Boolean).join(' ');
 

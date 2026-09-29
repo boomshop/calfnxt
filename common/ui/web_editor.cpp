@@ -1319,7 +1319,9 @@ void WebEditor::flushViz()
     constexpr int kMaxSpectrum = 2 + 5 * Dsp::kMaxSpectrumBins;
     float spectrum[kMaxSpectrum];
     const int nSpec = vizSource_->takeSpectrum(spectrum, kMaxSpectrum);
-    if (nSpec >= 2)
+    if (nSpec < 0)
+      flushVizArray(spectrumId, "spectrum", spectrum, 0);
+    else if (nSpec >= 2)
     {
       spectrum[0] = std::clamp(spectrum[0], 1.f, float(Dsp::kMaxSpectrumBins));
       spectrum[1] = spectrum[1] >= 0.5f ? 1.f : 0.f;
@@ -1339,7 +1341,9 @@ void WebEditor::flushViz()
     constexpr int kMaxSpectrum = 2 + 5 * Dsp::kMaxSpectrumBins;
     float spectrum[kMaxSpectrum];
     const int nSpec = vizSource_->takeOutputSpectrum(spectrum, kMaxSpectrum);
-    if (nSpec >= 2)
+    if (nSpec < 0)
+      flushVizArray(spectrumOutId, "spectrum", spectrum, 0);
+    else if (nSpec >= 2)
     {
       spectrum[0] = std::clamp(spectrum[0], 1.f, float(Dsp::kMaxSpectrumBins));
       spectrum[1] = spectrum[1] >= 0.5f ? 1.f : 0.f;

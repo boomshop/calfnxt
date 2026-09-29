@@ -4,10 +4,20 @@ import {
   bindBoolParamToHost,
   bindParamToHost,
   bindVizCtrl,
+  bindVizSpectrum,
   bindVizUnitLevels,
   postBegin,
   postEnd,
 } from '../utils/bind_param';
+import { auxAllpassFlat } from '../dsp/eqFilters';
+import {
+  EQ_SPECTRUM_ENTRIES,
+  type EqFilterType,
+  type EqPassSlope,
+  type IEqualizerBand,
+} from './equalizerHost';
+
+export { EQ_SPECTRUM_ENTRIES as RINGMOD_SPECTRUM_ENTRIES };
 
 export type IRingmodHost = {
   meta: typeof pluginMeta;
@@ -20,6 +30,11 @@ export type IRingmodHost = {
   modPhase$: DynamicValue<number>;
   modDetune$: DynamicValue<number>;
   modListen$: DynamicValue<boolean>;
+  /**
+   * When true, LFO frequency sweeps (LFO1→Freq, LFO2→LFO1 rate) use linear Hz
+   * (Calf legacy). Off = log octaves (default).
+   */
+  modFreqLin$: DynamicValue<boolean>;
   lfo1Mode$: DynamicValue<number>;
   lfo1Freq$: DynamicValue<number>;
   lfo1ModFreqLo$: DynamicValue<number>;
@@ -58,6 +73,16 @@ export type IRingmodHost = {
   modDetuneView$: DynamicValue<number>;
   modAmountView$: DynamicValue<number>;
   lfo1FreqView$: DynamicValue<number>;
+  /**
+   * Spectrum chart vertical handles:
+   * - LFO1→Freq on → Min + Max (carrier handle off)
+   * - LFO1→Freq off → carrier Freq only
+   */
+  carrierBands: IEqualizerBand[];
+  /** 0 Off / 1 Linear / 2 −3 / 3 −4.5 dB/oct tilt. */
+  spectrum$: DynamicValue<number>;
+  spectrumIn$: DynamicValue<number[]>;
+  spectrumOut$: DynamicValue<number[]>;
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
   pulseReset: (which: 1 | 2) => void;
@@ -132,6 +157,131 @@ function wireOverrideView(
       view$.set(param$.value);
     }
   }, false);
+}
+
+function formatHandleFreq(title: string, hz: number): string {
+  if (!Number.isFinite(hz)) return title;
+  const freq =
+    hz >= 1000
+      ? `${(hz / 1000).toFixed(hz >= 10000 ? 0 : 1)} kHz`
+      : `${Math.round(hz)} Hz`;
+  return `${title}\n${freq}`;
+}
+
+/**
+ * Filter-style vertical line handles on the spectrum chart:
+ * - LFO1→Freq off → one carrier Freq handle
+ * - LFO1→Freq on → Min + Max range handles (live carrier = EQChart freqGuide Graph)
+ * Curves use auxAllpassFlat (no response fill — spectrum only).
+ */
+function makeCarrierFreqBands(
+  modFreq$: DynamicValue<number>,
+  lo$: DynamicValue<number>,
+  hi$: DynamicValue<number>,
+  lfoActive$: DynamicValue<boolean>,
+): IEqualizerBand[] {
+  const type$ = DynamicValue.fromConstant<EqFilterType>('bandpass');
+  const slope$ = DynamicValue.fromConstant<EqPassSlope>(12);
+  const aux$ = DynamicValue.fromConstant(auxAllpassFlat);
+  const q$ = DynamicValue.fromConstant(1);
+  const gain$ = DynamicValue.fromConstant(0);
+  const off$ = DynamicValue.fromConstant(false);
+  const stereo$ = DynamicValue.fromConstant(0);
+
+  const stub = {
+    dyn$: off$,
+    dynAttack$: DynamicValue.fromConstant(20),
+    dynRelease$: DynamicValue.fromConstant(200),
+    dynThreshold$: DynamicValue.fromConstant(-36),
+    dynRatio$: DynamicValue.fromConstant(2),
+    dynMode$: DynamicValue.fromConstant(0),
+    channel$: stereo$,
+    listen$: off$,
+  };
+
+  const carrierActive$ = DynamicValue.fromConstant(!lfoActive$.value);
+  const rangeActive$ = DynamicValue.fromConstant(lfoActive$.value);
+  lfoActive$.subscribe((on) => {
+    carrierActive$.set(!on);
+    rangeActive$.set(on);
+  }, false);
+
+  const carrier: IEqualizerBand = {
+    index: 0,
+    id: 'rm-freq',
+    gain$,
+    effectiveGain$: gain$,
+    frequency$: modFreq$,
+    q$,
+    type$,
+    slope$,
+    auxType$: aux$,
+    active$: carrierActive$,
+    ...stub,
+    handleLabel: 'Freq',
+    formatHandleLabel: (label, hz) => formatHandleFreq(label, hz),
+    defaults: {
+      gain: 0,
+      frequency: modFreq$.value,
+      q: 1,
+      dynAttack: 20,
+      dynRelease: 200,
+      dynThreshold: -36,
+      dynRatio: 2,
+    },
+  };
+
+  const minBand: IEqualizerBand = {
+    index: 1,
+    id: 'rm-min',
+    gain$: DynamicValue.fromConstant(0),
+    effectiveGain$: DynamicValue.fromConstant(0),
+    frequency$: lo$,
+    q$: DynamicValue.fromConstant(1),
+    type$,
+    slope$,
+    auxType$: aux$,
+    active$: rangeActive$,
+    ...stub,
+    handleLabel: 'Min',
+    formatHandleLabel: (label, hz) => formatHandleFreq(label, hz),
+    defaults: {
+      gain: 0,
+      frequency: lo$.value,
+      q: 1,
+      dynAttack: 20,
+      dynRelease: 200,
+      dynThreshold: -36,
+      dynRatio: 2,
+    },
+  };
+
+  const maxBand: IEqualizerBand = {
+    index: 2,
+    id: 'rm-max',
+    gain$: DynamicValue.fromConstant(0),
+    effectiveGain$: DynamicValue.fromConstant(0),
+    frequency$: hi$,
+    q$: DynamicValue.fromConstant(1),
+    type$,
+    slope$,
+    auxType$: aux$,
+    active$: rangeActive$,
+    ...stub,
+    handleLabel: 'Max',
+    formatHandleLabel: (label, hz) => formatHandleFreq(label, hz),
+    defaults: {
+      gain: 0,
+      frequency: hi$.value,
+      q: 1,
+      dynAttack: 20,
+      dynRelease: 200,
+      dynThreshold: -36,
+      dynRatio: 2,
+    },
+  };
+
+  return [carrier, minBand, maxBand];
 }
 
 export function createBoundRingmodHost(): IRingmodHost {
@@ -241,6 +391,7 @@ export function createBoundRingmodHost(): IRingmodHost {
     modPhase$: bindNum('mod_phase', 0.5),
     modDetune$,
     modListen$: bindBool('mod_listen'),
+    modFreqLin$: bindBool('mod_freq_lin'),
     lfo1Mode$: bindNum('lfo1_mode', 0),
     lfo1Freq$,
     lfo1ModFreqLo$,
@@ -268,6 +419,23 @@ export function createBoundRingmodHost(): IRingmodHost {
     modDetuneView$,
     modAmountView$,
     lfo1FreqView$,
+    carrierBands: makeCarrierFreqBands(
+      modFreq$,
+      lfo1ModFreqLo$,
+      lfo1ModFreqHi$,
+      lfo1ModFreqActive$,
+    ),
+    spectrum$: bindNum('spectrum', 1),
+    spectrumIn$: (() => {
+      const dv = DynamicValue.fromConstant<number[]>([]);
+      bindVizSpectrum(dv, 'fft_in');
+      return dv;
+    })(),
+    spectrumOut$: (() => {
+      const dv = DynamicValue.fromConstant<number[]>([]);
+      bindVizSpectrum(dv, 'fft_out');
+      return dv;
+    })(),
     beginEdit: postBegin,
     endEdit: postEnd,
     pulseReset,

@@ -57,6 +57,7 @@
   --color-least: #777777;
 
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  --shadow-tight: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 :root.night {
@@ -71,6 +72,7 @@
   --color-least: #999999;
 
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+  --shadow-tight: 0 1px 3px rgba(0, 0, 0, 0.7);
 }
 
 /* Accent pairs (independent of day/night). */
@@ -212,7 +214,8 @@ textarea::selection {
   }
 
   > .block {
-    background: var(--background);
+    box-shadow: var(--shadow-tight);
+    border: 1px solid var(--background-least);
 
     &:has(.title) {
       padding-top: 26px !important;
@@ -224,6 +227,21 @@ textarea::selection {
       padding: 2px;
       opacity: 0.75;
       font-size: 11px;
+      font-weight: bold;
+      text-shadow:
+        2px 0 0 var(--background-less),
+        -2px 0 0 var(--background-less);
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 1px;
+        background: var(--background-least);
+        z-index: -1;
+      }
     }
   }
 }

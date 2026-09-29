@@ -216,6 +216,10 @@ export interface IEqualizerBand {
   handleLabel?: string;
   /** Optional AUX format_label(label, freqHz) for the handle. */
   formatHandleLabel?: (label: string, freqHz: number) => string;
+  /** Extra CSS class on the chart handle (e.g. live carrier marker). */
+  handleClass?: string;
+  /** Display-only handle — freq/gain bindings stay readonly. */
+  handleReadonly?: boolean;
   /** DSP descriptor defaults for AUX Knob double-click reset. */
   defaults: {
     frequency: number;

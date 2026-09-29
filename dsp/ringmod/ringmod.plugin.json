@@ -14,7 +14,7 @@
   ],
   "editor": {
     "width": 1024,
-    "height": 368
+    "height": 580
   },
   "buses": {
     "audio_inputs": [
@@ -100,6 +100,17 @@
     {
       "id": "mod_listen",
       "name": "Listen",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "mod_freq_lin",
+      "name": "Freq Lin",
       "type": "float",
       "unit": "",
       "min": 0.0,
@@ -314,6 +325,17 @@
       "min": 0.0,
       "max": 4.0,
       "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "spectrum",
+      "name": "Spectrum",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 3.0,
+      "default": 1.0,
       "scale": "linear",
       "precision": 0
     }

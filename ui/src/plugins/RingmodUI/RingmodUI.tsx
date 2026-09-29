@@ -1,9 +1,20 @@
+import { useMemo } from 'react';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { Header } from '../../components';
-import { Button, Knob, Select, State, Toggle, WaveformButtons, WithInfo } from '../../widgets';
+import {
+  Button,
+  EQChart,
+  Knob,
+  Select,
+  State,
+  Toggle,
+  WaveformButtons,
+  WithInfo,
+} from '../../widgets';
 import { paramIds } from '../../generated/ringmodModel';
 import {
   RINGMOD_CHANNEL_ENTRIES,
+  RINGMOD_SPECTRUM_ENTRIES,
   ringmodParamDefault,
   type IRingmodHost,
 } from '../../host/ringmodHost';
@@ -82,6 +93,40 @@ export function RingmodUI(props: RingmodUIProps) {
     host.lfo2ModAmountActive$,
     false,
   );
+  const spectrumMode = useDynamicValueReadonly(host.spectrum$, 1);
+
+  const carrierFreqGuides = useMemo(
+    () => [
+      {
+        freq$: host.modFreqView$,
+        visible$: host.lfo1ModFreqActive$,
+        className: 'rm-carrier-live',
+      },
+    ],
+    [host.modFreqView$, host.lfo1ModFreqActive$],
+  );
+
+  const bandEdit = useMemo(
+    () => (bandId: string) => {
+      if (bandId === 'rm-freq')
+        return {
+          beginEdit: () => host.beginEdit(paramIds.mod_freq),
+          endEdit: () => host.endEdit(paramIds.mod_freq),
+        };
+      if (bandId === 'rm-min')
+        return {
+          beginEdit: () => host.beginEdit(paramIds.lfo1_mod_freq_lo),
+          endEdit: () => host.endEdit(paramIds.lfo1_mod_freq_lo),
+        };
+      if (bandId === 'rm-max')
+        return {
+          beginEdit: () => host.beginEdit(paramIds.lfo1_mod_freq_hi),
+          endEdit: () => host.endEdit(paramIds.lfo1_mod_freq_hi),
+        };
+      return undefined;
+    },
+    [host],
+  );
 
   return (
     <div className="RingmodUI PluginUI">
@@ -92,10 +137,58 @@ export function RingmodUI(props: RingmodUIProps) {
         <WithInfo title={ringmodInfo.channel} className="info-block">
           <Select value$={host.channel$} entries={RINGMOD_CHANNEL_ENTRIES} />
         </WithInfo>
+        <WithInfo title={ringmodInfo.modListen} className="listen">
+          <Toggle state$={host.modListen$} icon="headphones" className="warn" />
+        </WithInfo>
+        <WithInfo title={ringmodInfo.spectrum} className="info-block">
+          <Select
+            value$={host.spectrum$}
+            entries={[...RINGMOD_SPECTRUM_ENTRIES]}
+          />
+        </WithInfo>
       </Header>
+
+      <div className="spectrum">
+        <EQChart
+          bands={host.carrierBands}
+          interactive
+          showLabels
+          showResponse={false}
+          yRange={{ min: -60, max: 0 }}
+          zRange={{ min: 1, max: 1 }}
+          dbGrid={12}
+          spectrumIn$={host.spectrumIn$}
+          spectrumOut$={host.spectrumOut$}
+          spectrumMode={Math.round(spectrumMode)}
+          freqGuides={carrierFreqGuides}
+          bandEdit={bandEdit}
+        />
+      </div>
 
       <div className="block lfo1">
         <div className="title">LFO 1</div>
+
+        <div className="knob-with-led frequency">
+          <State state$={host.lfo1FreqLed$} color="var(--color-warn)" />
+          <WithInfo title={ringmodInfo.lfo1Freq}>
+            <Knob
+              label={lfo1FreqDriven ? '(Freq)' : 'Freq'}
+              value$={host.lfo1FreqView$}
+              disabled$={host.lfo2Lfo1FreqActive$}
+              className={lfo1FreqDriven ? 'lfo-driven' : ''}
+              min={0.01}
+              max={10}
+              reset={ringmodParamDefault('lfo1_freq')}
+              scale="frequency"
+              log_factor={4}
+              dots={LFO_FREQ_DOTS}
+              labels={LFO_FREQ_LABELS}
+              size="large"
+              {...edit(paramIds.lfo1_freq)}
+            />
+          </WithInfo>
+        </div>
+
         <div className="block frequency">
           <div className="title">Modulator Frequency</div>
           <WithInfo title={ringmodInfo.lfo1ModFreq}>
@@ -170,32 +263,11 @@ export function RingmodUI(props: RingmodUIProps) {
           </WithInfo>
         </div>
 
-        <div className="knob-with-led frequency">
-          <State state$={host.lfo1FreqLed$} color="var(--color-warn)" />
-          <WithInfo title={ringmodInfo.lfo1Freq}>
-            <Knob
-              label={lfo1FreqDriven ? '(Freq)' : 'Freq'}
-              value$={host.lfo1FreqView$}
-              disabled$={host.lfo2Lfo1FreqActive$}
-              className={lfo1FreqDriven ? 'lfo-driven' : ''}
-              min={0.01}
-              max={10}
-              reset={ringmodParamDefault('lfo1_freq')}
-              scale="frequency"
-              log_factor={4}
-              dots={LFO_FREQ_DOTS}
-              labels={LFO_FREQ_LABELS}
-              size="medium"
-              {...edit(paramIds.lfo1_freq)}
-            />
-          </WithInfo>
-        </div>
-
         <div className="footer-row">
-          <WithInfo title={ringmodInfo.lfo1Reset}>
+          <WithInfo title={ringmodInfo.lfo1Reset} className="reset">
             <Button label="Reset" onClick={() => host.pulseReset(1)} />
           </WithInfo>
-          <WithInfo title={ringmodInfo.lfo1Mode} className="info-block wave">
+          <WithInfo title={ringmodInfo.lfo1Mode} className=" wave">
             <WaveformButtons
               value={lfo1Mode}
               onChange={(v) => {
@@ -211,6 +283,27 @@ export function RingmodUI(props: RingmodUIProps) {
 
       <div className="block modulator">
         <div className="title">Modulator</div>
+
+        <div className="knob-with-led frequency">
+          <State state$={host.modFreqLed$} color="var(--color-warn)" />
+          <WithInfo title={ringmodInfo.modFreq}>
+            <Knob
+              label={modFreqDriven ? '(Freq)' : 'Freq'}
+              value$={host.modFreqView$}
+              disabled$={host.lfo1ModFreqActive$}
+              className={modFreqDriven ? 'lfo-driven' : ''}
+              min={1}
+              max={20000}
+              reset={ringmodParamDefault('mod_freq')}
+              scale="frequency"
+              dots={MOD_FREQ_DOTS}
+              labels={MOD_FREQ_LABELS}
+              size="large"
+              {...edit(paramIds.mod_freq)}
+            />
+          </WithInfo>
+        </div>
+
         <div className="knob-with-led detune">
           <State state$={host.modDetuneLed$} color="var(--color-warn)" />
           <WithInfo title={ringmodInfo.modDetune}>
@@ -245,26 +338,6 @@ export function RingmodUI(props: RingmodUIProps) {
           />
         </WithInfo>
 
-        <div className="knob-with-led frequency">
-          <State state$={host.modFreqLed$} color="var(--color-warn)" />
-          <WithInfo title={ringmodInfo.modFreq}>
-            <Knob
-              label={modFreqDriven ? '(Freq)' : 'Freq'}
-              value$={host.modFreqView$}
-              disabled$={host.lfo1ModFreqActive$}
-              className={modFreqDriven ? 'lfo-driven' : ''}
-              min={1}
-              max={20000}
-              reset={ringmodParamDefault('mod_freq')}
-              scale="frequency"
-              dots={MOD_FREQ_DOTS}
-              labels={MOD_FREQ_LABELS}
-              size="large"
-              {...edit(paramIds.mod_freq)}
-            />
-          </WithInfo>
-        </div>
-
         <div className="knob-with-led amount">
           <State state$={host.modAmountLed$} color="var(--color-warn)" />
           <WithInfo title={ringmodInfo.modAmount}>
@@ -284,11 +357,10 @@ export function RingmodUI(props: RingmodUIProps) {
           </WithInfo>
         </div>
 
-        <WithInfo title={ringmodInfo.modListen} className="listen">
-          <Toggle state$={host.modListen$} icon="headphones" className="warn" />
-        </WithInfo>
-
         <div className="footer-row">
+          <WithInfo title={ringmodInfo.modFreqLin} className="freq-scale">
+            <Toggle state$={host.modFreqLin$} label="LOG" label_active="LIN" />
+          </WithInfo>
           <WithInfo title={ringmodInfo.modMode} className="info-block wave">
             <WaveformButtons
               value={modMode}
@@ -304,21 +376,7 @@ export function RingmodUI(props: RingmodUIProps) {
 
       <div className="block lfo2">
         <div className="title">LFO 2</div>
-        <WithInfo title={ringmodInfo.lfo2Freq} className="frequency">
-          <Knob
-            label="Freq"
-            value$={host.lfo2Freq$}
-            min={0.01}
-            max={10}
-            reset={ringmodParamDefault('lfo2_freq')}
-            scale="frequency"
-            log_factor={4}
-            dots={LFO_FREQ_DOTS}
-            labels={LFO_FREQ_LABELS}
-            size="medium"
-            {...edit(paramIds.lfo2_freq)}
-          />
-        </WithInfo>
+
         <div className="block">
           <div className="title">LFO 1 Frequency</div>
           <WithInfo title={ringmodInfo.lfo2Lfo1Freq}>
@@ -393,9 +451,25 @@ export function RingmodUI(props: RingmodUIProps) {
           </WithInfo>
         </div>
 
+        <WithInfo title={ringmodInfo.lfo2Freq} className="frequency">
+          <Knob
+            label="Freq"
+            value$={host.lfo2Freq$}
+            min={0.01}
+            max={10}
+            reset={ringmodParamDefault('lfo2_freq')}
+            scale="frequency"
+            log_factor={4}
+            dots={LFO_FREQ_DOTS}
+            labels={LFO_FREQ_LABELS}
+            size="large"
+            {...edit(paramIds.lfo2_freq)}
+          />
+        </WithInfo>
+
         <div className="footer-row">
           <State state$={host.lfo2Activity$} />
-          <WithInfo title={ringmodInfo.lfo2Mode} className="info-block wave">
+          <WithInfo title={ringmodInfo.lfo2Mode} className="wave">
             <WaveformButtons
               value={lfo2Mode}
               onChange={(v) => {
@@ -405,7 +479,7 @@ export function RingmodUI(props: RingmodUIProps) {
               }}
             />
           </WithInfo>
-          <WithInfo title={ringmodInfo.lfo2Reset}>
+          <WithInfo title={ringmodInfo.lfo2Reset} className="reset">
             <Button label="Reset" onClick={() => host.pulseReset(2)} />
           </WithInfo>
         </div>

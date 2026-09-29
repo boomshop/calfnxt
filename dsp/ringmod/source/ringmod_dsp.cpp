@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace calfNXT {
 namespace Ringmod {
@@ -15,7 +16,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5852u; // 'CNXR'
-constexpr uint32 kStateVersion = 2; // v2: + channel
+constexpr uint32 kStateVersion = 4; // v4: + mod_freq_lin (LOG/LIN LFO freq sweep)
 
 inline float centsRatio(float cents)
 {
@@ -35,6 +36,25 @@ inline float lerpRange(float a, float b, float t)
   const float lo = std::min(a, b);
   const float hi = std::max(a, b);
   return lerp(lo, hi, t);
+}
+
+/**
+ * Log-frequency lerp — constant rate in octaves so LFO sweeps feel even
+ * (linear Hz crawls toward Max and races toward Min on a log axis).
+ */
+inline float lerpLogRange(float a, float b, float t, float floor = 1.e-6f)
+{
+  const float lo = std::max(floor, std::min(a, b));
+  const float hi = std::max(floor, std::max(a, b));
+  if (hi <= lo)
+    return lo;
+  return lo * std::pow(hi / lo, std::clamp(t, 0.f, 1.f));
+}
+
+/** Frequency-range lerp: LOG (default) or LIN (Calf legacy). */
+inline float lerpFreqRange(float a, float b, float t, bool linearHz)
+{
+  return linearHz ? lerpRange(a, b, t) : lerpLogRange(a, b, t);
 }
 } // namespace
 
@@ -64,6 +84,10 @@ void RingmodPlugin::resetProcessing()
   lfo2_.activate();
   applyBaseOscParams(makeBlockState());
   (void)sr;
+  spectrumIn_.setSampleRate(sampleRate_);
+  spectrumIn_.reset();
+  spectrumOut_.setSampleRate(sampleRate_);
+  spectrumOut_.reset();
   lfo1Activity_.store(0.f, std::memory_order_relaxed);
   lfo2Activity_.store(0.f, std::memory_order_relaxed);
 }
@@ -85,6 +109,8 @@ tresult PLUGIN_API RingmodPlugin::setActive(TBool state)
 tresult PLUGIN_API RingmodPlugin::setupProcessing(ProcessSetup& newSetup)
 {
   sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  spectrumIn_.setSampleRate(sampleRate_);
+  spectrumOut_.setSampleRate(sampleRate_);
   resetProcessing();
   return EffectBase::setupProcessing(newSetup);
 }
@@ -94,10 +120,14 @@ RingmodPlugin::BlockState RingmodPlugin::makeBlockState() const
   BlockState s;
   s.bypass = params_[kParamBypass] >= 0.5f;
   s.listen = params_[kParamModListen] >= 0.5f;
+  s.spectrumOn =
+    static_cast<int>(std::lround(std::clamp(params_[kParamSpectrum], 0.f, 3.f)))
+    >= 1;
   s.lfo1FreqActive = params_[kParamLfo1ModFreqActive] >= 0.5f;
   s.lfo1DetuneActive = params_[kParamLfo1ModDetuneActive] >= 0.5f;
   s.lfo2Lfo1Active = params_[kParamLfo2Lfo1FreqActive] >= 0.5f;
   s.lfo2AmountActive = params_[kParamLfo2ModAmountActive] >= 0.5f;
+  s.freqLin = params_[kParamModFreqLin] >= 0.5f;
   s.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   s.modMode = static_cast<int>(std::lround(std::clamp(params_[kParamModMode], 0.f, 4.f)));
   s.lfo1Mode = static_cast<int>(std::lround(std::clamp(params_[kParamLfo1Mode], 0.f, 4.f)));
@@ -160,6 +190,8 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
   const int32 nFrames = data.numSamples;
   const bool anyLfoMod = state.lfo1FreqActive || state.lfo1DetuneActive
     || state.lfo2Lfo1Active || state.lfo2AmountActive;
+  const bool spectrumRun = state.spectrumOn && vizConsumerActive();
+  spectrumActive_.store(state.spectrumOn, std::memory_order_relaxed);
 
   auto storeEffective = [&](float modFreq, float modDetune, float modAmount, float lfo1Freq) {
     effModFreq_.store(modFreq, std::memory_order_relaxed);
@@ -177,7 +209,8 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
     if (s.lfo1FreqActive)
     {
       baseFreq = std::clamp(
-        lerpRange(s.lfo1FreqLo, s.lfo1FreqHi, unipolar(lfo1_.getValue())), 1.f, 20000.f);
+        lerpFreqRange(s.lfo1FreqLo, s.lfo1FreqHi, unipolar(lfo1_.getValue()), s.freqLin),
+        1.f, 20000.f);
       modL_.setFreq(baseFreq);
       modR_.setFreq(baseFreq);
     }
@@ -191,7 +224,8 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
     if (s.lfo2Lfo1Active)
     {
       lfo1Freq = std::clamp(
-        lerpRange(s.lfo2Lfo1Lo, s.lfo2Lfo1Hi, unipolar(lfo2_.getValue())), 0.01f, 10.f);
+        lerpFreqRange(s.lfo2Lfo1Lo, s.lfo2Lfo1Hi, unipolar(lfo2_.getValue()), s.freqLin),
+        0.01f, 10.f);
       lfo1_.setFreq(lfo1Freq);
     }
     if (s.lfo2AmountActive)
@@ -211,26 +245,59 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
   };
 
   // Quiet: keep LFO/osc phase continuous, skip sample multiply.
+  // Clear spectrum so the UI does not freeze the last FFT (host stop / silence).
   if (io_.inputWasQuiet())
   {
     advanceOscBlock();
+    if (spectrumRun)
+    {
+      spectrumIn_.clearDisplay();
+      spectrumOut_.clearDisplay();
+    }
     io_.end(data);
     return kResultOk;
   }
 
-  // Fast path: bypass — keep oscillators in phase for clickless return.
-  if (state.bypass)
+  const bool doProcess = !state.bypass
+    && (state.listen || state.modAmount > 1.0e-6f || state.lfo2AmountActive);
+
+  if (!doProcess && !spectrumRun)
   {
     advanceOscBlock();
     io_.end(data);
     return kResultOk;
   }
 
-  // Fast path: dry only (amount≈0, no listen, amount not LFO-modulated).
-  // Still publish LFO activity / effective when other LFO routes are active.
-  if (!state.listen && state.modAmount <= 1.0e-6f && !state.lfo2AmountActive)
+  if (spectrumRun)
   {
+    spectrumIn_.setSampleRate(sampleRate_);
+    spectrumIn_.setFftSize(4096);
+    spectrumIn_.setHold(false);
+    spectrumOut_.setSampleRate(sampleRate_);
+    spectrumOut_.setFftSize(4096);
+    spectrumOut_.setHold(false);
+  }
+
+  // Spectrum-only passthrough: tap in=out, keep oscillators in phase.
+  if (!doProcess)
+  {
+    const int32 nCh = data.outputs[0].numChannels;
+    auto tapPassthrough = [&](auto** out) {
+      for (int32 i = 0; i < nFrames; ++i)
+      {
+        const float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
+        const float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
+        spectrumIn_.process(L, R);
+        spectrumOut_.process(L, R);
+      }
+    };
+    if (data.symbolicSampleSize == kSample32)
+      tapPassthrough(data.outputs[0].channelBuffers32);
+    else
+      tapPassthrough(data.outputs[0].channelBuffers64);
     advanceOscBlock();
+    spectrumIn_.publish();
+    spectrumOut_.publish();
     io_.end(data);
     return kResultOk;
   }
@@ -249,6 +316,9 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
       float L = nCh > 0 ? static_cast<float>(out[0][i]) : 0.f;
       float R = nCh > 1 ? static_cast<float>(out[1][i]) : L;
 
+      if (spectrumRun)
+        spectrumIn_.process(L, R);
+
       float baseFreq = state.modFreq;
       float detune = state.modDetune;
       float amount = state.modAmount;
@@ -259,7 +329,9 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
         if (state.lfo1FreqActive)
         {
           baseFreq = std::clamp(
-            lerpRange(state.lfo1FreqLo, state.lfo1FreqHi, unipolar(lfo1_.getValue())),
+            lerpFreqRange(
+              state.lfo1FreqLo, state.lfo1FreqHi, unipolar(lfo1_.getValue()),
+              state.freqLin),
             1.f, 20000.f);
           modL_.setFreq(baseFreq);
           modR_.setFreq(baseFreq);
@@ -275,7 +347,9 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
         if (state.lfo2Lfo1Active)
         {
           lfo1Freq = std::clamp(
-            lerpRange(state.lfo2Lfo1Lo, state.lfo2Lfo1Hi, unipolar(lfo2_.getValue())),
+            lerpFreqRange(
+              state.lfo2Lfo1Lo, state.lfo2Lfo1Hi, unipolar(lfo2_.getValue()),
+              state.freqLin),
             0.01f, 10.f);
           lfo1_.setFreq(lfo1Freq);
         }
@@ -379,6 +453,9 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
       Dsp::sanitize(outL);
       Dsp::sanitize(outR);
 
+      if (spectrumRun)
+        spectrumOut_.process(outL, outR);
+
       if (nCh > 0)
         out[0][i] = outL;
       if (nCh > 1)
@@ -403,6 +480,11 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
   lfo1Activity_.store(led1, std::memory_order_relaxed);
   lfo2Activity_.store(led2, std::memory_order_relaxed);
   storeEffective(lastModFreq, lastModDetune, lastModAmount, lastLfo1Freq);
+  if (spectrumRun)
+  {
+    spectrumIn_.publish();
+    spectrumOut_.publish();
+  }
   io_.end(data);
   return kResultOk;
 }
@@ -425,6 +507,32 @@ int RingmodPlugin::takeRingmodEffective(float* out, int maxOut)
   out[2] = effModAmount_.load(std::memory_order_relaxed);
   out[3] = effLfo1Freq_.load(std::memory_order_relaxed);
   return 4;
+}
+
+int RingmodPlugin::takeSpectrum(float* out, int maxOut)
+{
+  if (!spectrumActive_.load(std::memory_order_relaxed))
+    return 0;
+  return spectrumIn_.takeSpectrum(out, maxOut);
+}
+
+int RingmodPlugin::takeOutputSpectrum(float* out, int maxOut)
+{
+  if (!spectrumActive_.load(std::memory_order_relaxed))
+    return 0;
+  return spectrumOut_.takeSpectrum(out, maxOut);
+}
+
+void RingmodPlugin::configureVizBins(const char* id, int bins)
+{
+  if (!id)
+    return;
+  if (std::strcmp(id, "fft_in") == 0 || std::strcmp(id, "fft_out") == 0 ||
+      std::strcmp(id, "fft") == 0)
+  {
+    spectrumIn_.configureBins(bins);
+    spectrumOut_.configureBins(bins);
+  }
 }
 
 tresult PLUGIN_API RingmodPlugin::setState(IBStream* state)

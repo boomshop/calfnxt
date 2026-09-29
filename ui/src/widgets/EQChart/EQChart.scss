@@ -26,7 +26,7 @@
        */
       > .aux-graph:not(.aux-baseline):not(.eq-spectrum-outer):not(
           .eq-spectrum-mask
-        ):not(.eq-spectrum-edge) {
+        ):not(.eq-spectrum-edge):not(.eq-freq-guide) {
         /* Fill-only ghosts; default .aux-graph stroke must not outline them. */
         stroke-opacity: var(--graph-stroke-opacity-none);
         fill: var(--color);
@@ -137,5 +137,16 @@
         }
       }
     }
+  }
+
+  /* Read-only vertical freq marker (AUX Graph, not ChartHandle). */
+  > svg > .aux-graphs > .aux-graph.eq-freq-guide {
+    pointer-events: none;
+    fill: none;
+    stroke: var(--color);
+    stroke-width: var(--graph-stroke-thicker);
+    stroke-opacity: var(--graph-stroke-opacity-full);
+    stroke-dasharray: var(--graph-dash-dashed);
+    stroke-linecap: butt;
   }
 }
