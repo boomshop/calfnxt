@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
 import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
@@ -21,6 +28,28 @@ export {
 
 /** Stable empty default — never inline `[]` in hook deps / subscribe fallbacks. */
 const EMPTY_SPECTRUM: number[] = [];
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** Dark rim so L/R strokes read on top of the filled RMS body. */
+function mountLrDropShadow(svg: SVGSVGElement, id: string): SVGFilterElement {
+  const defs = document.createElementNS(SVG_NS, 'defs');
+  defs.setAttribute('class', 'spec-lr-shadow-defs');
+  const filter = document.createElementNS(SVG_NS, 'filter');
+  filter.setAttribute('id', id);
+  filter.setAttribute('filterUnits', 'userSpaceOnUse');
+  filter.setAttribute('color-interpolation-filters', 'sRGB');
+  const drop = document.createElementNS(SVG_NS, 'feDropShadow');
+  drop.setAttribute('dx', '0');
+  drop.setAttribute('dy', '1.25');
+  drop.setAttribute('stdDeviation', '1');
+  drop.setAttribute('flood-color', '#000');
+  drop.setAttribute('flood-opacity', '1');
+  filter.appendChild(drop);
+  defs.appendChild(filter);
+  svg.insertBefore(defs, svg.firstChild);
+  return filter;
+}
 
 /** Chart display range (visible). DSP floor is lower (−120) for tilt footroom. */
 export const SPECTRUM_DB_MIN = -96;
@@ -629,10 +658,50 @@ export function SpectrumChart(props: SpectrumChartProps) {
     enabled: useLevelGrad,
     // Both paints: fill-gradient + stroke-gradient (CSS + inline on targets).
     targets: gradTargets,
-    paint: 'both',
+    paint: 'fill',
   });
   const reassertRef = useRef(reassert);
   reassertRef.current = reassert;
+
+  const lrShadowId = `spec-lr-shadow-${useId().replace(/:/g, '')}`;
+  // Spectral curve only. Waterfall is a canvas and never mounts this SVG.
+  useEffect(() => {
+    if (!chartSvg || !monitor || isSpectralizer) return;
+    const filter = mountLrDropShadow(chartSvg, lrShadowId);
+    const syncRegion = () => {
+      const w = Math.max(1, chartSvg.clientWidth);
+      const h = Math.max(1, chartSvg.clientHeight);
+      filter.setAttribute('x', '-16');
+      filter.setAttribute('y', '-16');
+      filter.setAttribute('width', String(w + 32));
+      filter.setAttribute('height', String(h + 32));
+    };
+    syncRegion();
+    const ro = new ResizeObserver(syncRegion);
+    ro.observe(chartSvg);
+
+    const url = `url(#${lrShadowId})`;
+    const painted: SVGElement[] = [];
+    for (const g of graphsRef.current) {
+      const el = g.element;
+      if (!el) continue;
+      if (
+        !el.classList.contains('spec-primary') &&
+        !el.classList.contains('spec-secondary')
+      )
+        continue;
+      el.setAttribute('filter', url);
+      painted.push(el);
+    }
+
+    return () => {
+      ro.disconnect();
+      for (const el of painted) {
+        if (el.getAttribute('filter') === url) el.removeAttribute('filter');
+      }
+      filter.parentElement?.remove();
+    };
+  }, [chartSvg, isSpectralizer, lrShadowId, monitor]);
 
   const sendVizBins = useCallback(
     (el: Element) => {
@@ -899,7 +968,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
           ? [
               {
                 className:
-                  'spec-rms fill-gradient fill-some stroke-semi stroke-thinner',
+                  'spec-rms fill-gradient fill-soft stroke-rich stroke-dotted stroke-thinner',
                 mode: 'bottom' as const,
                 gradient: true,
                 type: 'L',
