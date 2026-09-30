@@ -18,35 +18,5 @@
         fill-opacity: var(--graph-fill-opacity-none);
       }
     }
-
-    > .aux-handles {
-      > .aux-charthandle.aux-operating {
-        pointer-events: none;
-
-        > .aux-handle {
-          fill: var(--chart-level-stroke, var(--color-accent));
-          fill-opacity: var(--graph-fill-opacity-full);
-          stroke: var(--background);
-          stroke-width: 1.5px;
-          opacity: 1;
-        }
-
-        > .aux-label,
-        > .aux-line {
-          display: none;
-        }
-      }
-
-      > .aux-charthandle.aux-release-thresh {
-        > .aux-handle {
-          fill: var(--color);
-        }
-
-        > .aux-label,
-        > .aux-line {
-          display: none;
-        }
-      }
-    }
   }
 }

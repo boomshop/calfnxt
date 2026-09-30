@@ -71,14 +71,6 @@
     background: var(--background);
 
     > svg > .aux-graphs {
-      /*
-       * One sum curve only (HP+LP bands on the baseline). Individual ghosts
-       * were showing as a leftover floor stroke after hideEmptyBaseline.
-       */
-      > .eq-individual {
-        display: none !important;
-      }
-
       > .aux-baseline {
         fill: none !important;
         fill-opacity: var(--graph-fill-opacity-none) !important;

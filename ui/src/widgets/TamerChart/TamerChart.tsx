@@ -315,19 +315,10 @@ export function TamerChart(props: TamerChartProps) {
     postToHost({ t: 'vizcfg', id: TAMER_VIZ_ID, bins: next });
   }, []);
 
-  // Constant modes: AUX EqBand.initialize defaults type to string "parametric",
-  // which forces mode→circular, then "restores" via this.get('mode') (already
-  // circular). Seed a function type so that path is skipped; bind mode after
-  // type like EQChart so any later string type cannot stick circular.
-  const hpMode$ = useMemo(
-    () => DynamicValue.fromConstant('block-left'),
-    [],
-  );
-  const lpMode$ = useMemo(
-    () => DynamicValue.fromConstant('block-right'),
-    [],
-  );
-
+  // mode is the ChartHandle option (block-left / block-right). Do not also
+  // bind it: set() fires set_mode even when the value is unchanged, and that
+  // recreates line1 off-DOM until the next drag. Type stays a function so
+  // EqBand does not overwrite mode from a string filter type.
   const handleOptions = useMemo(
     () => [
       {
@@ -380,16 +371,14 @@ export function TamerChart(props: TamerChartProps) {
         { name: 'freq', backendValue: fLo$ },
         { name: 'x_max', backendValue: loMax$, readonly: true },
         { name: 'type', backendValue: hpType$, readonly: true },
-        { name: 'mode', backendValue: hpMode$, readonly: true },
       ],
       [
         { name: 'freq', backendValue: fHi$ },
         { name: 'x_min', backendValue: hiMin$, readonly: true },
         { name: 'type', backendValue: lpType$, readonly: true },
-        { name: 'mode', backendValue: lpMode$, readonly: true },
       ],
     ],
-    [fLo$, fHi$, loMax$, hiMin$, hpType$, lpType$, hpMode$, lpMode$],
+    [fLo$, fHi$, loMax$, hiMin$, hpType$, lpType$],
   );
 
   const handleEvents = useMemo(
@@ -756,7 +745,7 @@ export function TamerChart(props: TamerChartProps) {
       addGraphClasses(
         (g as AuxGraph).element,
         'tamer-search-eq',
-        'fill-none stroke-gradient stroke-dashed',
+        'fill-none stroke-gradient stroke-dashed stroke-thicker',
       );
     }
     return () => {

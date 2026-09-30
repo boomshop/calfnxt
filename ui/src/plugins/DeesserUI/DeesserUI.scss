@@ -26,6 +26,7 @@
           --graph-gradient,
           var(--chart-level-stroke, var(--color-accent))
         ) !important;
+        stroke-width: var(--graph-stroke-thicker);
       }
     }
 

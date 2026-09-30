@@ -419,34 +419,108 @@ textarea::selection {
       }
     }
 
+    /*
+     * Chart handles. Line and block share one line1; circulars only differ
+     * in handle fill. Dyn / mini stay in EQChart.scss.
+     * opacity: 1 beats AUX theme opacity so the fill/stroke tokens are the
+     * visible amount. vector-effect keeps line1 at 1px inside a viewBox.
+     */
     > .aux-handles {
       > .aux-charthandle {
+        > .aux-handle,
+        > .aux-line1,
+        > .aux-label {
+          transition:
+            fill var(--transition),
+            fill-opacity var(--transition),
+            stroke var(--transition),
+            stroke-opacity var(--transition);
+        }
+
         > .aux-handle {
           fill: var(--color);
-          fill-opacity: var(--graph-fill-opacity-faint);
+          opacity: 1;
+          stroke: none;
         }
 
         > .aux-line1 {
+          fill: none;
+          opacity: 1;
           stroke: var(--color);
-          stroke-opacity: var(--graph-stroke-opacity-faint);
+          stroke-width: var(--graph-stroke-thinner);
+          stroke-opacity: var(--graph-stroke-opacity-semi);
+          vector-effect: non-scaling-stroke;
         }
 
         > .aux-label {
           fill: var(--color);
-          fill-opacity: 0.33;
+          opacity: 1;
+          fill-opacity: var(--graph-stroke-opacity-semi);
         }
 
-        &.aux-active {
-          > .aux-handle {
-            fill-opacity: 0.66;
-          }
-
+        &:hover,
+        &.aux-hover {
           > .aux-line1 {
-            stroke-opacity: var(--graph-stroke-opacity-semi);
+            stroke-opacity: var(--graph-stroke-opacity-mostly);
           }
 
           > .aux-label {
-            fill-opacity: var(--graph-fill-opacity-full);
+            fill-opacity: var(--graph-stroke-opacity-mostly);
+          }
+        }
+
+        &.aux-active,
+        &.aux-dragging,
+        &.eq-selected {
+          > .aux-line1 {
+            stroke-opacity: var(--graph-stroke-opacity-full);
+          }
+
+          > .aux-label {
+            fill-opacity: var(--graph-stroke-opacity-full);
+          }
+        }
+
+        &.aux-line,
+        &.aux-block {
+          > .aux-handle {
+            fill-opacity: var(--graph-fill-opacity-ghost);
+          }
+
+          &:hover,
+          &.aux-hover {
+            > .aux-handle {
+              fill-opacity: var(--graph-fill-opacity-faint);
+            }
+          }
+
+          &.aux-active,
+          &.aux-dragging,
+          &.eq-selected {
+            > .aux-handle {
+              fill-opacity: var(--graph-fill-opacity-semi);
+            }
+          }
+        }
+
+        &.aux-circular {
+          > .aux-handle {
+            fill-opacity: var(--graph-fill-opacity-faint);
+          }
+
+          &:hover,
+          &.aux-hover {
+            > .aux-handle {
+              fill-opacity: var(--graph-fill-opacity-soft);
+            }
+          }
+
+          &.aux-active,
+          &.aux-dragging,
+          &.eq-selected {
+            > .aux-handle {
+              fill-opacity: var(--graph-fill-opacity-semi);
+            }
           }
         }
       }

@@ -169,7 +169,9 @@ export function EQChart(props: EQChartProps) {
 
   const [eqWidget, setEqWidget] = useState<unknown>(null);
   const isMini = size === 'mini';
-  const drawResponse = showResponse && !isMini;
+  // Miniatures still draw the band curve. `showResponse` is the opt-out
+  // (Ringmod spectrum handles); size alone must not drop the path.
+  const drawResponse = showResponse;
   const spectrumOn = !isMini && Math.round(spectrumMode) >= 1;
   // High-rate spectrum must NOT go through React state — paint AUX Graph directly.
   const spectrumOuterRef = useRef<{
@@ -242,17 +244,23 @@ export function EQChart(props: EQChartProps) {
         const cls = [
           'eq-band',
           `eq-band-${i}`,
+          !show ? 'eq-nolabel' : '',
           band.handleClass ?? '',
         ]
           .filter(Boolean)
           .join(' ');
         return {
           type: 'parametric',
-          label: customLabel ?? (showLabels && !band.handleReadonly ? `B${i + 1}` : ''),
+          // AUX only appends block/line guide strokes from the label layout
+          // pass. A measured (but hidden) label keeps that pass alive when
+          // the chart itself shows no handle names.
+          label:
+            customLabel ??
+            (show ? (showLabels ? `B${i + 1}` : '\u00b7') : '\u00b7'),
           ...(band.formatHandleLabel
             ? { format_label: band.formatHandleLabel }
             : !show
-              ? { format_label: false as const }
+              ? { format_label: () => '\u00b7' }
               : {}),
           class: cls,
           // Live markers: zero grab size — vertical line still fills y_min…y_max.
@@ -374,6 +382,14 @@ export function EQChart(props: EQChartProps) {
     handleBindings,
     handleEvents,
   );
+
+  // Setting mode to the value it already has recreates line1 off-DOM and
+  // does not invalidate. Re-run the label pass so the stroke is appended.
+  useEffect(() => {
+    for (const handle of handles) {
+      (handle as { invalidate?: (key: string) => void }).invalidate?.('mode');
+    }
+  }, [handles]);
 
   const ghosts = useWidgetsWithBindingsAndEvents(
     AuxEqBand,

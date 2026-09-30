@@ -55,46 +55,33 @@
 
     > .aux-handles {
       > .aux-charthandle {
-        &.aux-active,
-        &.eq-selected {
-          > .aux-handle {
-            fill-opacity: 0.66;
-          }
-
-          > .aux-line1 {
-            stroke-opacity: var(--graph-stroke-opacity-semi);
-          }
-
-          > .aux-label {
-            fill-opacity: var(--graph-fill-opacity-full);
-          }
-        }
-
-        &.aux-block,
-        &.aux-line {
-          > .aux-handle {
-            fill-opacity: var(--graph-fill-opacity-ghost);
-          }
-
-          &.aux-active,
-          &.eq-selected {
-            > .aux-handle {
-              fill-opacity: 0.2;
-            }
-          }
+        /* Measured stand-in so AUX draws line1; not a visible caption. */
+        &.eq-nolabel > .aux-label {
+          fill-opacity: 0;
+          pointer-events: none;
         }
 
         &.dyn {
-          > .aux-handle {
-            fill: var(--color-warn);
-            fill-opacity: var(--graph-fill-opacity-semi);
-            stroke: none;
+          /* Mode class keeps this above the suite handle rules in styles.css. */
+          &.aux-circular,
+          &.aux-line,
+          &.aux-block {
+            > .aux-handle {
+              fill: var(--color-warn);
+              fill-opacity: var(--graph-fill-opacity-semi);
+            }
+
+            &.aux-active,
+            &.eq-selected {
+              > .aux-handle {
+                fill-opacity: var(--graph-fill-opacity-rich);
+              }
+            }
           }
 
-          &.aux-active,
-          &.eq-selected {
+          &.aux-circular {
             > .aux-handle {
-              fill-opacity: var(--graph-fill-opacity-rich);
+              stroke: var(--color);
             }
           }
         }
@@ -112,6 +99,7 @@
       > .aux-graphs {
         > .aux-graph {
           fill: none;
+          stroke-width: var(--graph-stroke-thinner);
         }
       }
 
@@ -123,15 +111,27 @@
             display: none;
           }
 
-          > .aux-handle {
-            fill-opacity: var(--graph-fill-opacity-semi);
-            fill: var(--accent);
-            stroke: none;
+          &.aux-circular,
+          &.aux-line,
+          &.aux-block {
+            > .aux-handle {
+              fill-opacity: var(--graph-fill-opacity-semi);
+              fill: var(--accent);
+              stroke: none;
+            }
           }
 
           &.aux-circular {
             > .aux-handle {
               fill-opacity: var(--graph-fill-opacity-full);
+              stroke: none !important;
+            }
+          }
+
+          &.dyn {
+            > .aux-handle {
+              fill: var(--color-warn);
+              fill-opacity: var(--graph-fill-opacity-semi);
             }
           }
         }

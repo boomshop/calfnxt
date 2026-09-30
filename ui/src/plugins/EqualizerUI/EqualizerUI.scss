@@ -2,13 +2,17 @@
   display: grid;
   grid-template-areas: 'graph' 'bands' 'controls';
   grid-template-columns: 1fr;
-  grid-template-rows: 1fr 64px 220px;
+  grid-template-rows: 1fr 66px 220px;
   gap: 5px;
   align-items: stretch;
 
   > .EQChart {
     grid-area: graph;
     position: relative;
+
+    > svg > .aux-graphs > .aux-baseline {
+      stroke-width: var(--graph-stroke-thicker);
+    }
   }
 
   > .controls {
@@ -113,6 +117,7 @@
       background-clip: content-box;
       overflow: hidden;
       position: relative;
+      transition: border-color var(--transition);
 
       &::after {
         content: '';
@@ -122,8 +127,9 @@
           to bottom,
           rgba(200, 255, 255, 0.1),
           rgba(128, 128, 128, 0),
-          rgba(28, 0, 0, 0.2)
+          rgba(28, 0, 0, 0.1)
         );
+        pointer-events: none;
       }
 
       > .mini {

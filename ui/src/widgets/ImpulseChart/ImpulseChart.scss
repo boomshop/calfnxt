@@ -3,15 +3,4 @@
   height: 100%;
   min-height: 120px;
   background: var(--background);
-
-  .aux-charthandle.ir-decay-handle {
-    > .aux-line1 {
-      stroke: var(--color-warn);
-    }
-
-    > .aux-handle {
-      fill: var(--color-warn);
-      stroke: none;
-    }
-  }
 }

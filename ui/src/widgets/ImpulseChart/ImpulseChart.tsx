@@ -487,7 +487,7 @@ export function ImpulseChart(props: ImpulseChartProps) {
         addGraphClasses(
           dec.element,
           'ir-decay',
-          'fill-none stroke-gradient stroke-dashed',
+          'fill-none stroke-gradient stroke-dashed stroke-thicker',
         );
         decayGraphRef.current = dec;
         setGradTarget(dec.element ?? null);
