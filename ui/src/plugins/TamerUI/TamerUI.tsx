@@ -119,10 +119,28 @@ export function TamerUI(props: TamerUIProps) {
             className="warn"
           />
         </WithInfo>
+        <WithInfo title={tamerInfo.sidechainActive}>
+          <Toggle
+            state$={host.sidechainActive$}
+            icon="sidechain"
+            className="warn"
+          />
+        </WithInfo>
+        <WithInfo title={tamerInfo.scListen}>
+          <Toggle
+            state$={host.scListen$}
+            icon="sidechain"
+            label="SC"
+            className="warn"
+            enabled$={host.sidechainActive$}
+          />
+        </WithInfo>
       </Header>
 
       <TamerChart
         spectrum$={host.spectrumData$}
+        scSpectrum$={host.scSpectrumData$}
+        sidechainActive$={host.sidechainActive$}
         gr$={host.grResponse$}
         ladder$={host.ladder$}
         spectrumTilt={spectrum}
@@ -238,6 +256,7 @@ export function TamerUI(props: TamerUIProps) {
                 { pos: 1, label: '100' },
               ]}
               size="medium"
+              disabled$={host.sidechainActive$}
               {...{ 'value.format': (v: number) => `${Math.round(v * 100)}` }}
               {...edit(paramIds.harmonics)}
             />

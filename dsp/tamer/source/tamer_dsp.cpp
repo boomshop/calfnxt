@@ -15,7 +15,7 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5854u; // 'CNXT' family — Tamer
-constexpr uint32 kStateVersion = 2; // v2: + channel
+constexpr uint32 kStateVersion = 3; // v3: + sidechain_active / sc_listen
 } // namespace
 
 TamerPlugin::TamerPlugin()
@@ -29,7 +29,7 @@ tresult PLUGIN_API TamerPlugin::initialize(FUnknown* context)
   if (result != kResultOk)
     return result;
 
-  addStereoIO();
+  addStereoWithSidechainIO(nullptr, nullptr, STR16("Sidechain"));
   registerParameters(parameters);
   readParamPlains(params_, kParamCount);
   return kResultOk;
@@ -69,6 +69,17 @@ void TamerPlugin::updateLatency()
     componentHandler->restartComponent(kLatencyChanged);
 }
 
+void TamerPlugin::ensureScScratch(int32 nFrames)
+{
+  if (nFrames <= 0)
+    return;
+  if (static_cast<int32>(scScratchL_.size()) < nFrames)
+  {
+    scScratchL_.assign(static_cast<size_t>(nFrames), 0.f);
+    scScratchR_.assign(static_cast<size_t>(nFrames), 0.f);
+  }
+}
+
 uint32 PLUGIN_API TamerPlugin::getLatencySamples()
 {
   return latencySamples_;
@@ -85,6 +96,7 @@ tresult PLUGIN_API TamerPlugin::setupProcessing(ProcessSetup& newSetup)
 {
   sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
   scratch64_.prepare(newSetup.maxSamplesPerBlock);
+  ensureScScratch(newSetup.maxSamplesPerBlock);
   tamer_.setSampleRate(sampleRate_);
   resetProcessing();
   return EffectBase::setupProcessing(newSetup);
@@ -94,7 +106,12 @@ TamerPlugin::BlockState TamerPlugin::makeBlockState() const
 {
   BlockState s;
   s.bypass = params_[kParamBypass] >= 0.5f;
+  s.sidechainActive = params_[kParamSidechainActive] >= 0.5f;
+  s.scListen = params_[kParamScListen] >= 0.5f;
   s.diffListen = params_[kParamDiffListen] >= 0.5f;
+  // Exclusive listen — SC listen wins.
+  if (s.scListen)
+    s.diffListen = false;
   s.channel = Dsp::channelModeFromPlain(params_[kParamChannel]);
   s.fLo = std::clamp(params_[kParamFLo], 20.f, 20000.f);
   s.fHi = std::clamp(params_[kParamFHi], 20.f, 20000.f);
@@ -127,6 +144,9 @@ tresult PLUGIN_API TamerPlugin::process(ProcessData& data)
   io_.setBypassGains(state.bypass);
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
+  const bool wantExtSc = state.sidechainActive && data.numInputs >= 2;
+  const bool scBusActive = wantExtSc && isAudioInputActive(1);
+
   const bool hasHostAudio = io_.begin(data);
   if (!hasHostAudio)
     return kResultOk;
@@ -136,6 +156,43 @@ tresult PLUGIN_API TamerPlugin::process(ProcessData& data)
   {
     io_.end(data);
     return kResultOk;
+  }
+
+  ensureScScratch(nFrames);
+
+  const float* scL = nullptr;
+  const float* scR = nullptr;
+  if (scBusActive)
+  {
+    if (data.symbolicSampleSize == kSample32)
+    {
+      auto** ins = data.inputs[1].channelBuffers32;
+      if (ins && ins[0])
+      {
+        scL = ins[0];
+        scR = (data.inputs[1].numChannels > 1 && ins[1]) ? ins[1] : nullptr;
+      }
+    }
+    else if (data.symbolicSampleSize == kSample64)
+    {
+      auto** ins = data.inputs[1].channelBuffers64;
+      if (ins && ins[0])
+      {
+        for (int32 i = 0; i < nFrames; ++i)
+          scScratchL_[static_cast<size_t>(i)] =
+            static_cast<float>(ins[0][i]);
+        if (data.inputs[1].numChannels > 1 && ins[1])
+        {
+          for (int32 i = 0; i < nFrames; ++i)
+            scScratchR_[static_cast<size_t>(i)] =
+              static_cast<float>(ins[1][i]);
+          scR = scScratchR_.data();
+        }
+        else
+          scR = nullptr;
+        scL = scScratchL_.data();
+      }
+    }
   }
 
   // channelBuffers32/64 share a union. A non-null 32-bit pointer is not proof
@@ -181,35 +238,50 @@ tresult PLUGIN_API TamerPlugin::process(ProcessData& data)
   // Spectrum/GR share the processing STFT. Keep it running whenever the editor
   // is open (Bypass, Depth=0, host stop / quiet) so curves decay instead of
   // freezing. Park only with the UI hidden after the wet path has flushed.
-  if (quiet)
+  // Ext SC / SC Listen also keep the STFT warm (key can move while main is quiet).
+  if (quiet && !scBusActive)
     flushLeft_ = std::max(0, flushLeft_ - nFrames);
   else
     flushLeft_ =
       static_cast<int>(tamer_.latencySamples()) + tamer_.hopSize();
 
   const bool flushed = flushLeft_ <= 0;
-  const bool needAudioStft = !state.bypass && depthOn;
-  const bool runStft = wantViz || (needAudioStft && !(quiet && flushed));
+  const bool needAudioStft =
+    (!state.bypass && depthOn) || state.scListen || (scBusActive && depthOn);
+  const bool runStft =
+    wantViz || state.scListen || (needAudioStft && !(quiet && flushed && !scBusActive));
 
-  if (!runStft && quiet && flushed)
+  if (!runStft && quiet && flushed && !scBusActive)
   {
     io_.end(data);
     return kResultOk;
   }
 
+  const bool scActive = scBusActive && scL != nullptr;
+
   bool ran = false;
   if (is32)
   {
     tamer_.process(left32, right32, nFrames, state.bypass, state.diffListen, runStft,
-                   state.channel);
+                   state.channel, scL, scR, scActive, state.scListen);
     ran = true;
   }
-  else
+  else if (left64 && scratch64_.capacity() > 0)
   {
+    // SC Mid already converted into scScratch* for kSample64.
+    int32 scOff = 0;
     ran = scratch64_.process(left64, right64, nFrames,
                              [&](float* left, float* right, int32 n) {
-                               tamer_.process(left, right, n, state.bypass, state.diffListen,
-                                              runStft, state.channel);
+                               const float* chunkScL =
+                                 scActive ? scScratchL_.data() + scOff : nullptr;
+                               const float* chunkScR =
+                                 (scActive && scR) ? scScratchR_.data() + scOff
+                                                   : nullptr;
+                               tamer_.process(left, right, n, state.bypass,
+                                              state.diffListen, runStft,
+                                              state.channel, chunkScL, chunkScR,
+                                              scActive, state.scListen);
+                               scOff += n;
                              });
   }
 
@@ -223,6 +295,11 @@ tresult PLUGIN_API TamerPlugin::process(ProcessData& data)
 int TamerPlugin::takeSpectrum(float* out, int maxOut)
 {
   return tamer_.takeSpectrum(out, maxOut);
+}
+
+int TamerPlugin::takeOutputSpectrum(float* out, int maxOut)
+{
+  return tamer_.takeScSpectrum(out, maxOut);
 }
 
 int TamerPlugin::takeFreqResponse(float* out, int maxOut)
@@ -239,7 +316,8 @@ void TamerPlugin::configureVizBins(const char* id, int bins)
 {
   if (!id)
     return;
-  if (std::strcmp(id, "fft") == 0 || std::strcmp(id, "tamer") == 0)
+  if (std::strcmp(id, "fft") == 0 || std::strcmp(id, "fft_sc") == 0
+      || std::strcmp(id, "tamer") == 0)
     tamer_.configureBins(bins);
 }
 

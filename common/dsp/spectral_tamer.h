@@ -11,13 +11,18 @@
 // Harmonics (0…1): among Depth GR tips, walk F0 ladders (≥3 hits at 1·2·3·F0).
 // Soft-keep by level vs siblings; overlap = max GR (min keep).
 //
+// External sidechain (optional): detect on Aux Mid STFT; GR still applied to
+// main. SC Listen solos latency-matched SC Mid. Without a live SC bus,
+// detection falls back to main.
+//
 // Reconstruction: sqrt-Hann analysis/synthesis, hop = N/4, shift-OLA.
 // Latency = N − hop. Buffers preallocated to kMaxFft (no RT heap).
 // Fastpath: park STFT only when the editor is hidden and (no audio work, or
 // quiet-after-flush). Open UI keeps the STFT on silence/Bypass/Depth=0 so the
 // chart decays live (same FFT as processing — no cheaper analyzer path).
 //
-// Viz: log-binned spectrum (SpectrumTap layout) + GR response [N, L×N, R×N].
+// Viz: log-binned spectrum (SpectrumTap layout) + GR response [N, L×N, R×N]
+// + optional SC Mid spectrum (same layout, avg only).
 
 #include "biquad.h"
 #include "channel_mode.h"
@@ -126,10 +131,14 @@ public:
   {
     std::fill(inL_.begin(), inL_.end(), 0.f);
     std::fill(inR_.begin(), inR_.end(), 0.f);
+    if (!scIn_.empty())
+      std::fill(scIn_.begin(), scIn_.end(), 0.f);
     std::fill(olaL_.begin(), olaL_.end(), 0.f);
     std::fill(olaR_.begin(), olaR_.end(), 0.f);
     std::fill(dryL_.begin(), dryL_.end(), 0.f);
     std::fill(dryR_.begin(), dryR_.end(), 0.f);
+    if (!scDry_.empty())
+      std::fill(scDry_.begin(), scDry_.end(), 0.f);
     std::fill(outL_.begin(), outL_.end(), 0.f);
     std::fill(outR_.begin(), outR_.end(), 0.f);
     std::fill(grDb_.begin(), grDb_.end(), 0.f);
@@ -149,30 +158,48 @@ public:
       outR_[static_cast<size_t>(outWrite_)] = 0.f;
       outWrite_ = (outWrite_ + 1) & outMask_;
     }
+    if (!scIn_.empty())
+      std::fill(scIn_.begin(), scIn_.end(), 0.f);
+    if (!scDry_.empty())
+      std::fill(scDry_.begin(), scDry_.end(), 0.f);
     std::fill(avgDb_.begin(), avgDb_.end(), kFloorDb);
     std::fill(maxDb_.begin(), maxDb_.end(), kFloorDb);
     std::fill(lDb_.begin(), lDb_.end(), kFloorDb);
     std::fill(rDb_.begin(), rDb_.end(), kFloorDb);
     std::fill(grDisp_.begin(), grDisp_.end(), 0.f);
+    std::fill(scAvgDb_.begin(), scAvgDb_.end(), kFloorDb);
     ladderN_ = 0;
     ladderKeep_ = 0.f;
+    scDetectActive_ = false;
+    scListenActive_ = false;
   }
 
   /**
    * Process in-place stereo. When STFT parked: latency-matched dry only.
    * Bypass with live STFT: GR→0 on the wet OLA (no dry↔wet cut). Diff Listen:
-   * delayed dry − wet.
+   * delayed dry − wet. SC Listen: latency-matched Aux Mid (exclusive with Diff).
    * Channel: Stereo / L / R / Mid / Side — unused path stays latency-matched dry.
    * Mid/Side: dry ring stores mid|side; STFT feeds the selected path on both
    * analysis channels (linked detector).
    * `runStft`: false skips analysis/OLA (CPU fastpath).
+   * `scL`/`scR`: optional Aux sidechain (Mid trigger). `scActive` enables
+   * detect-from-SC when buffers are present; otherwise detection stays on main.
    */
   void process(float* left, float* right, int n, bool bypass, bool diffListen,
-               bool runStft, ChannelMode channel = ChannelMode::Stereo)
+               bool runStft, ChannelMode channel = ChannelMode::Stereo,
+               const float* scL = nullptr, const float* scR = nullptr,
+               bool scActive = false, bool scListen = false)
   {
     if (!left || n <= 0)
       return;
     applyPendingSizes();
+
+    const bool haveSc = scActive && scL != nullptr;
+    scDetectActive_ = haveSc;
+    scListenActive_ = scListen && haveSc;
+    // Diff and SC listen are exclusive — SC listen wins if both are set.
+    if (scListenActive_)
+      diffListen = false;
 
     if (runStft && !stftActive_)
     {
@@ -187,7 +214,8 @@ public:
 
     if (!runStft)
     {
-      processDryOnly(left, right, n, bypass, diffListen, channel);
+      processDryOnly(left, right, n, bypass, diffListen, channel, scL, scR,
+                     scListenActive_);
       return;
     }
 
@@ -206,6 +234,18 @@ public:
       float inR = nChR ? right[i] : inL;
       sanitizeDenormal(inL);
       sanitizeDenormal(inR);
+
+      float scMid = 0.f;
+      if (haveSc)
+      {
+        float sL = scL[i];
+        float sR = scR ? scR[i] : sL;
+        sanitizeDenormal(sL);
+        sanitizeDenormal(sR);
+        scMid = 0.5f * (sL + sR);
+      }
+      scDry_[static_cast<size_t>(dryWrite_)] = scMid;
+      const float scOut = scDry_[static_cast<size_t>((dryWrite_ - lat) & dryMask)];
 
       float feedL = inL;
       float feedR = inR;
@@ -257,6 +297,7 @@ public:
 
       inL_[static_cast<size_t>(writePos_)] = feedL;
       inR_[static_cast<size_t>(writePos_)] = feedR;
+      scIn_[static_cast<size_t>(writePos_)] = scMid;
       writePos_ = (writePos_ + 1) % nFft;
 
       if (filled_ < nFft)
@@ -282,10 +323,14 @@ public:
         outRead_ = (outRead_ + 1) & outMask;
       }
 
-      // Bypass stays on the wet OLA path with GR forced to 0 — no dry↔wet
-      // switch (that hard cut clicked when GR was mid-flight).
       float outL = 0.f;
       float outR = 0.f;
+      if (scListenActive_)
+      {
+        outL = scOut;
+        outR = scOut;
+      }
+      else
       switch (channel)
       {
         case ChannelMode::Left:
@@ -346,17 +391,32 @@ public:
 
   /** Latency-matched dry only — used while STFT is parked. */
   void processDryOnly(float* left, float* right, int n, bool /*bypass*/,
-                      bool diffListen, ChannelMode channel = ChannelMode::Stereo)
+                      bool diffListen, ChannelMode channel = ChannelMode::Stereo,
+                      const float* scL = nullptr, const float* scR = nullptr,
+                      bool scListen = false)
   {
     const int nChR = right ? 1 : 0;
     const int dryMask = dryMask_;
     const int lat = static_cast<int>(latencySamples());
+    const bool haveSc = scL != nullptr;
     for (int i = 0; i < n; ++i)
     {
       float inL = left[i];
       float inR = nChR ? right[i] : inL;
       sanitizeDenormal(inL);
       sanitizeDenormal(inR);
+
+      float scMid = 0.f;
+      if (haveSc)
+      {
+        float sL = scL[i];
+        float sR = scR ? scR[i] : sL;
+        sanitizeDenormal(sL);
+        sanitizeDenormal(sR);
+        scMid = 0.5f * (sL + sR);
+      }
+      scDry_[static_cast<size_t>(dryWrite_)] = scMid;
+      const float scOut = scDry_[static_cast<size_t>((dryWrite_ - lat) & dryMask)];
 
       float dryStoreL = inL;
       float dryStoreR = inR;
@@ -377,27 +437,40 @@ public:
       dryWrite_ = (dryWrite_ + 1) & dryMask;
 
       // Diff with STFT parked: nothing was removed.
-      if (diffListen)
+      float outL = 0.f;
+      float outR = 0.f;
+      if (scListen && haveSc)
       {
-        left[i] = 0.f;
-        if (nChR)
-          right[i] = 0.f;
+        outL = scOut;
+        outR = scOut;
       }
-      else if (channel == ChannelMode::Mid || channel == ChannelMode::Side)
+      else if (diffListen)
       {
-        float outL = 0.f;
-        float outR = 0.f;
+        outL = 0.f;
+        outR = 0.f;
+      }
+      else if (channel == ChannelMode::Mid)
         decodeMs(dryOutL, dryOutR, outL, outR);
-        left[i] = outL;
-        if (nChR)
-          right[i] = outR;
+      else if (channel == ChannelMode::Side)
+        decodeMs(dryOutL, dryOutR, outL, outR);
+      else if (channel == ChannelMode::Left)
+      {
+        outL = dryOutL;
+        outR = dryOutR;
+      }
+      else if (channel == ChannelMode::Right)
+      {
+        outL = dryOutL;
+        outR = dryOutR;
       }
       else
       {
-        left[i] = dryOutL;
-        if (nChR)
-          right[i] = dryOutR;
+        outL = dryOutL;
+        outR = dryOutR;
       }
+      left[i] = outL;
+      if (nChR)
+        right[i] = outR;
     }
   }
 
@@ -419,6 +492,35 @@ public:
     std::memcpy(out + 2 + n, pubMax_.data(), sizeof(float) * static_cast<size_t>(n));
     std::memcpy(out + 2 + 2 * n, pubL_.data(), sizeof(float) * static_cast<size_t>(n));
     std::memcpy(out + 2 + 3 * n, pubR_.data(), sizeof(float) * static_cast<size_t>(n));
+    return need;
+  }
+
+  /**
+   * Sidechain Mid spectrum (SpectrumTap layout). Returns 0 when SC detect is
+   * inactive so the host can skip the stream.
+   */
+  int takeScSpectrum(float* out, int maxOut)
+  {
+    if (!out || maxOut < 2)
+      return 0;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!pubScActive_)
+      return 0;
+    const int n = bins_;
+    if (n < 1 || pubScAvg_.size() != static_cast<size_t>(n))
+      return 0;
+    const int need = 2 + 4 * n;
+    if (maxOut < need)
+      return 0;
+    out[0] = static_cast<float>(n);
+    out[1] = 0.f;
+    std::memcpy(out + 2, pubScAvg_.data(), sizeof(float) * static_cast<size_t>(n));
+    // SC is Mid-only — duplicate avg into max/L/R for the shared payload shape.
+    std::memcpy(out + 2 + n, pubScAvg_.data(), sizeof(float) * static_cast<size_t>(n));
+    std::memcpy(out + 2 + 2 * n, pubScAvg_.data(),
+                sizeof(float) * static_cast<size_t>(n));
+    std::memcpy(out + 2 + 3 * n, pubScAvg_.data(),
+                sizeof(float) * static_cast<size_t>(n));
     return need;
   }
 
@@ -469,6 +571,8 @@ public:
     pubL_ = lDb_;
     pubR_ = rDb_;
     pubGr_ = grDisp_;
+    pubScAvg_ = scAvgDb_;
+    pubScActive_ = scDetectActive_;
     pubLadderN_ = ladderN_;
     pubLadderKeep_ = ladderKeep_;
     if (ladderN_ > 0)
@@ -497,6 +601,7 @@ private:
     const size_t half = n / 2 + 1;
     inL_.assign(n, 0.f);
     inR_.assign(n, 0.f);
+    scIn_.assign(n, 0.f);
     olaL_.assign(n, 0.f);
     olaR_.assign(n, 0.f);
     window_.assign(n, 0.f);
@@ -504,6 +609,8 @@ private:
     imL_.assign(n, 0.f);
     reR_.assign(n, 0.f);
     imR_.assign(n, 0.f);
+    scRe_.assign(n, 0.f);
+    scIm_.assign(n, 0.f);
     magDb_.assign(half, kFloorDb);
     detectDb_.assign(half, kFloorDb);
     filtDb_.assign(half, 0.f);
@@ -527,6 +634,7 @@ private:
     outMask_ = dryMask_;
     dryL_.assign(static_cast<size_t>(dryMask_ + 1), 0.f);
     dryR_.assign(static_cast<size_t>(dryMask_ + 1), 0.f);
+    scDry_.assign(static_cast<size_t>(dryMask_ + 1), 0.f);
     outL_.assign(static_cast<size_t>(outMask_ + 1), 0.f);
     outR_.assign(static_cast<size_t>(outMask_ + 1), 0.f);
   }
@@ -577,6 +685,7 @@ private:
     lDb_.assign(static_cast<size_t>(bins_), kFloorDb);
     rDb_.assign(static_cast<size_t>(bins_), kFloorDb);
     grDisp_.assign(static_cast<size_t>(bins_), 0.f);
+    scAvgDb_.assign(static_cast<size_t>(bins_), kFloorDb);
     {
       std::lock_guard<std::mutex> lock(mutex_);
       pubAvg_.assign(static_cast<size_t>(bins_), kFloorDb);
@@ -584,6 +693,8 @@ private:
       pubL_.assign(static_cast<size_t>(bins_), kFloorDb);
       pubR_.assign(static_cast<size_t>(bins_), kFloorDb);
       pubGr_.assign(static_cast<size_t>(bins_), 0.f);
+      pubScAvg_.assign(static_cast<size_t>(bins_), kFloorDb);
+      pubScActive_ = false;
     }
     rebuildBinMap();
   }
@@ -740,6 +851,8 @@ private:
   {
     std::fill(inL_.begin(), inL_.end(), 0.f);
     std::fill(inR_.begin(), inR_.end(), 0.f);
+    if (!scIn_.empty())
+      std::fill(scIn_.begin(), scIn_.end(), 0.f);
     std::fill(olaL_.begin(), olaL_.end(), 0.f);
     std::fill(olaR_.begin(), olaR_.end(), 0.f);
     std::fill(outL_.begin(), outL_.end(), 0.f);
@@ -809,14 +922,43 @@ private:
       const float mR = fftBinMag(reR_.data(), imR_.data(), k);
       magDb_[static_cast<size_t>(k)] =
         magToDb(0.5f * (mL + mR), norm, kDetectCeilDb);
-      const float w =
-        (k < static_cast<int>(filtDb_.size())) ? filtDb_[static_cast<size_t>(k)]
-                                               : 0.f;
-      detectDb_[static_cast<size_t>(k)] =
-        std::max(kFloorDb, magDb_[static_cast<size_t>(k)] + w);
     }
 
     updateDisplaySpectrum();
+
+    if (scDetectActive_)
+    {
+      for (int i = 0; i < n; ++i)
+      {
+        const int idx = (start + i) % n;
+        const float w = window_[static_cast<size_t>(i)];
+        scRe_[static_cast<size_t>(i)] = scIn_[static_cast<size_t>(idx)] * w;
+        scIm_[static_cast<size_t>(i)] = 0.f;
+      }
+      fftRadix2(scRe_.data(), scIm_.data(), n);
+      for (int k = 0; k <= half; ++k)
+      {
+        const float m = fftBinMag(scRe_.data(), scIm_.data(), k);
+        const float scDb = magToDb(m, norm, kDetectCeilDb);
+        const float w =
+          (k < static_cast<int>(filtDb_.size())) ? filtDb_[static_cast<size_t>(k)]
+                                                 : 0.f;
+        detectDb_[static_cast<size_t>(k)] = std::max(kFloorDb, scDb + w);
+      }
+      updateDisplayScSpectrum();
+    }
+    else
+    {
+      for (int k = 0; k <= half; ++k)
+      {
+        const float w =
+          (k < static_cast<int>(filtDb_.size())) ? filtDb_[static_cast<size_t>(k)]
+                                                 : 0.f;
+        detectDb_[static_cast<size_t>(k)] =
+          std::max(kFloorDb, magDb_[static_cast<size_t>(k)] + w);
+      }
+      std::fill(scAvgDb_.begin(), scAvgDb_.end(), kFloorDb);
+    }
 
     // Bypass / Depth=0: no new cuts — GR releases to 0, wet OLA keeps running
     // so engaging Bypass never hard-switches dry↔wet (click).
@@ -825,6 +967,12 @@ private:
 
     ladderN_ = 0;
     ladderKeep_ = 0.f;
+
+    // Harmonics protects a tone ladder on the *same* detector signal. With
+    // external SC that would soft-keep the key's series on the main — skip it.
+    const float harmSave = harmonics_;
+    if (scDetectActive_)
+      harmonics_ = 0.f;
 
     if (!bypassActive_ && depthDb_ > 0.f && kHi_ >= kLo_)
     {
@@ -972,6 +1120,7 @@ private:
       // Filter curve gates Depth: 0 dB → full, −24 dB → none (linear in dB).
       applySearchMaskToGr();
     }
+    harmonics_ = harmSave;
 
     for (int k = 0; k <= half; ++k)
     {
@@ -1475,6 +1624,28 @@ private:
     }
   }
 
+  void updateDisplayScSpectrum()
+  {
+    const float alpha = emaSpec_;
+    const float nrm = 2.f / static_cast<float>(fftSize_);
+    for (int i = 0; i < bins_; ++i)
+    {
+      if (!binValid_[static_cast<size_t>(i)])
+      {
+        scAvgDb_[static_cast<size_t>(i)] = kFloorDb;
+        continue;
+      }
+      const int lo = binLo_[static_cast<size_t>(i)];
+      const int hi = binHi_[static_cast<size_t>(i)];
+      float peak = 0.f;
+      for (int k = lo; k < hi; ++k)
+        peak = std::max(peak, fftBinMag(scRe_.data(), scIm_.data(), k));
+      const float dA = magToDb(peak, nrm, kSpecCeilDb);
+      scAvgDb_[static_cast<size_t>(i)] +=
+        alpha * (dA - scAvgDb_[static_cast<size_t>(i)]);
+    }
+  }
+
   void updateDisplayGr()
   {
     // Same log bands as the analyzer: report GR at the FFT bin that owns the
@@ -1522,6 +1693,10 @@ private:
   bool stftActive_ = false;
   /** When true, hops skip detection (GR→0) but keep wet OLA running. */
   bool bypassActive_ = false;
+  /** Detect from Aux Mid instead of main (set each process()). */
+  bool scDetectActive_ = false;
+  bool scListenActive_ = false;
+  bool pubScActive_ = false;
 
   float fLoHz_ = 200.f;
   float fHiHz_ = 5000.f;
@@ -1545,10 +1720,12 @@ private:
   std::atomic<int> pendingBins_ {128};
 
   std::vector<float> inL_, inR_, olaL_, olaR_, dryL_, dryR_, outL_, outR_, window_;
+  std::vector<float> scIn_, scDry_;
   std::vector<float> reL_, imL_, reR_, imR_;
+  std::vector<float> scRe_, scIm_;
   std::vector<float> magDb_, detectDb_, filtDb_, envDb_, grDb_, grTarget_, scratch_;
-  std::vector<float> avgDb_, maxDb_, lDb_, rDb_, grDisp_;
-  std::vector<float> pubAvg_, pubMax_, pubL_, pubR_, pubGr_;
+  std::vector<float> avgDb_, maxDb_, lDb_, rDb_, grDisp_, scAvgDb_;
+  std::vector<float> pubAvg_, pubMax_, pubL_, pubR_, pubGr_, pubScAvg_;
   /** Live guides: interleaved (centerHz, halfWidthHz) × ladderN_. */
   std::vector<float> ladder_;
   std::vector<float> pubLadder_;

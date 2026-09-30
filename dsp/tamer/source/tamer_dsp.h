@@ -9,6 +9,8 @@
 
 #include "tamer_params.h"
 
+#include <vector>
+
 namespace calfNXT {
 namespace Tamer {
 
@@ -35,6 +37,8 @@ public:
   int takeOutputLevelsDb(float* out, int maxOut) override { return io_.takeOutputLevelsDb(out, maxOut); }
   int takeSpectrum(float* out, int maxOut) override;
   const char* vizSpectrumId() const override { return "fft"; }
+  int takeOutputSpectrum(float* out, int maxOut) override;
+  const char* vizOutputSpectrumId() const override { return "fft_sc"; }
   int takeFreqResponse(float* out, int maxOut) override;
   const char* vizFreqResponseId() const override { return "tamer"; }
   int takeHarmonicGuides(float* out, int maxOut) override;
@@ -53,6 +57,8 @@ private:
   struct BlockState
   {
     bool bypass = false;
+    bool sidechainActive = false;
+    bool scListen = false;
     bool diffListen = false;
     Dsp::ChannelMode channel = Dsp::ChannelMode::Stereo;
     float fLo = 200.f;
@@ -72,11 +78,15 @@ private:
   void applyBlockState(const BlockState& s);
   void resetProcessing();
   void updateLatency();
+  void ensureScScratch(Steinberg::int32 nFrames);
   static int qualityToFft(int quality);
 
   float params_[kParamCount] {};
   Dsp::IoStage io_;
   Dsp::Sample64Scratch scratch64_;
+  /** Float SC Mid block (32-bit path uses inputs directly; 64-bit converts here). */
+  std::vector<float> scScratchL_;
+  std::vector<float> scScratchR_;
   Dsp::SpectralTamer tamer_;
   double sampleRate_ = 44100.0;
   Steinberg::uint32 latencySamples_ = 0;

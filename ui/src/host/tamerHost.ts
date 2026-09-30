@@ -90,6 +90,10 @@ export function tamerAuxLpType(slopeDb: TamerSlopeDb) {
 export type ITamerHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
+  /** External Aux sidechain as detector key. */
+  sidechainActive$: DynamicValue<boolean>;
+  /** Solo latency-matched SC Mid (exclusive with Diff Listen). */
+  scListen$: DynamicValue<boolean>;
   /** 0 Stereo / 1 Left / 2 Right / 3 Mid / 4 Side. */
   channel$: DynamicValue<number>;
   fLo$: DynamicValue<number>;
@@ -106,6 +110,8 @@ export type ITamerHost = {
   spectrum$: DynamicValue<number>;
   diffListen$: DynamicValue<boolean>;
   spectrumData$: DynamicValue<number[]>;
+  /** SC Mid spectrum (empty / unused when Ext SC off). */
+  scSpectrumData$: DynamicValue<number[]>;
   grResponse$: DynamicValue<number[]>;
   /** Harmonic protect guides [n, keep, (hz, halfW)×n]. */
   ladder$: DynamicValue<number[]>;
@@ -137,17 +143,43 @@ function bindBool(name: keyof typeof paramIds): DynamicValue<boolean> {
   return dv;
 }
 
+/** Diff Listen ↔ SC Listen exclusive; turn Ext SC off clears SC Listen. */
+function wireListenExclusivity(
+  sidechainActive$: DynamicValue<boolean>,
+  scListen$: DynamicValue<boolean>,
+  diffListen$: DynamicValue<boolean>,
+): void {
+  scListen$.subscribe((on) => {
+    if (on && diffListen$.value) diffListen$.set(false);
+  });
+  diffListen$.subscribe((on) => {
+    if (on && scListen$.value) scListen$.set(false);
+  });
+  sidechainActive$.subscribe((on) => {
+    if (!on && scListen$.value) scListen$.set(false);
+  });
+}
+
 export function createBoundTamerHost(): ITamerHost {
   const spectrumData$ = DynamicValue.fromConstant<number[]>([]);
+  const scSpectrumData$ = DynamicValue.fromConstant<number[]>([]);
   const grResponse$ = DynamicValue.fromConstant<number[]>([]);
   const ladder$ = DynamicValue.fromConstant<number[]>([]);
   bindVizSpectrum(spectrumData$, 'fft');
+  bindVizSpectrum(scSpectrumData$, 'fft_sc');
   bindVizResponse(grResponse$, 'tamer');
   bindVizLadder(ladder$, 'tamer');
+
+  const sidechainActive$ = bindBool('sidechain_active');
+  const scListen$ = bindBool('sc_listen');
+  const diffListen$ = bindBool('diff_listen');
+  wireListenExclusivity(sidechainActive$, scListen$, diffListen$);
 
   return {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
+    sidechainActive$,
+    scListen$,
     channel$: bindNum('channel', 0),
     fLo$: bindNum('f_lo', 200),
     fHi$: bindNum('f_hi', 5000),
@@ -161,8 +193,9 @@ export function createBoundTamerHost(): ITamerHost {
     release$: bindNum('release', 80),
     quality$: bindNum('quality', 1),
     spectrum$: bindNum('spectrum', 1),
-    diffListen$: bindBool('diff_listen'),
+    diffListen$,
     spectrumData$,
+    scSpectrumData$,
     grResponse$,
     ladder$,
     beginEdit: postBegin,

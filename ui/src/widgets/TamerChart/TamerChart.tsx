@@ -196,6 +196,9 @@ const TAMER_DB_GRID = buildDbGridY(TAMER_DB_MIN, TAMER_DB_MAX, 6, 6, {
 
 export interface TamerChartProps {
   spectrum$: DynamicValue<number[]>;
+  /** SC Mid spectrum — shown as a thin stroke while Ext SC is on. */
+  scSpectrum$?: DynamicValue<number[]>;
+  sidechainActive$?: DynamicValue<boolean>;
   gr$: DynamicValue<number[]>;
   /** Harmonic protect guides [n, keep, (hz, halfW)×n]. */
   ladder$?: DynamicValue<number[]>;
@@ -217,6 +220,8 @@ export interface TamerChartProps {
 export function TamerChart(props: TamerChartProps) {
   const {
     spectrum$,
+    scSpectrum$,
+    sidechainActive$,
     gr$,
     ladder$,
     spectrumTilt,
@@ -240,6 +245,8 @@ export function TamerChart(props: TamerChartProps) {
   /** 0 = not measured yet (spectrumPxPerBin falls back to design width). */
   const chartWidthRef = useRef(0);
   const spectrumLatest = useRef<number[]>(EMPTY);
+  const scSpectrumLatest = useRef<number[]>(EMPTY);
+  const scActiveLatest = useRef(false);
   const grLatest = useRef<number[]>(EMPTY);
   const ladderLatest = useRef<number[]>(EMPTY);
   tiltRef.current = spectrumTilt;
@@ -568,11 +575,22 @@ export function TamerChart(props: TamerChartProps) {
     const gIn = graphsRef.current[0];
     const gOut = graphsRef.current[1];
     const gGr = graphsRef.current[2];
+    const gSc = graphsRef.current[3];
     if (!gIn || !gOut || !gGr) return;
+
+    const paintSc = () => {
+      if (!gSc) return;
+      const on = scActiveLatest.current;
+      gSc.set('active', on);
+      gSc.set(
+        'dots',
+        on ? buildSpecDots(scSpectrumLatest.current) : null,
+      );
+    };
 
     // SpectrumChart pattern: Binding returns dots for the bound graph;
     // siblings (out) are updated via set() inside transformReceive.
-    bindingsRef.current = [
+    const binds = [
       bindAuxOptions(gIn, [
         {
           name: 'dots',
@@ -599,14 +617,53 @@ export function TamerChart(props: TamerChartProps) {
             grLatest.current = next;
             paintOutSibling();
             gGr.toFront?.();
+            gSc?.toFront?.();
             reassertRef.current();
             return buildGrDots(next);
           },
         },
       ]),
     ];
+    if (gSc && scSpectrum$) {
+      binds.push(
+        bindAuxOptions(gSc, [
+          {
+            name: 'dots',
+            backendValue: scSpectrum$,
+            readonly: true,
+            transformReceive: (raw: unknown) => {
+              const next =
+                Array.isArray(raw) && raw.length ? (raw as number[]) : EMPTY;
+              scSpectrumLatest.current = next;
+              paintSc();
+              gSc.toFront?.();
+              return scActiveLatest.current ? buildSpecDots(next) : null;
+            },
+          },
+        ]),
+      );
+    }
+    if (gSc && sidechainActive$) {
+      binds.push(
+        bindAuxOptions(gSc, [
+          {
+            name: 'active',
+            backendValue: sidechainActive$,
+            readonly: true,
+            transformReceive: (v: unknown) => {
+              scActiveLatest.current = !!v;
+              paintSc();
+              return !!v;
+            },
+          },
+        ]),
+      );
+    }
+    bindingsRef.current = binds;
   }, [
     spectrum$,
+    scSpectrum$,
+    sidechainActive$,
     gr$,
     buildSpecDots,
     buildGrDots,
@@ -707,7 +764,19 @@ export function TamerChart(props: TamerChartProps) {
           'tamer-gr',
           'fill-none stroke-color stroke-thick',
         );
-        graphsRef.current = [gIn, gOut, gGr];
+        const gSc = inst.addGraph({
+          dots: null,
+          type: 'L',
+          mode: 'line',
+          class: 'tamer-sc',
+          active: false,
+        });
+        addGraphClasses(
+          gSc.element,
+          'tamer-sc',
+          'fill-none stroke-color stroke-thinner stroke-semi',
+        );
+        graphsRef.current = [gIn, gOut, gGr, gSc];
       }
 
       setChartSvg(inst.svg ?? null);
