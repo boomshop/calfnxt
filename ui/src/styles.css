@@ -333,6 +333,10 @@ textarea::selection {
     color var(--transition),
     background var(--transition);
 
+  &:hover {
+    background: var(--background-least);
+  }
+
   &.aux-active {
     background: var(--color-accent);
     color: var(--contrast-accent);
