@@ -51,30 +51,30 @@
 }
 
 :root.day {
-  --background: #eeeeee;
-  --background-less: #e4e4e4;
-  --background-lesser: #d3d3d3;
-  --background-least: #bbbbbb;
+  --background: #ecedee;
+  --background-less: #e2e3e4;
+  --background-lesser: #d1d2d3;
+  --background-least: #b9babb;
 
-  --color: #111111;
-  --color-less: #333333;
-  --color-lesser: #555555;
-  --color-least: #777777;
+  --color: #121314;
+  --color-less: #343536;
+  --color-lesser: #565758;
+  --color-least: #78797a;
 
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
   --shadow-tight: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 :root.night {
-  --background: #000003;
-  --background-less: #0a0a0d;
-  --background-lesser: #1b1b1e;
-  --background-least: #333336;
+  --background: #010203;
+  --background-less: #0b0c0d;
+  --background-lesser: #1c1d1e;
+  --background-least: #343536;
 
-  --color: #fdfdff;
-  --color-less: #dbdbdd;
-  --color-lesser: #b9b9bb;
-  --color-least: #979799;
+  --color: #fdfeff;
+  --color-less: #dbdcdd;
+  --color-lesser: #b9babb;
+  --color-least: #979899;
 
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
   --shadow-tight: 0 1px 3px rgba(0, 0, 0, 0.7);
