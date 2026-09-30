@@ -43,6 +43,11 @@
   --aux-scale-markersize: 3px;
   --aux-scale-minheight: 15px;
   --aux-scale-minwidth: 20px;
+
+  --aux-knob-bgmargintiny: 2px;
+  --aux-knob-bgmarginsmall: 15px;
+  --aux-knob-bgmarginmedium: 20px;
+  --aux-knob-bgmargin: 20px;
 }
 
 :root.day {
