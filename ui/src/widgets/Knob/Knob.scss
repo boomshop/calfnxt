@@ -5,6 +5,12 @@
   --aux-knob-large: 120px;
   --aux-knob-huge: 192px;
   --aux-knob-bgmargin: 22px;
+
+  --aux-knob-bgblurtiny: 1px;
+  --aux-knob-bgblursmall: 2px;
+  --aux-knob-bgblurmedium: 3px;
+  --aux-knob-bgblurlarge: 4px;
+  --aux-knob-bgblurhuge: 5px;
 }
 
 .Knob {
@@ -20,6 +26,12 @@
       width: 32px;
       > input {
         font-size: 12px;
+      }
+    }
+
+    > .aux-knob {
+      &::after {
+        filter: blur(var(--aux-knob-bgblurtiny));
       }
     }
   }
@@ -40,6 +52,12 @@
         font-size: 12px;
       }
     }
+
+    > .aux-knob {
+      &::after {
+        filter: blur(var(--aux-knob-bgblursmall));
+      }
+    }
   }
 
   &.aux-preset-medium {
@@ -56,6 +74,12 @@
         font-size: 16px;
       }
     }
+
+    > .aux-knob {
+      &::after {
+        filter: blur(var(--aux-knob-bgblurmedium));
+      }
+    }
   }
 
   &.aux-preset-large {
@@ -70,6 +94,12 @@
         font-size: 28px;
       }
     }
+
+    > .aux-knob {
+      &::after {
+        filter: blur(var(--aux-knob-bgblurlarge));
+      }
+    }
   }
 
   &.aux-preset-huge {
@@ -82,6 +112,12 @@
 
       > input {
         font-size: 40px;
+      }
+    }
+
+    > .aux-knob {
+      &::after {
+        filter: blur(var(--aux-knob-bgblurhuge));
       }
     }
   }
@@ -128,6 +164,7 @@
         }
       }
     }
+
     &::before {
       content: none;
     }
@@ -137,9 +174,9 @@
       position: absolute;
       background: linear-gradient(
         to top,
-        rgba(200, 255, 255, 0.055),
+        rgba(200, 255, 255, 0.05),
         rgba(128, 128, 128, 0),
-        rgba(28, 0, 0, 0.055)
+        rgba(28, 0, 0, 0.05)
       ) !important;
       border-radius: 50%;
       pointer-events: none;
