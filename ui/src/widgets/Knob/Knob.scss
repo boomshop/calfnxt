@@ -46,7 +46,7 @@
     --aux-main-fontsize: 14px;
 
     > .aux-label {
-      bottom: -2px;
+      bottom: 0px;
     }
 
     > .aux-value {
@@ -60,7 +60,7 @@
 
   &.aux-preset-large {
     > .aux-label {
-      bottom: 8px;
+      bottom: 0px;
     }
 
     > .aux-value {
@@ -74,7 +74,7 @@
 
   &.aux-preset-huge {
     > .aux-label {
-      bottom: 12px;
+      bottom: 0px;
     }
 
     > .aux-value {
@@ -97,6 +97,8 @@
     overflow: show;
 
     > svg {
+      position: relative;
+
       > .aux-circular {
         > .aux-base {
           fill: var(--background-lesser);
@@ -131,7 +133,15 @@
     }
 
     &::after {
-      content: none;
+      content: '';
+      position: absolute;
+      background: linear-gradient(
+        to bottom,
+        rgba(200, 255, 255, 0.05),
+        rgba(128, 128, 128, 0),
+        rgba(28, 0, 0, 0.05)
+      ) !important;
+      border-radius: 50%;
     }
   }
 

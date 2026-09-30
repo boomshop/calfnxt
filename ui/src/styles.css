@@ -192,6 +192,18 @@ textarea::selection {
   display: flex;
   gap: var(--gap);
 
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      rgba(200, 255, 255, 0.02),
+      rgba(128, 128, 128, 0),
+      rgba(28, 0, 0, 0.02)
+    );
+  }
+
   > .title {
     position: absolute;
     top: 0;
@@ -216,6 +228,10 @@ textarea::selection {
   > .block {
     box-shadow: var(--shadow-tight);
     border: 1px solid var(--background-least);
+
+    &::before {
+      content: none;
+    }
 
     &:has(.title) {
       padding-top: 26px !important;
@@ -312,6 +328,7 @@ textarea::selection {
 .aux-button {
   border-radius: var(--border-radius);
   background: var(--background-lesser);
+  position: relative;
   transition:
     color var(--transition),
     background var(--transition);
@@ -334,6 +351,25 @@ textarea::selection {
 
   > .aux-icon {
     --aux-icon-size: 20px;
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      rgba(200, 255, 255, 0.2),
+      rgba(128, 128, 128, 0),
+      rgba(28, 0, 0, 0.3)
+    );
+    mix-blend-mode: soft-light;
+  }
+
+  &.listen {
+    &::before {
+      content: none;
+    }
   }
 }
 
