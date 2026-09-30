@@ -444,6 +444,7 @@ export function EQChart(props: EQChartProps) {
       removeGraph: (g: unknown) => void;
       subscribe: (event: string, cb: (...args: unknown[]) => void) => () => void;
       isDestructed: () => boolean;
+      svg?: SVGSVGElement;
       baseline: {
         toFront: () => void;
         set: (key: string, value: unknown) => void;
@@ -489,10 +490,24 @@ export function EQChart(props: EQChartProps) {
       }
     };
 
+    // SVG paint order is DOM order. ChartHandle/Graph toFront|toBack only
+    // reorder inside their own <g>; CSS z-index does not cross .aux-handles
+    // vs .aux-graphs. Miniatures want dots under the curve → group swap.
+    const buryMiniHandles = () => {
+      if (!isMini || eq.isDestructed()) return;
+      const svg = eq.svg;
+      if (!svg) return;
+      const graphsG = svg.querySelector(':scope > .aux-graphs');
+      const handlesG = svg.querySelector(':scope > .aux-handles');
+      if (!graphsG || !handlesG) return;
+      if (handlesG.nextSibling !== graphsG) svg.insertBefore(handlesG, graphsG);
+    };
+
     const bringBaselineFront = () => {
-      if (eq.isDestructed() || !drawResponse) return;
+      if (eq.isDestructed()) return;
       // Must run after addGraph — new graphs append and would cover the sum curve.
-      eq.baseline.toFront();
+      if (drawResponse) eq.baseline.toFront();
+      buryMiniHandles();
     };
 
     syncBaseline();

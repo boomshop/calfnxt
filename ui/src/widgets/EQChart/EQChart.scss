@@ -115,7 +115,7 @@
           &.aux-line,
           &.aux-block {
             > .aux-handle {
-              fill-opacity: var(--graph-fill-opacity-semi);
+              fill-opacity: var(--graph-fill-opacity-full);
               fill: var(--accent);
               stroke: none;
             }
@@ -123,7 +123,6 @@
 
           &.aux-circular {
             > .aux-handle {
-              fill-opacity: var(--graph-fill-opacity-full);
               stroke: none !important;
             }
           }
@@ -131,7 +130,6 @@
           &.dyn {
             > .aux-handle {
               fill: var(--color-warn);
-              fill-opacity: var(--graph-fill-opacity-semi);
             }
           }
         }
