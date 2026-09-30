@@ -723,8 +723,47 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
   const bool hasHostAudio = io_.begin(data);
   if (!hasHostAudio)
   {
-    // Host silenceFlags: outs may be unusable — light scrub only.
+    // Host silenceFlags: outs may be unusable — still scroll history with silence.
     idleSanitize(data.numSamples);
+    bool allSleeping = broadband_.isSleeping();
+    if (allSleeping)
+    {
+      for (int b = 0; b < bands; ++b)
+      {
+        if (!strip_[b].isSleeping())
+        {
+          allSleeping = false;
+          break;
+        }
+      }
+    }
+    const bool xfadeBusy =
+      bypassXfadePos_ < bypassXfadeLen_ || bypass != bypassOld_;
+    const bool drained = allSleeping && !xfadeBusy
+      && lastOutPeak_ < Dsp::IoStage::kQuietPeak;
+    if (drained)
+    {
+      bypassOld_ = bypass;
+      for (int b = 0; b < kMaxBands; ++b)
+        stripMeter_[b].forceZero();
+      bbMeter_.forceZero();
+      overallMeter_.forceZero();
+      const int32 n = data.numSamples;
+      for (int32 i = 0; i < n; ++i)
+      {
+        for (int b = 0; b < bands; ++b)
+          histFeedSample(b, 0.f, 1.f, displayLimit);
+      }
+      if (vizConsumerActive() && !spectrumFloor_)
+      {
+        spectrumIn_.feedSilence(n);
+        spectrumOut_.feedSilence(n);
+        spectrumIn_.publish();
+        spectrumOut_.publish();
+        if (spectrumIn_.isDisplayNearFloor() && spectrumOut_.isDisplayNearFloor())
+          spectrumFloor_ = true;
+      }
+    }
     publishHistSnapshot();
     return kResultOk;
   }
@@ -748,6 +787,7 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
     && lastOutPeak_ < Dsp::IoStage::kQuietPeak;
 
   // Host still clocks audio: advance history with silence so the chart keeps scrolling.
+  // Spectrum overlays decay to the floor (do not freeze the last FFT).
   if (quietIn && drained)
   {
     bypassOld_ = bypass;
@@ -765,9 +805,26 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
       }
     }
     publishHistSnapshot();
+    if (vizConsumerActive() && !spectrumFloor_)
+    {
+      spectrumIn_.setSampleRate(sampleRate_);
+      spectrumOut_.setSampleRate(sampleRate_);
+      spectrumIn_.setFftSize(2048);
+      spectrumOut_.setFftSize(2048);
+      spectrumIn_.setHold(false);
+      spectrumOut_.setHold(false);
+      spectrumIn_.feedSilence(data.numSamples);
+      spectrumOut_.feedSilence(data.numSamples);
+      spectrumIn_.publish();
+      spectrumOut_.publish();
+      if (spectrumIn_.isDisplayNearFloor() && spectrumOut_.isDisplayNearFloor())
+        spectrumFloor_ = true;
+    }
     io_.end(data);
     return kResultOk;
   }
+  if (!quietIn)
+    spectrumFloor_ = false;
 
   updateLatency(false);
   applySplitParams();

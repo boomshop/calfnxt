@@ -91,6 +91,20 @@
     }
   }
 
+  // Monitor accent (L) understroke — solid black rim, cheaper than feDropShadow.
+  // 3px under 1.5px color; offset by color stroke width down-right.
+  .spec-lr-rim {
+    stroke: #000 !important;
+    stroke-width: 3px !important;
+    stroke-opacity: 1;
+    fill: none;
+    fill-opacity: 0;
+    transform: translate(
+      var(--graph-stroke-medium),
+      var(--graph-stroke-medium)
+    );
+  }
+
   .spec-hold.spec-diff {
     stroke: var(--chart-level-stroke, var(--color-accent));
     stroke-dasharray: none;

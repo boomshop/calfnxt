@@ -91,6 +91,8 @@ private:
   std::atomic<float> effectiveCutoffHz_ { 1000.f };
   /** After one quiet zero-feed block, resonant state is drained. */
   bool quietDrained_ = false;
+  /** Spectrum overlay parked after silence decayed to the floor. */
+  bool spectrumFloor_ = false;
 };
 
 } // namespace Filter

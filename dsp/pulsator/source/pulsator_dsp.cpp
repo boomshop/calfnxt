@@ -181,10 +181,22 @@ tresult PLUGIN_API PulsatorPlugin::process(ProcessData& data)
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
   const bool hasHostAudio = io_.begin(data);
+  const int32 nFrames = hasHostAudio ? data.numSamples : data.numSamples;
   if (!hasHostAudio)
+  {
+    // Host silenceFlags: outs unusable — still scroll history + keep LFO phase.
+    if (nFrames > 0)
+    {
+      for (int32 i = 0; i < nFrames; ++i)
+        histFeedSample(0.f, 0.f, 0.f, 0.f);
+      lfoL_.advance(static_cast<uint32_t>(nFrames));
+      lfoR_.advance(static_cast<uint32_t>(nFrames));
+      publishLfoViz();
+      publishHistSnapshot();
+    }
     return kResultOk;
+  }
 
-  const int32 nFrames = data.numSamples;
   if (nFrames <= 0)
   {
     io_.end(data);

@@ -163,6 +163,36 @@ public:
     }
   }
 
+  /** Quiet / host-stop: feed zeros so EMA + max decay toward the floor. */
+  void feedSilence(int nSamples)
+  {
+    if (nSamples <= 0)
+      return;
+    for (int i = 0; i < nSamples; ++i)
+      process(0.f, 0.f);
+  }
+
+  /**
+   * True when live traces (and unlatched max) sit within marginDb of the floor.
+   * Used to park quiet FFT work after the overlay has fallen away.
+   */
+  bool isDisplayNearFloor(float marginDb = 1.5f) const
+  {
+    const float lim = kFloorDb + std::max(0.f, marginDb);
+    for (int i = 0; i < bins_; ++i)
+    {
+      if (avgDb_[static_cast<size_t>(i)] > lim
+          || lDb_[static_cast<size_t>(i)] > lim
+          || rDb_[static_cast<size_t>(i)] > lim
+          || rmsDb_[static_cast<size_t>(i)] > lim)
+        return false;
+      if (!hold_ && !latchPeaks_
+          && maxDb_[static_cast<size_t>(i)] > lim)
+        return false;
+    }
+    return true;
+  }
+
   void publish()
   {
     std::lock_guard<std::mutex> lock(mutex_);

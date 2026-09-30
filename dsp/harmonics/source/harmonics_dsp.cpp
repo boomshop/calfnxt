@@ -407,11 +407,14 @@ tresult PLUGIN_API HarmonicsPlugin::process(ProcessData& data)
 
   const bool hasHostAudio = io_.begin(data);
   const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
-  // No long tail — skip OS shaper on quiet; scrub denormals once.
+  // No long tail — skip OS shaper on quiet; scrub denormals and decay shape zone.
   if (quietIn)
   {
     distL_.sanitize();
     distR_.sanitize();
+    const int32 n = data.numSamples;
+    if (n > 0)
+      shapeZone_ *= std::pow(shapeZoneFall_, static_cast<float>(n));
     if (hasHostAudio)
       io_.end(data);
     return kResultOk;

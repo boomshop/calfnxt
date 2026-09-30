@@ -482,10 +482,9 @@ tresult PLUGIN_API TransientsPlugin::process(ProcessData& data)
   const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
 
   // Never skip while lookahead / envelopes still hold energy.
-  // Host still clocks audio: advance envelope history with silence so the chart scrolls.
+  // Advance envelope history with silence (incl. silenceFlags) so the chart scrolls.
   if (quietIn && transients_.isIdle())
   {
-    if (hasHostAudio)
     {
       const int32 n = data.numSamples;
       for (int32 i = 0; i < n; ++i)

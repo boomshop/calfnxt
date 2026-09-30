@@ -307,7 +307,19 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
   const bool hasHostAudio = io_.begin(data);
   if (!hasHostAudio)
   {
-    // Host silenceFlags: outs may be unusable — do not touch them.
+    // Host silenceFlags: outs may be unusable — still scroll history with silence.
+    const bool xfadeBusy =
+      bypassXfadePos_ < bypassXfadeLen_ || bypass != bypassOld_;
+    const bool drained = limiter_.isSleeping() && !xfadeBusy
+      && lastOutPeak_ < Dsp::IoStage::kQuietPeak;
+    if (drained)
+    {
+      bypassOld_ = bypass;
+      grMeter_.forceZero();
+      const int32 n = data.numSamples;
+      for (int32 i = 0; i < n; ++i)
+        histFeedSample(0.f, 1.f, displayLimit);
+    }
     publishHistSnapshot();
     return kResultOk;
   }

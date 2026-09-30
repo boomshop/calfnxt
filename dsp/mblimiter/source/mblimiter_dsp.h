@@ -174,6 +174,8 @@ private:
   int histSnapshotSampleCount_[kMaxBands] {};
   int histSnapshotSamplesPerSlot_ = 1;
   int histVisibleSlots_ = 160;
+  /** Spectrum overlay parked after silence decayed to the floor. */
+  bool spectrumFloor_ = false;
 };
 
 } // namespace Mblimiter

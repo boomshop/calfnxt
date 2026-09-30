@@ -233,10 +233,20 @@ tresult PLUGIN_API CrusherPlugin::process(ProcessData& data)
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
   const bool hasHostAudio = io_.begin(data);
-  if (!hasHostAudio)
-    return kResultOk;
-
   const int32 nFrames = data.numSamples;
+  if (!hasHostAudio)
+  {
+    // Host silenceFlags: outs unusable — still scroll history + decay shape zone.
+    if (nFrames > 0)
+    {
+      shapeZone_ *= std::pow(shapeZoneFall_, static_cast<float>(nFrames));
+      for (int32 i = 0; i < nFrames; ++i)
+        histFeedSample(0.f, 0.f, 0.f, 0.f);
+      publishHistSnapshot();
+    }
+    return kResultOk;
+  }
+
   if (nFrames <= 0)
   {
     io_.end(data);

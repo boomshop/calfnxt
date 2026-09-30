@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -28,28 +27,6 @@ export {
 
 /** Stable empty default — never inline `[]` in hook deps / subscribe fallbacks. */
 const EMPTY_SPECTRUM: number[] = [];
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
-/** Dark rim so L/R strokes read on top of the filled RMS body. */
-function mountLrDropShadow(svg: SVGSVGElement, id: string): SVGFilterElement {
-  const defs = document.createElementNS(SVG_NS, 'defs');
-  defs.setAttribute('class', 'spec-lr-shadow-defs');
-  const filter = document.createElementNS(SVG_NS, 'filter');
-  filter.setAttribute('id', id);
-  filter.setAttribute('filterUnits', 'userSpaceOnUse');
-  filter.setAttribute('color-interpolation-filters', 'sRGB');
-  const drop = document.createElementNS(SVG_NS, 'feDropShadow');
-  drop.setAttribute('dx', '0');
-  drop.setAttribute('dy', '1.25');
-  drop.setAttribute('stdDeviation', '1');
-  drop.setAttribute('flood-color', '#000');
-  drop.setAttribute('flood-opacity', '1');
-  filter.appendChild(drop);
-  defs.appendChild(filter);
-  svg.insertBefore(defs, svg.firstChild);
-  return filter;
-}
 
 /** Chart display range (visible). DSP floor is lower (−120) for tilt footroom. */
 export const SPECTRUM_DB_MIN = -96;
@@ -663,46 +640,6 @@ export function SpectrumChart(props: SpectrumChartProps) {
   const reassertRef = useRef(reassert);
   reassertRef.current = reassert;
 
-  const lrShadowId = `spec-lr-shadow-${useId().replace(/:/g, '')}`;
-  // Spectral curve only. Waterfall is a canvas and never mounts this SVG.
-  useEffect(() => {
-    if (!chartSvg || !monitor || isSpectralizer) return;
-    const filter = mountLrDropShadow(chartSvg, lrShadowId);
-    const syncRegion = () => {
-      const w = Math.max(1, chartSvg.clientWidth);
-      const h = Math.max(1, chartSvg.clientHeight);
-      filter.setAttribute('x', '-16');
-      filter.setAttribute('y', '-16');
-      filter.setAttribute('width', String(w + 32));
-      filter.setAttribute('height', String(h + 32));
-    };
-    syncRegion();
-    const ro = new ResizeObserver(syncRegion);
-    ro.observe(chartSvg);
-
-    const url = `url(#${lrShadowId})`;
-    const painted: SVGElement[] = [];
-    for (const g of graphsRef.current) {
-      const el = g.element;
-      if (!el) continue;
-      if (
-        !el.classList.contains('spec-primary') &&
-        !el.classList.contains('spec-secondary')
-      )
-        continue;
-      el.setAttribute('filter', url);
-      painted.push(el);
-    }
-
-    return () => {
-      ro.disconnect();
-      for (const el of painted) {
-        if (el.getAttribute('filter') === url) el.removeAttribute('filter');
-      }
-      filter.parentElement?.remove();
-    };
-  }, [chartSvg, isSpectralizer, lrShadowId, monitor]);
-
   const sendVizBins = useCallback(
     (el: Element) => {
       const width = Math.round(el.getBoundingClientRect().width);
@@ -806,11 +743,10 @@ export function SpectrumChart(props: SpectrumChartProps) {
         );
       }
 
-      const [g0, g1, gHold, gPeak] = graphs;
-      if (m !== SPECTRUM_MODE.Difference)
-        (gPeak ?? gHold)?.element?.classList.remove('spec-diff');
-
       if (monitorRef.current && m !== SPECTRUM_MODE.Spectralizer) {
+        // [rms, L-rim, L, R, max] — dark understroke on accent (L) only.
+        const [, gLRim, gL, gR, gMax] = graphs;
+        gMax?.element?.classList.remove('spec-diff');
         chart.set('range_y', { min: SPECTRUM_DB_MIN, max: SPECTRUM_DB_MAX });
         chart.set(
           'grid_y',
@@ -827,9 +763,11 @@ export function SpectrumChart(props: SpectrumChartProps) {
             px,
           );
         const rms = payload.rms ?? payload.avg;
-        g1?.set('dots', dots(payload.L, slope));
-        gHold?.set('dots', dots(payload.R, slope));
-        gPeak?.set('dots', dots(payload.max, slope));
+        const lDots = dots(payload.L, slope);
+        gLRim?.set('dots', lDots);
+        gL?.set('dots', lDots);
+        gR?.set('dots', dots(payload.R, slope));
+        gMax?.set('dots', dots(payload.max, slope));
         const band = corridorElRef.current;
         if (band && slope > 0) {
           const center = midbandMean(rms, payload.bins, slope);
@@ -840,10 +778,14 @@ export function SpectrumChart(props: SpectrumChartProps) {
         } else if (band) {
           band.hidden = true;
         }
-        gPeak?.toFront?.();
+        gMax?.toFront?.();
         reassertRef.current();
         return dots(rms, slope);
       }
+
+      const [g0, g1, gHold, gPeak] = graphs;
+      if (m !== SPECTRUM_MODE.Difference)
+        (gPeak ?? gHold)?.element?.classList.remove('spec-diff');
 
       let primary: { x: number; y: number }[] | null = null;
       g1?.set('dots', null);
@@ -973,14 +915,21 @@ export function SpectrumChart(props: SpectrumChartProps) {
                 gradient: true,
                 type: 'L',
               },
+              // Cheap L rim (thicker black understroke) — accent only; no SVG blur.
               {
-                className: 'spec-primary fill-none stroke-accent',
+                className: 'spec-lr-rim fill-none',
                 mode: 'line' as const,
                 gradient: false,
                 type: 'L',
               },
               {
-                className: 'spec-secondary fill-none stroke-warn',
+                className: 'spec-primary fill-none stroke-accent stroke-medium',
+                mode: 'line' as const,
+                gradient: false,
+                type: 'L',
+              },
+              {
+                className: 'spec-secondary fill-none stroke-warn stroke-medium',
                 mode: 'line' as const,
                 gradient: false,
                 type: 'L',

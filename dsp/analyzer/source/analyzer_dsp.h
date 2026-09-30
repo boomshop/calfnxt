@@ -56,7 +56,8 @@ private:
   Dsp::SpectrumTap spectrum_;
   Dsp::StereoFieldTap fieldTap_;
   Dsp::LoudnessMeter loudness_;
-  int quietSamples_ = 0;
+  /** Spectrum overlay parked after silence decayed to the floor. */
+  bool spectrumFloor_ = false;
 };
 
 } // namespace Analyzer

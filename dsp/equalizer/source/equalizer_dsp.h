@@ -64,6 +64,8 @@ private:
   double sampleRate_ = 44100.0;
   /** After one quiet block of zero-feed, IIR state is drained — further quiet can skip. */
   bool quietDrained_ = false;
+  /** Spectrum overlay parked after silence decayed to the floor. */
+  bool spectrumFloor_ = false;
 };
 
 } // namespace Equalizer

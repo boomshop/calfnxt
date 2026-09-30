@@ -381,14 +381,20 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
     }
   }
 
+  // Quiet + all GR idle: after drain, advance history with silence and decay
+  // spectrum overlays to the floor (do not freeze the last FFT).
   if (quietIn && allGrIdle)
   {
     if (quietDrained_)
     {
       for (int b = 0; b < kMaxBands; ++b)
         grMeter_[b].forceZero();
-      // Host still clocks audio: advance history with silence (skip full DSP).
-      if (hasHostAudio)
+      for (int b = 0; b < bands; ++b)
+      {
+        pointInDbPlain_[b] = -96.f;
+        pointOutDbPlain_[b] = -96.f;
+      }
+      publishDynamicsPoints();
       {
         const int n = data.numSamples;
         for (int i = 0; i < n; ++i)
@@ -397,15 +403,31 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
             histFeedSample(b, 0.f, 1.f, bandState[b].threshLin);
         }
         publishHistSnapshot();
-        publishDynamicsPoints();
-        io_.end(data);
       }
+      if (vizConsumerActive() && !spectrumFloor_)
+      {
+        spectrumIn_.setSampleRate(sampleRate_);
+        spectrumOut_.setSampleRate(sampleRate_);
+        spectrumIn_.setFftSize(2048);
+        spectrumOut_.setFftSize(2048);
+        spectrumIn_.setHold(false);
+        spectrumOut_.setHold(false);
+        spectrumIn_.feedSilence(data.numSamples);
+        spectrumOut_.feedSilence(data.numSamples);
+        spectrumIn_.publish();
+        spectrumOut_.publish();
+        if (spectrumIn_.isDisplayNearFloor() && spectrumOut_.isDisplayNearFloor())
+          spectrumFloor_ = true;
+      }
+      if (hasHostAudio)
+        io_.end(data);
       return kResultOk;
     }
   }
   else if (!quietIn)
   {
     quietDrained_ = false;
+    spectrumFloor_ = false;
   }
 
   if (!data.outputs || data.outputs[0].numChannels < 2)

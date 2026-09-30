@@ -104,6 +104,8 @@ private:
   Dsp::SpectrumTap spectrumIn_;
   Dsp::SpectrumTap spectrumOut_;
   std::atomic<bool> spectrumActive_{false};
+  /** Spectrum overlay parked after silence decayed to the floor. */
+  bool spectrumFloor_ = false;
 
   std::atomic<float> lfo1Activity_{0.f};
   std::atomic<float> lfo2Activity_{0.f};

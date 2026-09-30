@@ -136,20 +136,40 @@ tresult PLUGIN_API FilterPlugin::process(ProcessData& data)
   }
 
   // Quiet + (env off, or envelope settled): first quiet block zero-feeds the
-  // filter (drain resonance); further quiet blocks may skip.
+  // filter (drain resonance); further quiet blocks may skip DSP. Spectrum
+  // keeps feeding silence until the overlay decays to the floor.
   if (!quietIn)
+  {
     quietDrained_ = false;
+    spectrumFloor_ = false;
+  }
+  const bool wantSpectrum = state.spectrumOn && vizConsumerActive();
   if (quietIn && envIdle && quietDrained_)
   {
     effectiveCutoffHz_.store(
       state.bypass ? baseHz : filter_.lastCutoffHz(),
       std::memory_order_relaxed);
+    if (wantSpectrum && !spectrumFloor_)
+    {
+      const int32 n = data.numSamples;
+      spectrumIn_.setSampleRate(sampleRate_);
+      spectrumOut_.setSampleRate(sampleRate_);
+      spectrumIn_.setFftSize(4096);
+      spectrumOut_.setFftSize(4096);
+      spectrumIn_.setHold(false);
+      spectrumOut_.setHold(false);
+      spectrumIn_.feedSilence(n);
+      spectrumOut_.feedSilence(n);
+      spectrumIn_.publish();
+      spectrumOut_.publish();
+      if (spectrumIn_.isDisplayNearFloor() && spectrumOut_.isDisplayNearFloor())
+        spectrumFloor_ = true;
+    }
     if (hasHostAudio)
       io_.end(data);
     return kResultOk;
   }
 
-  const bool wantSpectrum = state.spectrumOn && vizConsumerActive();
   if (wantSpectrum)
   {
     spectrumIn_.setSampleRate(sampleRate_);

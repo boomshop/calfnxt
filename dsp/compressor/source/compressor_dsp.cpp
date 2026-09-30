@@ -333,10 +333,12 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
   // Idle only when main (and ext SC if used) is quiet AND GR envelopes settled.
   // External sidechain can still move GR on a silent main — keep processing then.
   // Host still clocks audio: advance history with silence so the chart keeps scrolling.
+  // Dynamics point drops to the floor (not the last hit).
   if (quietIn && gr_.isIdle() && !scBusActive)
   {
     grMeter_.forceZero();
-    if (hasHostAudio)
+    pointInDbPlain_ = -96.f;
+    pointOutDbPlain_ = -96.f;
     {
       const int32 n = data.numSamples;
       const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);

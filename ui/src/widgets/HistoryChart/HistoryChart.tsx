@@ -214,14 +214,42 @@ function isCutTipsSeries(spec: HistorySeries): boolean {
 }
 
 /**
+ * Drawing floor (−60) plus a small band: scroll-on-silence / near-noise
+ * residuals must not yank auto-scale to full range. Reference lines
+ * (thresh / limit / GR) still count when they sit above this band.
+ */
+const AUTO_SCALE_SILENCE_DB = AUTO_SCALE_HARD_MIN + 6;
+
+/**
+ * Peak/fill series only drive auto-scale from the newest fraction of the
+ * window. Older slots still scroll visually, but a long Limiter 8 s history
+ * would otherwise keep the softest past residue (−60) until it ages out —
+ * unlike Mbcomp, whose mid-scale threshold line anchors the floor.
+ */
+const AUTO_SCALE_PEAK_FRACTION = 0.25;
+
+/** Thresh / Limit / GR / Trig strokes — full window (stable anchors). */
+function isAutoScaleReferenceSeries(spec: HistorySeries): boolean {
+  const id = spec.id;
+  return (
+    id === 'thresh' ||
+    id === 'gr' ||
+    id === 'trigger' ||
+    typeof spec.flatDb$ !== 'undefined'
+  );
+}
+
+/**
  * Deepest plotted Y across all listed+visible series (cut tips: both edges).
  *
  * Returns `null` when there is no buffer yet (studio / first paint) so the
  * floor envelope does not lock onto −60 and then crawl up via slow release.
  *
- * Near-zero lin maps to HARD_MIN (−60) for drawing; those silence sentinels are
- * skipped for auto-scale when any real sample exists — otherwise sparse zeros
- * in the 10 s window yank the floor with nothing visible in a zoomed range.
+ * Near-zero lin maps to HARD_MIN (−60) for drawing; those silence sentinels
+ * (and a few dB above) are skipped for auto-scale when any real sample
+ * exists — otherwise sparse zeros / noise-floor scroll yank the floor.
+ * Peak fills only inspect the newest quarter of the window so stop+silence
+ * settles on Limit/Thresh/GR instead of waiting for an 8 s ring to drain.
  * All-silence buffer → HARD_MIN.
  */
 function seriesDeepestDb(
@@ -236,12 +264,17 @@ function seriesDeepestDb(
   const slots = Math.floor(data.length / nCh);
   if (slots < 1) return null;
 
+  const peakStart = Math.min(
+    slots - 1,
+    Math.max(0, Math.floor(slots * (1 - AUTO_SCALE_PEAK_FRACTION))),
+  );
+
   let deepest = Infinity;
   let sawReal = false;
 
   const consider = (y: number) => {
-    // Silence sentinel from historyLinToDb(≈0) — ignore unless buffer is empty of content.
-    if (!(y > AUTO_SCALE_HARD_MIN)) return;
+    // Silence / near-floor — ignore unless the buffer has no real content.
+    if (!(y > AUTO_SCALE_SILENCE_DB)) return;
     sawReal = true;
     if (y < deepest) deepest = y;
   };
@@ -252,11 +285,13 @@ function seriesDeepestDb(
     if (!listed || !visible) continue;
 
     const transform = spec.transform ?? historyLinToDb;
+    const ref = isAutoScaleReferenceSeries(spec);
+    const i0 = ref ? 0 : peakStart;
     if (isCutTipsSeries(spec)) {
       const grCh = spec.diffGrChannel;
       const diffCh = spec.diffChannel;
       const grMode = spec.diffGrMode ?? 'attenuate';
-      for (let i = 0; i < slots; ++i) {
+      for (let i = i0; i < slots; ++i) {
         const baseLin = data[i * nCh + spec.channel] ?? 0;
         let inLin: number;
         let outLin: number;
@@ -282,7 +317,7 @@ function seriesDeepestDb(
     } else if (spec.scaleGrChannel != null) {
       const grCh = spec.scaleGrChannel;
       const grMode = spec.scaleGrMode ?? 'attenuate';
-      for (let i = 0; i < slots; ++i) {
+      for (let i = i0; i < slots; ++i) {
         const baseLin = data[i * nCh + spec.channel] ?? 0;
         const gr = Math.min(1, Math.max(1e-6, data[i * nCh + grCh] ?? 1));
         const lin =
@@ -297,7 +332,7 @@ function seriesDeepestDb(
       }
       const pairCh = spec.pairChannel;
       const pairMode = spec.pairMode;
-      for (let i = 0; i < slots; ++i) {
+      for (let i = i0; i < slots; ++i) {
         let lin = data[i * nCh + spec.channel] ?? 0;
         if (pairCh != null && pairMode) {
           const b = data[i * nCh + pairCh] ?? 0;

@@ -77,54 +77,60 @@ tresult PLUGIN_API AnalyzerPlugin::process(ProcessData& data)
 
   const bool hasHostAudio = io_.begin(data);
   const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
-  const bool drawField = hasHostAudio && !bypass && !quietIn && vizConsumerActive();
-  if (quietIn)
-    quietSamples_ += data.numSamples;
-  else
-    quietSamples_ = 0;
-  const bool silenceHold =
-    quietIn && quietSamples_ > static_cast<int>(sampleRate_ * 0.4);
+  if (!quietIn)
+    spectrumFloor_ = false;
 
-  // Spectrum / gonio: after in_gain, before out_gain. Skip when the UI is hidden.
+  // Spectrum / gonio: after in_gain, before out_gain. Bypass clears; quiet decays.
   if (bypass && vizConsumerActive())
   {
     spectrum_.clearDisplay();
     fieldTap_.clearDisplay();
+    spectrumFloor_ = true;
   }
-  else if (drawField && data.numOutputs > 0)
+  else if (!bypass && vizConsumerActive())
   {
     const int32 nFrames = data.numSamples;
-    if (data.symbolicSampleSize == kSample32)
+    if (hasHostAudio && data.numOutputs > 0 && !spectrumFloor_)
     {
-      auto** out = data.outputs[0].channelBuffers32;
-      const int32 nCh = data.outputs[0].numChannels;
-      for (int32 i = 0; i < nFrames; ++i)
+      if (data.symbolicSampleSize == kSample32)
       {
-        const float L = nCh > 0 && out[0] ? out[0][i] : 0.f;
-        const float R = nCh > 1 && out[1] ? out[1][i] : L;
-        spectrum_.process(L, R);
-        fieldTap_.process(L, R);
+        auto** out = data.outputs[0].channelBuffers32;
+        const int32 nCh = data.outputs[0].numChannels;
+        for (int32 i = 0; i < nFrames; ++i)
+        {
+          const float L = nCh > 0 && out[0] ? out[0][i] : 0.f;
+          const float R = nCh > 1 && out[1] ? out[1][i] : L;
+          spectrum_.process(L, R);
+          fieldTap_.process(L, R);
+        }
       }
+      else
+      {
+        auto** out = data.outputs[0].channelBuffers64;
+        const int32 nCh = data.outputs[0].numChannels;
+        for (int32 i = 0; i < nFrames; ++i)
+        {
+          const float L = nCh > 0 && out[0] ? static_cast<float>(out[0][i]) : 0.f;
+          const float R = nCh > 1 && out[1] ? static_cast<float>(out[1][i]) : L;
+          spectrum_.process(L, R);
+          fieldTap_.process(L, R);
+        }
+      }
+      spectrum_.publish();
+      fieldTap_.publish();
+      if (quietIn && spectrum_.isDisplayNearFloor())
+        spectrumFloor_ = true;
     }
-    else
+    else if (!hasHostAudio && !spectrumFloor_)
     {
-      auto** out = data.outputs[0].channelBuffers64;
-      const int32 nCh = data.outputs[0].numChannels;
+      spectrum_.feedSilence(nFrames);
       for (int32 i = 0; i < nFrames; ++i)
-      {
-        const float L = nCh > 0 && out[0] ? static_cast<float>(out[0][i]) : 0.f;
-        const float R = nCh > 1 && out[1] ? static_cast<float>(out[1][i]) : L;
-        spectrum_.process(L, R);
-        fieldTap_.process(L, R);
-      }
+        fieldTap_.process(0.f, 0.f);
+      spectrum_.publish();
+      fieldTap_.publish();
+      if (spectrum_.isDisplayNearFloor())
+        spectrumFloor_ = true;
     }
-    spectrum_.publish();
-    fieldTap_.publish();
-  }
-  else if (silenceHold && vizConsumerActive())
-  {
-    spectrum_.clearLive();
-    fieldTap_.clearDisplay();
   }
 
   if (hasHostAudio)

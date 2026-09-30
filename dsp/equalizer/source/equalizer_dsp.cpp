@@ -168,7 +168,19 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
   io_.setBypassGains(bypass);
   const bool hasHostAudio = io_.begin(data);
   if (!hasHostAudio)
+  {
+    if (spectrumRun && !spectrumFloor_)
+    {
+      const int32 n = data.numSamples;
+      spectrumIn_.feedSilence(n);
+      spectrumOut_.feedSilence(n);
+      spectrumIn_.publish();
+      spectrumOut_.publish();
+      if (spectrumIn_.isDisplayNearFloor() && spectrumOut_.isDisplayNearFloor())
+        spectrumFloor_ = true;
+    }
     return kResultOk;
+  }
 
   bool anyListen = false;
   bool anyDynBusy = false;
@@ -181,11 +193,31 @@ tresult PLUGIN_API EqualizerPlugin::process(ProcessData& data)
   }
 
   // Quiet + no listen + dyn GR settled: first quiet block still zero-feeds IIR
-  // (drain ring); further quiet blocks may skip.
+  // (drain ring); further quiet blocks may skip EQ. Spectrum keeps feeding
+  // silence until the overlay decays to the floor (suite quiet policy).
   if (!io_.inputWasQuiet())
+  {
     quietDrained_ = false;
+    spectrumFloor_ = false;
+  }
   if (io_.inputWasQuiet() && !anyListen && !anyDynBusy && quietDrained_)
   {
+    if (spectrumRun && !spectrumFloor_)
+    {
+      const int32 n = data.numSamples;
+      spectrumIn_.setSampleRate(sampleRate_);
+      spectrumOut_.setSampleRate(sampleRate_);
+      spectrumIn_.setFftSize(4096);
+      spectrumOut_.setFftSize(4096);
+      spectrumIn_.setHold(false);
+      spectrumOut_.setHold(false);
+      spectrumIn_.feedSilence(n);
+      spectrumOut_.feedSilence(n);
+      spectrumIn_.publish();
+      spectrumOut_.publish();
+      if (spectrumIn_.isDisplayNearFloor() && spectrumOut_.isDisplayNearFloor())
+        spectrumFloor_ = true;
+    }
     io_.end(data);
     return kResultOk;
   }

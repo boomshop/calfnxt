@@ -184,14 +184,34 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
   io_.setGainsDb(params_[kParamInGain], params_[kParamOutGain]);
 
   const bool hasHostAudio = io_.begin(data);
-  if (!hasHostAudio)
-    return kResultOk;
-
   const int32 nFrames = data.numSamples;
-  const bool anyLfoMod = state.lfo1FreqActive || state.lfo1DetuneActive
-    || state.lfo2Lfo1Active || state.lfo2AmountActive;
   const bool spectrumRun = state.spectrumOn && vizConsumerActive();
   spectrumActive_.store(state.spectrumOn, std::memory_order_relaxed);
+
+  if (!hasHostAudio)
+  {
+    // silenceFlags: keep LFO phase; decay spectrum overlays to the floor.
+    if (nFrames > 0)
+    {
+      lfo1_.advance(static_cast<uint32_t>(nFrames));
+      lfo2_.advance(static_cast<uint32_t>(nFrames));
+      modL_.advance(static_cast<uint32_t>(nFrames));
+      modR_.advance(static_cast<uint32_t>(nFrames));
+      if (spectrumRun && !spectrumFloor_)
+      {
+        spectrumIn_.feedSilence(nFrames);
+        spectrumOut_.feedSilence(nFrames);
+        spectrumIn_.publish();
+        spectrumOut_.publish();
+        if (spectrumIn_.isDisplayNearFloor() && spectrumOut_.isDisplayNearFloor())
+          spectrumFloor_ = true;
+      }
+    }
+    return kResultOk;
+  }
+
+  const bool anyLfoMod = state.lfo1FreqActive || state.lfo1DetuneActive
+    || state.lfo2Lfo1Active || state.lfo2AmountActive;
 
   auto storeEffective = [&](float modFreq, float modDetune, float modAmount, float lfo1Freq) {
     effModFreq_.store(modFreq, std::memory_order_relaxed);
@@ -245,18 +265,29 @@ tresult PLUGIN_API RingmodPlugin::process(ProcessData& data)
   };
 
   // Quiet: keep LFO/osc phase continuous, skip sample multiply.
-  // Clear spectrum so the UI does not freeze the last FFT (host stop / silence).
+  // Spectrum feeds silence so overlays decay to the floor (suite quiet policy).
   if (io_.inputWasQuiet())
   {
     advanceOscBlock();
-    if (spectrumRun)
+    if (spectrumRun && !spectrumFloor_)
     {
-      spectrumIn_.clearDisplay();
-      spectrumOut_.clearDisplay();
+      spectrumIn_.setSampleRate(sampleRate_);
+      spectrumOut_.setSampleRate(sampleRate_);
+      spectrumIn_.setFftSize(4096);
+      spectrumOut_.setFftSize(4096);
+      spectrumIn_.setHold(false);
+      spectrumOut_.setHold(false);
+      spectrumIn_.feedSilence(nFrames);
+      spectrumOut_.feedSilence(nFrames);
+      spectrumIn_.publish();
+      spectrumOut_.publish();
+      if (spectrumIn_.isDisplayNearFloor() && spectrumOut_.isDisplayNearFloor())
+        spectrumFloor_ = true;
     }
     io_.end(data);
     return kResultOk;
   }
+  spectrumFloor_ = false;
 
   const bool doProcess = !state.bypass
     && (state.listen || state.modAmount > 1.0e-6f || state.lfo2AmountActive);

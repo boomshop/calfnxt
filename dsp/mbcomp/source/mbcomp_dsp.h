@@ -126,6 +126,8 @@ private:
   int histVisibleSlots_ = 160;
   /** After one quiet zero-feed block, crossover state is drained. */
   bool quietDrained_ = false;
+  /** Spectrum overlay parked after silence decayed to the floor. */
+  bool spectrumFloor_ = false;
   /** Per-band soft bypass: 1 = active, 0 = fully bypassed. */
   float bypassSmooth_[kMaxBands] {};
 };

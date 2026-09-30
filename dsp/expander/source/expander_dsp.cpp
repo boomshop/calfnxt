@@ -576,7 +576,8 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
     invPeakHold_[0] = 0.f;
     invPeakHold_[1] = 0.f;
     detPeakHold_ = 0.f;
-    if (hasHostAudio)
+    pointInDbPlain_ = -96.f;
+    pointOutDbPlain_ = -96.f;
     {
       const int32 n = data.numSamples;
       for (int32 i = 0; i < n; ++i)

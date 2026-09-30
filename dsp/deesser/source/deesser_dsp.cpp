@@ -389,11 +389,10 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
   const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
 
   // Idle only when input is quiet AND de-esser GR is settled.
-  // Host still clocks audio: advance history with silence so the chart keeps scrolling.
+  // Advance history with silence (incl. silenceFlags) so the chart keeps scrolling.
   if (quietIn && gr_.isIdle())
   {
     grMeter_.forceZero();
-    if (hasHostAudio)
     {
       const int32 n = data.numSamples;
       const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);
