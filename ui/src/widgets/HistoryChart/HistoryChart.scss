@@ -42,11 +42,11 @@
     align-items: center;
 
     > .Toggle {
-      padding: 2;
+      padding: 2px 4px;
       height: auto;
 
       > .aux-label {
-        font-size: var(--font-size-tiny);
+        font-size: var(--font-size-small);
       }
     }
   }
