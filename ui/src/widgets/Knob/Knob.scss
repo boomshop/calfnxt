@@ -136,12 +136,13 @@
       content: '';
       position: absolute;
       background: linear-gradient(
-        to bottom,
-        rgba(200, 255, 255, 0.05),
+        to top,
+        rgba(200, 255, 255, 0.055),
         rgba(128, 128, 128, 0),
-        rgba(28, 0, 0, 0.05)
+        rgba(28, 0, 0, 0.055)
       ) !important;
       border-radius: 50%;
+      pointer-events: none;
     }
   }
 
