@@ -66,15 +66,15 @@
 }
 
 :root.night {
-  --background: #000000;
-  --background-less: #0a0a0a;
-  --background-lesser: #1b1b1b;
-  --background-least: #333333;
+  --background: #000003;
+  --background-less: #0a0a0d;
+  --background-lesser: #1b1b1e;
+  --background-least: #333336;
 
-  --color: #ffffff;
-  --color-less: #dddddd;
-  --color-lesser: #bbbbbb;
-  --color-least: #999999;
+  --color: #fdfdff;
+  --color-less: #dbdbdd;
+  --color-lesser: #b9b9bb;
+  --color-least: #979799;
 
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
   --shadow-tight: 0 1px 3px rgba(0, 0, 0, 0.7);
