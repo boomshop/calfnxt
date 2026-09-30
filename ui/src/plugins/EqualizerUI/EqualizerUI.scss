@@ -112,6 +112,19 @@
       background: var(--background-less);
       background-clip: content-box;
       overflow: hidden;
+      position: relative;
+
+      &::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          to bottom,
+          rgba(200, 255, 255, 0.1),
+          rgba(128, 128, 128, 0),
+          rgba(28, 0, 0, 0.2)
+        );
+      }
 
       > .mini {
         margin: 0;
@@ -210,6 +223,10 @@
 
         > .aux-icon {
           --aux-icon-size: 16px;
+        }
+
+        &::before {
+          content: none;
         }
       }
 
