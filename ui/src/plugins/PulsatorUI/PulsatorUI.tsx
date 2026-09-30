@@ -195,6 +195,10 @@ export function PulsatorUI(props: PulsatorUIProps) {
             dots={BPM_DOTS}
             labels={BPM_LABELS}
             disabled={timingLocked}
+            {...{
+              // BPM uses frequency scale for log feel — not Hz digit formatting.
+              'value.format': (v: number) => v.toFixed(1),
+            }}
             {...edit(paramIds.bpm)}
           />
         </WithInfo>

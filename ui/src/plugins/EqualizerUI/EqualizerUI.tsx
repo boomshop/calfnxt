@@ -7,6 +7,7 @@ import {
   Toggle,
   WithInfo,
 } from '../../widgets';
+import { formatHz } from '../../utils/formatHz';
 import {
   EQ_DEFAULT_SELECTED_INDEX,
   EQ_DYN_ATTACK_MAX,
@@ -163,7 +164,7 @@ function BandRow(props: {
         aria-label={`Select band ${index + 1}`}>
         <span
           className={['freq', freqChannelClass].filter(Boolean).join(' ')}>
-          {freq.toFixed(2)}
+          {formatHz(freq)}
         </span>
         <EQChart
           bands={[band]}

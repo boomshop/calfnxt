@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { ValueKnob as AuxKnob } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
+import { formatHz } from '../../utils/formatHz';
 import { composeInteractingOnSet, type AuxOnSet } from '../editGesture';
 import './Knob.scss';
+
+export { formatHz } from '../../utils/formatHz';
 
 /** AUX Knob size presets (from `@deutschesoft/aux-widgets` Knob options). */
 export type KnobPreset = 'tiny' | 'small' | 'medium' | 'large' | 'huge';
@@ -218,6 +221,13 @@ export function Knob(props: KnobProps) {
     return parts.join(' ');
   }, [size, className]);
 
+  // Frequency-scale knobs (Hz / LFO rate) share one digit budget unless overridden.
+  const hzFormat =
+    rest.scale === 'frequency' &&
+    !Object.prototype.hasOwnProperty.call(rest, 'value.format')
+      ? { 'value.format': formatHz }
+      : null;
+
   const unsubsRef = useRef<(() => void)[]>([]);
 
   const detach = useCallback(() => {
@@ -281,6 +291,7 @@ export function Knob(props: KnobProps) {
 
   return (
     <KnobWidget
+      {...(hzFormat ?? {})}
       {...rest}
       className={cls}
       widgetRef={widgetRef}

@@ -26,6 +26,7 @@ import {
   tunerSourceDefaults,
   type ITunerHost,
 } from '../../host/tunerHost';
+import { formatHz } from '../../utils/formatHz';
 import { tunerInfo } from './tunerInfo';
 import '../PluginUI.scss';
 import './TunerUI.scss';
@@ -520,6 +521,7 @@ export function TunerUI(props: TunerUIProps) {
               dots={VIB_RATE_DOTS}
               labels={VIB_RATE_LABELS}
               size="small"
+              {...{ 'value.format': formatHz }}
               {...edit(paramIds.vib_rate)}
             />
           </WithInfo>

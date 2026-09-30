@@ -21,6 +21,7 @@ import {
   type IReverbHost,
 } from '../../host/reverbHost';
 import type { ReverbPresetId } from './reverbPresets';
+import { formatHz } from '../../utils/formatHz';
 import { reverbInfo } from './reverbInfo';
 import '../PluginUI.scss';
 import './ReverbUI.scss';
@@ -527,6 +528,7 @@ export function ReverbUI({ host }: ReverbUIProps) {
                   reset={reverbParamDefault('hf_damp')}
                   dots={HF_DOTS}
                   labels={HF_LABELS}
+                  {...{ 'value.format': formatHz }}
                   {...edit(paramIds.hf_damp)}
                 />
               </WithInfo>
@@ -542,6 +544,7 @@ export function ReverbUI({ host }: ReverbUIProps) {
                   reset={reverbParamDefault('mod_rate')}
                   dots={MOD_DOTS}
                   labels={MOD_LABELS}
+                  {...{ 'value.format': formatHz }}
                   {...edit(paramIds.mod_rate)}
                 />
               </WithInfo>
