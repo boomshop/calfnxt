@@ -43,11 +43,6 @@
   --aux-scale-markersize: 3px;
   --aux-scale-minheight: 15px;
   --aux-scale-minwidth: 20px;
-
-  --aux-knob-bgmargintiny: 2px;
-  --aux-knob-bgmarginsmall: 15px;
-  --aux-knob-bgmarginmedium: 20px;
-  --aux-knob-bgmargin: 20px;
 }
 
 :root.day {
@@ -337,6 +332,7 @@ textarea::selection {
   transition:
     color var(--transition),
     background var(--transition);
+  border: 1px solid var(--background);
 
   &:hover {
     background: var(--background-least);
@@ -368,9 +364,10 @@ textarea::selection {
     inset: 0;
     background: linear-gradient(
       to bottom,
-      rgba(200, 255, 255, 0.05),
-      rgba(128, 128, 128, 0),
-      rgba(28, 0, 0, 0.05)
+      rgba(255, 255, 255, 0.05) 0%,
+      rgba(255, 255, 255, 0) 50%,
+      rgba(0, 0, 0, 0) 50.1%,
+      rgba(0, 0, 0, 0.08) 100%
     );
     pointer-events: none;
   }
