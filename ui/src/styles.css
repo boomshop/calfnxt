@@ -109,7 +109,7 @@
 
   --color-warn: #ffcc00;
   --contrast-warn: #000000;
-  --color-hot: #ff6600;
+  --color-hot: #ff0000;
 }
 
 :root.sea {
@@ -121,7 +121,7 @@
 
   --color-warn: #00ced5;
   --contrast-warn: #000000;
-  --color-hot: #b700ff;
+  --color-hot: #ff5900;
 }
 
 :root.slick {

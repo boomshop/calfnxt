@@ -31,7 +31,9 @@ const FALLBACK: ThemeColors = {
 };
 
 function cssByte(n: number): string {
-  return Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+  return Math.max(0, Math.min(255, Math.round(n)))
+    .toString(16)
+    .padStart(2, '0');
 }
 
 let colorProbe: HTMLSpanElement | null = null;
@@ -82,9 +84,8 @@ export function readThemeColors(): ThemeColors {
   };
 }
 
-export const themeColors$ = DynamicValue.fromConstant<ThemeColors>(
-  readThemeColors(),
-);
+export const themeColors$ =
+  DynamicValue.fromConstant<ThemeColors>(readThemeColors());
 
 function refreshThemeColors() {
   // Next frame so classList toggles have applied computed styles.
@@ -101,6 +102,7 @@ export function levelMeterGradient(c: ThemeColors) {
   return [
     { value: -96, color: c.accent },
     { value: 0, color: c.warn },
+    { value: 0.01, color: c.hot },
     { value: 12, color: c.hot },
   ];
 }
@@ -110,6 +112,7 @@ export function levelMeterGradientMap(c: ThemeColors) {
   return {
     '-96': c.accent,
     '0': c.warn,
+    '0.01': c.hot,
     '12': c.hot,
   };
 }
