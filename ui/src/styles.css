@@ -333,7 +333,6 @@ textarea::selection {
   transition:
     color var(--transition),
     background var(--transition);
-  border: 1px solid var(--background);
 
   &:hover {
     background: var(--background-least);
