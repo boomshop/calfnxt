@@ -565,21 +565,36 @@ public:
 
   void publish()
   {
-    std::lock_guard<std::mutex> lock(mutex_);
-    pubAvg_ = avgDb_;
-    pubMax_ = maxDb_;
-    pubL_ = lDb_;
-    pubR_ = rDb_;
-    pubGr_ = grDisp_;
-    pubScAvg_ = scAvgDb_;
+    // Same contract as SpectrumTap: never block, never allocate. The macOS
+    // editor shares the process; a mutex wait or a malloc under the lock
+    // stalls the realtime thread against AppKit.
+    std::unique_lock<std::mutex> lock(mutex_, std::try_to_lock);
+    if (!lock.owns_lock())
+      return;
+
+    auto copyEq = [](std::vector<float>& dst, const std::vector<float>& src) {
+      if (src.empty() || dst.size() != src.size())
+        return;
+      std::memcpy(dst.data(), src.data(), src.size() * sizeof(float));
+    };
+    copyEq(pubAvg_, avgDb_);
+    copyEq(pubMax_, maxDb_);
+    copyEq(pubL_, lDb_);
+    copyEq(pubR_, rDb_);
+    copyEq(pubGr_, grDisp_);
+    copyEq(pubScAvg_, scAvgDb_);
     pubScActive_ = scDetectActive_;
-    pubLadderN_ = ladderN_;
     pubLadderKeep_ = ladderKeep_;
+    pubLadderN_ = 0;
     if (ladderN_ > 0)
-      pubLadder_.assign(ladder_.begin(),
-                        ladder_.begin() + static_cast<size_t>(2 * ladderN_));
-    else
-      pubLadder_.clear();
+    {
+      const size_t n = static_cast<size_t>(2 * ladderN_);
+      if (pubLadder_.size() >= n && ladder_.size() >= n)
+      {
+        std::memcpy(pubLadder_.data(), ladder_.data(), n * sizeof(float));
+        pubLadderN_ = ladderN_;
+      }
+    }
   }
 
 private:
@@ -619,7 +634,7 @@ private:
     grTarget_.assign(half, 0.f);
     scratch_.assign(half, 0.f);
     ladder_.assign(static_cast<size_t>(2 * kMaxLadderRungs), 0.f);
-    pubLadder_.clear();
+    pubLadder_.assign(static_cast<size_t>(2 * kMaxLadderRungs), 0.f);
     ladderN_ = 0;
     pubLadderN_ = 0;
     ladderKeep_ = 0.f;

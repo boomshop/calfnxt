@@ -2,6 +2,7 @@
 
 #include "base/source/fstreamer.h"
 #include "channel_mode.h"
+#include "fp_flush.h"
 
 #include <algorithm>
 #include <cmath>
@@ -137,6 +138,10 @@ void TamerPlugin::applyBlockState(const BlockState& s)
 
 tresult PLUGIN_API TamerPlugin::process(ProcessData& data)
 {
+  // STFT bins go denormal between hops. A 64-bit Apple Silicon host that
+  // leaves FPCR.FZ clear stalls the callback on those flushes.
+  Dsp::ScopedFlushDenormals flushDenormals;
+
   syncParamPlains(data, params_, kParamCount);
 
   const BlockState state = makeBlockState();

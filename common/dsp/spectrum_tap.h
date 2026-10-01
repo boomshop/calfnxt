@@ -195,7 +195,12 @@ public:
 
   void publish()
   {
-    std::lock_guard<std::mutex> lock(mutex_);
+    // Audio thread must not wait on the UI snapshot. The macOS editor is
+    // in-process; blocking here priority-inverts against AppKit and the
+    // host callback looks frozen. Skip the frame instead.
+    std::unique_lock<std::mutex> lock(mutex_, std::try_to_lock);
+    if (!lock.owns_lock())
+      return;
     publishLocked();
   }
 
@@ -476,11 +481,18 @@ private:
 
   void publishLocked()
   {
-    pubAvg_ = avgDb_;
-    pubMax_ = maxDb_;
-    pubL_ = lDb_;
-    pubR_ = rDb_;
-    pubRms_ = rmsDb_;
+    // memcpy only — vector assign can malloc under the lock and deadlock
+    // the audio thread against the in-process UI allocator.
+    const size_t n = avgDb_.size();
+    if (n == 0 || pubAvg_.size() != n || pubMax_.size() != n || pubL_.size() != n
+        || pubR_.size() != n || pubRms_.size() != n)
+      return;
+    const size_t bytes = n * sizeof(float);
+    std::memcpy(pubAvg_.data(), avgDb_.data(), bytes);
+    std::memcpy(pubMax_.data(), maxDb_.data(), bytes);
+    std::memcpy(pubL_.data(), lDb_.data(), bytes);
+    std::memcpy(pubR_.data(), rDb_.data(), bytes);
+    std::memcpy(pubRms_.data(), rmsDb_.data(), bytes);
   }
 
   double sampleRate_ = 48000.0;

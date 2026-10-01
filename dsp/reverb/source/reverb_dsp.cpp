@@ -2,6 +2,7 @@
 
 #include "base/source/fstreamer.h"
 #include "dsp_math.h"
+#include "fp_flush.h"
 #include "gain_util.h"
 
 #include <algorithm>
@@ -385,6 +386,10 @@ void ReverbPlugin::processSample(float inL, float inR, float& outL, float& outR)
 
 tresult PLUGIN_API ReverbPlugin::process(ProcessData& data)
 {
+  // Allpass tanks skip per-sample denormal scrub. Without FTZ a 64-bit
+  // Apple Silicon callback never returns.
+  Dsp::ScopedFlushDenormals flushDenormals;
+
   syncParamPlains(data, params_, kParamCount);
   updateFromParams();
 

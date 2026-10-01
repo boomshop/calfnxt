@@ -2,6 +2,7 @@
 
 #include "base/source/fstreamer.h"
 #include "dsp_math.h"
+#include "fp_flush.h"
 #include "gain_util.h"
 
 #include <algorithm>
@@ -694,6 +695,10 @@ tresult PLUGIN_API MblimiterPlugin::setupProcessing(ProcessSetup& newSetup)
 
 tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
 {
+  // Seven lookahead rings plus the split filters. Denormals with FPCR.FZ
+  // clear (Reaper 64-bit on Apple Silicon) blow the callback budget.
+  Dsp::ScopedFlushDenormals flushDenormals;
+
   syncParamPlains(data, params_, kParamCount);
 
   const bool bypass = params_[kParamBypass] >= 0.5f;
