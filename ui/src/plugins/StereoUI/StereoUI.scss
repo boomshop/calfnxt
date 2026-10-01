@@ -45,6 +45,7 @@
   > .mode {
     flex: 0 0 120px;
     align-items: stretch;
+    padding-right: 16px;
 
     > .Buttons,
     > .WithInfo:has(> .Buttons) {
