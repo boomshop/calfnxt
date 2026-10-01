@@ -198,9 +198,10 @@ textarea::selection {
     inset: 0;
     background: linear-gradient(
       to bottom,
-      rgba(255, 255, 255, 0.02),
-      rgba(128, 128, 128, 0),
-      rgba(0, 0, 0, 0.02)
+      rgba(255, 255, 255, 0.02) 0,
+      rgba(255, 255, 255, 0) 50%,
+      rgba(0, 0, 0, 0) 50.1%,
+      rgba(0, 0, 0, 0.02) 100%
     );
   }
 
