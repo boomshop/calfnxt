@@ -17,14 +17,14 @@
     }
 
     > .left {
-      justify-self: end;
+      justify-self: center;
       display: flex;
       gap: 16px;
       align-items: center;
     }
 
     > .right {
-      justify-self: start;
+      justify-self: center;
       display: flex;
       gap: 16px;
       align-items: center;
