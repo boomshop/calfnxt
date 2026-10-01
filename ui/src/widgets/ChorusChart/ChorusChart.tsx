@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { useVizPaint } from '../../utils/viz_paint';
@@ -27,17 +34,27 @@ function wrap01(v: number): number {
 }
 
 /** Calf Multichorus depth-panel X (0…1) for one voice / channel. */
-function depthDotX(phase: number, voice: number, unit: number, scw: number): number {
+function depthDotX(
+  phase: number,
+  voice: number,
+  unit: number,
+  scw: number,
+): number {
   const ph = wrap01(phase);
   const x = 0.5 + 0.5 * Math.sin(ph * 2 * Math.PI);
   return (voice * unit + x) / scw;
 }
 
 /** Calf Multichorus rate-panel Y (−1…1) for one voice. */
-function rateDotY(phase: number, voice: number, unit: number, scw: number): number {
+function rateDotY(
+  phase: number,
+  voice: number,
+  unit: number,
+  scw: number,
+): number {
   const ph = wrap01(phase);
   let y = 0.95 * Math.sin(ph * 2 * Math.PI);
-  y = (voice * unit + (y + 1) / 2) / scw * 2 - 1;
+  y = ((voice * unit + (y + 1) / 2) / scw) * 2 - 1;
   return y;
 }
 
@@ -53,7 +70,7 @@ function voiceSineCurve(
     const x = i / (points - 1);
     const phase = x;
     let y = 0.95 * Math.sin(phase * 2 * Math.PI);
-    y = (voice * unit + (y + 1) / 2) / scw * 2 - 1;
+    y = ((voice * unit + (y + 1) / 2) / scw) * 2 - 1;
     pts.push({ x, y });
   }
   return pts;
@@ -125,7 +142,8 @@ export function ChorusChart(props: ChorusChartProps) {
   const nVoices = Math.max(1, Math.min(8, Math.round(voices)));
   const unit = 1 - Math.min(1, Math.max(0, overlap));
   const scw = 1 + unit * (nVoices - 1);
-  const vStep = (Math.min(360, Math.max(0, vphase)) / 360) / Math.max(nVoices - 1, 1);
+  const vStep =
+    Math.min(360, Math.max(0, vphase)) / 360 / Math.max(nVoices - 1, 1);
 
   layoutRef.current = {
     nVoices,
@@ -139,13 +157,17 @@ export function ChorusChart(props: ChorusChartProps) {
   };
 
   const curves = useMemo(
-    () => Array.from({ length: nVoices }, (_, v) => voiceSineCurve(v, unit, scw, 96)),
+    () =>
+      Array.from({ length: nVoices }, (_, v) =>
+        voiceSineCurve(v, unit, scw, 96),
+      ),
     [nVoices, unit, scw],
   );
 
   const padX = 6;
   const padY = 6;
-  const mapDepthX = (x: number, w: number) => padX + clamp01(x) * (w - padX * 2);
+  const mapDepthX = (x: number, w: number) =>
+    padX + clamp01(x) * (w - padX * 2);
   const mapDepthY = (y: number, h: number) => {
     const mid = h * 0.5;
     const amp = Math.max(1, mid - padY);
@@ -179,11 +201,17 @@ export function ChorusChart(props: ChorusChartProps) {
       const rL = rateDotsRef.current[v * 2];
       const rR = rateDotsRef.current[v * 2 + 1];
       if (dL) {
-        dL.setAttribute('cx', String(mapDepthX(depthDotX(phL, v, u, s), depthW)));
+        dL.setAttribute(
+          'cx',
+          String(mapDepthX(depthDotX(phL, v, u, s), depthW)),
+        );
         dL.setAttribute('cy', String(mapDepthY(0.5, depthH)));
       }
       if (dR) {
-        dR.setAttribute('cx', String(mapDepthX(depthDotX(phR, v, u, s), depthW)));
+        dR.setAttribute(
+          'cx',
+          String(mapDepthX(depthDotX(phR, v, u, s), depthW)),
+        );
         dR.setAttribute('cy', String(mapDepthY(-0.5, depthH)));
       }
       if (rL) {
@@ -206,7 +234,15 @@ export function ChorusChart(props: ChorusChartProps) {
     // next viz tick will correct; also pull current if available.
     const cur = lfo$.value;
     if (Array.isArray(cur)) paintLfo(cur);
-  }, [nVoices, depthSize.w, depthSize.h, rateSize.w, rateSize.h, paintLfo, lfo$]);
+  }, [
+    nVoices,
+    depthSize.w,
+    depthSize.h,
+    rateSize.w,
+    rateSize.h,
+    paintLfo,
+    lfo$,
+  ]);
 
   return (
     <div className={`ChorusChart${className ? ` ${className}` : ''}`}>
@@ -214,15 +250,14 @@ export function ChorusChart(props: ChorusChartProps) {
         <svg
           className="aux-chart"
           viewBox={`0 0 ${depthSize.w} ${depthSize.h}`}
-          preserveAspectRatio="none"
-        >
-          <line
-            className="grid stroke-color stroke-thinner stroke-semi"
+          preserveAspectRatio="none">
+          {/* <line
+            className="grid stroke-color stroke-thinner stroke-faint"
             x1={padX}
             x2={depthSize.w - padX}
             y1={mapDepthY(0, depthSize.h)}
             y2={mapDepthY(0, depthSize.h)}
-          />
+          /> */}
           {Array.from({ length: nVoices }, (_, v) => (
             <g key={`d${v}`}>
               <circle
@@ -251,15 +286,14 @@ export function ChorusChart(props: ChorusChartProps) {
         <svg
           className="aux-chart"
           viewBox={`0 0 ${rateSize.w} ${rateSize.h}`}
-          preserveAspectRatio="none"
-        >
-          <line
-            className="grid stroke-color stroke-thinner stroke-semi"
+          preserveAspectRatio="none">
+          {/* <line
+            className="grid stroke-color stroke-thinner stroke-faint"
             x1={padX}
             x2={rateSize.w - padX}
             y1={mapRateY(0, rateSize.h)}
             y2={mapRateY(0, rateSize.h)}
-          />
+          /> */}
           {curves.map((pts, v) => (
             <path
               key={`c${v}`}

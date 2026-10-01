@@ -12,7 +12,7 @@
       /* Unity / null line — beat AUX .aux-steady + soft defaults. */
       > .aux-graph.aux-steady {
         stroke: var(--color);
-        stroke-opacity: var(--graph-stroke-opacity-semi);
+        stroke-opacity: var(--graph-stroke-opacity-soft);
         stroke-dasharray: var(--graph-dash-dashed); /* 3 3 */
         fill: none;
         fill-opacity: var(--graph-fill-opacity-none);

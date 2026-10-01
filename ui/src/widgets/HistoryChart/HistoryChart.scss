@@ -21,7 +21,7 @@
   svg > .aux-grid > .aux-gridline.base,
   .aux-grid > .aux-gridline.base {
     stroke: var(--color);
-    stroke-opacity: var(--graph-stroke-opacity-semi) !important;
+    stroke-opacity: var(--graph-stroke-opacity-soft) !important;
   }
 
   /* Hidden via listed$ / visible$ — keep path node, kill paint. */
