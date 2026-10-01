@@ -133,9 +133,9 @@
     display: grid;
     grid-template-areas:
       'left range'
-      'knobs knobs';
+      'shape knobs';
     grid-template-columns: auto auto;
-    grid-template-rows: auto auto;
+    grid-template-rows: 1fr auto;
     gap: var(--gap) 24px;
     grid-auto-flow: column;
     align-items: center;
@@ -151,6 +151,12 @@
       flex-direction: column;
       align-items: center;
       gap: var(--gap);
+      justify-content: space-between;
+    }
+
+    > .shape {
+      grid-area: shape;
+      align-self: stretch;
     }
 
     > .knobs {

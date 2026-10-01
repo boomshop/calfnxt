@@ -317,25 +317,27 @@ export function ImpulseUI(props: ImpulseUIProps) {
               size="large"
             />
           </WithInfo>
+
           <WithInfo title={impulseInfo.reverse} className="reverse">
             <Toggle state$={host.reverse$} label="Reverse" />
           </WithInfo>
         </div>
 
+        <WithInfo title={impulseInfo.shape} className="shape">
+          <Knob
+            label="Shape"
+            value$={host.shape$}
+            min={1}
+            max={8}
+            reset={impulseParamDefault('shape')}
+            dots={SHAPE_DOTS}
+            labels={SHAPE_LABELS}
+            scale="log2"
+            {...edit(paramIds.shape)}
+          />
+        </WithInfo>
+
         <div className="knobs">
-          <WithInfo title={impulseInfo.shape} className="shape">
-            <Knob
-              label="Shape"
-              value$={host.shape$}
-              min={1}
-              max={8}
-              reset={impulseParamDefault('shape')}
-              dots={SHAPE_DOTS}
-              labels={SHAPE_LABELS}
-              scale="log2"
-              {...edit(paramIds.shape)}
-            />
-          </WithInfo>
           <WithInfo title={impulseInfo.predelay} className="predelay">
             <Knob
               label="Predelay"
