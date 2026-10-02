@@ -880,8 +880,6 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
       outR = outL;
     const float inL = outL;
     const float inR = outR;
-    if (spectrumRun)
-      spectrumIn_.process(inL, inR);
 
     if (color > 0.f)
     {
@@ -1116,8 +1114,14 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
     Dsp::sanitizeDenormal(outL);
     Dsp::sanitizeDenormal(outR);
 
+    // Overlay must see latency-matched dry vs wet. Tapping fft_in before
+    // bypassDelay_ (PDC ≈ 2× max look) compared different FFT windows and
+    // painted a phantom In/Out diff with GR still at unity.
     if (spectrumRun)
+    {
+      spectrumIn_.process(dryL, dryR);
       spectrumOut_.process(outL, outR);
+    }
 
     const float op = std::max(std::fabs(outL), std::fabs(outR));
     if (op > blockPeak)
