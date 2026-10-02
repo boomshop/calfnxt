@@ -2,12 +2,16 @@
  * Shared In/Out spectrum overlay dots for EQChart / MultibandChart.
  * outer = max(in,out), mask = min(in,out), edge = output contour.
  *
- * Overlay only needs the avg traces — do not parse/copy max/L/R/rms, and do
- * not Catmull-Rom densify (that turned a 192-bin overlay into ~1/px SVG).
+ * Overlay only needs the avg traces — do not parse/copy max/L/R/rms.
+ * Y-smooth + capped Catmull-Rom (≤ 2× bins, not 1 pt/CSS-px) so log-bin
+ * plateaus do not draw as stairs; the old uncapped densify exploded SVG.
  */
 import {
   SPECTRUM_DB_MIN,
   binToHz,
+  catmullRomDensify,
+  smoothSeriesY,
+  spectrumPxPerBin,
   tiltDb,
 } from '../widgets/SpectrumChart/SpectrumChart';
 import { SPECTRUM_MAX_BINS } from './spectrum_bins';
@@ -40,11 +44,26 @@ function payloadBins(raw: number[] | null | undefined): number {
   return raw.length >= 2 + bins ? bins : 0;
 }
 
+function polishOverlay(
+  xs: number[],
+  ys: number[],
+  bins: number,
+  cssWidthPx: number,
+): SpectrumOverlayDots {
+  const px = spectrumPxPerBin(cssWidthPx, bins);
+  const smoothed = smoothSeriesY(ys, xs, px);
+  const pts: SpectrumOverlayDots = [];
+  for (let i = 0; i < xs.length; ++i) pts.push({ x: xs[i]!, y: smoothed[i]! });
+  const cap = Math.min(Math.max(1, cssWidthPx), bins * 2);
+  return catmullRomDensify(pts, cap, 'log');
+}
+
 /** One pass over In/Out avg traces → the three overlay polylines. */
 export function spectrumOverlayLayers(
   inRaw: number[] | null | undefined,
   outRaw: number[] | null | undefined,
   axis: SpectrumOverlayAxis,
+  cssWidthPx = 0,
 ): {
   outer: SpectrumOverlayDots | null;
   mask: SpectrumOverlayDots | null;
@@ -56,29 +75,31 @@ export function spectrumOverlayLayers(
   if (!bins) return { outer: null, mask: null, edge: null };
 
   const slope = axis.slopeDbPerOct ?? 0;
-  const outer: SpectrumOverlayDots = [];
-  const mask: SpectrumOverlayDots = [];
-  const edge: SpectrumOverlayDots = [];
+  const xs: number[] = [];
+  const yOuter: number[] = [];
+  const yMask: number[] = [];
+  const yEdge: number[] = [];
   for (let i = 0; i < bins; ++i) {
     const f = binToHz(i, bins);
     if (f < axis.fMin || f > axis.fMax) continue;
     const da = binsIn ? avgAt(inRaw, i) : SPECTRUM_DB_MIN;
     const db = binsOut ? avgAt(outRaw, i) : SPECTRUM_DB_MIN;
-    outer.push({
-      x: f,
-      y: mapSpectrumDbToY(tiltDb(Math.max(da, db), f, slope), axis.yMin, axis.yMax),
-    });
-    mask.push({
-      x: f,
-      y: mapSpectrumDbToY(tiltDb(Math.min(da, db), f, slope), axis.yMin, axis.yMax),
-    });
-    edge.push({
-      x: f,
-      y: mapSpectrumDbToY(tiltDb(db, f, slope), axis.yMin, axis.yMax),
-    });
+    const ta = tiltDb(Math.max(da, db), f, slope);
+    const tb = tiltDb(Math.min(da, db), f, slope);
+    const tout = tiltDb(db, f, slope);
+    xs.push(f);
+    yOuter.push(mapSpectrumDbToY(ta, axis.yMin, axis.yMax));
+    yMask.push(mapSpectrumDbToY(tb, axis.yMin, axis.yMax));
+    yEdge.push(mapSpectrumDbToY(tout, axis.yMin, axis.yMax));
   }
-  if (!outer.length) return { outer: null, mask: null, edge: null };
-  return { outer, mask, edge };
+  if (!xs.length) return { outer: null, mask: null, edge: null };
+
+  const w = cssWidthPx > 0 ? cssWidthPx : 1024;
+  return {
+    outer: polishOverlay(xs, yOuter, bins, w),
+    mask: polishOverlay(xs, yMask, bins, w),
+    edge: polishOverlay(xs, yEdge, bins, w),
+  };
 }
 
 export function spectrumOverlayDiffDots(
@@ -86,9 +107,9 @@ export function spectrumOverlayDiffDots(
   outRaw: number[] | null | undefined,
   mode: 'max' | 'min',
   axis: SpectrumOverlayAxis,
-  _cssWidthPx?: number,
+  cssWidthPx?: number,
 ): SpectrumOverlayDots | null {
-  const layers = spectrumOverlayLayers(inRaw, outRaw, axis);
+  const layers = spectrumOverlayLayers(inRaw, outRaw, axis, cssWidthPx ?? 0);
   return mode === 'max' ? layers.outer : layers.mask;
 }
 
@@ -96,7 +117,7 @@ export function spectrumOverlayDiffDots(
 export function spectrumOverlayContourDots(
   outRaw: number[] | null | undefined,
   axis: SpectrumOverlayAxis,
-  _cssWidthPx?: number,
+  cssWidthPx?: number,
 ): SpectrumOverlayDots | null {
-  return spectrumOverlayLayers(null, outRaw, axis).edge;
+  return spectrumOverlayLayers(null, outRaw, axis, cssWidthPx ?? 0).edge;
 }

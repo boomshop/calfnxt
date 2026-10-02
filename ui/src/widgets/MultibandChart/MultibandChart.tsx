@@ -783,7 +783,12 @@ export function MultibandChart(props: MultibandChartProps) {
           const out = row[1] ?? [];
           const scalePlain = typeof row[2] === 'number' ? row[2] : 0;
           const axis = axisFor(scalePlain);
-          const layers = spectrumOverlayLayers(inn, out, axis);
+          const layers = spectrumOverlayLayers(
+            inn,
+            out,
+            axis,
+            spectrumWidthRef.current,
+          );
           mask.set('dots', layers.mask);
           edge.set('dots', layers.edge);
           return layers.outer;
