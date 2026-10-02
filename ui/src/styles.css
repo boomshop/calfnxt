@@ -204,14 +204,28 @@ textarea::selection {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(
+    pointer-events: none;
+    background-image: url('./images/noise.png');
+    background-repeat: repeat;
+    background-size: 128px 128px;
+    z-index: 0;
+    mix-blend-mode: soft-light;
+    opacity: 0.75;
+  }
+  /* &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: linear-gradient(
       to bottom,
       rgb(from var(--bevel-light) r g b / 0.02) 0,
       rgb(from var(--bevel-light) r g b / 0) 50%,
       rgb(from var(--bevel-dark) r g b / 0) 50.1%,
       rgb(from var(--bevel-dark) r g b / 0.02) 100%
     );
-  }
+  } */
 
   > .title {
     position: absolute;
