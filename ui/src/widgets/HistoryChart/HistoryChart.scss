@@ -39,6 +39,11 @@
     > .HistoryChart-chart svg {
       shape-rendering: optimizeSpeed;
     }
+
+    > .history-toggles {
+      left: 4px;
+      top: 4px;
+    }
   }
 
   > .history-toggles {
