@@ -167,9 +167,7 @@ export interface HistoryChartProps {
    */
   autoScale?: boolean;
   /**
-   * rAF glide of `range_y` while auto-scaling. Default true (Compressor /
-   * Limiter). Multiband strips pass false so 4–6 charts do not repaint at
-   * display Hz on top of the viz tick.
+   * rAF glide of `range_y` while auto-scaling. Default true.
    */
   autoScaleAnimate?: boolean;
   /**

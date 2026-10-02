@@ -84,8 +84,7 @@ export class ChartYAutoScale {
   private enabled = true;
   private yMax = 0;
   /**
-   * Smooth range_y glide toward the snapped floor. Strip histories should
-   * leave this false — the rAF loop redraws every graph at display Hz.
+   * Smooth range_y glide toward the snapped floor. Default true.
    */
   animateRange = true;
 

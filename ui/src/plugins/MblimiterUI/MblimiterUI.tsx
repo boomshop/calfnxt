@@ -138,7 +138,6 @@ function BandStrip(props: { band: IMblimiterBand; compactKnobs: boolean }) {
           data$={band.historyData$}
           vizId="mblimiter"
           autoScale
-          autoScaleAnimate={false}
           maxBins={MB_BAND_HISTORY_BINS}
           syncBins={band.index === 0}
           windowMs={MB_BAND_HISTORY_MS}
