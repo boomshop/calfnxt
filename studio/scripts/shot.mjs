@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 /**
- * Build + serve the Studio Vite app, screenshot each plugin frame → website/images/.
+ * Build + serve the Studio Vite app, screenshot each plugin frame for every
+ * day/night × accent pair → website/images/<mode>/<accent>/<id>.png
  *
  *   npm run shot
  *   npm run shot -- plugin=reverb
  *   npm run shot -- reverb
+ *   npm run shot -- night calfnxt
+ *   npm run shot -- reverb mode=day accent=lime
  */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -74,8 +77,13 @@ const ALL = [
   'tamer',
 ];
 
-function parsePlugins(argv) {
+const MODES = ['night', 'day'];
+const ACCENTS = ['calfnxt', 'lime', 'fire', 'sea', 'slick'];
+
+function parseArgs(argv) {
   const ids = new Set();
+  const modes = new Set();
+  const accents = new Set();
   for (let i = 0; i < argv.length; ++i) {
     const a = argv[i];
     if (a.startsWith('plugin=')) {
@@ -91,16 +99,79 @@ function parsePlugins(argv) {
       if (next) ids.add(next.trim());
       continue;
     }
-    if (ALL.includes(a)) ids.add(a);
+    if (a.startsWith('mode=')) {
+      modes.add(a.slice('mode='.length).trim());
+      continue;
+    }
+    if (a.startsWith('--mode=')) {
+      modes.add(a.slice('--mode='.length).trim());
+      continue;
+    }
+    if (a === '--mode') {
+      const next = argv[++i];
+      if (next) modes.add(next.trim());
+      continue;
+    }
+    if (a.startsWith('accent=')) {
+      accents.add(a.slice('accent='.length).trim());
+      continue;
+    }
+    if (a.startsWith('--accent=')) {
+      accents.add(a.slice('--accent='.length).trim());
+      continue;
+    }
+    if (a === '--accent') {
+      const next = argv[++i];
+      if (next) accents.add(next.trim());
+      continue;
+    }
+    if (ALL.includes(a)) {
+      ids.add(a);
+      continue;
+    }
+    if (MODES.includes(a)) {
+      modes.add(a);
+      continue;
+    }
+    if (ACCENTS.includes(a)) {
+      accents.add(a);
+      continue;
+    }
+    console.error(
+      `unknown argument "${a}". plugins: ${ALL.join(', ')}; modes: ${MODES.join(', ')}; accents: ${ACCENTS.join(', ')}`,
+    );
+    process.exit(1);
   }
-  if (ids.size === 0) return ALL.slice();
   for (const id of ids) {
     if (!ALL.includes(id)) {
       console.error(`unknown plugin "${id}". known: ${ALL.join(', ')}`);
       process.exit(1);
     }
   }
-  return [...ids];
+  for (const mode of modes) {
+    if (!MODES.includes(mode)) {
+      console.error(`unknown mode "${mode}". known: ${MODES.join(', ')}`);
+      process.exit(1);
+    }
+  }
+  for (const accent of accents) {
+    if (!ACCENTS.includes(accent)) {
+      console.error(
+        `unknown accent "${accent}". known: ${ACCENTS.join(', ')}`,
+      );
+      process.exit(1);
+    }
+  }
+  const themes = [];
+  for (const mode of modes.size ? [...modes] : MODES) {
+    for (const accent of accents.size ? [...accents] : ACCENTS) {
+      themes.push({ mode, accent });
+    }
+  }
+  return {
+    plugins: ids.size === 0 ? ALL.slice() : [...ids],
+    themes,
+  };
 }
 
 function ensureGenerated() {
@@ -144,13 +215,10 @@ function runNpm(args) {
   });
 }
 
-async function forceStudioTheme(page) {
+async function prepStudioPage(page) {
   await page.addInitScript(() => {
     try {
-      localStorage.setItem('calfnxt.themeMode', 'night');
-      localStorage.setItem('calfnxt.themeAccent', 'calfnxt');
       localStorage.setItem('calfnxt.showWidgetInfo', '0');
-      // Expander history: GR off for clean website shots (matches UI default).
       localStorage.setItem('calfnxt.historyVisible.expander.gr', '0');
       localStorage.setItem('calfnxt.historyVisible.expander.trigger', '0');
     } catch {
@@ -159,14 +227,41 @@ async function forceStudioTheme(page) {
   });
 }
 
-async function shotPlugin(browser, id) {
-  const url = `${BASE}/#${id}`;
-  // Probe CSS size at dpr=1
+async function applyStudioTheme(page, mode, accent) {
+  await page.evaluate(
+    async ({ mode, accent }) => {
+      try {
+        localStorage.setItem('calfnxt.showWidgetInfo', '0');
+        localStorage.setItem('calfnxt.themeMode', mode);
+        localStorage.setItem('calfnxt.themeAccent', accent);
+        localStorage.setItem('calfnxt.historyVisible.expander.gr', '0');
+        localStorage.setItem('calfnxt.historyVisible.expander.trigger', '0');
+      } catch {
+        /* ignore */
+      }
+      const root = document.documentElement;
+      root.classList.add('calfnxt-widget-info-off');
+      for (const c of ['day', 'night']) root.classList.toggle(c, c === mode);
+      for (const c of ['calfnxt', 'lime', 'fire', 'sea', 'slick'])
+        root.classList.toggle(c, c === accent);
+      window.__calfnxtStudioSetTheme?.(mode, accent);
+      await new Promise((r) => requestAnimationFrame(() => r()));
+      await new Promise((r) => requestAnimationFrame(() => r()));
+    },
+    { mode, accent },
+  );
+  // AUX SVG + themeColors$ rAF refresh
+  await wait(280);
+}
+
+async function shotPlugin(browser, id, themes) {
+  const first = themes[0];
+  const url = `${BASE}/?mode=${first.mode}&accent=${first.accent}#${id}`;
   const probe = await browser.newPage({
     viewport: { width: 1400, height: 1000 },
     deviceScaleFactor: 1,
   });
-  await forceStudioTheme(probe);
+  await prepStudioPage(probe);
   await probe.goto(url, { waitUntil: 'networkidle' });
   await probe.waitForSelector('[data-studio-frame][data-ready="1"]', {
     timeout: 45000,
@@ -183,46 +278,36 @@ async function shotPlugin(browser, id) {
     },
     deviceScaleFactor: dpr,
   });
-  await forceStudioTheme(page);
+  await prepStudioPage(page);
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForSelector('[data-studio-frame][data-ready="1"]', {
     timeout: 45000,
   });
-  // Re-assert prefs after boot (in case localStorage raced or was flipped).
-  await page.evaluate(() => {
-    try {
-      localStorage.setItem('calfnxt.showWidgetInfo', '0');
-      localStorage.setItem('calfnxt.themeMode', 'night');
-      localStorage.setItem('calfnxt.themeAccent', 'calfnxt');
-      localStorage.setItem('calfnxt.historyVisible.expander.gr', '0');
-      localStorage.setItem('calfnxt.historyVisible.expander.trigger', '0');
-    } catch {
-      /* ignore */
-    }
-    const root = document.documentElement;
-    root.classList.add('calfnxt-widget-info-off');
-    for (const c of ['day', 'night']) root.classList.toggle(c, c === 'night');
-    for (const c of ['calfnxt', 'lime', 'fire', 'sea', 'slick'])
-      root.classList.toggle(c, c === 'calfnxt');
-  });
-  // Extra settle for AUX SVG layouts + theme paint refresh
-  await wait(200);
 
-  const out = path.join(OUT_DIR, `${id}.png`);
-  await page
-    .locator('[data-studio-frame]')
-    .screenshot({ path: out, type: 'png' });
+  for (const { mode, accent } of themes) {
+    await applyStudioTheme(page, mode, accent);
+    const dir = path.join(OUT_DIR, mode, accent);
+    fs.mkdirSync(dir, { recursive: true });
+    const out = path.join(dir, `${id}.png`);
+    await page
+      .locator('[data-studio-frame]')
+      .screenshot({ path: out, type: 'png' });
+    console.log(
+      `    wrote ${mode}/${accent}/${id}.png  (${Math.round(box.width)}×${Math.round(box.height)} @${dpr.toFixed(2)}x)`,
+    );
+  }
   await page.close();
-  console.log(
-    `    wrote ${out}  (${Math.round(box.width)}×${Math.round(box.height)} @${dpr.toFixed(2)}x)`,
-  );
 }
 
 async function main() {
   useInstalledPlaywrightBrowsers();
   ensureGenerated();
-  const plugins = parsePlugins(process.argv.slice(2));
+  const { plugins, themes } = parseArgs(process.argv.slice(2));
   fs.mkdirSync(OUT_DIR, { recursive: true });
+
+  console.log(
+    `==> ${plugins.length} plugin(s) × ${themes.length} theme(s)`,
+  );
 
   console.log('==> vite build');
   await runNpm(['run', 'build']);
@@ -239,7 +324,7 @@ async function main() {
     try {
       for (const id of plugins) {
         console.log(`==> ${id}`);
-        await shotPlugin(browser, id);
+        await shotPlugin(browser, id, themes);
       }
     } finally {
       await browser.close();

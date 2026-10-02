@@ -1,6 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { showWidgetInfo$, themeAccent$, themeMode$ } from '@calfnxt/ui';
+import {
+  ACCENT_CLASSES,
+  setThemeAccent,
+  setThemeMode,
+  showWidgetInfo$,
+  type ThemeAccent,
+  type ThemeMode,
+} from '@calfnxt/ui';
 import { App } from './App';
 import '../../ui/src/styles.css';
 import './studio.css';
@@ -11,9 +18,25 @@ import './studio.css';
 // Screenshots must never show WithInfo tip bubbles (default is on / localStorage).
 showWidgetInfo$.set(false);
 
-// Website shots always use the default branding pair (ignore user prefs).
-themeMode$.set('night');
-themeAccent$.set('calfnxt');
+function isAccent(v: string | null): v is ThemeAccent {
+  return (ACCENT_CLASSES as readonly string[]).includes(v ?? '');
+}
+
+function themeFromSearch(): { mode: ThemeMode; accent: ThemeAccent } {
+  const q = new URLSearchParams(window.location.search);
+  const mode: ThemeMode = q.get('mode') === 'day' ? 'day' : 'night';
+  const raw = q.get('accent');
+  return { mode, accent: isAccent(raw) ? raw : 'calfnxt' };
+}
+
+const initialTheme = themeFromSearch();
+setThemeMode(initialTheme.mode);
+setThemeAccent(initialTheme.accent);
+
+window.__calfnxtStudioSetTheme = (mode, accent) => {
+  setThemeMode(mode);
+  setThemeAccent(accent);
+};
 
 // Expander history: GR/Trig off for studio shots (matches EXPANDER_HISTORY_TOGGLES).
 try {

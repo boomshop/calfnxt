@@ -1,7 +1,8 @@
 # calfNXT Screenshot Studio
 
 Optional tooling to render each plugin UI with **static demo fixtures** and export
-PNGs to `website/images/` via Playwright.
+PNGs to `website/images/<mode>/<accent>/` via Playwright
+(night/day × calfnxt/lime/fire/sea/slick). Default branding is **night / calfnxt**.
 
 Normal plugin development does **not** need this package. Install only when you
 want to refresh website screenshots.
@@ -49,9 +50,14 @@ node scripts/gen_synthetic_viz.mjs
 From **repo root**:
 
 ```bash
-npm run studio                 # all plugins → website/images/<id>.png
+npm run studio                 # all plugins × all themes → website/images/<mode>/<accent>/<id>.png
 npm run studio -- plugin=reverb
 npm run studio -- reverb
+npm run studio -- night calfnxt          # default pair only
+npm run studio -- reverb mode=day accent=lime
+./tools/website.sh shots                 # same capture via the website tool (alias: studio)
+./tools/website.sh all                   # shots, then upload website/ (alias: full)
+./tools/website.sh site                  # upload index.html + styles.css only (alias: website)
 ```
 
 Or from `studio/`:
@@ -64,13 +70,16 @@ npm run shot -- equalizer
 Output width targets ~1560 CSS×deviceScaleFactor (matches current website assets).
 Frames are design-size (`*.plugin.json` editor WxH) without DevShell chrome.
 **WithInfo tip bubbles are forced off** for every capture (`showWidgetInfo$` + CSS).
-Theme is always reset to **night / calfnxt** (ignore localStorage prefs).
+Each capture writes `website/images/<mode>/<accent>/<id>.png`. Omit mode/accent
+filters to shoot all ten pairs; URL query `?mode=&accent=` selects the pair in
+the Studio preview.
 
 ## Preview in the browser
 
 ```bash
 cd studio && npm run dev
 # http://127.0.0.1:5174/#compressor
+# http://127.0.0.1:5174/?mode=day&accent=lime#compressor
 ```
 
 ## Layout
@@ -81,6 +90,6 @@ cd studio && npm run dev
 | `fixtures/<id>/params.json` | Knob / mode plains |
 | `fixtures/<id>/viz.json` | Static levels, history, GR, gonio, … |
 | `scripts/shot.mjs` | Playwright capture |
-| `scripts/extract_history.py` | Best-effort envelope from `website/images/*.png` |
+| `scripts/extract_history.py` | Best-effort envelope from `website/images/night/calfnxt/*.png` |
 
 `website/` remains gitignored; copy/deploy screenshots separately.

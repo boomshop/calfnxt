@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Best-effort: sample history/envelope curves from website/images/*.png into fixtures.
+"""Best-effort: sample history/envelope curves from website/images/night/calfnxt/*.png.
 
 Usage (from repo root or studio/):
   python3 studio/scripts/extract_history.py
@@ -151,7 +151,9 @@ def merge_envelope(plugin: str, envelope: list[float]) -> None:
 def main() -> None:
     want = sys.argv[1:] or ["compressor", "deesser", "transients"]
     for plugin in want:
-        png = IMAGES / f"{plugin}.png"
+        png = IMAGES / "night" / "calfnxt" / f"{plugin}.png"
+        if not png.is_file():
+            png = IMAGES / f"{plugin}.png"
         if not png.is_file():
             print(f"skip {plugin}: missing {png}")
             continue
