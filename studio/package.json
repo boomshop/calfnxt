@@ -1,7 +1,7 @@
 {
   "name": "calfnxt-studio",
   "private": true,
-  "version": "2.12.4",
+  "version": "2.12.5",
   "type": "module",
   "description": "Optional screenshot studio for website/images/<mode>/<accent> (Playwright). Install explicitly: cd studio && npm i",
   "scripts": {
