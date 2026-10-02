@@ -38,7 +38,7 @@ dsp/*/web/
 # Website
 /website/
 
-# Local deploy (host/user paths; keep out of git)
+# Website static tree is local-only; the publish helper lives in git as tools/website.sh
 /tools/publish-website.sh
 
 # Tuner click-test regression log (local iteration)

@@ -266,11 +266,16 @@ cd ui && npm run dev   # e.g. http://localhost:5173/#chorus
 
 Useful for layout/widgets; does **not** replace `~/.vst3` for hosts.
 
-### Website screenshots (optional)
+### Website screenshots / publish (optional)
 
 ```bash
 cd studio && npm install    # once (Chromium)
-npm run studio              # from repo root — all / one plugin
+./tools/website.sh shots              # screenshots only (alias: studio)
+./tools/website.sh publish            # upload full website/ (incl. images)
+./tools/website.sh all                # screenshots, then upload everything (alias: full)
+./tools/website.sh site               # upload index.html + styles.css only (alias: website)
+# ./tools/website.sh studio -- reverb night calfnxt
+# npm run studio                      # same capture as `shots`
 ```
 
 See [`studio/README.md`](studio/README.md).
