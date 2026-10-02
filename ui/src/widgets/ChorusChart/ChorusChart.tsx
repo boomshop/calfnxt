@@ -112,16 +112,16 @@ function useBoxSize(ref: RefObject<HTMLElement | null>): Size {
 
 /**
  * Two stacked Calf Multi Chorus panels:
- * - Depth: tiny L/R dots per voice along the delay span
+ * - Depth: L/R phase lines, each half the strip height
  * - Rate: per-voice sine curves + live phase dots
  *
- * Params → React; live `lfo$` → imperative circle attrs (no React on viz ticks).
+ * Params → React; live `lfo$` → imperative marker attrs (no React on viz ticks).
  */
 export function ChorusChart(props: ChorusChartProps) {
   const { className, voices$, overlap$, vphase$, lfo$ } = props;
   const depthBoxRef = useRef<HTMLDivElement>(null);
   const rateBoxRef = useRef<HTMLDivElement>(null);
-  const depthDotsRef = useRef<(SVGCircleElement | null)[]>([]);
+  const depthDotsRef = useRef<(SVGLineElement | null)[]>([]);
   const rateDotsRef = useRef<(SVGCircleElement | null)[]>([]);
   const layoutRef = useRef({
     nVoices: 1,
@@ -168,11 +168,6 @@ export function ChorusChart(props: ChorusChartProps) {
   const padY = 6;
   const mapDepthX = (x: number, w: number) =>
     padX + clamp01(x) * (w - padX * 2);
-  const mapDepthY = (y: number, h: number) => {
-    const mid = h * 0.5;
-    const amp = Math.max(1, mid - padY);
-    return mid - y * amp;
-  };
   const mapRateX = (x: number, w: number) => padX + clamp01(x) * (w - padX * 2);
   const mapRateY = (y: number, h: number) => {
     const mid = h * 0.5;
@@ -201,18 +196,18 @@ export function ChorusChart(props: ChorusChartProps) {
       const rL = rateDotsRef.current[v * 2];
       const rR = rateDotsRef.current[v * 2 + 1];
       if (dL) {
-        dL.setAttribute(
-          'cx',
-          String(mapDepthX(depthDotX(phL, v, u, s), depthW)),
-        );
-        dL.setAttribute('cy', String(mapDepthY(0.5, depthH)));
+        const x = String(mapDepthX(depthDotX(phL, v, u, s), depthW));
+        dL.setAttribute('x1', x);
+        dL.setAttribute('x2', x);
+        dL.setAttribute('y1', '0');
+        dL.setAttribute('y2', String(depthH * 0.5));
       }
       if (dR) {
-        dR.setAttribute(
-          'cx',
-          String(mapDepthX(depthDotX(phR, v, u, s), depthW)),
-        );
-        dR.setAttribute('cy', String(mapDepthY(-0.5, depthH)));
+        const x = String(mapDepthX(depthDotX(phR, v, u, s), depthW));
+        dR.setAttribute('x1', x);
+        dR.setAttribute('x2', x);
+        dR.setAttribute('y1', String(depthH * 0.5));
+        dR.setAttribute('y2', String(depthH));
       }
       if (rL) {
         rL.setAttribute('cx', String(mapRateX(phL, rateW)));
@@ -255,32 +250,36 @@ export function ChorusChart(props: ChorusChartProps) {
             className="grid stroke-color stroke-thinner stroke-faint"
             x1={padX}
             x2={depthSize.w - padX}
-            y1={mapDepthY(0, depthSize.h)}
-            y2={mapDepthY(0, depthSize.h)}
+            y1={depthSize.h * 0.5}
+            y2={depthSize.h * 0.5}
           /> */}
           {Array.from({ length: nVoices }, (_, v) => (
             <g key={`d${v}`}>
-              <circle
+              <line
                 ref={(el) => {
                   depthDotsRef.current[v * 2] = el;
                 }}
-                className="dot dot-l fill-accent stroke-none"
-                cx={0}
-                cy={0}
-                r={3.5}
+                className="mark mark-l stroke-accent fill-none stroke-thicker"
+                x1={0}
+                x2={0}
+                y1={0}
+                y2={0}
               />
-              <circle
+              <line
                 ref={(el) => {
                   depthDotsRef.current[v * 2 + 1] = el;
                 }}
-                className="dot dot-r fill-warn stroke-none"
-                cx={0}
-                cy={0}
-                r={3.5}
+                className="mark mark-r stroke-warn fill-none stroke-thicker"
+                x1={0}
+                x2={0}
+                y1={0}
+                y2={0}
               />
             </g>
           ))}
         </svg>
+        <span className="lane l">L</span>
+        <span className="lane r">R</span>
       </div>
       <div ref={rateBoxRef} className="ChorusChart-panel rate">
         <svg
@@ -297,7 +296,7 @@ export function ChorusChart(props: ChorusChartProps) {
           {curves.map((pts, v) => (
             <path
               key={`c${v}`}
-              className="wave fill-none stroke-color stroke-rich"
+              className="wave fill-none stroke-color stroke-faint"
               d={pathThrough(
                 pts,
                 (x) => mapRateX(x, rateSize.w),

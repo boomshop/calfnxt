@@ -15,6 +15,26 @@
 
     &.depth {
       flex: 0 0 32px;
+
+      > .lane {
+        position: absolute;
+        left: 5px;
+        z-index: 1;
+        pointer-events: none;
+        font-family: Oswald, sans-serif;
+        font-size: 9px;
+        line-height: 1;
+      }
+
+      > .lane.l {
+        top: 2px;
+        color: var(--color-accent);
+      }
+
+      > .lane.r {
+        bottom: 2px;
+        color: var(--color-warn);
+      }
     }
 
     &.rate {
