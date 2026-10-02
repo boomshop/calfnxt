@@ -191,7 +191,13 @@ textarea::selection {
 }
 
 .block {
-  background: var(--background-less);
+  /* Lightness-only shade of --background-less. Interpolate in oklch so the hue does not drift. */
+  background: linear-gradient(
+    to bottom in oklch,
+    oklch(from var(--background-less) calc(l + 0.012) c h),
+    oklch(from var(--background-less) l c h) 50%,
+    oklch(from var(--background-less) calc(l - 0.012) c h)
+  );
   border-radius: var(--border-radius);
   position: relative;
   padding: var(--gap);
@@ -212,20 +218,6 @@ textarea::selection {
     mix-blend-mode: soft-light;
     opacity: 0.75;
   }
-  /* &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    background-image: linear-gradient(
-      to bottom,
-      rgb(from var(--bevel-light) r g b / 0.02) 0,
-      rgb(from var(--bevel-light) r g b / 0) 50%,
-      rgb(from var(--bevel-dark) r g b / 0) 50.1%,
-      rgb(from var(--bevel-dark) r g b / 0.02) 100%
-    );
-  } */
 
   > .title {
     position: absolute;
@@ -402,7 +394,12 @@ textarea::selection {
 }
 
 .aux-chart {
-  background: var(--background-less);
+  background: linear-gradient(
+    to bottom in oklch,
+    oklch(from var(--background-less) calc(l + 0.012) c h),
+    oklch(from var(--background-less) l c h) 50%,
+    oklch(from var(--background-less) calc(l - 0.012) c h)
+  );
   border-radius: var(--border-radius);
   border: 1px solid var(--background-lesser);
 
