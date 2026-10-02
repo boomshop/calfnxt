@@ -12,7 +12,12 @@ import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import { useChartGradient } from '../../hooks/useChartGradient';
+import {
+  ANALYZER_SPECTRUM_TOGGLES,
+  persistedHistoryVisible$,
+} from '../../prefs/historySeriesVisible';
 import { themeColors$ } from '../../theme/themeColors';
+import { Toggle } from '../Toggle';
 import {
   SPECTRUM_MAX_BINS,
   SPECTRUM_MIN_BINS,
@@ -52,6 +57,19 @@ export const SPECTRUM_SCALE = {
 } as const;
 
 export type SpectrumMode = (typeof SPECTRUM_MODE)[keyof typeof SPECTRUM_MODE];
+
+type SpectrumTraceId = keyof typeof ANALYZER_SPECTRUM_TOGGLES;
+
+const SPECTRUM_TRACE_CHIPS: ReadonlyArray<{
+  id: SpectrumTraceId;
+  short: string;
+  name: string;
+}> = [
+  { id: 'l', short: 'L', name: 'Left' },
+  { id: 'r', short: 'R', name: 'Right' },
+  { id: 'rms', short: 'RMS', name: 'RMS' },
+  { id: 'hold', short: 'Hold', name: 'Peak hold' },
+];
 
 const DB_GRID = 6;
 const DB_LABEL = 12;
@@ -598,6 +616,25 @@ export function SpectrumChart(props: SpectrumChartProps) {
     className,
   } = props;
 
+  const specVis = useMemo(() => {
+    const vis = {} as Record<
+      SpectrumTraceId,
+      ReturnType<typeof persistedHistoryVisible$>
+    >;
+    for (const id of Object.keys(
+      ANALYZER_SPECTRUM_TOGGLES,
+    ) as SpectrumTraceId[]) {
+      vis[id] = persistedHistoryVisible$(
+        'analyzer',
+        id,
+        ANALYZER_SPECTRUM_TOGGLES[id],
+      );
+    }
+    return vis;
+  }, []);
+  const specVisRef = useRef(specVis);
+  specVisRef.current = specVis;
+
   const chartRef = useRef<AuxChartInstance | null>(null);
   const graphsRef = useRef<AuxGraph[]>([]);
   const graphBindingsRef = useRef<Bindings | null>(null);
@@ -710,6 +747,22 @@ export function SpectrumChart(props: SpectrumChartProps) {
     (raw: number[]): { x: number; y: number }[] | null => {
       const m = Math.round(modeRef.current);
       const slope = slopeDbPerOct(scaleRef.current);
+      const graphs = graphsRef.current;
+      const dvs = specVisRef.current;
+      const vis = {
+        l: !!dvs.l.value,
+        r: !!dvs.r.value,
+        rms: !!dvs.rms.value,
+        hold: !!dvs.hold.value,
+      };
+      if (monitorRef.current && graphs.length >= 5) {
+        const [gRms, gLRim, gL, gR, gMax] = graphs;
+        gRms?.element?.classList.toggle('spec-hidden', !vis.rms);
+        gLRim?.element?.classList.toggle('spec-hidden', !vis.l);
+        gL?.element?.classList.toggle('spec-hidden', !vis.l);
+        gR?.element?.classList.toggle('spec-hidden', !vis.r);
+        gMax?.element?.classList.toggle('spec-hidden', !vis.hold);
+      }
       const payload = parseSpectrumPayload(raw);
       if (!payload) return null;
 
@@ -720,7 +773,6 @@ export function SpectrumChart(props: SpectrumChartProps) {
       }
 
       const chart = chartRef.current;
-      const graphs = graphsRef.current;
       if (!chart || chart.isDestructed?.()) return null;
 
       if (payload.bins !== binsRef.current) {
@@ -745,7 +797,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
 
       if (monitorRef.current && m !== SPECTRUM_MODE.Spectralizer) {
         // [rms, L-rim, L, R, max] — dark understroke on accent (L) only.
-        const [, gLRim, gL, gR, gMax] = graphs;
+        const [gRms, gLRim, gL, gR, gMax] = graphs;
         gMax?.element?.classList.remove('spec-diff');
         chart.set('range_y', { min: SPECTRUM_DB_MIN, max: SPECTRUM_DB_MAX });
         chart.set(
@@ -762,12 +814,22 @@ export function SpectrumChart(props: SpectrumChartProps) {
             s,
             px,
           );
+        const show = (
+          g: AuxGraph | undefined,
+          on: boolean,
+          pts: ReturnType<typeof dots> | null,
+        ) => {
+          g?.set('dots', on ? pts : null);
+          g?.element?.classList.toggle('spec-hidden', !on);
+        };
         const rms = payload.rms ?? payload.avg;
-        const lDots = dots(payload.L, slope);
-        gLRim?.set('dots', lDots);
-        gL?.set('dots', lDots);
-        gR?.set('dots', dots(payload.R, slope));
-        gMax?.set('dots', dots(payload.max, slope));
+        const lDots = vis.l ? dots(payload.L, slope) : null;
+        const rmsDots = vis.rms ? dots(rms, slope) : null;
+        show(gLRim, vis.l, lDots);
+        show(gL, vis.l, lDots);
+        show(gR, vis.r, vis.r ? dots(payload.R, slope) : null);
+        show(gMax, vis.hold, vis.hold ? dots(payload.max, slope) : null);
+        show(gRms, vis.rms, rmsDots);
         const band = corridorElRef.current;
         if (band && slope > 0) {
           const center = midbandMean(rms, payload.bins, slope);
@@ -778,9 +840,9 @@ export function SpectrumChart(props: SpectrumChartProps) {
         } else if (band) {
           band.hidden = true;
         }
-        gMax?.toFront?.();
+        if (vis.hold) gMax?.toFront?.();
         reassertRef.current();
-        return dots(rms, slope);
+        return rmsDots;
       }
 
       const [g0, g1, gHold, gPeak] = graphs;
@@ -910,7 +972,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
           ? [
               {
                 className:
-                  'spec-rms fill-gradient fill-soft stroke-rich stroke-dotted stroke-thinner',
+                  'spec-rms fill-gradient fill-soft stroke-rich stroke-thinner',
                 mode: 'bottom' as const,
                 gradient: true,
                 type: 'L',
@@ -1041,6 +1103,19 @@ export function SpectrumChart(props: SpectrumChartProps) {
     buildPoints(dataLatestRef.current);
   }, [mode, hold, scale, buildPoints]);
 
+  // Monitor trace chips — AWML DVs, no React re-render on toggle.
+  useEffect(() => {
+    if (!monitor) return;
+    const unsubs = SPECTRUM_TRACE_CHIPS.map(({ id }) =>
+      specVis[id].subscribe(() => {
+        buildPoints(dataLatestRef.current);
+      }),
+    );
+    return () => {
+      for (const u of unsubs) u();
+    };
+  }, [monitor, specVis, buildPoints]);
+
   // Re-attach Binding when data$ / paint identity changes (curve modes only).
   useEffect(() => {
     if (isSpectralizer || !graphsRef.current[0]) return;
@@ -1135,6 +1210,16 @@ export function SpectrumChart(props: SpectrumChartProps) {
             hidden
             aria-hidden
           />
+          <div className="spectrum-toggles">
+            {SPECTRUM_TRACE_CHIPS.map((chip) => (
+              <Toggle
+                key={chip.id}
+                state$={specVis[chip.id]}
+                label={chip.short}
+                title={chip.name}
+              />
+            ))}
+          </div>
         </>
       )}
       {isSpectralizer && (

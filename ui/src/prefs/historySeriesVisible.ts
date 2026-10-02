@@ -93,3 +93,11 @@ export const ANALYZER_LOUD_TOGGLES = {
   mom: true,
   st: true,
 } as const;
+
+/** Analyzer spectrum (monitor) — L / R / RMS / Hold on by default. */
+export const ANALYZER_SPECTRUM_TOGGLES = {
+  l: true,
+  r: true,
+  rms: true,
+  hold: true,
+} as const;

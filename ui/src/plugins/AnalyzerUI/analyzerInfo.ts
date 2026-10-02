@@ -8,7 +8,7 @@ export const analyzerInfo = {
   reset:
     'Clears integrated loudness, LRA, the clock and the true-peak / sample-peak maximums. The spectrum peak-hold is a separate reset.',
   resetPeak:
-    'Clears the white dashed spectrum peak trace. It stays latched (no slow decay) until the next reset, so the hottest bin of the pass remains visible.',
+    'Clears the white peak-hold trace. It stays latched (no slow decay) until the next reset, so the hottest bin of the pass remains visible. Hide the line with the Hold chip if you only want it gone from the picture.',
   fftSize:
     'FFT size: larger = finer low-frequency detail and slower updates; smaller = snappier / less bass resolution. 4k is the default at 48 kHz; 8k helps resolve sub/bass further (more CPU). 1k/2k when you want a quicker display. This is the main CPU knob — L and R are both transformed.',
   scale:
@@ -16,7 +16,7 @@ export const analyzerInfo = {
   standard:
     'Loudness target and true-peak mark. The measurement itself stays ITU-R BS.1770-4. EBU R128 = −23 LUFS / −1 dBTP. ATSC A/85 = −24 LKFS / −2 dBTP. −14 and −16 are the streaming ceilings (about  −1 dBTP) most music masters are checked against.',
   curves:
-    'Four traces at once. Accent is left, warn is right (both ~100 ms). The solid neutral curve is a slower RMS body (~1 s, power in each band, L+R). The white dashed line is the latched peak of the mid and only clears with Reset Peak.',
+    'Four traces at once — L, R, RMS and Hold chips at the top-left hide any of them. Accent is left, warn is right (both ~100 ms). The solid neutral curve is a slower RMS body (~1 s, power in each band, L+R). The white line is the latched peak of the mid and only clears with Reset Peak.',
   diff:
     'Left minus right, in dB, same frequency axis as the main chart. Above the centre line the left is hotter (accent fill); below, the right is hotter (warn fill). A flat line on zero is a centred, matching spectrum. Wide stereo or a one-sided problem shows up here without switching modes.',
   gonio:

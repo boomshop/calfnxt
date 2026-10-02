@@ -110,4 +110,30 @@
     stroke-dasharray: none;
     stroke-opacity: 0.95;
   }
+
+  .spec-hidden {
+    opacity: 0 !important;
+    stroke-opacity: var(--graph-stroke-opacity-none) !important;
+    fill-opacity: var(--graph-fill-opacity-none) !important;
+  }
+
+  > .spectrum-toggles {
+    position: absolute;
+    left: var(--gap);
+    top: var(--gap);
+    z-index: 4;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+
+    > .Toggle {
+      padding: 2px 4px;
+      height: auto;
+
+      > .aux-label {
+        font-size: var(--font-size-small);
+      }
+    }
+  }
 }
