@@ -137,6 +137,7 @@ function BandStrip(props: {
           vizId="mbcomp"
           windowMs={MB_BAND_HISTORY_MS}
           autoScale
+          autoScaleReleaseTauS={4}
           maxBins={MB_BAND_HISTORY_BINS}
           syncBins={band.index === 0}
           className={['compact', bypass && 'disabled'].filter(Boolean).join(' ')}

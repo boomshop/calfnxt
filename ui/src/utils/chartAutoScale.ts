@@ -87,6 +87,8 @@ export class ChartYAutoScale {
    * Smooth range_y glide toward the snapped floor. Default true.
    */
   animateRange = true;
+  /** Release time constant (seconds). Attack stay-low hold is unchanged. */
+  releaseTauS = AUTO_SCALE_RELEASE_TAU_S;
 
   setEnabled(on: boolean): void {
     this.enabled = on;
@@ -175,7 +177,7 @@ export class ChartYAutoScale {
       this.attackPending = target;
       if (dtMs > 0) {
         const dt = dtMs / 1000;
-        env += (target - env) * (1 - Math.exp(-dt / AUTO_SCALE_RELEASE_TAU_S));
+        env += (target - env) * (1 - Math.exp(-dt / this.releaseTauS));
       }
       if (Math.abs(target - env) <= AUTO_SCALE_SETTLE_DB) env = target;
     }

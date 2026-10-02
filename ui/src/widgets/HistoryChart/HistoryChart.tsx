@@ -9,6 +9,7 @@ import {
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import {
   AUTO_SCALE_HARD_MIN,
+  AUTO_SCALE_RELEASE_TAU_S,
   ChartYAutoScale,
 } from '../../utils/chartAutoScale';
 import { buildDbGridY, buildTimeGridX } from '../../utils/chartGrid';
@@ -170,6 +171,11 @@ export interface HistoryChartProps {
    * rAF glide of `range_y` while auto-scaling. Default true.
    */
   autoScaleAnimate?: boolean;
+  /**
+   * Release time constant (seconds) for the floor envelope. Attack stays
+   * fast (`AUTO_SCALE_ATTACK_MS`). Default 2; multiband strips use 4.
+   */
+  autoScaleReleaseTauS?: number;
   /**
    * Cap DSP history slots (`vizcfg` bins). Strip charts are ~200×96 px —
    * 72 points is already denser than one per pixel.
@@ -650,6 +656,7 @@ export function HistoryChart(props: HistoryChartProps) {
     dbMax = DB_MAX,
     autoScale = false,
     autoScaleAnimate = true,
+    autoScaleReleaseTauS = AUTO_SCALE_RELEASE_TAU_S,
     maxBins,
     syncBins = true,
     persistToggles,
@@ -812,6 +819,7 @@ export function HistoryChart(props: HistoryChartProps) {
       const scaler = yAutoScaleRef.current;
       scaler.setEnabled(!!autoScale);
       scaler.animateRange = autoScaleAnimate;
+      scaler.releaseTauS = autoScaleReleaseTauS;
       if (!autoScaleAnimate) scaler.cancelAnim();
 
       const yMin = autoScale ? scaler.rangeMin : dbMin;
@@ -1000,6 +1008,7 @@ export function HistoryChart(props: HistoryChartProps) {
       applyAutoScale,
       autoScale,
       autoScaleAnimate,
+      autoScaleReleaseTauS,
       data$,
       maxBins,
       syncBins,
