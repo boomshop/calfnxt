@@ -50,7 +50,7 @@ node scripts/gen_synthetic_viz.mjs
 From **repo root**:
 
 ```bash
-npm run studio                 # all plugins × all themes → website/images/<mode>/<accent>/<id>.png
+npm run studio                 # all plugins × all themes → website/images/<mode>/<accent>/<id>.jpg
 npm run studio -- plugin=reverb
 npm run studio -- reverb
 npm run studio -- night calfnxt          # default pair only
@@ -70,7 +70,7 @@ npm run shot -- equalizer
 Output width targets ~1560 CSS×deviceScaleFactor (matches current website assets).
 Frames are design-size (`*.plugin.json` editor WxH) without DevShell chrome.
 **WithInfo tip bubbles are forced off** for every capture (`showWidgetInfo$` + CSS).
-Each capture writes `website/images/<mode>/<accent>/<id>.png`. Omit mode/accent
+Each capture writes `website/images/<mode>/<accent>/<id>.jpg` (JPEG quality 80). Omit mode/accent
 filters to shoot all ten pairs; URL query `?mode=&accent=` selects the pair in
 the Studio preview.
 
@@ -90,6 +90,6 @@ cd studio && npm run dev
 | `fixtures/<id>/params.json` | Knob / mode plains |
 | `fixtures/<id>/viz.json` | Static levels, history, GR, gonio, … |
 | `scripts/shot.mjs` | Playwright capture |
-| `scripts/extract_history.py` | Best-effort envelope from `website/images/night/calfnxt/*.png` |
+| `scripts/extract_history.py` | Best-effort envelope from `website/images/night/calfnxt/*.jpg` |
 
 `website/` remains gitignored; copy/deploy screenshots separately.

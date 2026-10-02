@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Build + serve the Studio Vite app, screenshot each plugin frame for every
- * day/night × accent pair → website/images/<mode>/<accent>/<id>.png
+ * day/night × accent pair → website/images/<mode>/<accent>/<id>.jpg
  *
  *   npm run shot
  *   npm run shot -- plugin=reverb
@@ -288,12 +288,14 @@ async function shotPlugin(browser, id, themes) {
     await applyStudioTheme(page, mode, accent);
     const dir = path.join(OUT_DIR, mode, accent);
     fs.mkdirSync(dir, { recursive: true });
-    const out = path.join(dir, `${id}.png`);
-    await page
-      .locator('[data-studio-frame]')
-      .screenshot({ path: out, type: 'png' });
+    const out = path.join(dir, `${id}.jpg`);
+    await page.locator('[data-studio-frame]').screenshot({
+      path: out,
+      type: 'jpeg',
+      quality: 80,
+    });
     console.log(
-      `    wrote ${mode}/${accent}/${id}.png  (${Math.round(box.width)}×${Math.round(box.height)} @${dpr.toFixed(2)}x)`,
+      `    wrote ${mode}/${accent}/${id}.jpg  (${Math.round(box.width)}×${Math.round(box.height)} @${dpr.toFixed(2)}x)`,
     );
   }
   await page.close();

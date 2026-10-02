@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Best-effort: sample history/envelope curves from website/images/night/calfnxt/*.png.
+"""Best-effort: sample history/envelope curves from website/images/night/calfnxt/*.jpg.
 
 Usage (from repo root or studio/):
   python3 studio/scripts/extract_history.py
@@ -151,20 +151,24 @@ def merge_envelope(plugin: str, envelope: list[float]) -> None:
 def main() -> None:
     want = sys.argv[1:] or ["compressor", "deesser", "transients"]
     for plugin in want:
-        png = IMAGES / "night" / "calfnxt" / f"{plugin}.png"
-        if not png.is_file():
-            png = IMAGES / f"{plugin}.png"
-        if not png.is_file():
-            print(f"skip {plugin}: missing {png}")
+        shot = IMAGES / "night" / "calfnxt" / f"{plugin}.jpg"
+        if not shot.is_file():
+            shot = IMAGES / "night" / "calfnxt" / f"{plugin}.png"
+        if not shot.is_file():
+            shot = IMAGES / f"{plugin}.jpg"
+        if not shot.is_file():
+            shot = IMAGES / f"{plugin}.png"
+        if not shot.is_file():
+            print(f"skip {plugin}: missing {shot}")
             continue
         rect = CHART_RECT.get(plugin)
         if not rect:
             print(f"skip {plugin}: no chart rect")
             continue
         if plugin == "transients":
-            env = extract_transients(png, rect)
+            env = extract_transients(shot, rect)
         elif plugin in ("compressor", "deesser"):
-            env = extract_3ch(png, rect)
+            env = extract_3ch(shot, rect)
             for c in (0, 1, 2):
                 for i in range(1, SLOTS - 1):
                     a = env[(i - 1) * 3 + c]
@@ -172,7 +176,7 @@ def main() -> None:
                     d = env[(i + 1) * 3 + c]
                     env[i * 3 + c] = 0.25 * a + 0.5 * b + 0.25 * d
         else:
-            env = extract_2ch(png, rect)
+            env = extract_2ch(shot, rect)
             for c in (0, 1):
                 for i in range(1, SLOTS - 1):
                     a = env[(i - 1) * 2 + c]
