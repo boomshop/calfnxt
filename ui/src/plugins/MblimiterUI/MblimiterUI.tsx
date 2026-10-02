@@ -11,6 +11,8 @@ import {
   Select,
   Toggle,
   WithInfo,
+  MB_BAND_HISTORY_BINS,
+  MB_BAND_HISTORY_MS,
   mblimiterHistorySeries,
 } from '../../widgets';
 import { paramIds } from '../../generated/mblimiterModel';
@@ -118,6 +120,8 @@ const XOVER_PARAM_IDS = [
   paramIds.xover5,
 ];
 
+const MBLIMITER_HISTORY_SERIES = mblimiterHistorySeries();
+
 export interface MblimiterUIProps {
   host: IMblimiterHost;
 }
@@ -134,9 +138,12 @@ function BandStrip(props: { band: IMblimiterBand; compactKnobs: boolean }) {
           data$={band.historyData$}
           vizId="mblimiter"
           autoScale
-          windowMs={2000}
-          sourceWindowMs={4000}
-          series={mblimiterHistorySeries()}
+          autoScaleAnimate={false}
+          maxBins={MB_BAND_HISTORY_BINS}
+          syncBins={band.index === 0}
+          windowMs={MB_BAND_HISTORY_MS}
+          className="compact"
+          series={MBLIMITER_HISTORY_SERIES}
         />
       </div>
 
@@ -258,6 +265,14 @@ export function MblimiterUI(props: MblimiterUIProps) {
     [host],
   );
 
+  const xoverEdit = useCallback(
+    (index: number) => ({
+      beginEdit: () => host.beginEdit(XOVER_PARAM_IDS[index]!),
+      endEdit: () => host.endEdit(XOVER_PARAM_IDS[index]!),
+    }),
+    [host],
+  );
+
   const edit = (id: number) => ({
     beginEdit: () => host.beginEdit(id),
     endEdit: () => host.endEdit(id),
@@ -322,10 +337,7 @@ export function MblimiterUI(props: MblimiterUIProps) {
         spectrumIn$={host.spectrumIn$}
         spectrumOut$={host.spectrumOut$}
         spectrumScale$={host.scale$}
-        xoverEdit={(index) => ({
-          beginEdit: () => host.beginEdit(XOVER_PARAM_IDS[index]!),
-          endEdit: () => host.endEdit(XOVER_PARAM_IDS[index]!),
-        })}
+        xoverEdit={xoverEdit}
       />
 
       <div className="strips">

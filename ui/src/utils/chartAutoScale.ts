@@ -83,6 +83,11 @@ export class ChartYAutoScale {
   private attackPending = AUTO_SCALE_SOFT_MIN;
   private enabled = true;
   private yMax = 0;
+  /**
+   * Smooth range_y glide toward the snapped floor. Strip histories should
+   * leave this false — the rAF loop redraws every graph at display Hz.
+   */
+  animateRange = true;
 
   setEnabled(on: boolean): void {
     this.enabled = on;
@@ -182,7 +187,8 @@ export class ChartYAutoScale {
     this.displayMin = snapped;
     if (snapped !== prevSnap) setGridY?.(snapped);
     if (Math.abs(this.animMin - snapped) > AUTO_SCALE_ANIM_EPS_DB) {
-      this.ensureRangeAnim(chart);
+      if (this.animateRange) this.ensureRangeAnim(chart);
+      else this.setAnimMin(chart, snapped);
     }
   }
 

@@ -31,6 +31,16 @@
     fill-opacity: var(--graph-fill-opacity-none) !important;
   }
 
+  /* Multiband strips: isolate paint, skip fancy SVG stroking. */
+  &.compact {
+    contain: layout paint;
+    min-height: 0;
+
+    > .HistoryChart-chart svg {
+      shape-rendering: optimizeSpeed;
+    }
+  }
+
   > .history-toggles {
     position: absolute;
     left: var(--gap);

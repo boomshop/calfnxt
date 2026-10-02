@@ -61,7 +61,10 @@ public:
 
   void setSampleRate(double sr)
   {
-    sampleRate_ = sr > 0.0 ? sr : 44100.0;
+    const double s = sr > 0.0 ? sr : 44100.0;
+    if (s == sampleRate_)
+      return;
+    sampleRate_ = s;
     updateBallistics();
     rebuildBinMap();
   }

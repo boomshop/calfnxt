@@ -294,7 +294,8 @@ export function createBoundMbcompHost(): IMbcompHost {
     grAll$.subscribe((arr) => {
       for (const band of bands) {
         const v = arr[band.index];
-        band.gr$.set(typeof v === 'number' && Number.isFinite(v) ? v : 0);
+        const next = typeof v === 'number' && Number.isFinite(v) ? v : 0;
+        if (band.gr$.value !== next) band.gr$.set(next);
       }
     }, false),
   );
@@ -304,10 +305,11 @@ export function createBoundMbcompHost(): IMbcompHost {
   disposers.push(
     bandIo$.subscribe((arr) => {
       for (const band of bands) {
-        const inDb = arr[band.index * 2];
-        const outDb = arr[band.index * 2 + 1];
-        band.inLevel$.set(typeof inDb === 'number' ? inDb : -96);
-        band.outLevel$.set(typeof outDb === 'number' ? outDb : -96);
+        const inDb = typeof arr[band.index * 2] === 'number' ? arr[band.index * 2]! : -96;
+        const outDb =
+          typeof arr[band.index * 2 + 1] === 'number' ? arr[band.index * 2 + 1]! : -96;
+        if (band.inLevel$.value !== inDb) band.inLevel$.set(inDb);
+        if (band.outLevel$.value !== outDb) band.outLevel$.set(outDb);
       }
     }, false),
   );

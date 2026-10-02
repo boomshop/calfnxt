@@ -18,7 +18,7 @@ using namespace Steinberg::Vst;
 namespace {
 constexpr uint32 kStateMagic = 0x434e584Eu; // 'CNXE'
 constexpr uint32 kStateVersion = 1;
-constexpr float kHistoryDisplayMs = 2000.f;
+constexpr float kHistoryDisplayMs = 4000.f;
 
 float ascCoeffFromPlain(float c)
 {

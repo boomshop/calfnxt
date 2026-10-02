@@ -6,6 +6,8 @@ import {
   Buttons,
   DynamicsChart,
   HistoryChart,
+  MB_BAND_HISTORY_BINS,
+  MB_BAND_HISTORY_MS,
   mbcompHistorySeries,
   Knob,
   LevelMeter,
@@ -98,6 +100,8 @@ const XOVER_PARAM_IDS = [
   paramIds.xover5,
 ];
 
+const MBCOMP_HISTORY_SERIES = mbcompHistorySeries({ compact: true });
+
 export interface MbcompUIProps {
   host: IMbcompHost;
 }
@@ -131,11 +135,13 @@ function BandStrip(props: {
         <HistoryChart
           data$={band.historyData$}
           vizId="mbcomp"
-          windowMs={2000}
-          sourceWindowMs={4000}
+          windowMs={MB_BAND_HISTORY_MS}
           autoScale
-          className={bypass ? 'disabled' : undefined}
-          series={mbcompHistorySeries()}
+          autoScaleAnimate={false}
+          maxBins={MB_BAND_HISTORY_BINS}
+          syncBins={band.index === 0}
+          className={['compact', bypass && 'disabled'].filter(Boolean).join(' ')}
+          series={MBCOMP_HISTORY_SERIES}
         />
       </div>
 
@@ -506,6 +512,21 @@ export function MbcompUI(props: MbcompUIProps) {
     [host],
   );
 
+  const thresholdEdit = useCallback(
+    (index: number) => ({
+      beginEdit: () => host.bands[index]?.beginEdit('threshold'),
+      endEdit: () => host.bands[index]?.endEdit('threshold'),
+    }),
+    [host],
+  );
+  const xoverEdit = useCallback(
+    (index: number) => ({
+      beginEdit: () => host.beginEdit(XOVER_PARAM_IDS[index]!),
+      endEdit: () => host.endEdit(XOVER_PARAM_IDS[index]!),
+    }),
+    [host],
+  );
+
   const selectedBand = host.bands[selected] ?? host.bands[0]!;
   const thresholds$ = useMemo(
     () => host.bands.map((band) => band.threshold$),
@@ -570,14 +591,8 @@ export function MbcompUI(props: MbcompUIProps) {
         spectrumIn$={host.spectrumIn$}
         spectrumOut$={host.spectrumOut$}
         spectrumScale$={host.scale$}
-        thresholdEdit={(index) => ({
-          beginEdit: () => host.bands[index]?.beginEdit('threshold'),
-          endEdit: () => host.bands[index]?.endEdit('threshold'),
-        })}
-        xoverEdit={(index) => ({
-          beginEdit: () => host.beginEdit(XOVER_PARAM_IDS[index]!),
-          endEdit: () => host.endEdit(XOVER_PARAM_IDS[index]!),
-        })}
+        thresholdEdit={thresholdEdit}
+        xoverEdit={xoverEdit}
       />
 
       <div className="strips">

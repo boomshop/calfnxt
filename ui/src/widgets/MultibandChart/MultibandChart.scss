@@ -3,6 +3,7 @@
   height: 100%;
   min-height: 120px;
   background: var(--background);
+  contain: layout;
 
   > svg {
     // Clamped curves still benefit from a hard clip if AUX overshoots.

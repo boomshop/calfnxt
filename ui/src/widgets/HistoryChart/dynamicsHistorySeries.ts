@@ -177,10 +177,28 @@ export function deesserHistorySeries(): HistorySeries[] {
 }
 
 /**
- * Mbcomp per-band strip (3ch, 2 s window):
- * Channels: [bandPostGr, grLin, threshLin].
+ * Mbcomp / Mblimiter per-band strip window — keep in sync with
+ * `kHistoryDisplayMs` in the multiband DSP.
  */
-export function mbcompHistorySeries(): HistorySeries[] {
+export const MB_BAND_HISTORY_MS = 4000;
+/** Strip charts are ~200×96 px. Cap DSP slots so SVG paths stay cheap. */
+export const MB_BAND_HISTORY_BINS = 72;
+
+function tamerInputClass(compact: boolean): string {
+  return compact
+    ? 'fill-full fill-soft stroke-none'
+    : DYN_TAMER.input;
+}
+
+/**
+ * Mbcomp per-band strip (3ch, 4 s window):
+ * Channels: [bandPostGr, grLin, threshLin].
+ * `compact` skips the userSpaceOnUse gradient (6 tiny SVGs × 30 Hz is expensive).
+ */
+export function mbcompHistorySeries(
+  opts?: { compact?: boolean },
+): HistorySeries[] {
+  const compact = !!opts?.compact;
   if (HISTORY_TAMER_FILLS) {
     return [
       {
@@ -190,7 +208,7 @@ export function mbcompHistorySeries(): HistorySeries[] {
         channel: 0,
         scaleGrChannel: 1,
         scaleGrMode: 'expand',
-        className: DYN_TAMER.input,
+        className: tamerInputClass(compact),
         mode: 'bottom',
       },
       {
@@ -234,7 +252,10 @@ export function mbcompHistorySeries(): HistorySeries[] {
  * Limiter history (3ch, 4 s window):
  * Channels: [outPeak, grLin, limitLin].
  */
-export function limiterHistorySeries(): HistorySeries[] {
+export function limiterHistorySeries(
+  opts?: { compact?: boolean },
+): HistorySeries[] {
+  const compact = !!opts?.compact;
   if (HISTORY_TAMER_FILLS) {
     return [
       {
@@ -244,7 +265,7 @@ export function limiterHistorySeries(): HistorySeries[] {
         channel: 0,
         scaleGrChannel: 1,
         scaleGrMode: 'expand',
-        className: DYN_TAMER.input,
+        className: tamerInputClass(compact),
         mode: 'bottom',
       },
       {
@@ -284,9 +305,9 @@ export function limiterHistorySeries(): HistorySeries[] {
   ];
 }
 
-/** Mblimiter per-band strip — same layout/styles as Limiter (2 s window). */
+/** Mblimiter per-band strip — same layout/styles as Limiter (4 s window). */
 export function mblimiterHistorySeries(): HistorySeries[] {
-  return limiterHistorySeries();
+  return limiterHistorySeries({ compact: true });
 }
 
 /**

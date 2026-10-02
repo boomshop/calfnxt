@@ -72,5 +72,5 @@ export const mbcompInfo = {
     'Level of this band after compression and makeup. Compare to Band In to hear/see how hard the band is being worked.',
 
   history:
-    'Scrolling history (about 10 seconds): full-range level, this band’s level, and its gain reduction. Use it to see whether GR tracks hits cleanly or rides the whole phrase.',
+    'Scrolling history (about 4 seconds): this band’s level and its gain reduction. Use it to see whether GR tracks hits cleanly or rides the whole phrase.',
 } as const;

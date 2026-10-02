@@ -167,6 +167,22 @@ export interface HistoryChartProps {
    */
   autoScale?: boolean;
   /**
+   * rAF glide of `range_y` while auto-scaling. Default true (Compressor /
+   * Limiter). Multiband strips pass false so 4–6 charts do not repaint at
+   * display Hz on top of the viz tick.
+   */
+  autoScaleAnimate?: boolean;
+  /**
+   * Cap DSP history slots (`vizcfg` bins). Strip charts are ~200×96 px —
+   * 72 points is already denser than one per pixel.
+   */
+  maxBins?: number;
+  /**
+   * When several charts share `vizId` (mbcomp / mblimiter strips), only one
+   * should report width. Default true.
+   */
+  syncBins?: boolean;
+  /**
    * Legend toggles for matching series ids, persisted under
    * `calfnxt.historyVisible.<persistId ?? vizId>.<seriesId>`. Values are the
    * default when nothing is stored yet (dynamics Trig/GR default off).
@@ -635,6 +651,9 @@ export function HistoryChart(props: HistoryChartProps) {
     dbMin = DB_MIN,
     dbMax = DB_MAX,
     autoScale = false,
+    autoScaleAnimate = true,
+    maxBins,
+    syncBins = true,
     persistToggles,
     persistId,
     className,
@@ -794,6 +813,8 @@ export function HistoryChart(props: HistoryChartProps) {
       const gen = (attachGenRef.current += 1);
       const scaler = yAutoScaleRef.current;
       scaler.setEnabled(!!autoScale);
+      scaler.animateRange = autoScaleAnimate;
+      if (!autoScaleAnimate) scaler.cancelAnim();
 
       const yMin = autoScale ? scaler.rangeMin : dbMin;
       const yMax = dbMax;
@@ -967,15 +988,23 @@ export function HistoryChart(props: HistoryChartProps) {
       });
 
       const el = chart.element ?? chart.svg;
-      if (el) {
+      if (el && syncBins) {
         vizBinsStopRef.current?.();
-        vizBinsStopRef.current = observeVizBins(el, vizId);
+        vizBinsStopRef.current = observeVizBins(
+          el,
+          vizId,
+          48,
+          maxBins ?? 512,
+        );
       }
     },
     [
       applyAutoScale,
       autoScale,
+      autoScaleAnimate,
       data$,
+      maxBins,
+      syncBins,
       dbMax,
       dbMin,
       sweepGraphs,

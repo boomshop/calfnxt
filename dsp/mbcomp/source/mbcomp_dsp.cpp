@@ -17,7 +17,7 @@ using namespace Steinberg::Vst;
 namespace {
 constexpr uint32 kStateMagic = 0x434e584Du; // 'CNXM'
 constexpr uint32 kStateVersion = 2; // v2: + channel
-constexpr float kHistoryDisplayMs = 2000.f;
+constexpr float kHistoryDisplayMs = 4000.f;
 
 
 /** Kill NaN/Inf and absurd peaks so a host anti-blast (Reaper automute) cannot latch. */
@@ -589,11 +589,6 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
   float bandsR[kMaxBands];
 
   const bool spectrumRun = vizConsumerActive();
-  if (spectrumRun)
-  {
-    spectrumIn_.setSampleRate(sampleRate_);
-    spectrumOut_.setSampleRate(sampleRate_);
-  }
 
   for (int i = 0; i < nSamples; ++i)
   {
@@ -652,8 +647,6 @@ tresult PLUGIN_API MbcompPlugin::process(ProcessData& data)
       splitL_.process(L, bandsL);
       if (linkedPath)
       {
-        float discard[kMaxBands];
-        splitR_.process(L, discard);
         for (int b = 0; b < bands; ++b)
           bandsR[b] = bandsL[b];
       }

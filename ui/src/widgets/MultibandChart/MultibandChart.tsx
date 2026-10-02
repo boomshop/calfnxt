@@ -23,13 +23,11 @@ import { useChartGradient } from '../../hooks/useChartGradient';
 import { bindAuxOptions } from '../../utils/aux_bindings';
 import { postToHost } from '../../utils/bridge';
 import {
-  SPECTRUM_MAX_BINS,
   SPECTRUM_MIN_BINS,
   spectrumScaleSlope,
 } from '../SpectrumChart/SpectrumChart';
 import {
-  spectrumOverlayContourDots,
-  spectrumOverlayDiffDots,
+  spectrumOverlayLayers,
   type SpectrumOverlayAxis,
 } from '../../utils/spectrumDiffOverlay';
 import { addGraphClasses, GRAPH_STYLE } from '../../styles/graphStyles';
@@ -311,7 +309,11 @@ export function MultibandChart(props: MultibandChartProps) {
 
   useEffect(() => {
     const unsubs = gr$.map((dv, i) =>
-      dv.subscribe((v) => derived.gain$[i]?.set(grToGainDb(v)), true),
+      dv.subscribe((v) => {
+        const next = grToGainDb(v);
+        const gain$ = derived.gain$[i];
+        if (gain$ && gain$.value !== next) gain$.set(next);
+      }, true),
     );
     return () => unsubs.forEach((u) => u());
   }, [derived, gr$]);
@@ -420,9 +422,9 @@ export function MultibandChart(props: MultibandChartProps) {
         // Selected band uses bottom fill; others stay stroke-only.
         mode: b === selectedBand ? 'bottom' : 'line',
         class: `mb-curve mb-band-${b} fill-none stroke-gradient`,
-        accuracy: 1,
-        oversampling: 8,
-        threshold: 3,
+        accuracy: 2,
+        oversampling: 2,
+        threshold: 4,
       })),
     [selectedBand, shapes],
   );
@@ -781,10 +783,10 @@ export function MultibandChart(props: MultibandChartProps) {
           const out = row[1] ?? [];
           const scalePlain = typeof row[2] === 'number' ? row[2] : 0;
           const axis = axisFor(scalePlain);
-          const w = spectrumWidthRef.current;
-          mask.set('dots', spectrumOverlayDiffDots(inn, out, 'min', axis, w));
-          edge.set('dots', spectrumOverlayContourDots(out, axis, w));
-          return spectrumOverlayDiffDots(inn, out, 'max', axis, w);
+          const layers = spectrumOverlayLayers(inn, out, axis);
+          mask.set('dots', layers.mask);
+          edge.set('dots', layers.edge);
+          return layers.outer;
         },
       },
     ]);
@@ -799,7 +801,7 @@ export function MultibandChart(props: MultibandChartProps) {
         spectrumWidthRef.current = Math.max(1, width);
         const next = Math.max(
           SPECTRUM_MIN_BINS,
-          Math.min(SPECTRUM_MAX_BINS, width),
+          Math.min(192, width),
         );
         postToHost({ t: 'vizcfg', id: 'fft_in', bins: next });
         postToHost({ t: 'vizcfg', id: 'fft_out', bins: next });

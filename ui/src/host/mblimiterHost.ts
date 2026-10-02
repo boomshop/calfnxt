@@ -295,18 +295,19 @@ export function createBoundMblimiterHost(): IMblimiterHost {
       const active = clampBands(numBands$.value);
       for (const band of bands) {
         const v = arr[band.index];
-        band.gr$.set(typeof v === 'number' && Number.isFinite(v) ? v : 0);
+        const next = typeof v === 'number' && Number.isFinite(v) ? v : 0;
+        if (band.gr$.value !== next) band.gr$.set(next);
       }
       // Last element: DSP overallMeter_ (deepest strip×bb with fall ballistics).
-      if (arr.length === active + 1) {
-        const overall = arr[active];
-        gr$.set(
-          typeof overall === 'number' && Number.isFinite(overall) ? overall : 0,
-        );
-      } else if (arr.length > 0) {
-        const last = arr[arr.length - 1];
-        gr$.set(typeof last === 'number' && Number.isFinite(last) ? last : 0);
-      }
+      const overall =
+        arr.length === active + 1
+          ? arr[active]
+          : arr.length > 0
+            ? arr[arr.length - 1]
+            : undefined;
+      const nextOverall =
+        typeof overall === 'number' && Number.isFinite(overall) ? overall : 0;
+      if (gr$.value !== nextOverall) gr$.set(nextOverall);
     }, false),
   );
   disposers.push(bindVizGrArray((v) => grAll$.set(v), MBLIMITER_VIZ_ID));
@@ -315,10 +316,11 @@ export function createBoundMblimiterHost(): IMblimiterHost {
   disposers.push(
     bandIo$.subscribe((arr) => {
       for (const band of bands) {
-        const inDb = arr[band.index * 2];
-        const outDb = arr[band.index * 2 + 1];
-        band.inLevel$.set(typeof inDb === 'number' ? inDb : -96);
-        band.outLevel$.set(typeof outDb === 'number' ? outDb : -96);
+        const inDb = typeof arr[band.index * 2] === 'number' ? arr[band.index * 2]! : -96;
+        const outDb =
+          typeof arr[band.index * 2 + 1] === 'number' ? arr[band.index * 2 + 1]! : -96;
+        if (band.inLevel$.value !== inDb) band.inLevel$.set(inDb);
+        if (band.outLevel$.value !== outDb) band.outLevel$.set(outDb);
       }
     }, false),
   );

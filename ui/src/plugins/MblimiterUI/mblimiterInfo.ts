@@ -41,7 +41,7 @@ export const mblimiterInfo = {
     'How many dB this band’s strip limiter is currently pulling down. Deep constant GR means that range is being continuously squashed.',
 
   history:
-    'Scrolling history (about 10 seconds): full-range level, this band’s level, and its gain reduction. Use it to see whether GR tracks hits cleanly or rides the whole phrase.',
+    'Scrolling history (about 4 seconds): this band’s level and its gain reduction. Use it to see whether GR tracks hits cleanly or rides the whole phrase.',
 
   limit:
     'The loudness ceiling. Lower = more of the signal hits the wall and gets turned down — the mix gets denser and “louder” sounding, but peaks lose headroom. With Auto Level on, turning Limit down also boosts the overall level so the ceiling still sits at full scale.',
