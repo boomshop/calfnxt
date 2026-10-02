@@ -184,21 +184,15 @@ export const MB_BAND_HISTORY_MS = 4000;
 /** Strip charts are ~200×96 px. Cap DSP slots so SVG paths stay cheap. */
 export const MB_BAND_HISTORY_BINS = 72;
 
-function tamerInputClass(compact: boolean): string {
-  return compact
-    ? 'fill-full fill-soft stroke-none'
-    : DYN_TAMER.input;
-}
-
 /**
  * Mbcomp per-band strip (3ch, 4 s window):
  * Channels: [bandPostGr, grLin, threshLin].
- * `compact` skips the userSpaceOnUse gradient (6 tiny SVGs × 30 Hz is expensive).
+ * `compact` is kept for callers (strip CSS contain/optimizeSpeed). Input fill
+ * uses the shared accent↔warn gradient — a grey wash hid the color.
  */
 export function mbcompHistorySeries(
-  opts?: { compact?: boolean },
+  _opts?: { compact?: boolean },
 ): HistorySeries[] {
-  const compact = !!opts?.compact;
   if (HISTORY_TAMER_FILLS) {
     return [
       {
@@ -208,7 +202,7 @@ export function mbcompHistorySeries(
         channel: 0,
         scaleGrChannel: 1,
         scaleGrMode: 'expand',
-        className: tamerInputClass(compact),
+        className: DYN_TAMER.input,
         mode: 'bottom',
       },
       {
@@ -253,9 +247,8 @@ export function mbcompHistorySeries(
  * Channels: [outPeak, grLin, limitLin].
  */
 export function limiterHistorySeries(
-  opts?: { compact?: boolean },
+  _opts?: { compact?: boolean },
 ): HistorySeries[] {
-  const compact = !!opts?.compact;
   if (HISTORY_TAMER_FILLS) {
     return [
       {
@@ -265,7 +258,7 @@ export function limiterHistorySeries(
         channel: 0,
         scaleGrChannel: 1,
         scaleGrMode: 'expand',
-        className: tamerInputClass(compact),
+        className: DYN_TAMER.input,
         mode: 'bottom',
       },
       {
