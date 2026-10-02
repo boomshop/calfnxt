@@ -119,7 +119,8 @@ private:
   int reapTicks_ = 0;
   std::string readBuf_;
   std::chrono::steady_clock::time_point lastVizFlush_ {};
-  std::chrono::steady_clock::time_point lastEnvVizFlush_ {};
+  /** Remainder ms toward the next viz frame (16 ms pump vs 25/30 Hz). */
+  double vizPhaseMs_ = 0;
   /** Accumulates CNXV frames during one flushViz() for a single CNXB send. */
   std::vector<char> vizBatchFrames_;
   std::uint32_t vizBatchCount_ = 0;

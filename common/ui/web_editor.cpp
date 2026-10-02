@@ -462,7 +462,7 @@ void WebEditor::handleHelperLine(const std::string& line)
       pendingParamDirty_[i].store(false, std::memory_order_relaxed);
     }
     lastVizFlush_ = {};
-    lastEnvVizFlush_ = {};
+    vizPhaseMs_ = 0;
     onPageReady();
     return;
   }
@@ -1112,12 +1112,32 @@ void WebEditor::flushViz()
     hz = 5;
   else if (hz > 60)
     hz = 60;
-  const auto minGap = std::chrono::milliseconds(1000 / hz);
-
-  if (lastEnvVizFlush_.time_since_epoch().count() == 0
-      || now - lastEnvVizFlush_ >= minGap)
+  // IRunLoop pumps every 16 ms. Integer `1000/hz` ms (33 for 30 Hz, 40 for
+  // 25 Hz) both miss the 32 ms tick and fire at 48 ms — same ~21 Hz, so the
+  // first Header step did nothing. Accumulate the true period and spend it
+  // across 2- and 3-tick cadences so 30/25/20 average the requested rate.
+  const double periodMs = 1000.0 / static_cast<double>(hz);
+  double dtMs = periodMs;
+  if (lastVizFlush_.time_since_epoch().count() != 0)
   {
-    lastEnvVizFlush_ = now;
+    dtMs = std::chrono::duration<double, std::milli>(now - lastVizFlush_).count();
+    if (dtMs < 0.0)
+      dtMs = 0.0;
+    else if (dtMs > 100.0)
+      dtMs = 100.0;
+  }
+  lastVizFlush_ = now;
+  vizPhaseMs_ += dtMs;
+  if (vizPhaseMs_ < periodMs)
+  {
+    endVizBatch();
+    return;
+  }
+  vizPhaseMs_ -= periodMs;
+  if (vizPhaseMs_ >= periodMs)
+    vizPhaseMs_ = std::fmod(vizPhaseMs_, periodMs);
+
+  {
     constexpr int kMaxEnvFloats = 6 * (512 * 3) + 1;
     float envBuf[kMaxEnvFloats];
     const int nEnv = vizSource_->takeEnvelopeDisplay(envBuf, kMaxEnvFloats);
@@ -1156,16 +1176,6 @@ void WebEditor::flushViz()
         flushVizArray(midiId, "midi", midi, 2);
     }
   }
-
-  if (lastVizFlush_.time_since_epoch().count() != 0)
-  {
-    if (now - lastVizFlush_ < minGap)
-    {
-      endVizBatch();
-      return;
-    }
-  }
-  lastVizFlush_ = now;
 
   if (const char* tempoId = vizSource_->vizTempoId())
   {
