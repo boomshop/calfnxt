@@ -15,6 +15,7 @@ import {
   MB_BAND_HISTORY_MS,
   mblimiterHistorySeries,
 } from '../../widgets';
+import { LIMITER_HISTORY_TOGGLES } from '../../prefs/historySeriesVisible';
 import { paramIds } from '../../generated/mblimiterModel';
 import {
   LIMITER_CURVE_ENTRIES,
@@ -142,6 +143,7 @@ function BandStrip(props: { band: IMblimiterBand; compactKnobs: boolean }) {
           maxBins={MB_BAND_HISTORY_BINS}
           syncBins={band.index === 0}
           windowMs={MB_BAND_HISTORY_MS}
+          persistToggles={LIMITER_HISTORY_TOGGLES}
           className="compact"
           series={MBLIMITER_HISTORY_SERIES}
         />

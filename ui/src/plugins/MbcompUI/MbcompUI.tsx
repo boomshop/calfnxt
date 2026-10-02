@@ -16,6 +16,7 @@ import {
   Toggle,
   WithInfo,
 } from '../../widgets';
+import { LIMITER_HISTORY_TOGGLES } from '../../prefs/historySeriesVisible';
 import { paramIds } from '../../generated/mbcompModel';
 import {
   MBCOMP_CHANNEL_ENTRIES,
@@ -140,6 +141,7 @@ function BandStrip(props: {
           autoScaleReleaseTauS={4}
           maxBins={MB_BAND_HISTORY_BINS}
           syncBins={band.index === 0}
+          persistToggles={LIMITER_HISTORY_TOGGLES}
           className={['compact', bypass && 'disabled'].filter(Boolean).join(' ')}
           series={MBCOMP_HISTORY_SERIES}
         />
