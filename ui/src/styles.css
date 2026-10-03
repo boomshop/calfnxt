@@ -549,23 +549,6 @@ textarea::selection {
   }
 }
 
-.aux-state {
-  background: var(--color-hot);
-  border-radius: 2px;
-
-  > .aux-mask {
-    position: relative;
-
-    &::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: var(--background);
-      opacity: 0.8;
-    }
-  }
-}
-
 .aux-meter {
   --aux-multimeter-gridgap: 0;
   --aux-meter-gridgap: 0 4px;
@@ -588,6 +571,23 @@ textarea::selection {
   }
 
   > .aux-scale {
+  }
+
+  > .aux-state {
+    background: var(--color-hot);
+    border-radius: 2px;
+
+    > .aux-mask {
+      position: relative;
+
+      &::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: var(--background);
+        opacity: 0.8;
+      }
+    }
   }
 
   &.aux-horizontal {
