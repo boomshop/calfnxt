@@ -3,7 +3,7 @@
   width: 100%;
   height: 100%;
   min-height: 160px;
-  background: #000;
+  // background: #000;
   overflow: hidden;
 
   > .SpectrumChart-aux,
@@ -13,9 +13,9 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: #000;
-    border-color: #000;
-    --color: #fff;
+    // background: #000;
+    // border-color: #000;
+    // --color: #fff;
 
     > svg {
       overflow: hidden;
@@ -91,7 +91,7 @@
     }
   }
 
-  // Monitor accent (L) understroke — solid black rim, cheaper than feDropShadow.
+  // Monitor understroke — L dots at night, R dots in day. Same stroke either way.
   // 3px under 1.5px color; offset by color stroke width down-right.
   .spec-lr-rim {
     stroke: #000 !important;
@@ -135,5 +135,13 @@
         font-size: var(--font-size-small);
       }
     }
+  }
+}
+
+.day {
+  .spec-lr-rim {
+    stroke: #000 !important;
+    stroke-width: 2px !important;
+    stroke-opacity: 0.5 !important;
   }
 }

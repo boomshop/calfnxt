@@ -16,6 +16,7 @@ import {
   ANALYZER_SPECTRUM_TOGGLES,
   persistedHistoryVisible$,
 } from '../../prefs/historySeriesVisible';
+import { themeMode$ } from '../../prefs/theme';
 import { themeColors$ } from '../../theme/themeColors';
 import { Toggle } from '../Toggle';
 import {
@@ -641,6 +642,8 @@ export function SpectrumChart(props: SpectrumChartProps) {
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   // High-rate spectrum → AUX/canvas only (no React re-render from data$).
   const dataLatestRef = useRef<number[]>(EMPTY_SPECTRUM);
+  /** Rim understroke follows L at night and R in day. */
+  const themeModeRef = useRef(themeMode$.value);
   const modeRef = useRef(mode);
   const holdRef = useRef(hold);
   const monitorRef = useRef(monitor);
@@ -757,8 +760,12 @@ export function SpectrumChart(props: SpectrumChartProps) {
       };
       if (monitorRef.current && graphs.length >= 5) {
         const [gRms, gLRim, gL, gR, gMax] = graphs;
+        const rimOnR = themeModeRef.current === 'day';
         gRms?.element?.classList.toggle('spec-hidden', !vis.rms);
-        gLRim?.element?.classList.toggle('spec-hidden', !vis.l);
+        gLRim?.element?.classList.toggle(
+          'spec-hidden',
+          rimOnR ? !vis.r : !vis.l,
+        );
         gL?.element?.classList.toggle('spec-hidden', !vis.l);
         gR?.element?.classList.toggle('spec-hidden', !vis.r);
         gMax?.element?.classList.toggle('spec-hidden', !vis.hold);
@@ -796,7 +803,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
       }
 
       if (monitorRef.current && m !== SPECTRUM_MODE.Spectralizer) {
-        // [rms, L-rim, L, R, max] — dark understroke on accent (L) only.
+        // [rms, rim, L, R, max] — same understroke; L dots at night, R dots in day.
         const [gRms, gLRim, gL, gR, gMax] = graphs;
         gMax?.element?.classList.remove('spec-diff');
         chart.set('range_y', { min: SPECTRUM_DB_MIN, max: SPECTRUM_DB_MAX });
@@ -824,10 +831,12 @@ export function SpectrumChart(props: SpectrumChartProps) {
         };
         const rms = payload.rms ?? payload.avg;
         const lDots = vis.l ? dots(payload.L, slope) : null;
+        const rDots = vis.r ? dots(payload.R, slope) : null;
         const rmsDots = vis.rms ? dots(rms, slope) : null;
-        show(gLRim, vis.l, lDots);
+        const rimOnR = themeModeRef.current === 'day';
+        show(gLRim, rimOnR ? vis.r : vis.l, rimOnR ? rDots : lDots);
         show(gL, vis.l, lDots);
-        show(gR, vis.r, vis.r ? dots(payload.R, slope) : null);
+        show(gR, vis.r, rDots);
         show(gMax, vis.hold, vis.hold ? dots(payload.max, slope) : null);
         show(gRms, vis.rms, rmsDots);
         const band = corridorElRef.current;
@@ -977,7 +986,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
                 gradient: true,
                 type: 'L',
               },
-              // Cheap L rim (thicker black understroke) — accent only; no SVG blur.
+              // Same understroke style. Night feeds L dots, day feeds R dots.
               {
                 className: 'spec-lr-rim fill-none',
                 mode: 'line' as const,
@@ -1102,6 +1111,15 @@ export function SpectrumChart(props: SpectrumChartProps) {
   useEffect(() => {
     buildPoints(dataLatestRef.current);
   }, [mode, hold, scale, buildPoints]);
+
+  // Rim follows L at night and R in day — repaint without a React render.
+  useEffect(() => {
+    const unsub = themeMode$.subscribe((mode) => {
+      themeModeRef.current = mode;
+      buildPoints(dataLatestRef.current);
+    });
+    return unsub;
+  }, [buildPoints]);
 
   // Monitor trace chips — AWML DVs, no React re-render on toggle.
   useEffect(() => {
