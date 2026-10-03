@@ -102,7 +102,7 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
           layout="top"
           show_clip={[true, true]}
           auto_clip={[5000, 5000]}
-          clipping={[0, 0]}
+          clipping={[0.000001, 0.000001]}
         />
       </div>
 
@@ -116,7 +116,7 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
           layout="top"
           show_clip={[true, true]}
           auto_clip={[5000, 5000]}
-          clipping={[0, 0]}
+          clipping={[0.000001, 0.000001]}
         />
         <Knob
           className="gain"
