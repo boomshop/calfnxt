@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo } from 'react';
 import './Header.scss';
 import { CalfNxtLogo } from '../CalfNxtLogo';
-import { Button, Buttons, Knob, MenuButton, MultiMeter, Toggle } from '../../widgets';
+import {
+  Button,
+  Buttons,
+  Knob,
+  MenuButton,
+  MultiMeter,
+  Toggle,
+} from '../../widgets';
 import {
   createHeaderIo,
   ioGainMeta,
@@ -93,6 +100,9 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
           count$={io.inputChannelCount$}
           labels={inLabels}
           layout="top"
+          show_clip={[true, true]}
+          auto_clip={[5000, 5000]}
+          clipping={[0, 0]}
         />
       </div>
 
@@ -104,6 +114,9 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
           count$={io.outputChannelCount$}
           labels={outLabels}
           layout="top"
+          show_clip={[true, true]}
+          auto_clip={[5000, 5000]}
+          clipping={[0, 0]}
         />
         <Knob
           className="gain"
@@ -143,7 +156,10 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
           </div>
           <div className="prefs-row">
             <span className="prefs-label">Color</span>
-            <div className="prefs-accent" role="group" aria-label="Accent color">
+            <div
+              className="prefs-accent"
+              role="group"
+              aria-label="Accent color">
               {ACCENT_CLASSES.map((accent) => (
                 <Button
                   key={accent}

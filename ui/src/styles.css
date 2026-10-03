@@ -549,6 +549,15 @@ textarea::selection {
   }
 }
 
+.aux-state {
+  background: var(--color-hot);
+  border-radius: 2px;
+
+  > .aux-mask {
+    background: var(--background-least);
+  }
+}
+
 .aux-meter {
   --aux-multimeter-gridgap: 0;
   --aux-meter-gridgap: 0 4px;
@@ -578,6 +587,10 @@ textarea::selection {
     --aux-meter-gridgap: 2px 4px;
 
     > .aux-bar {
+      align-self: center;
+    }
+
+    > .aux-state {
       align-self: center;
     }
   }
