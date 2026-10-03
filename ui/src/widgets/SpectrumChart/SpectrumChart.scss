@@ -54,6 +54,10 @@
     background: #000;
   }
 
+  :root.day & > .SpectrumChart-waterfall {
+    background: #fff;
+  }
+
   > .SpectrumChart-gridOverlay {
     position: absolute;
     inset: 0;

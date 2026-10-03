@@ -513,11 +513,16 @@ function lerpByte(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);
 }
 
-/** Waterfall on black: −66 black, −54 accent, −32 warn, −18 white. */
-const WF_BLACK_DB = -66;
-const WF_ACCENT_DB = -54;
-const WF_WARN_DB = -32;
-const WF_WHITE_DB = -18;
+/**
+ * Same dB stops either theme. Night field is black, day field is white.
+ * Night: black → accent → warn → white (brighter = louder).
+ * Day: white → warn → accent → black (darker = louder), so luminance
+ * stays monotonic and the peak is still the strongest mark.
+ */
+const WF_FLOOR_DB = -66;
+const WF_LO_DB = -54;
+const WF_HI_DB = -32;
+const WF_PEAK_DB = -18;
 const WF_BLACK: [number, number, number] = [0, 0, 0];
 const WF_WHITE: [number, number, number] = [255, 255, 255];
 
@@ -525,6 +530,7 @@ function waterfallPixel(
   db: number,
   accent: [number, number, number],
   warn: [number, number, number],
+  day: boolean,
 ): [number, number, number, number] {
   const mix = (
     a: [number, number, number],
@@ -539,17 +545,17 @@ function waterfallPixel(
       255,
     ];
   };
-  if (db <= WF_BLACK_DB) return [0, 0, 0, 0];
-  if (db >= WF_WHITE_DB) return [255, 255, 255, 255];
-  if (db < WF_ACCENT_DB)
-    return mix(
-      WF_BLACK,
-      accent,
-      (db - WF_BLACK_DB) / (WF_ACCENT_DB - WF_BLACK_DB),
-    );
-  if (db < WF_WARN_DB)
-    return mix(accent, warn, (db - WF_ACCENT_DB) / (WF_WARN_DB - WF_ACCENT_DB));
-  return mix(warn, WF_WHITE, (db - WF_WARN_DB) / (WF_WHITE_DB - WF_WARN_DB));
+  const floor = day ? WF_WHITE : WF_BLACK;
+  const peak = day ? WF_BLACK : WF_WHITE;
+  const lo = day ? warn : accent;
+  const hi = day ? accent : warn;
+  if (db <= WF_FLOOR_DB) return [floor[0], floor[1], floor[2], 0];
+  if (db >= WF_PEAK_DB) return [peak[0], peak[1], peak[2], 255];
+  if (db < WF_LO_DB)
+    return mix(floor, lo, (db - WF_FLOOR_DB) / (WF_LO_DB - WF_FLOOR_DB));
+  if (db < WF_HI_DB)
+    return mix(lo, hi, (db - WF_LO_DB) / (WF_HI_DB - WF_LO_DB));
+  return mix(hi, peak, (db - WF_HI_DB) / (WF_PEAK_DB - WF_HI_DB));
 }
 
 function parseCssColor(c: string): [number, number, number] {
@@ -726,6 +732,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
       const colors = themeColors$.value;
       const accent = parseCssColor(colors.accent);
       const warn = parseCssColor(colors.warn);
+      const day = themeModeRef.current === 'day';
       const n = payload.bins;
       const y0 = (h - 1) * rowBytes;
 
@@ -733,7 +740,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
         const bin = Math.min(n - 1, Math.floor((x / w) * n));
         const raw = payload.avg[bin] ?? SPECTRUM_DSP_FLOOR_DB;
         const db = tiltDb(raw, binToHz(bin, n), slope);
-        const [r, g, b, a] = waterfallPixel(db, accent, warn);
+        const [r, g, b, a] = waterfallPixel(db, accent, warn, day);
         const i = y0 + x * 4;
         img.data[i] = r;
         img.data[i + 1] = g;
