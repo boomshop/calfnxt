@@ -180,15 +180,18 @@ export function ChorusUI(props: ChorusUIProps) {
         </div>
       </div>
 
-      <WithInfo title={chorusInfo.chart}>
-        <ChorusChart
-          voices$={host.voices$}
-          overlap$={host.overlap$}
-          vphase$={host.vphase$}
-          lfo$={host.chorusLfo$}
-          className="chart"
-        />
-      </WithInfo>
+      <div className="block chart">
+        <div className="title">Position</div>
+        <WithInfo title={chorusInfo.chart}>
+          <ChorusChart
+            voices$={host.voices$}
+            overlap$={host.overlap$}
+            vphase$={host.vphase$}
+            lfo$={host.chorusLfo$}
+            className="chart"
+          />
+        </WithInfo>
+      </div>
 
       <div className="block voices">
         <div className="title">Voices</div>
