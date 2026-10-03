@@ -50,16 +50,15 @@
 }
 
 :root.day {
-  --background: #ecedee;
-  /* Night-step hue, lightness unchanged. */
-  --background-less: #dfe4e9;
-  --background-lesser: #ced2d9;
-  --background-least: #b6bac4;
+  --background: #fcfdfe;
+  --background-less: #eef1f6;
+  --background-lesser: #dde1e9;
+  --background-least: #ccced7;
 
-  --color: #121314;
-  --color-less: #323539;
-  --color-lesser: #53575d;
-  --color-least: #757982;
+  --color: #001122;
+  --color-less: #2f3d4a;
+  --color-lesser: #586474;
+  --color-least: #7d8497;
 
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
   --shadow-tight: 0 1px 3px rgba(0, 0, 0, 0.2);
@@ -67,14 +66,11 @@
 
 :root.night {
   --background: #010203;
-  /* OKLab midpoint of --background and --background-lesser. */
   --background-less: #0a0d10;
   --background-lesser: #1a1d22;
-  /* Same OKLab step past --background-lesser, lightness kept at #343536. */
   --background-least: #32353d;
 
   --color: #fdfeff;
-  /* Night-step hue, lightness unchanged. */
   --color-less: #d8dde2;
   --color-lesser: #b6bac1;
   --color-least: #9498a2;
@@ -381,7 +377,7 @@ textarea::selection {
       rgb(from var(--bevel-light) r g b / 0.05) 0%,
       rgb(from var(--bevel-light) r g b / 0) 50%,
       rgb(from var(--bevel-dark) r g b / 0) 50.1%,
-      rgb(from var(--bevel-dark) r g b / 0.08) 100%
+      rgb(from var(--bevel-dark) r g b / 0.05) 100%
     );
     pointer-events: none;
   }
