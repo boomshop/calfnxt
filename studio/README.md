@@ -2,7 +2,7 @@
 
 Optional tooling to render each plugin UI with **static demo fixtures** and export
 PNGs to `website/images/<mode>/<accent>/` via Playwright
-(night/day × calfnxt/lime/fire/sea/slick). Default branding is **night / calfnxt**.
+(night/day × calfnxt/fire/lime/sea/slick). Default branding is **night / calfnxt**.
 
 Normal plugin development does **not** need this package. Install only when you
 want to refresh website screenshots.

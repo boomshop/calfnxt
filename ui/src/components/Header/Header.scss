@@ -154,11 +154,11 @@
             #ff0066
           );
         }
-        &.accent-lime > .aux-icon::before {
-          background-image: linear-gradient(to top right, #00cc00, #dddd00);
-        }
         &.accent-fire > .aux-icon::before {
           background-image: linear-gradient(to top right, #990000, #ffcc00);
+        }
+        &.accent-lime > .aux-icon::before {
+          background-image: linear-gradient(to top right, #00cc00, #dddd00);
         }
         &.accent-sea > .aux-icon::before {
           background-image: linear-gradient(to top right, #0033cc, #00ccff);

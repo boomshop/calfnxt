@@ -92,18 +92,6 @@
   --color-hot: #ff6600;
 }
 
-:root.lime {
-  --color-accent: #009362;
-  --contrast-accent: #ffffff;
-  --color-accent-h: 120;
-  --color-accent-s: 100%;
-  --color-accent-l: 37%;
-
-  --color-warn: #c3dd00;
-  --contrast-warn: #000000;
-  --color-hot: #ff9900;
-}
-
 :root.fire {
   --color-accent: #b10023;
   --contrast-accent: #ffffff;
@@ -114,6 +102,18 @@
   --color-warn: #ffbb00;
   --contrast-warn: #000000;
   --color-hot: #ff0000;
+}
+
+:root.lime {
+  --color-accent: #009362;
+  --contrast-accent: #ffffff;
+  --color-accent-h: 120;
+  --color-accent-s: 100%;
+  --color-accent-l: 37%;
+
+  --color-warn: #c3dd00;
+  --contrast-warn: #000000;
+  --color-hot: #ff9900;
 }
 
 :root.sea {

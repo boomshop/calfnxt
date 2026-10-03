@@ -1,19 +1,19 @@
 import { DynamicValue } from '@deutschesoft/awml';
 import '../utils/chartPaintOrder';
 
-/** Appearance prefs: day/night surfaces + accent pair (calfnxt / lime / fire / sea / slick). */
+/** Appearance prefs: day/night surfaces + accent pair (calfnxt / fire / lime / sea / slick). */
 
 export const THEME_MODE_KEY = 'calfnxt.themeMode';
 export const THEME_ACCENT_KEY = 'calfnxt.themeAccent';
 
 export type ThemeMode = 'day' | 'night';
-export type ThemeAccent = 'calfnxt' | 'lime' | 'fire' | 'sea' | 'slick';
+export type ThemeAccent = 'calfnxt' | 'fire' | 'lime' | 'sea' | 'slick';
 
 const MODE_CLASSES: ThemeMode[] = ['day', 'night'];
 export const ACCENT_CLASSES: ThemeAccent[] = [
   'calfnxt',
-  'lime',
   'fire',
+  'lime',
   'sea',
   'slick',
 ];
@@ -45,8 +45,8 @@ function readMode(): ThemeMode {
 function isAccent(v: string | null): v is ThemeAccent {
   return (
     v === 'calfnxt' ||
-    v === 'lime' ||
     v === 'fire' ||
+    v === 'lime' ||
     v === 'sea' ||
     v === 'slick'
   );

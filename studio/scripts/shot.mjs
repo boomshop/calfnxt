@@ -78,7 +78,7 @@ const ALL = [
 ];
 
 const MODES = ['night', 'day'];
-const ACCENTS = ['calfnxt', 'lime', 'fire', 'sea', 'slick'];
+const ACCENTS = ['calfnxt', 'fire', 'lime', 'sea', 'slick'];
 
 function parseArgs(argv) {
   const ids = new Set();
@@ -242,7 +242,7 @@ async function applyStudioTheme(page, mode, accent) {
       const root = document.documentElement;
       root.classList.add('calfnxt-widget-info-off');
       for (const c of ['day', 'night']) root.classList.toggle(c, c === mode);
-      for (const c of ['calfnxt', 'lime', 'fire', 'sea', 'slick'])
+      for (const c of ['calfnxt', 'fire', 'lime', 'sea', 'slick'])
         root.classList.toggle(c, c === accent);
       window.__calfnxtStudioSetTheme?.(mode, accent);
       await new Promise((r) => requestAnimationFrame(() => r()));
