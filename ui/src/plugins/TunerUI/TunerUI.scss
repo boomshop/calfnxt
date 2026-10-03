@@ -144,18 +144,18 @@
 
           .Toggle.key-white,
           .Toggle.key-white .aux-button {
-            background: #999;
+            background: #aaa;
             color: #666;
 
             &.aux-active {
-              background: #ececec;
+              background: #fff;
               color: #000;
             }
           }
 
           .Toggle.key-black,
           .Toggle.key-black .aux-button {
-            background: #666;
+            background: #555;
             color: #999;
 
             &.aux-active {

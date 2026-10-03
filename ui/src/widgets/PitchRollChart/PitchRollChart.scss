@@ -6,11 +6,21 @@
   position: relative;
   overflow: hidden;
 
-  /* Keyboard: disabled black keys are anthracite, not near-black. */
-  --key-white-on: #e8e8e8;
-  --key-white-off: #9a9a9a;
-  --key-black-on: #141414;
-  --key-black-off: #5a5a5a;
+  /* Keyboard fills match the tuner note keys, in day and night. */
+  --key-white-on: #fff;
+  --key-white-off: #aaa;
+  --key-white-on-label: #000;
+  --key-white-off-label: #666;
+  --key-black-on: #000;
+  --key-black-off: #555;
+  --key-black-on-label: #fff;
+  --key-black-off-label: #999;
+
+  /* History lanes. Night values; day overrides below. */
+  --lane-white-on: #1a1d22;
+  --lane-white-off: #121418;
+  --lane-black-on: #010203;
+  --lane-black-off: #000102;
 
   > canvas {
     display: block;
@@ -19,9 +29,28 @@
   }
 }
 
+:root.day .PitchRollChart,
+:root.night .PitchRollChart {
+  --key-white-on: #fff;
+  --key-white-off: #aaa;
+  --key-white-on-label: #000;
+  --key-white-off-label: #666;
+  --key-black-on: #000;
+  --key-black-off: #555;
+  --key-black-on-label: #fff;
+  --key-black-off-label: #999;
+}
+
+:root.night .PitchRollChart {
+  --lane-white-on: #1f2329;
+  --lane-white-off: #0f1114;
+  --lane-black-on: #010203;
+  --lane-black-off: #0d1014;
+}
+
 :root.day .PitchRollChart {
-  --key-white-on: #f5f5f5;
-  --key-white-off: #b8b8b8;
-  --key-black-on: #1a1a1a;
-  --key-black-off: #5c5c5c;
+  --lane-white-on: #fcfdfe;
+  --lane-white-off: var(--background-less);
+  --lane-black-on: #dde1e9;
+  --lane-black-off: var(--background-less);
 }

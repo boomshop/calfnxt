@@ -188,17 +188,18 @@ export function PitchRollChart(props: PitchRollChartProps) {
     const bg = readCss(wrap, '--background', '#000');
     const fg = readCss(wrap, '--color', '#fff');
     const lesser = readCss(wrap, '--background-lesser', '#1b1b1b');
-    // White keys always lighter than black, in both day and night.
-    const day = document.documentElement.classList.contains('day');
-    const laneWhite = day ? bg : lesser;
-    const laneBlack = day ? lesser : bg;
-    const least = readCss(wrap, '--color-least', '#999');
+    const laneWhiteOn = readCss(wrap, '--lane-white-on', '#1a1d22');
+    const laneWhiteOff = readCss(wrap, '--lane-white-off', '#121418');
+    const laneBlackOn = readCss(wrap, '--lane-black-on', '#010203');
+    const laneBlackOff = readCss(wrap, '--lane-black-off', '#000102');
     const accent = readCss(wrap, '--color-accent', '#0066ff');
     const warn = readCss(wrap, '--color-warn', '#ff0066');
-    const keyWhiteOn = readCss(wrap, '--key-white-on', '#e8e8e8');
-    const keyWhiteOff = readCss(wrap, '--key-white-off', '#9a9a9a');
-    const keyBlackOn = readCss(wrap, '--key-black-on', '#141414');
-    const keyBlackOff = readCss(wrap, '--key-black-off', '#5a5a5a');
+    const keyWhiteOn = readCss(wrap, '--key-white-on', '#fff');
+    const keyWhiteOff = readCss(wrap, '--key-white-off', '#aaa');
+    const keyWhiteOnLabel = readCss(wrap, '--key-white-on-label', '#000');
+    const keyWhiteOffLabel = readCss(wrap, '--key-white-off-label', '#666');
+    const keyBlackOn = readCss(wrap, '--key-black-on', '#000');
+    const keyBlackOff = readCss(wrap, '--key-black-off', '#555');
 
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, cssW, cssH);
@@ -223,12 +224,13 @@ export function PitchRollChart(props: PitchRollChartProps) {
     for (let m = midiLo; m < midiHi; ++m) {
       const pc = ((m % 12) + 12) % 12;
       const y = yOf(m + 0.5);
-      ctx.fillStyle = isBlack(pc) ? laneBlack : laneWhite;
-      ctx.fillRect(keyW, y, plotW, rowH);
-      if (!notes[pc]) {
-        ctx.fillStyle = 'rgba(0,0,0,0.28)';
-        ctx.fillRect(keyW, y, plotW, rowH);
+      const on = notes[pc];
+      if (isBlack(pc)) {
+        ctx.fillStyle = on ? laneBlackOn : laneBlackOff;
+      } else {
+        ctx.fillStyle = on ? laneWhiteOn : laneWhiteOff;
       }
+      ctx.fillRect(keyW, y, plotW, rowH);
     }
 
     // Keyboard.
@@ -250,7 +252,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
       ctx.lineTo(cssW, y);
       ctx.stroke();
       if (pc === 0) {
-        ctx.fillStyle = isBlack(pc) ? least : '#333';
+        ctx.fillStyle = allowed ? keyWhiteOnLabel : keyWhiteOffLabel;
         ctx.font = `${keyLabelPx}px ${fontFamily}`;
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
@@ -260,7 +262,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
 
     // Adjacent white keys (E|F, B|C) need a dark join — the lane fill is the
     // same colour on both sides, so the usual lesser stroke disappears.
-    ctx.strokeStyle = laneBlack;
+    ctx.strokeStyle = laneBlackOn;
     ctx.lineWidth = 1;
     for (let m = midiLo; m < midiHi; ++m) {
       const pc = ((m % 12) + 12) % 12;
@@ -352,31 +354,16 @@ export function PitchRollChart(props: PitchRollChartProps) {
       const mid = midAccentWarn(accent, warn);
       // Dry dashed --color; −1 mid(accent,warn); −2 warn; +1 --color; sub accent.
       strokePitch(
-        (i) => ((bitsOf(i) & 1) ? inMidi(i) : 0),
+        (i) => (bitsOf(i) & 1 ? inMidi(i) : 0),
         withAlpha(fg, 0.85),
         1.75,
         PITCH_DASH_TIGHT,
       );
+      strokePitch((i) => (bitsOf(i) & 2 ? inMidi(i) - 12 : 0), mid, 1.75, []);
+      strokePitch((i) => (bitsOf(i) & 4 ? inMidi(i) - 24 : 0), warn, 1.75, []);
+      strokePitch((i) => (bitsOf(i) & 8 ? inMidi(i) + 12 : 0), fg, 1.75, []);
       strokePitch(
-        (i) => ((bitsOf(i) & 2) ? inMidi(i) - 12 : 0),
-        mid,
-        1.75,
-        [],
-      );
-      strokePitch(
-        (i) => ((bitsOf(i) & 4) ? inMidi(i) - 24 : 0),
-        warn,
-        1.75,
-        [],
-      );
-      strokePitch(
-        (i) => ((bitsOf(i) & 8) ? inMidi(i) + 12 : 0),
-        fg,
-        1.75,
-        [],
-      );
-      strokePitch(
-        (i) => ((bitsOf(i) & 16) ? inMidi(i) - 12 : 0),
+        (i) => (bitsOf(i) & 16 ? inMidi(i) - 12 : 0),
         accent,
         1.75,
         [],
@@ -420,15 +407,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
     ctx.textAlign = 'right';
     ctx.fillText(`${Math.round(PITCH_ROLL_MS / 1000)}s`, cssW - 6, 12);
     ctx.textAlign = 'left';
-  }, [
-    fmin,
-    fmax,
-    notes,
-    showIn,
-    showOut,
-    showTarg,
-    theme,
-  ]);
+  }, [fmin, fmax, notes, showIn, showOut, showTarg, theme]);
 
   useEffect(() => {
     const unsub = data$.subscribe((buf: Float32Array | null) => {
