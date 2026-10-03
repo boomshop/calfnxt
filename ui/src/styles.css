@@ -554,7 +554,15 @@ textarea::selection {
   border-radius: 2px;
 
   > .aux-mask {
-    background: var(--background-least);
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--background);
+      opacity: 0.8;
+    }
   }
 }
 
@@ -562,16 +570,16 @@ textarea::selection {
   --aux-multimeter-gridgap: 0;
   --aux-meter-gridgap: 0 4px;
   --aux-multimeter-labelwidth: 20px;
+  --aux-levelmeter-statesize: 6px;
 
   margin: 0;
 
   > .aux-bar {
     overflow: hidden;
-    border-radius: var(--border-radius);
+    border-radius: 2px;
 
     > .aux-mask {
       opacity: 0.8;
-      border-radius: var(--border-radius);
     }
   }
 
