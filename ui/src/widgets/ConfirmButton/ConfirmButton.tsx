@@ -9,8 +9,10 @@ const ConfirmButtonWidget = componentFromWidget(
     icon: false,
     icon_confirm: 'questionmark',
     label: false,
-    label_confirm: false,
+    label_confirm: 'Sure?',
     confirm: true,
+    timeout: 2500,
+    interrupt: 80,
   },
   'ConfirmButton',
 );

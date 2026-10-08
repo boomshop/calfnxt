@@ -1457,6 +1457,7 @@ int main(int argc, char** argv)
     "if(src.t==='ir'){"
     "if(src.cmd!=null)o.cmd=String(src.cmd);"
     "if(src.path!=null)o.path=String(src.path);"
+    "if(src.slot!=null)o.slot=src.slot|0;"
     "}"
     "if(src.t==='midi'){"
     "if(src.cmd!=null)o.cmd=String(src.cmd);"

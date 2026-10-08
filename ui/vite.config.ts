@@ -44,6 +44,7 @@ const knownPlugins = [
   "bender",
   "impulse",
   "tamer",
+  "denoiser",
 ] as const;
 
 export default defineConfig(({ command }) => {

@@ -46,6 +46,7 @@ const ALL_PLUGINS = [
   'bender',
   'impulse',
   'tamer',
+  'denoiser',
 ];
 
 const rawArgs = process.argv.slice(2);

@@ -26,6 +26,7 @@ import type {
   IBenderHost,
   IImpulseHost,
   ITamerHost,
+  IDenoiserHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -50,6 +51,8 @@ export type VizFixture = {
   shape?: number[];
   /** Spectrum: [bins, hold, avg×N, max×N, L×N, R×N] dBFS. */
   spectrum?: number[];
+  /** Denoiser active/blended noise profile (same layout as spectrum). */
+  profileSpectrum?: number[];
   /** Pre-dynamics / pre-EQ spectrum (mbcomp / mblimiter / equalizer / filter). */
   spectrumIn?: number[];
   /** Post-dynamics / post-EQ spectrum (mbcomp / mblimiter / equalizer / filter). */
@@ -1184,6 +1187,50 @@ export function applyTamerDemo(
   }
 }
 
+function applyDenoiserDemo(
+  host: IDenoiserHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.profile$, params.profile);
+  setNum(host.blend$, params.blend);
+  setNum(host.amount$, params.amount);
+  setNum(host.floor$, params.floor);
+  setNum(host.fLo$, params.f_lo);
+  setBool(host.fLoOn$, params.f_lo_on);
+  setNum(host.fHi$, params.f_hi);
+  setBool(host.fHiOn$, params.f_hi_on);
+  setNum(host.quality$, params.quality);
+  setNum(host.spectrum$, params.spectrum);
+  setBool(host.diffListen$, params.diff_listen);
+  setNum(host.listen$, params.listen);
+  applySharedViz(viz);
+  if (viz.spectrum) {
+    host.spectrumData$.set(viz.spectrum);
+    pushViz('fft', 'spectrum', viz.spectrum);
+  }
+  if (viz.response) {
+    host.grResponse$.set(viz.response);
+    pushViz('denoiser', 'response', viz.response);
+  }
+  if (viz.profileSpectrum) {
+    host.profileSpectrum$.set(viz.profileSpectrum);
+    pushViz('denoiser_prof', 'spectrum', viz.profileSpectrum);
+  }
+  // Seed three mini-profile cards from the active profile curve (slot 1 filled).
+  const bins = Math.max(0, Math.round(viz.profileSpectrum?.[0] ?? 0));
+  const db =
+    bins > 0 && viz.profileSpectrum && viz.profileSpectrum.length >= 2 + bins
+      ? viz.profileSpectrum.slice(2, 2 + bins)
+      : [];
+  host.profiles$.set([
+    { i: 1, valid: db.length > 0, db },
+    { i: 2, valid: false, db: [] },
+    { i: 3, valid: false, db: [] },
+  ]);
+}
+
 export type DemoApplier = (
   host: unknown,
   params: Record<string, unknown>,
@@ -1217,4 +1264,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   bender: applyBenderDemo as DemoApplier,
   impulse: applyImpulseDemo as DemoApplier,
   tamer: applyTamerDemo as DemoApplier,
+  denoiser: applyDenoiserDemo as DemoApplier,
 };

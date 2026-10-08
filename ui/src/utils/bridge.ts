@@ -22,8 +22,24 @@ export type calfNXTMsg =
   | { t: "midi"; cmd: string }
   /** Analyzer: reset integrated loudness (`reset`) or latched spectrum peaks (`resetpeak`). */
   | { t: "meter"; cmd: string }
-  /** Impulse library: browse / select / tree / status. */
-  | { t: "ir"; cmd: string; path?: string; root?: string; sel?: string; status?: string; tree?: IrNode[]; open?: string[]; scroll?: number };
+  /** Impulse library / Denoiser profiles: browse / select / tree / status / learn / stop / clear / sync. */
+  | {
+      t: "ir";
+      cmd: string;
+      path?: string;
+      root?: string;
+      sel?: string;
+      status?: string;
+      tree?: IrNode[];
+      open?: string[];
+      scroll?: number;
+      /** Denoiser profile slot 1…3 (learn / stop / clear). */
+      slot?: number;
+      /** Denoiser `profiles` reply bin count. */
+      bins?: number;
+      /** Denoiser learned profile snapshots. */
+      slots?: { i: number; valid: number; db?: number[] }[];
+    };
 
 /** Plain float from a host→UI param message (`v`, or legacy q/d). */
 export function plainFromMsg(msg: { v?: number; q?: number; d?: number }): number | undefined {

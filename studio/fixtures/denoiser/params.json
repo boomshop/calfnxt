@@ -1,0 +1,15 @@
+{
+  "bypass": false,
+  "profile": 1,
+  "blend": 250,
+  "amount": 1,
+  "floor": -20,
+  "f_lo": 20,
+  "f_lo_on": true,
+  "f_hi": 160,
+  "f_hi_on": true,
+  "quality": 1,
+  "spectrum": 1,
+  "diff_listen": false,
+  "listen": 0
+}

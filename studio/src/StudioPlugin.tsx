@@ -26,6 +26,7 @@ import {
   BenderUI,
   ImpulseUI,
   TamerUI,
+  DenoiserUI,
   createBoundCompressorHost,
   createBoundExpanderHost,
   createBoundDeesserHost,
@@ -52,6 +53,7 @@ import {
   createBoundBenderHost,
   createBoundImpulseHost,
   createBoundTamerHost,
+  createBoundDenoiserHost,
   showWidgetInfo$,
   type PluginId,
 } from '@calfnxt/ui';
@@ -143,6 +145,10 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
     params: (await import('../fixtures/tamer/params.json')).default,
     viz: (await import('../fixtures/tamer/viz.json')).default,
   }),
+  denoiser: async () => ({
+    params: (await import('../fixtures/denoiser/params.json')).default,
+    viz: (await import('../fixtures/denoiser/viz.json')).default,
+  }),
   limiter: async () => ({
     params: (await import('../fixtures/limiter/params.json')).default,
     viz: (await import('../fixtures/limiter/viz.json')).default,
@@ -217,6 +223,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundImpulseHost();
       case 'tamer':
         return createBoundTamerHost();
+      case 'denoiser':
+        return createBoundDenoiserHost();
       case 'limiter':
         return createBoundLimiterHost();
       case 'mbcomp':
@@ -337,6 +345,10 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
     case 'tamer':
       return (
         <TamerUI host={host as ReturnType<typeof createBoundTamerHost>} />
+      );
+    case 'denoiser':
+      return (
+        <DenoiserUI host={host as ReturnType<typeof createBoundDenoiserHost>} />
       );
     case 'limiter':
       return <LimiterUI host={host as ReturnType<typeof createBoundLimiterHost>} />;

@@ -18,6 +18,8 @@ export * from "./ReverbChart";
 export * from "./SpectrumChart";
 export * from "./SpectrumDiffChart";
 export * from "./TamerChart";
+export * from "./DenoiserChart";
+export * from "./ProfileMiniSpectrum";
 export * from "./ModulationChart";
 export * from "./ChorusChart";
 export * from "./ImpulseChart";

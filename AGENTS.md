@@ -24,7 +24,7 @@ system WebKit); the **host `environ` is never mutated**. Opt out with
 `CALFNXT_KEEP_HOST_LDPATH`. Each bundle ships `Contents/<arch>/calfnxt-web-host`
 next to the `.so`. User-facing contract: `README.md` → Clarifications.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Impulse** (`#impulse`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`), **Tuner** (`#tuner`), **Octaver** (`#octaver`), **Bender** (`#bender`), **Tamer** (`#tamer`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Impulse** (`#impulse`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`), **Tuner** (`#tuner`), **Octaver** (`#octaver`), **Bender** (`#bender`), **Tamer** (`#tamer`), **Denoiser** (`#denoiser`).
 Suite focus is this set — no near-term new plugins unless explicitly requested.
 
 ---
@@ -83,8 +83,9 @@ dsp/octaver/   octaver.plugin.json + DSP + codegen
 dsp/bender/    bender.plugin.json + DSP + codegen
 dsp/impulse/   impulse.plugin.json + DSP + codegen
 dsp/tamer/     tamer.plugin.json + DSP + codegen
+dsp/denoiser/      denoiser.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
-ui/            React SPA (Vite), hash router #equalizer / … / #tamer
+ui/            React SPA (Vite), hash router #equalizer / … / #denoiser
 external/vst3sdk/
 ```
 
@@ -398,6 +399,7 @@ Ideas only if explicitly revived — do not start these unprompted:
 | Bender DSP                  | `dsp/bender/source/*_dsp.*`, `common/dsp/bender_shifter.h`; UI `ui/src/plugins/BenderUI/*`, `host/benderHost.ts`                                                                                        |
 | Impulse DSP                 | `dsp/impulse/source/*_dsp.*`, `common/dsp/partitioned_convolver.h`, `wav_load.h`, `ir_library.h`; UI `ui/src/plugins/ImpulseUI/*`, `host/impulseHost.ts`, `widgets/ImpulseChart/*`                     |
 | Tamer DSP                   | `dsp/tamer/source/*_dsp.*`, `common/dsp/spectral_tamer.h`; UI `ui/src/plugins/TamerUI/*`, `host/tamerHost.ts`, `widgets/TamerChart/*`                                                                 |
+| Denoiser DSP                    | `dsp/denoiser/source/*_dsp.*`, `common/dsp/spectral_denoiser.h`; UI `ui/src/plugins/DenoiserUI/*`, `host/denoiserHost.ts`, `widgets/DenoiserChart/*`                                                                     |
 | Param bind                  | `ui/src/utils/bridge.ts`, `ui/src/utils/bind_param.ts`, `host/*Host.ts`                                                                                                                              |
 | Header I/O                  | `ui/src/components/Header/*`, `host/headerMeters.ts`                                                                                                                                                |
 | Meters                      | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*`                                                                                                                                                       |
