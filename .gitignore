@@ -46,3 +46,6 @@ dsp/*/web/
 
 OCTAVER*.md
 /node_modules/
+
+# Local extracted webkitgtk-6.0 for optional GTK4 helper builds (not committed)
+/.deps-webkitgtk6/

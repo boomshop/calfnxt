@@ -333,6 +333,17 @@ void WebEditor::fillWebRoot(char* out, size_t cap)
 
 bool WebEditor::findHelperPath(char* out, size_t cap)
 {
+  // Opt-in floating GTK4/Wayland helper (same SPA; no XEmbed).
+  const char* prefer = "calfnxt-web-host";
+  if (envFlag("CALFNXT_WEB_HOST"))
+  {
+    const char* v = std::getenv("CALFNXT_WEB_HOST");
+    if (v && (!std::strcmp(v, "gtk4") || !std::strcmp(v, "float") || !std::strcmp(v, "wayland")))
+      prefer = "calfnxt-web-host-gtk4";
+  }
+  else if (envFlag("CALFNXT_WEB_FLOATING"))
+    prefer = "calfnxt-web-host-gtk4";
+
   Dl_info info {};
   if (dladdr(reinterpret_cast<void*>(&dlAnchor), &info) && info.dli_fname)
   {
@@ -340,13 +351,30 @@ bool WebEditor::findHelperPath(char* out, size_t cap)
     auto slash = so.rfind('/');
     if (slash != std::string::npos)
     {
-      std::snprintf(out, cap, "%s/calfnxt-web-host", so.substr(0, slash).c_str());
+      std::snprintf(out, cap, "%s/%s", so.substr(0, slash).c_str(), prefer);
       if (access(out, X_OK) == 0)
         return true;
+      // Fall back to classic GtkPlug host if gtk4 helper was requested but missing.
+      if (std::strcmp(prefer, "calfnxt-web-host") != 0)
+      {
+        std::snprintf(out, cap, "%s/calfnxt-web-host", so.substr(0, slash).c_str());
+        if (access(out, X_OK) == 0)
+        {
+          logBoth("[calfnxt] %s missing — falling back to calfnxt-web-host\n", prefer);
+          return true;
+        }
+      }
     }
   }
-  std::snprintf(out, cap, "calfnxt-web-host");
-  return access(out, X_OK) == 0;
+  std::snprintf(out, cap, "%s", prefer);
+  if (access(out, X_OK) == 0)
+    return true;
+  if (std::strcmp(prefer, "calfnxt-web-host") != 0)
+  {
+    std::snprintf(out, cap, "calfnxt-web-host");
+    return access(out, X_OK) == 0;
+  }
+  return false;
 }
 
 WebEditor::WebEditor(EditController* controller, ViewRect size, const char* entryHtml)

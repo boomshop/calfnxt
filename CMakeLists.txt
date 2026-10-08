@@ -75,9 +75,10 @@ add_subdirectory(dsp/tamer)
 add_subdirectory(tools/offline)
 
 # After every plugin registered via calfnxt_copy_web_host: refresh helpers whenever
-# calfnxt-web-host is rebuilt (plugin .so may be unchanged).
+# a web-host binary is rebuilt (plugin .so may be unchanged).
 get_property(_calfnxt_web_host_plugins GLOBAL PROPERTY CALFNXT_WEB_HOST_PLUGIN_TARGETS)
 set(_calfnxt_web_host_bundle_cmds)
+set(_calfnxt_web_host_bundle_deps calfnxt-web-host)
 foreach(_t IN LISTS _calfnxt_web_host_plugins)
   list(APPEND _calfnxt_web_host_bundle_cmds
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${_t}>"
@@ -85,11 +86,21 @@ foreach(_t IN LISTS _calfnxt_web_host_plugins)
       "$<TARGET_FILE:calfnxt-web-host>"
       "$<TARGET_FILE_DIR:${_t}>/calfnxt-web-host"
   )
+  if(CALFNXT_HAVE_WEB_HOST_GTK4)
+    list(APPEND _calfnxt_web_host_bundle_cmds
+      COMMAND ${CMAKE_COMMAND} -E copy
+        "$<TARGET_FILE:calfnxt-web-host-gtk4>"
+        "$<TARGET_FILE_DIR:${_t}>/calfnxt-web-host-gtk4"
+    )
+  endif()
 endforeach()
+if(CALFNXT_HAVE_WEB_HOST_GTK4)
+  list(APPEND _calfnxt_web_host_bundle_deps calfnxt-web-host-gtk4)
+endif()
 add_custom_target(calfnxt-web-host-bundles
   ${_calfnxt_web_host_bundle_cmds}
-  DEPENDS calfnxt-web-host
-  COMMENT "Refresh calfnxt-web-host inside all plugin VST3 bundles"
+  DEPENDS ${_calfnxt_web_host_bundle_deps}
+  COMMENT "Refresh calfnxt-web-host(+gtk4) inside all plugin VST3 bundles"
 )
 
 # UI build needs generated models from every plugin descriptor

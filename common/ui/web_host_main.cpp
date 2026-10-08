@@ -18,6 +18,7 @@
 
 #include "ui_file_log.h"
 #include "viz_bin.h"
+#include "web_host_shared.h"
 
 #include <cerrno>
 #include <cstdint>
@@ -31,6 +32,8 @@
 #include <string>
 #include <unistd.h>
 #include <vector>
+
+namespace W = calfNXT::Ui::WebHostShared;
 
 namespace {
 
@@ -76,137 +79,7 @@ constexpr int kMapPollMaxTries = 2000 / kMapPollMs;
 void evalJs(const char* js);
 bool sendLine(const char* line);
 
-bool envFlag(const char* name)
-{
-  const char* s = std::getenv(name);
-  return s != nullptr && s[0] != '\0';
-}
-
-/**
- * WebKit's "Failed to create GBM buffer" goes to the process stderr, which
- * Ardour discards. Dup stderr onto a pipe so those lines also land in
- * /tmp/calfnxt-ui.log. hostLog writes the saved fd directly (no echo).
- */
-struct StderrCapture
-{
-  int saved = -1;
-  int readFd = -1;
-  GThread* thread = nullptr;
-  bool gbmNoted = false;
-};
-
-StderrCapture stderrCap;
-
-void writeSavedStderr(const char* data, size_t n)
-{
-  const int fd = stderrCap.saved >= 0 ? stderrCap.saved : STDERR_FILENO;
-  size_t off = 0;
-  while (off < n)
-  {
-    const ssize_t w = ::write(fd, data + off, n - off);
-    if (w < 0)
-    {
-      if (errno == EINTR)
-        continue;
-      break;
-    }
-    if (w == 0)
-      break;
-    off += static_cast<size_t>(w);
-  }
-}
-
-void noteCapturedLine(const std::string& line)
-{
-  writeSavedStderr(line.data(), line.size());
-  if (line.size() <= 1024)
-    calfNXT::Ui::appendUiLog(line.c_str());
-  else
-  {
-    std::string cut = line.substr(0, 1000);
-    cut += "...\n";
-    calfNXT::Ui::appendUiLog(cut.c_str());
-  }
-  if (stderrCap.gbmNoted || line.find("Failed to create GBM buffer") == std::string::npos)
-    return;
-  stderrCap.gbmNoted = true;
-  static const char hint[] =
-    "[calfnxt-web-host] gbm-fail: DMA-BUF renderer failed to allocate a GBM buffer; "
-    "the page can finish loading while the XEmbed stays black. "
-    "Relaunch the host with WEBKIT_DISABLE_DMABUF_RENDERER=1 to keep GL compositing. "
-    "CALFNXT_WEB_NO_GPU=1 is the slower software fallback.\n";
-  writeSavedStderr(hint, sizeof hint - 1);
-  calfNXT::Ui::appendUiLog(hint);
-}
-
-gpointer stderrCaptureThread(gpointer)
-{
-  std::string acc;
-  char tmp[1024];
-  while (stderrCap.readFd >= 0)
-  {
-    const ssize_t n = ::read(stderrCap.readFd, tmp, sizeof tmp);
-    if (n == 0)
-      break;
-    if (n < 0)
-    {
-      if (errno == EINTR)
-        continue;
-      break;
-    }
-    acc.append(tmp, static_cast<size_t>(n));
-    for (;;)
-    {
-      auto pos = acc.find('\n');
-      if (pos == std::string::npos)
-      {
-        if (acc.size() < 8192)
-          break;
-        acc.push_back('\n');
-        pos = acc.size() - 1;
-      }
-      std::string line = acc.substr(0, pos + 1);
-      acc.erase(0, pos + 1);
-      noteCapturedLine(line);
-    }
-  }
-  return nullptr;
-}
-
-void startStderrCapture()
-{
-  int fds[2] = {-1, -1};
-  if (::pipe2(fds, O_CLOEXEC) != 0)
-    return;
-  const int saved = ::dup(STDERR_FILENO);
-  if (saved < 0)
-  {
-    ::close(fds[0]);
-    ::close(fds[1]);
-    return;
-  }
-  ::fcntl(saved, F_SETFD, FD_CLOEXEC);
-  if (::dup2(fds[1], STDERR_FILENO) < 0)
-  {
-    ::close(saved);
-    ::close(fds[0]);
-    ::close(fds[1]);
-    return;
-  }
-  ::close(fds[1]);
-  stderrCap.saved = saved;
-  stderrCap.readFd = fds[0];
-  stderrCap.thread = g_thread_new("calfnxt-stderr", stderrCaptureThread, nullptr);
-  if (!stderrCap.thread)
-  {
-    ::dup2(saved, STDERR_FILENO);
-    ::close(saved);
-    ::close(fds[0]);
-    stderrCap.saved = -1;
-    stderrCap.readFd = -1;
-  }
-}
-
+bool envFlag(const char* name) { return W::envFlag(name); }
 void hostLog(const char* fmt, ...)
 {
   char buf[1024];
@@ -216,48 +89,11 @@ void hostLog(const char* fmt, ...)
   va_end(ap);
   if (n <= 0)
     return;
-  const size_t len = static_cast<size_t>(n) >= sizeof buf ? sizeof buf - 1 : static_cast<size_t>(n);
-  writeSavedStderr(buf, len);
-  calfNXT::Ui::appendUiLog(buf);
+  // Forward through shared (stderr tee + file log).
+  W::hostLog("%s", buf);
 }
-
-const char* envOrUnset(const char* name)
-{
-  const char* s = std::getenv(name);
-  return (s && s[0]) ? s : "(unset)";
-}
-
-bool readFirstLine(const char* path, char* out, size_t outLen)
-{
-  if (!out || outLen < 2)
-    return false;
-  out[0] = '\0';
-  const int fd = ::open(path, O_RDONLY | O_CLOEXEC);
-  if (fd < 0)
-    return false;
-  const ssize_t n = ::read(fd, out, outLen - 1);
-  ::close(fd);
-  if (n <= 0)
-  {
-    out[0] = '\0';
-    return false;
-  }
-  out[n] = '\0';
-  for (size_t i = 0; i < static_cast<size_t>(n); ++i)
-  {
-    if (out[i] == '\n' || out[i] == '\r')
-    {
-      out[i] = '\0';
-      break;
-    }
-  }
-  size_t len = std::strlen(out);
-  while (len > 0 && (out[len - 1] == ' ' || out[len - 1] == '\t'))
-    out[--len] = '\0';
-  return out[0] != '\0';
-}
-
-/** One-shot graphics snapshot for blank-embed reports (GPU, session, WebKit). */
+void logEvalJsError(const char* message) { W::logEvalJsError(message); }
+void startStderrCapture() { W::startStderrCapture(); }
 void logGraphicsProbe()
 {
   const char* gdkBackend = "other";
@@ -269,102 +105,11 @@ void logGraphicsProbe()
     if (const char* name = gdk_display_get_name(display))
       displayName = name;
   }
-  hostLog("[calfnxt-web-host] gfx webkit=%u.%u.%u gtk=%u.%u.%u gdk=%s display=%s "
-          "session=%s wayland=%s gdk_backend=%s DISPLAY=%s stderr-tee=%d\n",
+  hostLog("[calfnxt-web-host] gfx webkit=%u.%u.%u gtk=%u.%u.%u gdk=%s display=%s\n",
           webkit_get_major_version(), webkit_get_minor_version(), webkit_get_micro_version(),
           gtk_get_major_version(), gtk_get_minor_version(), gtk_get_micro_version(),
-          gdkBackend, displayName, envOrUnset("XDG_SESSION_TYPE"), envOrUnset("WAYLAND_DISPLAY"),
-          envOrUnset("GDK_BACKEND"), envOrUnset("DISPLAY"), stderrCap.saved >= 0 ? 1 : 0);
-  hostLog("[calfnxt-web-host] gfx dmabuf=%s compositing=%s no_gpu=%s glx_vendor=%s\n",
-          envOrUnset("WEBKIT_DISABLE_DMABUF_RENDERER"),
-          envOrUnset("WEBKIT_DISABLE_COMPOSITING_MODE"), envOrUnset("CALFNXT_WEB_NO_GPU"),
-          envOrUnset("__GLX_VENDOR_LIBRARY_NAME"));
-
-  DIR* dir = ::opendir("/sys/class/drm");
-  int found = 0;
-  if (!dir)
-  {
-    hostLog("[calfnxt-web-host] gfx drm=(unreadable)\n");
-  }
-  else
-  {
-    while (dirent* ent = ::readdir(dir))
-    {
-      const char* name = ent->d_name;
-      if (std::strncmp(name, "card", 4) != 0 || std::strchr(name, '-') || name[4] == '\0')
-        continue;
-      bool digits = true;
-      for (const char* p = name + 4; *p; ++p)
-      {
-        if (*p < '0' || *p > '9')
-          digits = false;
-      }
-      if (!digits)
-        continue;
-
-      char path[512];
-      std::snprintf(path, sizeof path, "/sys/class/drm/%s/device/driver", name);
-      char link[512];
-      const char* driver = "?";
-      const ssize_t n = ::readlink(path, link, sizeof link - 1);
-      if (n > 0)
-      {
-        link[n] = '\0';
-        if (const char* slash = std::strrchr(link, '/'))
-          driver = slash + 1;
-        else
-          driver = link;
-      }
-      char vendor[64];
-      char device[64];
-      std::snprintf(path, sizeof path, "/sys/class/drm/%s/device/vendor", name);
-      if (!readFirstLine(path, vendor, sizeof vendor))
-        std::snprintf(vendor, sizeof vendor, "?");
-      std::snprintf(path, sizeof path, "/sys/class/drm/%s/device/device", name);
-      if (!readFirstLine(path, device, sizeof device))
-        std::snprintf(device, sizeof device, "?");
-      hostLog("[calfnxt-web-host] gfx drm %s driver=%s vendor=%s device=%s\n", name, driver,
-              vendor, device);
-      if (++found >= 8)
-        break;
-    }
-    ::closedir(dir);
-    if (found == 0)
-      hostLog("[calfnxt-web-host] gfx drm=(none)\n");
-  }
-
-  char nvidia[240];
-  if (readFirstLine("/proc/driver/nvidia/version", nvidia, sizeof nvidia))
-    hostLog("[calfnxt-web-host] gfx nvidia=%s\n", nvidia);
-}
-
-/** evalJs can fail on every param/viz line (~30–60 Hz); do not fill the log. */
-void logEvalJsError(const char* message)
-{
-  static int64_t lastNs = 0;
-  static int dropped = 0;
-  timespec ts {};
-  if (::clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
-  {
-    hostLog("[calfnxt-web-host] evalJs: %s\n", message ? message : "?");
-    return;
-  }
-  const int64_t now =
-    static_cast<int64_t>(ts.tv_sec) * 1000000000LL + static_cast<int64_t>(ts.tv_nsec);
-  if (lastNs != 0 && (now - lastNs) < 1000000000LL)
-  {
-    ++dropped;
-    return;
-  }
-  lastNs = now;
-  if (dropped > 0)
-  {
-    hostLog("[calfnxt-web-host] evalJs: %s (%d similar omitted)\n", message ? message : "?",
-            dropped);
-    dropped = 0;
-    return;
-  }
-  hostLog("[calfnxt-web-host] evalJs: %s\n", message ? message : "?");
+          gdkBackend, displayName);
+  W::logGraphicsProbe("web-host");
 }
 
 bool sendLine(const char* line)
@@ -1085,45 +830,9 @@ void injectVizBin(const calfNXT::Ui::VizBin::Decoded& dec)
   g_variant_unref(args);
 }
 
-/** Append one decoded CNXV into a JS-side pack (id/kind/fmt/scale/bias/count/payload). */
 void appendVizPackItem(std::vector<std::uint8_t>& pack, const calfNXT::Ui::VizBin::Decoded& dec)
 {
-  namespace VB = calfNXT::Ui::VizBin;
-  const auto idLen = static_cast<std::uint8_t>(std::min(dec.id.size(), VB::kMaxIdLen));
-  const auto kindLen = static_cast<std::uint8_t>(std::min(dec.kind.size(), VB::kMaxKindLen));
-  const std::size_t bps = VB::bytesPerSample(dec.fmt);
-  const std::size_t payload = static_cast<std::size_t>(std::max(0, dec.count)) * bps;
-
-  const std::size_t at = pack.size();
-  pack.resize(at + 1 + idLen + 1 + kindLen + 1 + 4 + 4 + 4 + payload);
-  std::uint8_t* p = pack.data() + at;
-  *p++ = idLen;
-  if (idLen)
-    std::memcpy(p, dec.id.data(), idLen);
-  p += idLen;
-  *p++ = kindLen;
-  if (kindLen)
-    std::memcpy(p, dec.kind.data(), kindLen);
-  p += kindLen;
-  *p++ = static_cast<std::uint8_t>(dec.fmt);
-  auto writeF32 = [](std::uint8_t* d, float v) {
-    static_assert(sizeof(float) == 4, "float");
-    std::memcpy(d, &v, 4);
-  };
-  auto writeU32 = [](std::uint8_t* d, std::uint32_t v) {
-    d[0] = static_cast<std::uint8_t>(v);
-    d[1] = static_cast<std::uint8_t>(v >> 8);
-    d[2] = static_cast<std::uint8_t>(v >> 16);
-    d[3] = static_cast<std::uint8_t>(v >> 24);
-  };
-  writeF32(p, dec.scale);
-  p += 4;
-  writeF32(p, dec.bias);
-  p += 4;
-  writeU32(p, static_cast<std::uint32_t>(std::max(0, dec.count)));
-  p += 4;
-  if (payload && dec.payload)
-    std::memcpy(p, dec.payload, payload);
+  W::appendVizPackItem(pack, dec);
 }
 
 /** One WebKit round-trip for many CNXV frames (CNXB batch). */
@@ -1246,31 +955,9 @@ void scheduleJsProbes()
   }, nullptr);
 }
 
-bool jsonHasType(const char* s, const char* type)
-{
-  char needle[40];
-  std::snprintf(needle, sizeof needle, "\"t\":\"%s\"", type);
-  if (std::strstr(s, needle))
-    return true;
-  std::snprintf(needle, sizeof needle, "\"t\": \"%s\"", type);
-  return std::strstr(s, needle) != nullptr;
-}
-
+bool jsonHasType(const char* s, const char* type) { return W::jsonHasType(s, type); }
 bool jsonNumberAfterKey(const char* s, const char* key, double& out)
-{
-  const char* p = std::strstr(s, key);
-  if (!p)
-    return false;
-  p = std::strchr(p, ':');
-  if (!p)
-    return false;
-  ++p;
-  while (*p == ' ' || *p == '\t')
-    ++p;
-  char* end = nullptr;
-  out = std::strtod(p, &end);
-  return end != p;
-}
+{ return W::jsonNumberAfterKey(s, key, out); }
 
 void handlePluginLine(const std::string& line)
 {

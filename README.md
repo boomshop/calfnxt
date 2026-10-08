@@ -139,7 +139,8 @@ Optional: **Ninja**.
 | Module           | Purpose                                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `gtk+-3.0`       | GtkPlug / X11 embed (**only** `calfnxt-web-host`, never the `.so`)                                                        |
-| `webkit2gtk-4.1` | WebKitGTK **for GTK 3** in the helper (`2` = WebKit2 engine, **not** GTK 2; do **not** substitute 4.0 or `webkitgtk-6.0`) |
+| `webkit2gtk-4.1` | WebKitGTK **for GTK 3** in the default helper (`2` = WebKit2 engine, **not** GTK 2)                                      |
+| `gtk4` + `webkitgtk-6.0` | Optional floating helper `calfnxt-web-host-gtk4` (`CALFNXT_WEB_HOST=gtk4`). Same SPA / ui-dist; not a drop-in for the embed host. |
 
 Usually pulled in as deps: GLib, GObject, Cairo, Soup, X11.
 
@@ -300,6 +301,7 @@ Example: `CALFNXT_WEB_DEBUG=1 carla …`.
 | `CALFNXT_WEB_DEBUG`        | non-empty          | Extra stderr logging; WebKit developer extras + console→stdout. File log is always `/tmp/calfnxt-ui.log` (capped at 512 KiB, then truncated).                                  |
 | `CALFNXT_WEB_INSPECTOR`    | non-empty          | Open WebKit Inspector on editor load.                                                                                                                                          |
 | `CALFNXT_WEB_NO_GPU`       | non-empty          | Hardware accel **off** (`NEVER`). Default is **on** (`ALWAYS`). Use if the embed paints blank.                                                                                 |
+| `CALFNXT_WEB_HOST`         | `gtk4` / `float` / `wayland` | Opt-in floating helper `calfnxt-web-host-gtk4` (GTK4 + `webkitgtk-6.0`, no XEmbed). Default: classic GtkPlug host. Needs the gtk4 helper built + `webkitgtk-6.0` installed. Alias: `CALFNXT_WEB_FLOATING=1`. |
 | `CALFNXT_XWAYLAND_NUDGE`   | non-empty          | Opt-in GNOME/Mutter + Ardour on Wayland workaround. **Off by default.** See [Editor black or frozen on GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland).                |
 | `CALFNXT_KEEP_HOST_LDPATH` | non-empty          | Copy the host `LD_LIBRARY_PATH` into the helper’s spawn `envp`. Default: omit it **for the child only** (Mixbus/Ardour bundled glib). Never touches the DAW’s own environment. |
 
