@@ -26,6 +26,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <dirent.h>
 #include <fcntl.h>
 #include <string>
 #include <unistd.h>
@@ -81,6 +82,131 @@ bool envFlag(const char* name)
   return s != nullptr && s[0] != '\0';
 }
 
+/**
+ * WebKit's "Failed to create GBM buffer" goes to the process stderr, which
+ * Ardour discards. Dup stderr onto a pipe so those lines also land in
+ * /tmp/calfnxt-ui.log. hostLog writes the saved fd directly (no echo).
+ */
+struct StderrCapture
+{
+  int saved = -1;
+  int readFd = -1;
+  GThread* thread = nullptr;
+  bool gbmNoted = false;
+};
+
+StderrCapture stderrCap;
+
+void writeSavedStderr(const char* data, size_t n)
+{
+  const int fd = stderrCap.saved >= 0 ? stderrCap.saved : STDERR_FILENO;
+  size_t off = 0;
+  while (off < n)
+  {
+    const ssize_t w = ::write(fd, data + off, n - off);
+    if (w < 0)
+    {
+      if (errno == EINTR)
+        continue;
+      break;
+    }
+    if (w == 0)
+      break;
+    off += static_cast<size_t>(w);
+  }
+}
+
+void noteCapturedLine(const std::string& line)
+{
+  writeSavedStderr(line.data(), line.size());
+  if (line.size() <= 1024)
+    calfNXT::Ui::appendUiLog(line.c_str());
+  else
+  {
+    std::string cut = line.substr(0, 1000);
+    cut += "...\n";
+    calfNXT::Ui::appendUiLog(cut.c_str());
+  }
+  if (stderrCap.gbmNoted || line.find("Failed to create GBM buffer") == std::string::npos)
+    return;
+  stderrCap.gbmNoted = true;
+  static const char hint[] =
+    "[calfnxt-web-host] gbm-fail: DMA-BUF renderer failed to allocate a GBM buffer; "
+    "the page can finish loading while the XEmbed stays black. "
+    "Relaunch the host with WEBKIT_DISABLE_DMABUF_RENDERER=1 to keep GL compositing. "
+    "CALFNXT_WEB_NO_GPU=1 is the slower software fallback.\n";
+  writeSavedStderr(hint, sizeof hint - 1);
+  calfNXT::Ui::appendUiLog(hint);
+}
+
+gpointer stderrCaptureThread(gpointer)
+{
+  std::string acc;
+  char tmp[1024];
+  while (stderrCap.readFd >= 0)
+  {
+    const ssize_t n = ::read(stderrCap.readFd, tmp, sizeof tmp);
+    if (n == 0)
+      break;
+    if (n < 0)
+    {
+      if (errno == EINTR)
+        continue;
+      break;
+    }
+    acc.append(tmp, static_cast<size_t>(n));
+    for (;;)
+    {
+      auto pos = acc.find('\n');
+      if (pos == std::string::npos)
+      {
+        if (acc.size() < 8192)
+          break;
+        acc.push_back('\n');
+        pos = acc.size() - 1;
+      }
+      std::string line = acc.substr(0, pos + 1);
+      acc.erase(0, pos + 1);
+      noteCapturedLine(line);
+    }
+  }
+  return nullptr;
+}
+
+void startStderrCapture()
+{
+  int fds[2] = {-1, -1};
+  if (::pipe2(fds, O_CLOEXEC) != 0)
+    return;
+  const int saved = ::dup(STDERR_FILENO);
+  if (saved < 0)
+  {
+    ::close(fds[0]);
+    ::close(fds[1]);
+    return;
+  }
+  ::fcntl(saved, F_SETFD, FD_CLOEXEC);
+  if (::dup2(fds[1], STDERR_FILENO) < 0)
+  {
+    ::close(saved);
+    ::close(fds[0]);
+    ::close(fds[1]);
+    return;
+  }
+  ::close(fds[1]);
+  stderrCap.saved = saved;
+  stderrCap.readFd = fds[0];
+  stderrCap.thread = g_thread_new("calfnxt-stderr", stderrCaptureThread, nullptr);
+  if (!stderrCap.thread)
+  {
+    ::dup2(saved, STDERR_FILENO);
+    ::close(saved);
+    ::close(fds[0]);
+    stderrCap.saved = -1;
+    stderrCap.readFd = -1;
+  }
+}
+
 void hostLog(const char* fmt, ...)
 {
   char buf[1024];
@@ -90,9 +216,126 @@ void hostLog(const char* fmt, ...)
   va_end(ap);
   if (n <= 0)
     return;
-  std::fputs(buf, stderr);
-  std::fflush(stderr);
+  const size_t len = static_cast<size_t>(n) >= sizeof buf ? sizeof buf - 1 : static_cast<size_t>(n);
+  writeSavedStderr(buf, len);
   calfNXT::Ui::appendUiLog(buf);
+}
+
+const char* envOrUnset(const char* name)
+{
+  const char* s = std::getenv(name);
+  return (s && s[0]) ? s : "(unset)";
+}
+
+bool readFirstLine(const char* path, char* out, size_t outLen)
+{
+  if (!out || outLen < 2)
+    return false;
+  out[0] = '\0';
+  const int fd = ::open(path, O_RDONLY | O_CLOEXEC);
+  if (fd < 0)
+    return false;
+  const ssize_t n = ::read(fd, out, outLen - 1);
+  ::close(fd);
+  if (n <= 0)
+  {
+    out[0] = '\0';
+    return false;
+  }
+  out[n] = '\0';
+  for (size_t i = 0; i < static_cast<size_t>(n); ++i)
+  {
+    if (out[i] == '\n' || out[i] == '\r')
+    {
+      out[i] = '\0';
+      break;
+    }
+  }
+  size_t len = std::strlen(out);
+  while (len > 0 && (out[len - 1] == ' ' || out[len - 1] == '\t'))
+    out[--len] = '\0';
+  return out[0] != '\0';
+}
+
+/** One-shot graphics snapshot for blank-embed reports (GPU, session, WebKit). */
+void logGraphicsProbe()
+{
+  const char* gdkBackend = "other";
+  const char* displayName = "?";
+  if (GdkDisplay* display = gdk_display_get_default())
+  {
+    if (GDK_IS_X11_DISPLAY(display))
+      gdkBackend = "x11";
+    if (const char* name = gdk_display_get_name(display))
+      displayName = name;
+  }
+  hostLog("[calfnxt-web-host] gfx webkit=%u.%u.%u gtk=%u.%u.%u gdk=%s display=%s "
+          "session=%s wayland=%s gdk_backend=%s DISPLAY=%s stderr-tee=%d\n",
+          webkit_get_major_version(), webkit_get_minor_version(), webkit_get_micro_version(),
+          gtk_get_major_version(), gtk_get_minor_version(), gtk_get_micro_version(),
+          gdkBackend, displayName, envOrUnset("XDG_SESSION_TYPE"), envOrUnset("WAYLAND_DISPLAY"),
+          envOrUnset("GDK_BACKEND"), envOrUnset("DISPLAY"), stderrCap.saved >= 0 ? 1 : 0);
+  hostLog("[calfnxt-web-host] gfx dmabuf=%s compositing=%s no_gpu=%s glx_vendor=%s\n",
+          envOrUnset("WEBKIT_DISABLE_DMABUF_RENDERER"),
+          envOrUnset("WEBKIT_DISABLE_COMPOSITING_MODE"), envOrUnset("CALFNXT_WEB_NO_GPU"),
+          envOrUnset("__GLX_VENDOR_LIBRARY_NAME"));
+
+  DIR* dir = ::opendir("/sys/class/drm");
+  int found = 0;
+  if (!dir)
+  {
+    hostLog("[calfnxt-web-host] gfx drm=(unreadable)\n");
+  }
+  else
+  {
+    while (dirent* ent = ::readdir(dir))
+    {
+      const char* name = ent->d_name;
+      if (std::strncmp(name, "card", 4) != 0 || std::strchr(name, '-') || name[4] == '\0')
+        continue;
+      bool digits = true;
+      for (const char* p = name + 4; *p; ++p)
+      {
+        if (*p < '0' || *p > '9')
+          digits = false;
+      }
+      if (!digits)
+        continue;
+
+      char path[512];
+      std::snprintf(path, sizeof path, "/sys/class/drm/%s/device/driver", name);
+      char link[512];
+      const char* driver = "?";
+      const ssize_t n = ::readlink(path, link, sizeof link - 1);
+      if (n > 0)
+      {
+        link[n] = '\0';
+        if (const char* slash = std::strrchr(link, '/'))
+          driver = slash + 1;
+        else
+          driver = link;
+      }
+      char vendor[64];
+      char device[64];
+      std::snprintf(path, sizeof path, "/sys/class/drm/%s/device/vendor", name);
+      if (!readFirstLine(path, vendor, sizeof vendor))
+        std::snprintf(vendor, sizeof vendor, "?");
+      std::snprintf(path, sizeof path, "/sys/class/drm/%s/device/device", name);
+      if (!readFirstLine(path, device, sizeof device))
+        std::snprintf(device, sizeof device, "?");
+      hostLog("[calfnxt-web-host] gfx drm %s driver=%s vendor=%s device=%s\n", name, driver,
+              vendor, device);
+      if (++found >= 8)
+        break;
+    }
+    ::closedir(dir);
+    if (found == 0)
+      hostLog("[calfnxt-web-host] gfx drm=(none)\n");
+  }
+
+  char nvidia[240];
+  if (readFirstLine("/proc/driver/nvidia/version", nvidia, sizeof nvidia))
+    hostLog("[calfnxt-web-host] gfx nvidia=%s\n", nvidia);
 }
 
 /** evalJs can fail on every param/viz line (~30–60 Hz); do not fill the log. */
@@ -1389,6 +1632,8 @@ int main(int argc, char** argv)
       fcntl(g.sock, F_SETFL, flags | O_NONBLOCK);
   }
 
+  // Before GTK/WebKit: their GBM/GL warnings must reach the file log.
+  startStderrCapture();
   gdk_set_allowed_backends("x11");
   if (!gtk_init_check(&argc, &argv))
   {
@@ -1405,6 +1650,7 @@ int main(int argc, char** argv)
 
   hostLog("[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d\n",
           static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width, g.height);
+  logGraphicsProbe();
 
   // Non-ephemeral: Header prefs (UI Hz, theme) need HTML5 localStorage.
   // DOCUMENT_VIEWER: no browser-sized resource cache — local calfnxt:// SPA only.
@@ -1541,7 +1787,7 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  hostLog("[calfnxt-web-host] build=nudge-opt-1 hw-accel=%s cache=document-viewer xwayland_nudge=%s\n",
+  hostLog("[calfnxt-web-host] build=gfx-probe-1 hw-accel=%s cache=document-viewer xwayland_nudge=%s\n",
           noGpu ? "never" : "always", envFlag("CALFNXT_XWAYLAND_NUDGE") ? "1" : "(unset)");
   if (envFlag("CALFNXT_WEB_DEBUG"))
   {
