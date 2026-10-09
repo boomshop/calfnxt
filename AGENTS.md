@@ -156,7 +156,7 @@ mode Off/Linear, selected band, etc.).
 - Optional host tempo (Delay): `IVizSource::takeHostTempo` / `vizTempoId()` → `{t:"viz",id:"delay",kind:"tempo",v:[valid,bpm]}` → `bindVizTempo`.
 - Host also pushes `{t:"io",ch:N}` (bus channel count).
 - Header (`createHeaderIo`) binds In/Out MultiMeters + In/Out gain knobs for all plugins.
-- Spectrum (Analyzer; shared `SpectrumTap` for later EQ overlay): `{t:"viz",id:"fft",kind:"spectrum",v:[bins,hold,avg…,max…,L…,R…]}`; UI→host `{t:"vizcfg",id:"fft",bins:N}`. Display tilt (Linear / −3 / −4.5 dB/oct) + midband corridor are UI-only. Wire path: binary `CNXV` frames (`viz_bin.h`), batched per flush tick as `CNXB` when ≥2 streams → `Float32Array`. When the XEmbed parent is unmapped, `calfnxt-web-host` parks WebKit (`terminate_web_process` + hide) and sends `{t:"_visible",v:0}` so DSP skips viz; on show it reloads the UI. Never block the host UI thread waiting on helper exit.
+- Spectrum (Analyzer; shared `SpectrumTap` for later EQ overlay): `{t:"viz",id:"fft",kind:"spectrum",v:[bins,hold,avg…,max…,L…,R…]}`; UI→host `{t:"vizcfg",id:"fft",bins:N}`. Display tilt (Linear / −3 / −4.5 dB/oct) + midband corridor are UI-only. Wire path: binary `CNXV` frames (`viz_bin.h`), batched per flush tick as `CNXB` when ≥2 streams → `Float32Array`. Editor hide: GTK3 XEmbed **deep-parks** (destroy WebView+context, keep GtkPlug — killing the plug under Ardour freezes the host); on show, recreate WebView. GTK4 floating exits on close/unmap. Reap via close-path `waitpid` burst; respawn only after parent hide→show. Never block the audio thread on helper exit.
 
 ---
 
