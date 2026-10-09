@@ -3,13 +3,17 @@
  *
  * Separate binary from the GTK3 XEmbed host. Same SPA/bridge contract over an
  * inherited Unix socket FD (newline JS, CNXV/CNXB viz, UI JSON). Top-level
- * GtkWindow — no GtkPlug / X11. Prefer Wayland (do not force GDK_BACKEND=x11).
+ * GtkWindow — no GtkPlug. Prefer Wayland (do not force GDK_BACKEND=x11).
+ *
+ * Lifecycle: floating close or parent XEmbed unmap → {_visible:0} and exit.
+ * WebEditor respawns on remap/reattach (no long-lived park process).
  */
 
 #include <gtk/gtk.h>
 #include <webkit/webkit.h>
 #include <jsc/jsc.h>
 #include <glib-unix.h>
+#include <X11/Xlib.h>
 
 #include "web_host_shared.h"
 #include "viz_bin.h"
@@ -36,14 +40,22 @@ struct HostState
   char entryHtml[256] {};
   int width = 360;
   int height = 420;
+  unsigned long parentXid = 0;
   GtkWidget* window = nullptr;
   WebKitWebView* webview = nullptr;
   WebKitWebContext* ctx = nullptr;
   GMainLoop* loop = nullptr;
   guint sockSource = 0;
+  Display* x11Dpy = nullptr;
+  guint visibilityPollSource = 0;
+  int lastUiVisible = -1; // -1 unknown, 0 hidden, 1 shown
+  bool quitting = false;
 };
 
 HostState g;
+
+void evalJs(const char* js);
+bool sendLine(const char* line);
 
 bool sendLine(const char* line)
 {
@@ -73,6 +85,88 @@ void quitLoop()
 {
   if (g.loop)
     g_main_loop_quit(g.loop);
+}
+
+Display* x11Display()
+{
+  if (g.x11Dpy)
+    return g.x11Dpy;
+  g.x11Dpy = XOpenDisplay(nullptr);
+  return g.x11Dpy;
+}
+
+/** Host embed socket still shown? Ardour often unmaps this without removed(). */
+bool parentEmbedVisible()
+{
+  if (!g.parentXid)
+    return true; // no parent to track — keep floating unless user dismissed
+  Display* dpy = x11Display();
+  if (!dpy)
+    return true;
+  XWindowAttributes wa {};
+  if (!XGetWindowAttributes(dpy, static_cast<Window>(g.parentXid), &wa))
+    return false;
+  if (wa.map_state != IsViewable)
+    return false;
+  return wa.width >= 2 && wa.height >= 2;
+}
+
+void notifyPageUiVisible(bool visible)
+{
+  if (!g.webview || g.quitting)
+    return;
+  char js[160];
+  std::snprintf(js, sizeof js,
+                "window.__calfnxtUiVisible=%s;"
+                "try{document.dispatchEvent(new Event('calfnxt-visibility'));}catch(e){}",
+                visible ? "true" : "false");
+  evalJs(js);
+}
+
+void applyUiVisible(bool visible, const char* why)
+{
+  if (g.quitting)
+    return;
+  const int v = visible ? 1 : 0;
+  if (g.lastUiVisible == v)
+    return;
+  const int prev = g.lastUiVisible;
+  g.lastUiVisible = v;
+  W::hostLog("[calfnxt-web-host-gtk4] visible=%d (%s)\n", v, why ? why : "?");
+
+  char line[64];
+  std::snprintf(line, sizeof line, "{\"t\":\"_visible\",\"v\":%d}\n", v);
+  sendLine(line);
+
+  if (visible)
+  {
+    if (g.window && g.webview)
+      notifyPageUiVisible(true);
+    return;
+  }
+
+  // First sample hidden: wait for a later poll (startup race with XEmbed).
+  if (prev < 0 && std::strcmp(why ? why : "", "user-close") != 0)
+    return;
+
+  g.quitting = true;
+  notifyPageUiVisible(false);
+  W::hostLog("[calfnxt-web-host-gtk4] UI hidden (%s) — exiting\n", why ? why : "?");
+  quitLoop();
+}
+
+gboolean onVisibilityPoll(gpointer)
+{
+  applyUiVisible(parentEmbedVisible(), "poll");
+  return G_SOURCE_CONTINUE;
+}
+
+void startVisibilityPoll()
+{
+  if (g.visibilityPollSource)
+    return;
+  applyUiVisible(parentEmbedVisible(), "start");
+  g.visibilityPollSource = g_timeout_add(250, onVisibilityPoll, nullptr);
 }
 
 /** Report window size to the plugin (floating stand-in for XEmbed socket). */
@@ -453,6 +547,12 @@ void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
 
 void onWebProcessTerminated(WebKitWebView*, WebKitWebProcessTerminationReason reason, gpointer)
 {
+  if (g.quitting)
+  {
+    W::hostLog("[calfnxt-web-host-gtk4] web process terminated (reason=%d) — shutting down\n",
+               static_cast<int>(reason));
+    return;
+  }
   W::hostLog("[calfnxt-web-host-gtk4] web process terminated (reason=%d) — reloading\n",
              static_cast<int>(reason));
   if (!g.webview)
@@ -567,7 +667,8 @@ gboolean onSocketReadable(gint /*fd*/, GIOCondition condition, gpointer)
 
 gboolean onCloseRequest(GtkWindow*, gpointer)
 {
-  quitLoop();
+  // Quit helper — WebEditor respawns on next attach/remap.
+  applyUiVisible(false, "user-close");
   return TRUE;
 }
 
@@ -581,6 +682,7 @@ int main(int argc, char** argv)
     return cliRc == 1 ? 0 : cliRc;
 
   g.sock = cli.fd;
+  g.parentXid = cli.parentXid;
   std::snprintf(g.webRoot, sizeof g.webRoot, "%s", cli.webRoot);
   std::snprintf(g.entryHtml, sizeof g.entryHtml, "%s", cli.entryHtml);
   g.width = cli.width;
@@ -661,9 +763,9 @@ int main(int argc, char** argv)
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
 
-  W::hostLog("[calfnxt-web-host-gtk4] build=gtk4-float-1 hw-accel=%s cache=document-viewer "
-             "stderr-tee=%d\n",
-             noGpu ? "never" : "always", W::stderrCaptureActive() ? 1 : 0);
+  W::hostLog("[calfnxt-web-host-gtk4] build=gtk4-float-2 hw-accel=%s cache=document-viewer "
+             "stderr-tee=%d parent=0x%lx\n",
+             noGpu ? "never" : "always", W::stderrCaptureActive() ? 1 : 0, g.parentXid);
 
   // Kill the white flash before WebKit paints the SPA.
   {
@@ -714,6 +816,7 @@ int main(int argc, char** argv)
   webkit_web_view_load_uri(g.webview, uri);
 
   gtk_window_present(GTK_WINDOW(g.window));
+  startVisibilityPoll();
 
   if (W::envFlag("CALFNXT_WEB_INSPECTOR"))
   {
@@ -727,6 +830,11 @@ int main(int argc, char** argv)
   g.loop = g_main_loop_new(nullptr, FALSE);
   g_main_loop_run(g.loop);
 
+  if (g.visibilityPollSource)
+  {
+    g_source_remove(g.visibilityPollSource);
+    g.visibilityPollSource = 0;
+  }
   if (g.sockSource)
   {
     g_source_remove(g.sockSource);
@@ -747,6 +855,11 @@ int main(int argc, char** argv)
   {
     g_object_unref(g.ctx);
     g.ctx = nullptr;
+  }
+  if (g.x11Dpy)
+  {
+    XCloseDisplay(g.x11Dpy);
+    g.x11Dpy = nullptr;
   }
   if (g.sock >= 0)
   {
