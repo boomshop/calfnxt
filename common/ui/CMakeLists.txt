@@ -16,10 +16,14 @@ target_include_directories(calfnxt_ui
 )
 
 # Plugin .so must not pull GTK/WebKit (Ardour GType conflict).
+# X11 is OK: parent-visibility poll for helper respawn after quit-on-hide.
+find_package(X11 REQUIRED)
 target_link_libraries(calfnxt_ui
   PUBLIC
     sdk
     ${CMAKE_DL_LIBS}
+  PRIVATE
+    X11::X11
 )
 
 target_compile_features(calfnxt_ui PUBLIC cxx_std_17)
@@ -79,6 +83,7 @@ if(CALFNXT_HAVE_WEB_HOST_GTK4)
     PRIVATE
       PkgConfig::GTK4
       PkgConfig::WEBKITGTK6
+      X11
   )
   target_compile_features(calfnxt-web-host-gtk4 PRIVATE cxx_std_17)
   target_compile_definitions(calfnxt_ui PUBLIC CALFNXT_HAVE_WEB_HOST_GTK4=1)
