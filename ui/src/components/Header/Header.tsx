@@ -31,6 +31,10 @@ import {
   VIZ_HZ_OPTIONS,
   vizHz$,
 } from '../../prefs/vizHz';
+import {
+  ardourGuiTipDismissed$,
+  ardourGuiTipVisible$,
+} from '../../prefs/ardourGuiTip';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 
 export interface HeaderProps {
@@ -73,6 +77,7 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
     'calfnxt',
   );
   const vizHz = useDynamicValueReadonly(vizHz$, 30);
+  const showArdourTip = useDynamicValueReadonly(ardourGuiTipVisible$, false);
 
   return (
     <div className="Header">
@@ -134,6 +139,68 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
         />
         <span className="tag">Out</span>
       </div>
+
+      {showArdourTip ? (
+        <MenuButton
+          icon="warning"
+          className="ardour-tip"
+          anchor="top-right"
+          closeOnMenuClick={false}
+          title="Ardour UI setting — click for details">
+          <div
+            className="Header-ardour-tip"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="tip-title">
+              Ardour is parking this editor in RAM
+            </div>
+            <p>
+              Closing a plugin window in Ardour normally only hides it. The
+              window comes back fast, but calfNXT’s embedded UI (GTK3 / XEmbed)
+              stays alive in the background — often dozens or even hundreds of
+              MB of RAM per open plugin — until you remove the plugin or change
+              the preference below.
+            </p>
+            <p>
+              That setting tells Ardour to destroy VST UIs on close so we get a
+              proper teardown and the helper process can exit.
+            </p>
+            <ol>
+              <li>
+                <strong>Edit</strong> → <strong>Preferences</strong>
+              </li>
+              <li>
+                Open <strong>Plugins</strong> → <strong>GUI</strong>
+              </li>
+              <li>
+                Find <strong>Closing a Plugin GUI Window</strong>
+              </li>
+              <li>
+                Choose <strong>only destroys VST2/3 UIs, hides others</strong>
+                <span className="tip-alt">
+                  {' '}
+                  (or{' '}
+                  <strong>
+                    destroys the GUI instance, releasing resources
+                  </strong>
+                  )
+                </span>
+              </li>
+              <li>
+                Close this window and open it again — the helper should quit
+                cleanly when you close the UI.
+              </li>
+            </ol>
+            <label className="tip-dismiss">
+              <Toggle
+                state$={ardourGuiTipDismissed$}
+                className="tip-dismiss-toggle"
+                icon="close"
+              />
+              <span>Don&apos;t show this again</span>
+            </label>
+          </div>
+        </MenuButton>
+      ) : null}
 
       <Toggle
         className="widget-info"

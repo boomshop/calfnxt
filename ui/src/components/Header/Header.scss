@@ -70,6 +70,17 @@
     }
   }
 
+  > .ardour-tip {
+    flex-shrink: 0;
+    margin-left: 4px;
+    animation: blink 1s infinite;
+
+    > .trigger > .Button,
+    > .trigger > .aux-button {
+      color: var(--color-hot);
+    }
+  }
+
   > .widget-info {
     flex-shrink: 0;
     margin-left: 4px;
@@ -82,6 +93,56 @@
 }
 
 /* MenuButton portals the panel to document.body. */
+.MenuButton-menu .Header-ardour-tip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  width: min(340px, calc(100vw - 32px));
+  max-width: 90%;
+  padding: var(--gap);
+  box-sizing: border-box;
+  font-size: var(--font-size-small, 12px);
+  line-height: 1.35;
+  color: var(--color);
+
+  > .tip-title {
+    font-family: Oswald, sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    color: var(--color-hot);
+  }
+
+  > p {
+    margin: 0;
+    opacity: 0.92;
+  }
+
+  > ol {
+    margin: 0;
+    padding-left: 1.25em;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  > ol > li > .tip-alt {
+    opacity: 0.75;
+  }
+
+  > .tip-dismiss {
+    display: flex;
+    align-items: center;
+    gap: var(--gap);
+    margin-top: 4px;
+    cursor: pointer;
+    user-select: none;
+
+    > .tip-dismiss-toggle {
+      flex-shrink: 0;
+    }
+  }
+}
+
 .MenuButton-menu .Header-prefs {
   display: flex;
   flex-direction: column;
