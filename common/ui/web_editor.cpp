@@ -9,6 +9,7 @@
 #include "pluginterfaces/vst/vstspeaker.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdarg>
 #include <charconv>
 #include <cmath>
@@ -16,15 +17,20 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <X11/Xlib.h>
+
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <sched.h>
 #include <spawn.h>
 #include <signal.h>
 #include <string>
+#include <strings.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 #include <vector>
 
@@ -204,6 +210,62 @@ bool envFlag(const char* name)
   return s != nullptr && s[0] != '\0';
 }
 
+bool envEquals(const char* name, const char* want)
+{
+  const char* s = std::getenv(name);
+  return s && want && std::strcmp(s, want) == 0;
+}
+
+/** Plugin .so runs in-process — /proc/self is the DAW. */
+bool hostLooksLikeArdour()
+{
+  auto containsArdour = [](const char* s) -> bool {
+    if (!s || !s[0])
+      return false;
+    for (const char* p = s; *p; ++p)
+    {
+      const unsigned char c = static_cast<unsigned char>(*p);
+      const char lo = static_cast<char>(std::tolower(c));
+      if (lo == 'a' && ::strncasecmp(p, "ardour", 6) == 0)
+        return true;
+    }
+    return false;
+  };
+
+  char buf[256] {};
+  if (FILE* f = std::fopen("/proc/self/comm", "r"))
+  {
+    if (std::fgets(buf, sizeof buf, f))
+    {
+      // strip trailing newline
+      for (char* p = buf; *p; ++p)
+      {
+        if (*p == '\n' || *p == '\r')
+        {
+          *p = '\0';
+          break;
+        }
+      }
+      if (containsArdour(buf))
+      {
+        std::fclose(f);
+        return true;
+      }
+    }
+    std::fclose(f);
+  }
+
+  char exe[512] {};
+  const ssize_t n = ::readlink("/proc/self/exe", exe, sizeof exe - 1);
+  if (n > 0)
+  {
+    exe[n] = '\0';
+    if (containsArdour(exe))
+      return true;
+  }
+  return false;
+}
+
 float envFloat(const char* name)
 {
   const char* s = std::getenv(name);
@@ -333,6 +395,17 @@ void WebEditor::fillWebRoot(char* out, size_t cap)
 
 bool WebEditor::findHelperPath(char* out, size_t cap)
 {
+  // Opt-in floating GTK4/Wayland helper (same SPA; no XEmbed).
+  const char* prefer = "calfnxt-web-host";
+  if (envFlag("CALFNXT_WEB_HOST"))
+  {
+    const char* v = std::getenv("CALFNXT_WEB_HOST");
+    if (v && (!std::strcmp(v, "gtk4") || !std::strcmp(v, "float") || !std::strcmp(v, "wayland")))
+      prefer = "calfnxt-web-host-gtk4";
+  }
+  else if (envFlag("CALFNXT_WEB_FLOATING"))
+    prefer = "calfnxt-web-host-gtk4";
+
   Dl_info info {};
   if (dladdr(reinterpret_cast<void*>(&dlAnchor), &info) && info.dli_fname)
   {
@@ -340,13 +413,30 @@ bool WebEditor::findHelperPath(char* out, size_t cap)
     auto slash = so.rfind('/');
     if (slash != std::string::npos)
     {
-      std::snprintf(out, cap, "%s/calfnxt-web-host", so.substr(0, slash).c_str());
+      std::snprintf(out, cap, "%s/%s", so.substr(0, slash).c_str(), prefer);
       if (access(out, X_OK) == 0)
         return true;
+      // Fall back to classic GtkPlug host if gtk4 helper was requested but missing.
+      if (std::strcmp(prefer, "calfnxt-web-host") != 0)
+      {
+        std::snprintf(out, cap, "%s/calfnxt-web-host", so.substr(0, slash).c_str());
+        if (access(out, X_OK) == 0)
+        {
+          logBoth("[calfnxt] %s missing — falling back to calfnxt-web-host\n", prefer);
+          return true;
+        }
+      }
     }
   }
-  std::snprintf(out, cap, "calfnxt-web-host");
-  return access(out, X_OK) == 0;
+  std::snprintf(out, cap, "%s", prefer);
+  if (access(out, X_OK) == 0)
+    return true;
+  if (std::strcmp(prefer, "calfnxt-web-host") != 0)
+  {
+    std::snprintf(out, cap, "calfnxt-web-host");
+    return access(out, X_OK) == 0;
+  }
+  return false;
 }
 
 WebEditor::WebEditor(EditController* controller, ViewRect size, const char* entryHtml)
@@ -362,7 +452,17 @@ WebEditor::WebEditor(EditController* controller, ViewRect size, const char* entr
 WebEditor::~WebEditor()
 {
   detachParamListeners();
-  closeHelper();
+  x11Parent_ = nullptr;
+  sawParentHidden_ = false;
+  stopWebKit();
+  // Must drop the timer before `this` is destroyed (UAF if IRunLoop still holds us).
+  if (timerRegistered_ && runLoop_)
+  {
+    runLoop_->unregisterTimer(this);
+    timerRegistered_ = false;
+  }
+  runLoop_ = nullptr;
+  finishReapBurst(true);
 }
 
 tresult PLUGIN_API WebEditor::isPlatformTypeSupported(FIDString type)
@@ -503,13 +603,19 @@ void WebEditor::pumpSocket()
       if (errno == EAGAIN || errno == EWOULDBLOCK)
         break;
       logMsg("[calfnxt] socket read failed: %s\n", std::strerror(errno));
+      setEditorVisible(false);
       stopWebKit();
+      finishReapBurst(true);
       return;
     }
     if (n == 0)
     {
       logMsg("[calfnxt] web-host socket closed\n");
+      setEditorVisible(false);
       stopWebKit();
+      // GTK4/WebKit often needs SIGKILL before waitpid; Reaper may not pump timers.
+      finishReapBurst(true);
+      // Keep timer for respawn only after parent has been hidden (see tryRespawnHelper).
       return;
     }
     readBuf_.append(chunk, static_cast<size_t>(n));
@@ -543,9 +649,11 @@ bool WebEditor::openHelper(void* x11Parent)
     return false;
   }
 
+  helperIsGtk3Embed_ = std::strstr(helperPath, "gtk4") == nullptr;
+
   // Always log attach paths — empty editor windows are otherwise silent in hosts.
-  logBoth("[calfnxt] editor: helper=%s root=%s entry=%s\n",
-          helperPath, webRoot_, entryHtml_);
+  logBoth("[calfnxt] editor: helper=%s root=%s entry=%s gtk3embed=%d\n",
+          helperPath, webRoot_, entryHtml_, helperIsGtk3Embed_ ? 1 : 0);
 
   // entry may be "index.html#plugin" (URI fragment for SPA routing) — not a filesystem name.
   char entryFile[256];
@@ -691,28 +799,174 @@ void WebEditor::setEditorVisible(bool visible)
     vizSource_->setVizConsumerActive(visible);
 }
 
+void WebEditor::enqueueReap(pid_t pid)
+{
+  if (pid <= 0)
+    return;
+  for (int i = 0; i < reapQueueLen_; ++i)
+  {
+    if (reapQueue_[i] == pid)
+      return;
+  }
+  if (reapQueueLen_ >= kMaxReapQueue)
+  {
+    // Drop oldest after a last SIGKILL + WNOHANG attempt.
+    const pid_t drop = reapQueue_[0];
+    kill(drop, SIGKILL);
+    kill(-drop, SIGKILL);
+    int status = 0;
+    waitpid(drop, &status, WNOHANG);
+    for (int i = 1; i < reapQueueLen_; ++i)
+      reapQueue_[i - 1] = reapQueue_[i];
+    --reapQueueLen_;
+    logMsg("[calfnxt] web-host reap queue full — dropped pid=%d\n", static_cast<int>(drop));
+  }
+  reapQueue_[reapQueueLen_++] = pid;
+  reapTicks_ = 0;
+}
+
 void WebEditor::reapHelperNonBlocking()
 {
-  if (reapPid_ <= 0)
-    return;
-  int status = 0;
-  const pid_t r = waitpid(reapPid_, &status, WNOHANG);
-  if (r == reapPid_ || (r < 0 && errno == ECHILD))
+  // Only waitpid our helper pids — never (-1); the .so lives in the host process.
+  int out = 0;
+  for (int i = 0; i < reapQueueLen_; ++i)
   {
-    reapPid_ = -1;
+    const pid_t pid = reapQueue_[i];
+    int status = 0;
+    const pid_t r = waitpid(pid, &status, WNOHANG);
+    if (r == pid || (r < 0 && errno == ECHILD))
+    {
+      logMsg("[calfnxt] web-host reaped pid=%d\n", static_cast<int>(pid));
+      if (pid == helperPid_)
+        helperPid_ = -1;
+      continue;
+    }
+    reapQueue_[out++] = pid;
+  }
+  reapQueueLen_ = out;
+  if (reapQueueLen_ == 0)
+  {
     reapTicks_ = 0;
     return;
   }
+
   ++reapTicks_;
-  // ~1s at 16 ms: escalate. Never block the host UI/audio thread.
+  const pid_t oldest = reapQueue_[0];
+  // ~160 ms / ~1 s at 16 ms: escalate. Never block the host UI/audio thread.
+  if (reapTicks_ == 10)
+  {
+    kill(oldest, SIGTERM);
+    kill(-oldest, SIGTERM);
+  }
   if (reapTicks_ == 60)
-    kill(reapPid_, SIGKILL);
+  {
+    kill(oldest, SIGKILL);
+    kill(-oldest, SIGKILL);
+  }
   if (reapTicks_ > 120)
   {
-    logMsg("[calfnxt] web-host reap abandoned pid=%d\n", static_cast<int>(reapPid_));
-    reapPid_ = -1;
+    logMsg("[calfnxt] web-host reap abandoned pid=%d\n", static_cast<int>(oldest));
+    for (int i = 1; i < reapQueueLen_; ++i)
+      reapQueue_[i - 1] = reapQueue_[i];
+    --reapQueueLen_;
     reapTicks_ = 0;
   }
+}
+
+void WebEditor::maybeUnregisterTimerAfterReap()
+{
+  if (x11Parent_)
+    return; // still attached — need pump / respawn
+  if (reapQueueLen_ > 0)
+    return; // keep ticking until waitpid succeeds
+  if (timerRegistered_ && runLoop_)
+  {
+    runLoop_->unregisterTimer(this);
+    timerRegistered_ = false;
+  }
+  runLoop_ = nullptr;
+}
+
+bool WebEditor::parentEmbedVisible(void* x11Parent)
+{
+  if (!x11Parent)
+    return false;
+  // One shared Display for the process — open/close every 16 ms is too heavy.
+  static Display* dpy = XOpenDisplay(nullptr);
+  if (!dpy)
+    return false;
+  XWindowAttributes wa {};
+  const Window xid = static_cast<Window>(reinterpret_cast<uintptr_t>(x11Parent));
+  if (!XGetWindowAttributes(dpy, xid, &wa))
+    return false;
+  return wa.map_state == IsViewable && wa.width >= 2 && wa.height >= 2;
+}
+
+void WebEditor::tryRespawnHelper()
+{
+  // Wait until previous helper is fully reaped so we do not stack zombies.
+  if (!x11Parent_ || helperPid_ > 0 || sock_ >= 0 || reapQueueLen_ > 0)
+  {
+    respawnDebounce_ = 0;
+    return;
+  }
+  if (!parentEmbedVisible(x11Parent_))
+  {
+    sawParentHidden_ = true;
+    respawnDebounce_ = 0;
+    return;
+  }
+  // Helper died while the host frame is still mapped (typical GTK4 floating
+  // close, or Reaper/Ardour chrome still open) — do not respawn until a real
+  // hide→show edge. attached() still opens a fresh helper on reopen.
+  if (!sawParentHidden_)
+  {
+    respawnDebounce_ = 0;
+    return;
+  }
+  // ~2×16 ms debounce so a brief map flicker does not thrash spawn.
+  if (++respawnDebounce_ < 2)
+    return;
+  respawnDebounce_ = 0;
+  sawParentHidden_ = false;
+  logBoth("[calfnxt] parent visible again — respawning web-host\n");
+  if (openHelper(x11Parent_))
+    setEditorVisible(true);
+}
+
+void WebEditor::finishReapBurst(bool escalateKill)
+{
+  // Reaper/Carla often stop pumping IRunLoop after the editor closes, so the
+  // timer cannot collect zombies. Brief nanosleeps here are close-path only
+  // (not the audio/process thread); plain sched_yield was not enough for
+  // webkitgtk teardown.
+  if (escalateKill)
+  {
+    for (int i = 0; i < reapQueueLen_; ++i)
+    {
+      kill(reapQueue_[i], SIGKILL);
+      kill(-reapQueue_[i], SIGKILL);
+    }
+  }
+  constexpr int kMaxIters = 100; // ~100 ms worst case
+  for (int i = 0; i < kMaxIters && reapQueueLen_ > 0; ++i)
+  {
+    reapHelperNonBlocking();
+    if (reapQueueLen_ == 0)
+      break;
+    if (!escalateKill && i == 20)
+    {
+      for (int j = 0; j < reapQueueLen_; ++j)
+      {
+        kill(reapQueue_[j], SIGKILL);
+        kill(-reapQueue_[j], SIGKILL);
+      }
+    }
+    timespec ts {0, 1000L * 1000L}; // 1 ms
+    nanosleep(&ts, nullptr);
+  }
+  if (reapQueueLen_ > 0)
+    logBoth("[calfnxt] web-host reap burst incomplete (%d left)\n", reapQueueLen_);
 }
 
 void WebEditor::stopWebKit()
@@ -720,6 +974,12 @@ void WebEditor::stopWebKit()
   pageReady_ = false;
   if (sock_ >= 0)
   {
+    // Prefer orderly helper teardown (destroy GtkPlug) before SIGTERM.
+    sendLine("{\"t\":\"_shutdown\"}");
+    {
+      timespec ts {0, 50L * 1000L * 1000L};
+      nanosleep(&ts, nullptr);
+    }
     ::shutdown(sock_, SHUT_RDWR);
     ::close(sock_);
     sock_ = -1;
@@ -728,12 +988,8 @@ void WebEditor::stopWebKit()
 
   if (helperPid_ > 0)
   {
-    // Non-blocking only — usleep/waitpid(0) here froze Ardour's UI thread.
     kill(helperPid_, SIGTERM);
-    if (reapPid_ > 0 && reapPid_ != helperPid_)
-      kill(reapPid_, SIGKILL);
-    reapPid_ = helperPid_;
-    reapTicks_ = 0;
+    enqueueReap(helperPid_);
     helperPid_ = -1;
     logBoth("[calfnxt] web-host stop signaled (non-blocking)\n");
   }
@@ -741,17 +997,16 @@ void WebEditor::stopWebKit()
 
 void WebEditor::closeHelper()
 {
+  // Detach: no respawn. Reap on this thread — hosts often stop timer pumps here.
+  x11Parent_ = nullptr;
+  sawParentHidden_ = false;
+  respawnDebounce_ = 0;
   setEditorVisible(false);
   stopWebKit();
-  if (timerRegistered_ && runLoop_)
-  {
-    runLoop_->unregisterTimer(this);
-    timerRegistered_ = false;
-  }
-  runLoop_ = nullptr;
-  // Best-effort final reap after stop; still non-blocking.
-  for (int i = 0; i < 5 && reapPid_ > 0; ++i)
-    reapHelperNonBlocking();
+  finishReapBurst(false);
+  if (reapQueueLen_ > 0)
+    finishReapBurst(true);
+  maybeUnregisterTimerAfterReap();
 }
 
 void WebEditor::requestHostSize()
@@ -853,6 +1108,9 @@ tresult PLUGIN_API WebEditor::attached(void* parent, FIDString type)
     return kResultFalse;
   }
 
+  x11Parent_ = parent;
+  sawParentHidden_ = false;
+  respawnDebounce_ = 0;
   viewportApplied_ = false;
   socketWidth_ = 0;
   socketHeight_ = 0;
@@ -933,6 +1191,11 @@ tresult PLUGIN_API WebEditor::onSize(ViewRect* newSize)
 void PLUGIN_API WebEditor::onTimer()
 {
   reapHelperNonBlocking();
+  maybeUnregisterTimerAfterReap();
+  if (!timerRegistered_)
+    return;
+
+  tryRespawnHelper();
   pumpSocket();
   if (sock_ < 0 || !pageReady_)
     return;
@@ -1678,6 +1941,20 @@ void WebEditor::pushIoChannels()
   evalJs(js);
 }
 
+void WebEditor::pushHostTips()
+{
+  if (sock_ < 0)
+    return;
+  // GTK4 floating has no XEmbed park problem — tip only for Ardour + GtkPlug.
+  const bool show = hostLooksLikeArdour() && helperIsGtk3Embed_;
+  char js[160];
+  std::snprintf(js, sizeof js,
+                "window.__calfnxtOnHost && window.__calfnxtOnHost("
+                "{t:\"host\",tip:\"ardour-gui\",show:%d});",
+                show ? 1 : 0);
+  evalJs(js);
+}
+
 void WebEditor::onPageReady()
 {
   pageReady_ = true;
@@ -1686,6 +1963,7 @@ void WebEditor::onPageReady()
   attachParamListeners();
   pushAllParams();
   pushIoChannels();
+  pushHostTips();
   flushPendingParams();
   sendSizeToHelper();
 }

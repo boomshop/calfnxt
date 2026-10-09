@@ -22,7 +22,8 @@ namespace Ui {
  *
  * Spawns `calfnxt-web-host` (out-of-process GtkPlug + WebKit) and speaks the
  * same JSON bridge over a Unix socketpair — required so Ardour’s internalized
- * toolkit does not collide with system GTK3.
+ * toolkit does not collide with system GTK3. Helper exits on UI hide; this
+ * class reaps zombies on the IRunLoop timer and respawns when the parent remaps.
  *
  * Bridge (web → host): JSON via calfnxtNative.post
  *   {"t":"begin"|"set"|"end"|"sync","id":…}  (set uses q/d fixed-point)
@@ -60,6 +61,8 @@ public:
   void pushParamPlain(Steinberg::Vst::ParamID id, double plain);
   void pushAllParams();
   void pushIoChannels();
+  /** Ardour + GTK3 embed tip (UI may dismiss via localStorage). */
+  void pushHostTips();
 
   Steinberg::Vst::EditController* controller() const { return controller_; }
 
@@ -69,10 +72,17 @@ protected:
 
 private:
   bool openHelper(void* x11Parent);
-  /** Kill web-host (non-blocking). Full removed() also drops the timer. */
+  /** Kill web-host (non-blocking). Timer stays until waitpid finishes. */
   void stopWebKit();
   void closeHelper();
+  void enqueueReap(pid_t pid);
   void reapHelperNonBlocking();
+  /** SIGKILL + sched_yield WNOHANG burst (Reaper often stops pumping timers after UI close). */
+  void finishReapBurst(bool escalateKill);
+  /** Unregister IRunLoop timer once reaped and not attached (no UAF in dtor). */
+  void maybeUnregisterTimerAfterReap();
+  static bool parentEmbedVisible(void* x11Parent);
+  void tryRespawnHelper();
   void attachParamListeners();
   void detachParamListeners();
   void flushPendingParams();
@@ -110,13 +120,30 @@ private:
   bool requestingHostResize_ = false;
   bool viewportApplied_ = false;
   bool pageReady_ = false;
-  /** Helper `_visible` / DSP gate. WebKit park/resume is done in calfnxt-web-host. */
+  /** Helper `_visible` / DSP gate. Hide → helper exits; show → respawn. */
   bool editorVisible_ = false;
+  /** X11 embed parent from attached(); null after removed(). */
+  void* x11Parent_ = nullptr;
   int sock_ = -1;
   pid_t helperPid_ = -1;
-  /** Zombie reap after non-blocking stopWebKit (never block the host UI thread). */
-  pid_t reapPid_ = -1;
+  /**
+   * Pending helper pids to waitpid (never waitpid(-1) — we run in the host
+   * process and must not reap unrelated children). Cap covers stacked open/close.
+   */
+  static constexpr int kMaxReapQueue = 8;
+  pid_t reapQueue_[kMaxReapQueue] {};
+  int reapQueueLen_ = 0;
   int reapTicks_ = 0;
+  /**
+   * Respawn only after parent was non-viewable (hide→show). If the helper
+   * exits while the embed frame is still mapped (GTK4 floating close), do not
+   * immediately spawn again.
+   */
+  bool sawParentHidden_ = false;
+  /** Debounce parent-visible polls before respawn (Ardour remap without removed). */
+  int respawnDebounce_ = 0;
+  /** True while the live helper is the GtkPlug/XEmbed binary (not floating GTK4). */
+  bool helperIsGtk3Embed_ = true;
   std::string readBuf_;
   std::chrono::steady_clock::time_point lastVizFlush_ {};
   /** Remainder ms toward the next viz frame (16 ms pump vs 25/30 Hz). */

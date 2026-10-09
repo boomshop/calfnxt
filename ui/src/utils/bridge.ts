@@ -23,7 +23,9 @@ export type calfNXTMsg =
   /** Analyzer: reset integrated loudness (`reset`) or latched spectrum peaks (`resetpeak`). */
   | { t: "meter"; cmd: string }
   /** Impulse library: browse / select / tree / status. */
-  | { t: "ir"; cmd: string; path?: string; root?: string; sel?: string; status?: string; tree?: IrNode[]; open?: string[]; scroll?: number };
+  | { t: "ir"; cmd: string; path?: string; root?: string; sel?: string; status?: string; tree?: IrNode[]; open?: string[]; scroll?: number }
+  /** Host→UI tips (e.g. Ardour GTK3 embed preference). */
+  | { t: "host"; tip?: string; show?: number };
 
 /** Plain float from a host→UI param message (`v`, or legacy q/d). */
 export function plainFromMsg(msg: { v?: number; q?: number; d?: number }): number | undefined {

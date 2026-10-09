@@ -23,6 +23,8 @@ export interface MenuButtonProps {
   className?: string;
   label?: string | false;
   icon?: string | false;
+  /** Passed through to the trigger Button (tooltip / a11y). */
+  title?: string;
   /**
    * How the menu attaches under/over the button (LTR):
    * - `top*` = below the button; `bottom*` = above
@@ -31,6 +33,8 @@ export interface MenuButtonProps {
   anchor?: MenuAnchor;
   /** Inset from the clip edges when clamping. */
   viewportPadding?: number;
+  /** When false, clicks inside the menu do not close it (tip panels / forms). */
+  closeOnMenuClick?: boolean;
   children?: ReactNode;
 }
 
@@ -200,8 +204,10 @@ export function MenuButton(props: MenuButtonProps) {
     className,
     label = false,
     icon = false,
+    title,
     anchor = 'top',
     viewportPadding = VIEW_PAD_DEFAULT,
+    closeOnMenuClick = true,
     children,
   } = props;
 
@@ -291,7 +297,7 @@ export function MenuButton(props: MenuButtonProps) {
       ref={menuRef}
       className="MenuButton-menu"
       style={menuStyle}
-      onClick={close}
+      onClick={closeOnMenuClick ? close : undefined}
     >
       {children}
     </div>
@@ -300,7 +306,7 @@ export function MenuButton(props: MenuButtonProps) {
   return (
     <div ref={rootRef} className={cls}>
       <div ref={btnWrapRef} className="trigger">
-        <Button icon={icon} label={label} onClick={toggle} />
+        <Button icon={icon} label={label} title={title} onClick={toggle} />
       </div>
       {menu ? createPortal(menu, document.body) : null}
     </div>

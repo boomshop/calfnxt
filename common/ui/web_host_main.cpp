@@ -7,6 +7,12 @@
  *                  CNXB (batched) viz frames (see viz_bin.h) → Float32Array
  *   host → plugin: UI JSON from calfnxtNative.post, {"t":"_ready"},
  *                  {"t":"_socket","w","h"}, or {"t":"_visible","v":0|1}
+ *
+ * Lifecycle (GTK3 XEmbed): parent unmap **deep-parks** WebKit (destroy
+ * WebView + WebContext, keep GtkPlug) so RAM drops without exiting the
+ * process — killing/destroying the plug while Ardour still owns the XEmbed
+ * socket freezes Ardour. Intentional exit: {"t":"_shutdown"} / socket close
+ * → requestShutdown (destroy plug, then gtk_main_quit). GTK4: quit-on-hide.
  */
 
 #include <gdk/gdkx.h>
@@ -18,6 +24,7 @@
 
 #include "ui_file_log.h"
 #include "viz_bin.h"
+#include "web_host_shared.h"
 
 #include <cerrno>
 #include <cstdint>
@@ -31,6 +38,8 @@
 #include <string>
 #include <unistd.h>
 #include <vector>
+
+namespace W = calfNXT::Ui::WebHostShared;
 
 namespace {
 
@@ -60,6 +69,7 @@ struct HostState
   guint visibilityPollSource = 0;
   int lastParentVisible = -1; // -1 unknown, 0 hidden, 1 viewable
   bool webParked = false;
+  bool shuttingDown = false;
   /** Opt-in XWayland Configure nudge (`CALFNXT_XWAYLAND_NUDGE`). */
   guint nudgeSource = 0;
   int nudgeTries = 0;
@@ -75,138 +85,10 @@ constexpr int kMapPollMaxTries = 2000 / kMapPollMs;
 
 void evalJs(const char* js);
 bool sendLine(const char* line);
+void requestShutdown(const char* why);
+void hostLog(const char* fmt, ...);
 
-bool envFlag(const char* name)
-{
-  const char* s = std::getenv(name);
-  return s != nullptr && s[0] != '\0';
-}
-
-/**
- * WebKit's "Failed to create GBM buffer" goes to the process stderr, which
- * Ardour discards. Dup stderr onto a pipe so those lines also land in
- * /tmp/calfnxt-ui.log. hostLog writes the saved fd directly (no echo).
- */
-struct StderrCapture
-{
-  int saved = -1;
-  int readFd = -1;
-  GThread* thread = nullptr;
-  bool gbmNoted = false;
-};
-
-StderrCapture stderrCap;
-
-void writeSavedStderr(const char* data, size_t n)
-{
-  const int fd = stderrCap.saved >= 0 ? stderrCap.saved : STDERR_FILENO;
-  size_t off = 0;
-  while (off < n)
-  {
-    const ssize_t w = ::write(fd, data + off, n - off);
-    if (w < 0)
-    {
-      if (errno == EINTR)
-        continue;
-      break;
-    }
-    if (w == 0)
-      break;
-    off += static_cast<size_t>(w);
-  }
-}
-
-void noteCapturedLine(const std::string& line)
-{
-  writeSavedStderr(line.data(), line.size());
-  if (line.size() <= 1024)
-    calfNXT::Ui::appendUiLog(line.c_str());
-  else
-  {
-    std::string cut = line.substr(0, 1000);
-    cut += "...\n";
-    calfNXT::Ui::appendUiLog(cut.c_str());
-  }
-  if (stderrCap.gbmNoted || line.find("Failed to create GBM buffer") == std::string::npos)
-    return;
-  stderrCap.gbmNoted = true;
-  static const char hint[] =
-    "[calfnxt-web-host] gbm-fail: DMA-BUF renderer failed to allocate a GBM buffer; "
-    "the page can finish loading while the XEmbed stays black. "
-    "Relaunch the host with WEBKIT_DISABLE_DMABUF_RENDERER=1 to keep GL compositing. "
-    "CALFNXT_WEB_NO_GPU=1 is the slower software fallback.\n";
-  writeSavedStderr(hint, sizeof hint - 1);
-  calfNXT::Ui::appendUiLog(hint);
-}
-
-gpointer stderrCaptureThread(gpointer)
-{
-  std::string acc;
-  char tmp[1024];
-  while (stderrCap.readFd >= 0)
-  {
-    const ssize_t n = ::read(stderrCap.readFd, tmp, sizeof tmp);
-    if (n == 0)
-      break;
-    if (n < 0)
-    {
-      if (errno == EINTR)
-        continue;
-      break;
-    }
-    acc.append(tmp, static_cast<size_t>(n));
-    for (;;)
-    {
-      auto pos = acc.find('\n');
-      if (pos == std::string::npos)
-      {
-        if (acc.size() < 8192)
-          break;
-        acc.push_back('\n');
-        pos = acc.size() - 1;
-      }
-      std::string line = acc.substr(0, pos + 1);
-      acc.erase(0, pos + 1);
-      noteCapturedLine(line);
-    }
-  }
-  return nullptr;
-}
-
-void startStderrCapture()
-{
-  int fds[2] = {-1, -1};
-  if (::pipe2(fds, O_CLOEXEC) != 0)
-    return;
-  const int saved = ::dup(STDERR_FILENO);
-  if (saved < 0)
-  {
-    ::close(fds[0]);
-    ::close(fds[1]);
-    return;
-  }
-  ::fcntl(saved, F_SETFD, FD_CLOEXEC);
-  if (::dup2(fds[1], STDERR_FILENO) < 0)
-  {
-    ::close(saved);
-    ::close(fds[0]);
-    ::close(fds[1]);
-    return;
-  }
-  ::close(fds[1]);
-  stderrCap.saved = saved;
-  stderrCap.readFd = fds[0];
-  stderrCap.thread = g_thread_new("calfnxt-stderr", stderrCaptureThread, nullptr);
-  if (!stderrCap.thread)
-  {
-    ::dup2(saved, STDERR_FILENO);
-    ::close(saved);
-    ::close(fds[0]);
-    stderrCap.saved = -1;
-    stderrCap.readFd = -1;
-  }
-}
-
+bool envFlag(const char* name) { return W::envFlag(name); }
 void hostLog(const char* fmt, ...)
 {
   char buf[1024];
@@ -216,48 +98,64 @@ void hostLog(const char* fmt, ...)
   va_end(ap);
   if (n <= 0)
     return;
-  const size_t len = static_cast<size_t>(n) >= sizeof buf ? sizeof buf - 1 : static_cast<size_t>(n);
-  writeSavedStderr(buf, len);
-  calfNXT::Ui::appendUiLog(buf);
+  // Forward through shared (stderr tee + file log).
+  W::hostLog("%s", buf);
 }
 
-const char* envOrUnset(const char* name)
+/**
+ * Ardour-safe exit: destroy GtkPlug (XEmbed detach) before leaving gtk_main.
+ * Abrupt process death or gtk_main_quit while still plugged freezes Ardour.
+ */
+void requestShutdown(const char* why)
 {
-  const char* s = std::getenv(name);
-  return (s && s[0]) ? s : "(unset)";
+  if (g.shuttingDown)
+    return;
+  g.shuttingDown = true;
+  hostLog("[calfnxt-web-host] shutdown (%s) — destroy plug then quit\n",
+          why ? why : "?");
+
+  if (g.visibilityPollSource)
+  {
+    g_source_remove(g.visibilityPollSource);
+    g.visibilityPollSource = 0;
+  }
+  if (g.mapPollSource)
+  {
+    g_source_remove(g.mapPollSource);
+    g.mapPollSource = 0;
+  }
+  if (g.nudgeSource)
+  {
+    g_source_remove(g.nudgeSource);
+    g.nudgeSource = 0;
+  }
+  if (g.liveNudgeSource)
+  {
+    g_source_remove(g.liveNudgeSource);
+    g.liveNudgeSource = 0;
+  }
+  if (g.forceAllocIdle)
+  {
+    g_source_remove(g.forceAllocIdle);
+    g.forceAllocIdle = 0;
+  }
+
+  if (g.webview)
+  {
+    g.webParked = true;
+    webkit_web_view_terminate_web_process(g.webview);
+  }
+  if (g.plug)
+  {
+    gtk_widget_destroy(g.plug);
+    g.plug = nullptr;
+    g.webview = nullptr;
+  }
+  gtk_main_quit();
 }
 
-bool readFirstLine(const char* path, char* out, size_t outLen)
-{
-  if (!out || outLen < 2)
-    return false;
-  out[0] = '\0';
-  const int fd = ::open(path, O_RDONLY | O_CLOEXEC);
-  if (fd < 0)
-    return false;
-  const ssize_t n = ::read(fd, out, outLen - 1);
-  ::close(fd);
-  if (n <= 0)
-  {
-    out[0] = '\0';
-    return false;
-  }
-  out[n] = '\0';
-  for (size_t i = 0; i < static_cast<size_t>(n); ++i)
-  {
-    if (out[i] == '\n' || out[i] == '\r')
-    {
-      out[i] = '\0';
-      break;
-    }
-  }
-  size_t len = std::strlen(out);
-  while (len > 0 && (out[len - 1] == ' ' || out[len - 1] == '\t'))
-    out[--len] = '\0';
-  return out[0] != '\0';
-}
-
-/** One-shot graphics snapshot for blank-embed reports (GPU, session, WebKit). */
+void logEvalJsError(const char* message) { W::logEvalJsError(message); }
+void startStderrCapture() { W::startStderrCapture(); }
 void logGraphicsProbe()
 {
   const char* gdkBackend = "other";
@@ -269,102 +167,11 @@ void logGraphicsProbe()
     if (const char* name = gdk_display_get_name(display))
       displayName = name;
   }
-  hostLog("[calfnxt-web-host] gfx webkit=%u.%u.%u gtk=%u.%u.%u gdk=%s display=%s "
-          "session=%s wayland=%s gdk_backend=%s DISPLAY=%s stderr-tee=%d\n",
+  hostLog("[calfnxt-web-host] gfx webkit=%u.%u.%u gtk=%u.%u.%u gdk=%s display=%s\n",
           webkit_get_major_version(), webkit_get_minor_version(), webkit_get_micro_version(),
           gtk_get_major_version(), gtk_get_minor_version(), gtk_get_micro_version(),
-          gdkBackend, displayName, envOrUnset("XDG_SESSION_TYPE"), envOrUnset("WAYLAND_DISPLAY"),
-          envOrUnset("GDK_BACKEND"), envOrUnset("DISPLAY"), stderrCap.saved >= 0 ? 1 : 0);
-  hostLog("[calfnxt-web-host] gfx dmabuf=%s compositing=%s no_gpu=%s glx_vendor=%s\n",
-          envOrUnset("WEBKIT_DISABLE_DMABUF_RENDERER"),
-          envOrUnset("WEBKIT_DISABLE_COMPOSITING_MODE"), envOrUnset("CALFNXT_WEB_NO_GPU"),
-          envOrUnset("__GLX_VENDOR_LIBRARY_NAME"));
-
-  DIR* dir = ::opendir("/sys/class/drm");
-  int found = 0;
-  if (!dir)
-  {
-    hostLog("[calfnxt-web-host] gfx drm=(unreadable)\n");
-  }
-  else
-  {
-    while (dirent* ent = ::readdir(dir))
-    {
-      const char* name = ent->d_name;
-      if (std::strncmp(name, "card", 4) != 0 || std::strchr(name, '-') || name[4] == '\0')
-        continue;
-      bool digits = true;
-      for (const char* p = name + 4; *p; ++p)
-      {
-        if (*p < '0' || *p > '9')
-          digits = false;
-      }
-      if (!digits)
-        continue;
-
-      char path[512];
-      std::snprintf(path, sizeof path, "/sys/class/drm/%s/device/driver", name);
-      char link[512];
-      const char* driver = "?";
-      const ssize_t n = ::readlink(path, link, sizeof link - 1);
-      if (n > 0)
-      {
-        link[n] = '\0';
-        if (const char* slash = std::strrchr(link, '/'))
-          driver = slash + 1;
-        else
-          driver = link;
-      }
-      char vendor[64];
-      char device[64];
-      std::snprintf(path, sizeof path, "/sys/class/drm/%s/device/vendor", name);
-      if (!readFirstLine(path, vendor, sizeof vendor))
-        std::snprintf(vendor, sizeof vendor, "?");
-      std::snprintf(path, sizeof path, "/sys/class/drm/%s/device/device", name);
-      if (!readFirstLine(path, device, sizeof device))
-        std::snprintf(device, sizeof device, "?");
-      hostLog("[calfnxt-web-host] gfx drm %s driver=%s vendor=%s device=%s\n", name, driver,
-              vendor, device);
-      if (++found >= 8)
-        break;
-    }
-    ::closedir(dir);
-    if (found == 0)
-      hostLog("[calfnxt-web-host] gfx drm=(none)\n");
-  }
-
-  char nvidia[240];
-  if (readFirstLine("/proc/driver/nvidia/version", nvidia, sizeof nvidia))
-    hostLog("[calfnxt-web-host] gfx nvidia=%s\n", nvidia);
-}
-
-/** evalJs can fail on every param/viz line (~30–60 Hz); do not fill the log. */
-void logEvalJsError(const char* message)
-{
-  static int64_t lastNs = 0;
-  static int dropped = 0;
-  timespec ts {};
-  if (::clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
-  {
-    hostLog("[calfnxt-web-host] evalJs: %s\n", message ? message : "?");
-    return;
-  }
-  const int64_t now =
-    static_cast<int64_t>(ts.tv_sec) * 1000000000LL + static_cast<int64_t>(ts.tv_nsec);
-  if (lastNs != 0 && (now - lastNs) < 1000000000LL)
-  {
-    ++dropped;
-    return;
-  }
-  lastNs = now;
-  if (dropped > 0)
-  {
-    hostLog("[calfnxt-web-host] evalJs: %s (%d similar omitted)\n", message ? message : "?",
-            dropped);
-    dropped = 0;
-    return;
-  }
-  hostLog("[calfnxt-web-host] evalJs: %s\n", message ? message : "?");
+          gdkBackend, displayName);
+  W::logGraphicsProbe("web-host");
 }
 
 bool sendLine(const char* line)
@@ -613,8 +420,35 @@ void notifyPageUiVisible(bool visible)
   evalJs(js);
 }
 
+/** Drop WebView + context (WebKit processes); keep GtkPlug for Ardour XEmbed. */
+void deepParkWebUi(const char* why)
+{
+  if (!g.webview && !g.ctx)
+    return;
+  g.webParked = true;
+  hostLog("[calfnxt-web-host] deep-park (%s) — destroy WebView/context, keep plug\n",
+          why ? why : "?");
+  if (g.webview)
+  {
+    webkit_web_view_terminate_web_process(g.webview);
+    if (g.plug && gtk_widget_get_parent(GTK_WIDGET(g.webview)) == g.plug)
+      gtk_container_remove(GTK_CONTAINER(g.plug), GTK_WIDGET(g.webview));
+    gtk_widget_destroy(GTK_WIDGET(g.webview));
+    g.webview = nullptr;
+  }
+  if (g.ctx)
+  {
+    g_object_unref(g.ctx);
+    g.ctx = nullptr;
+  }
+}
+
+bool createWebUi();
+
 void applyUiVisible(bool visible, const char* why)
 {
+  if (g.shuttingDown)
+    return;
   const int v = visible ? 1 : 0;
   if (g.lastParentVisible == v)
     return;
@@ -626,33 +460,43 @@ void applyUiVisible(bool visible, const char* why)
   std::snprintf(line, sizeof line, "{\"t\":\"_visible\",\"v\":%d}\n", v);
   sendLine(line);
 
-  // After first known state: park/resume WebKit (do not exit — plugin must stay alive).
-  if (g.webview && prev >= 0)
+  // Never exit / destroy GtkPlug here — Ardour freezes. Deep-park frees RAM.
+  if (prev < 0)
   {
     if (visible)
+      notifyPageUiVisible(true);
+    return;
+  }
+
+  if (visible)
+  {
+    if (!g.webview)
+    {
+      hostLog("[calfnxt-web-host] resume — recreate WebView\n");
+      if (!createWebUi())
+      {
+        hostLog("[calfnxt-web-host] resume failed (createWebUi)\n");
+        return;
+      }
+    }
+    else
     {
       gtk_widget_show(GTK_WIDGET(g.webview));
       if (g.webParked)
       {
         char uri[512];
         std::snprintf(uri, sizeof uri, "calfnxt://bundle/%s", g.entryHtml);
-        hostLog("[calfnxt-web-host] resume web process → %s\n", uri);
         webkit_web_view_load_uri(g.webview, uri);
-        g.webParked = false;
       }
-      notifyPageUiVisible(true);
     }
-    else
-    {
-      // Park before terminate — otherwise web-process-terminated reloads immediately.
-      g.webParked = true;
-      webkit_web_view_terminate_web_process(g.webview);
-      gtk_widget_hide(GTK_WIDGET(g.webview));
-      notifyPageUiVisible(false);
-    }
-  }
-  else if (visible)
+    g.webParked = false;
     notifyPageUiVisible(true);
+  }
+  else
+  {
+    deepParkWebUi(why);
+    notifyPageUiVisible(false);
+  }
 
   if (!visible && g.liveNudgeSource)
   {
@@ -1085,45 +929,9 @@ void injectVizBin(const calfNXT::Ui::VizBin::Decoded& dec)
   g_variant_unref(args);
 }
 
-/** Append one decoded CNXV into a JS-side pack (id/kind/fmt/scale/bias/count/payload). */
 void appendVizPackItem(std::vector<std::uint8_t>& pack, const calfNXT::Ui::VizBin::Decoded& dec)
 {
-  namespace VB = calfNXT::Ui::VizBin;
-  const auto idLen = static_cast<std::uint8_t>(std::min(dec.id.size(), VB::kMaxIdLen));
-  const auto kindLen = static_cast<std::uint8_t>(std::min(dec.kind.size(), VB::kMaxKindLen));
-  const std::size_t bps = VB::bytesPerSample(dec.fmt);
-  const std::size_t payload = static_cast<std::size_t>(std::max(0, dec.count)) * bps;
-
-  const std::size_t at = pack.size();
-  pack.resize(at + 1 + idLen + 1 + kindLen + 1 + 4 + 4 + 4 + payload);
-  std::uint8_t* p = pack.data() + at;
-  *p++ = idLen;
-  if (idLen)
-    std::memcpy(p, dec.id.data(), idLen);
-  p += idLen;
-  *p++ = kindLen;
-  if (kindLen)
-    std::memcpy(p, dec.kind.data(), kindLen);
-  p += kindLen;
-  *p++ = static_cast<std::uint8_t>(dec.fmt);
-  auto writeF32 = [](std::uint8_t* d, float v) {
-    static_assert(sizeof(float) == 4, "float");
-    std::memcpy(d, &v, 4);
-  };
-  auto writeU32 = [](std::uint8_t* d, std::uint32_t v) {
-    d[0] = static_cast<std::uint8_t>(v);
-    d[1] = static_cast<std::uint8_t>(v >> 8);
-    d[2] = static_cast<std::uint8_t>(v >> 16);
-    d[3] = static_cast<std::uint8_t>(v >> 24);
-  };
-  writeF32(p, dec.scale);
-  p += 4;
-  writeF32(p, dec.bias);
-  p += 4;
-  writeU32(p, static_cast<std::uint32_t>(std::max(0, dec.count)));
-  p += 4;
-  if (payload && dec.payload)
-    std::memcpy(p, dec.payload, payload);
+  W::appendVizPackItem(pack, dec);
 }
 
 /** One WebKit round-trip for many CNXV frames (CNXB batch). */
@@ -1246,36 +1054,19 @@ void scheduleJsProbes()
   }, nullptr);
 }
 
-bool jsonHasType(const char* s, const char* type)
-{
-  char needle[40];
-  std::snprintf(needle, sizeof needle, "\"t\":\"%s\"", type);
-  if (std::strstr(s, needle))
-    return true;
-  std::snprintf(needle, sizeof needle, "\"t\": \"%s\"", type);
-  return std::strstr(s, needle) != nullptr;
-}
-
+bool jsonHasType(const char* s, const char* type) { return W::jsonHasType(s, type); }
 bool jsonNumberAfterKey(const char* s, const char* key, double& out)
-{
-  const char* p = std::strstr(s, key);
-  if (!p)
-    return false;
-  p = std::strchr(p, ':');
-  if (!p)
-    return false;
-  ++p;
-  while (*p == ' ' || *p == '\t')
-    ++p;
-  char* end = nullptr;
-  out = std::strtod(p, &end);
-  return end != p;
-}
+{ return W::jsonNumberAfterKey(s, key, out); }
 
 void handlePluginLine(const std::string& line)
 {
   if (line.empty())
     return;
+  if (jsonHasType(line.c_str(), "_shutdown"))
+  {
+    requestShutdown("plugin-_shutdown");
+    return;
+  }
   if (jsonHasType(line.c_str(), "_size"))
   {
     double w = 0.0;
@@ -1470,7 +1261,7 @@ gboolean onSocketReadable(gint /*fd*/, GIOCondition condition, gpointer)
 {
   if (condition & (G_IO_ERR | G_IO_HUP | G_IO_NVAL))
   {
-    gtk_main_quit();
+    requestShutdown("socket-hup");
     return G_SOURCE_REMOVE;
   }
   if (!(condition & G_IO_IN))
@@ -1486,12 +1277,12 @@ gboolean onSocketReadable(gint /*fd*/, GIOCondition condition, gpointer)
         continue;
       if (errno == EAGAIN || errno == EWOULDBLOCK)
         break;
-      gtk_main_quit();
+      requestShutdown("socket-read-err");
       return G_SOURCE_REMOVE;
     }
     if (n == 0)
     {
-      gtk_main_quit();
+      requestShutdown("socket-eof");
       return G_SOURCE_REMOVE;
     }
     g.readBuf.append(chunk, static_cast<size_t>(n));
@@ -1577,6 +1368,181 @@ void printUsage(const char* argv0)
                argv0);
 }
 
+static void paintBlackOnRealize(GtkWidget* widget, gpointer)
+{
+  GdkWindow* win = gtk_widget_get_window(widget);
+  if (!win)
+    return;
+  GdkRGBA bg {0.0, 0.0, 0.0, 1.0};
+  gdk_window_set_background_rgba(win, &bg);
+  gtk_widget_queue_draw(widget);
+}
+
+/** Create (or recreate after deep-park) WebContext + WebView inside g.plug. */
+bool createWebUi()
+{
+  if (!g.plug)
+    return false;
+  if (g.webview)
+    return true;
+
+  g.ctx = webkit_web_context_new();
+  webkit_web_context_set_cache_model(g.ctx, WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER);
+  webkit_web_context_register_uri_scheme(g.ctx, "calfnxt", onUriScheme, nullptr, nullptr);
+  auto* sec = webkit_web_context_get_security_manager(g.ctx);
+  webkit_security_manager_register_uri_scheme_as_local(sec, "calfnxt");
+  webkit_security_manager_register_uri_scheme_as_secure(sec, "calfnxt");
+  webkit_security_manager_register_uri_scheme_as_cors_enabled(sec, "calfnxt");
+
+  auto* ucm = webkit_user_content_manager_new();
+  g_signal_connect(ucm, "script-message-received::calfnxt", G_CALLBACK(onScriptMessage), nullptr);
+  webkit_user_content_manager_register_script_message_handler(ucm, "calfnxt");
+
+  static const char bridge[] =
+    "window.__calfnxtHostQ=window.__calfnxtHostQ||[];"
+    "window.__calfnxtUiVisible=true;"
+    "window.__calfnxtVizDump=window.__calfnxtVizDump||{};"
+    "window.__calfnxtDumpViz=function(){"
+    "var bag=window.__calfnxtVizDump||{};"
+    "var out={};"
+    "for(var k in bag){if(!Object.prototype.hasOwnProperty.call(bag,k))continue;"
+    "var v=bag[k];out[k]=v&&typeof v.slice==='function'?Array.prototype.slice.call(v):v;}"
+    "var json=JSON.stringify(out,null,2);"
+    "try{window.webkit.messageHandlers.calfnxt.postMessage('DUMPVIZ\\n'+json);}catch(e){}"
+    "console.log(json);return json;};"
+    "window.__calfnxtOnHost=window.__calfnxtOnHost||function(m){"
+    "if(m&&m.t==='viz'&&m.id!=null&&Array.isArray(m.v))"
+    "window.__calfnxtVizDump[String(m.id)+':'+String(m.kind)]=m.v;"
+    "window.__calfnxtHostQ.push(m);};"
+    "window.calfnxtNative={post:function(m){"
+    "var src=typeof m==='string'?JSON.parse(m):m;"
+    "var o={t:src.t};"
+    "if(src.id!=null&&src.t!=='vizcfg')o.id=src.id|0;"
+    "if(src.t==='set'&&typeof src.v==='number'){o.q=Math.round(src.v*1e6);o.d=1e6;}"
+    "if(src.t==='viewport'){"
+    "if(src.w!=null)o.w=src.w|0;if(src.h!=null)o.h=src.h|0;"
+    "}"
+    "if(src.t==='_diag'){"
+    "if(src.msg!=null)o.msg=String(src.msg);"
+    "if(src.w!=null)o.w=src.w|0;if(src.h!=null)o.h=src.h|0;"
+    "}"
+    "if(src.t==='vizcfg'){"
+    "if(src.id!=null)o.id=String(src.id);if(src.bins!=null)o.bins=src.bins|0;"
+    "}"
+    "if(src.t==='vizhz'){"
+    "if(src.hz!=null)o.hz=src.hz|0;"
+    "}"
+    "if(src.t==='ir'){"
+    "if(src.cmd!=null)o.cmd=String(src.cmd);"
+    "if(src.path!=null)o.path=String(src.path);"
+    "}"
+    "if(src.t==='midi'){"
+    "if(src.cmd!=null)o.cmd=String(src.cmd);"
+    "}"
+    "if(src.t==='meter'){"
+    "if(src.cmd!=null)o.cmd=String(src.cmd);"
+    "}"
+    "window.webkit.messageHandlers.calfnxt.postMessage(JSON.stringify(o));}};"
+    ;
+
+  std::string bridgeSrc = bridge;
+  if (envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR"))
+  {
+    bridgeSrc +=
+      "(function(){"
+      "function mount(){"
+      "if(document.getElementById('calfnxt-dump-viz'))return;"
+      "var b=document.createElement('button');"
+      "b.id='calfnxt-dump-viz';"
+      "b.type='button';"
+      "b.textContent='Dump viz';"
+      "b.title='Write /tmp/calfnxt-viz-dump.json';"
+      "b.style.cssText='position:fixed;top:4px;right:4px;z-index:2147483647;"
+      "font:12px/1.2 sans-serif;padding:6px 10px;cursor:pointer;"
+      "background:#222;color:#fff;border:1px solid #666;border-radius:3px;';"
+      "b.addEventListener('click',function(ev){"
+      "ev.preventDefault();ev.stopPropagation();"
+      "if(typeof window.__calfnxtDumpViz==='function')window.__calfnxtDumpViz();"
+      "b.textContent='Dumped';"
+      "setTimeout(function(){b.textContent='Dump viz';},1200);"
+      "});"
+      "document.documentElement.appendChild(b);"
+      "}"
+      "if(document.readyState==='loading')"
+      "document.addEventListener('DOMContentLoaded',mount);"
+      "else mount();"
+      "})();";
+  }
+
+  auto* script = webkit_user_script_new(bridgeSrc.c_str(), WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+                                        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, nullptr, nullptr);
+  webkit_user_content_manager_add_script(ucm, script);
+  webkit_user_script_unref(script);
+
+  {
+    static const char css[] =
+      "html,body,#root{background:#000!important;min-width:100%;min-height:100%;}";
+    auto* style = webkit_user_style_sheet_new(css, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+                                              WEBKIT_USER_STYLE_LEVEL_AUTHOR, nullptr, nullptr);
+    webkit_user_content_manager_add_style_sheet(ucm, style);
+    webkit_user_style_sheet_unref(style);
+  }
+
+  g.webview = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "web-context", g.ctx,
+                                          "user-content-manager", ucm, nullptr));
+  g_object_unref(ucm);
+
+  auto* settings = webkit_web_view_get_settings(g.webview);
+  const bool noGpu = envFlag("CALFNXT_WEB_NO_GPU");
+  webkit_settings_set_hardware_acceleration_policy(
+    settings,
+    noGpu ? WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER
+          : WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
+  webkit_settings_set_enable_page_cache(settings, FALSE);
+  webkit_settings_set_enable_html5_database(settings, FALSE);
+  webkit_settings_set_enable_media(settings, FALSE);
+  webkit_settings_set_enable_media_stream(settings, FALSE);
+  webkit_settings_set_enable_mediasource(settings, FALSE);
+  webkit_settings_set_enable_encrypted_media(settings, FALSE);
+  webkit_settings_set_enable_media_capabilities(settings, FALSE);
+  webkit_settings_set_enable_webrtc(settings, FALSE);
+  webkit_settings_set_enable_webaudio(settings, FALSE);
+  webkit_settings_set_enable_html5_local_storage(settings, TRUE);
+  const bool webDebug = envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR");
+  webkit_settings_set_enable_developer_extras(settings, webDebug ? TRUE : FALSE);
+  if (webDebug)
+    webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
+
+  {
+    GdkRGBA bg {0.0, 0.0, 0.0, 1.0};
+    webkit_web_view_set_background_color(g.webview, &bg);
+  }
+
+  gtk_container_add(GTK_CONTAINER(g.plug), GTK_WIDGET(g.webview));
+  gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
+  gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
+  g_signal_connect(g.webview, "realize", G_CALLBACK(paintBlackOnRealize), nullptr);
+  g_signal_connect(g.webview, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
+  g_signal_connect(g.webview, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
+  g_signal_connect(g.webview, "load-failed",
+                   G_CALLBACK(+[](WebKitWebView*, WebKitLoadEvent, const gchar* failingUri,
+                                  GError* error, gpointer) -> gboolean {
+                     hostLog("[calfnxt-web-host] load-failed: %s (%s)\n",
+                             failingUri ? failingUri : "?",
+                             error && error->message ? error->message : "?");
+                     return FALSE;
+                   }),
+                   nullptr);
+
+  char uri[512];
+  std::snprintf(uri, sizeof uri, "calfnxt://bundle/%s", g.entryHtml);
+  hostLog("[calfnxt-web-host] load %s\n", uri);
+  webkit_web_view_load_uri(g.webview, uri);
+  gtk_widget_show_all(GTK_WIDGET(g.webview));
+  syncNativeSize();
+  return true;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1651,154 +1617,9 @@ int main(int argc, char** argv)
   hostLog("[calfnxt-web-host] start parent=0x%llx root=%s entry=%s %dx%d\n",
           static_cast<unsigned long long>(parentXid), g.webRoot, g.entryHtml, g.width, g.height);
   logGraphicsProbe();
-
-  // Non-ephemeral: Header prefs (UI Hz, theme) need HTML5 localStorage.
-  // DOCUMENT_VIEWER: no browser-sized resource cache — local calfnxt:// SPA only.
-  g.ctx = webkit_web_context_new();
-  webkit_web_context_set_cache_model(g.ctx, WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER);
-  webkit_web_context_register_uri_scheme(g.ctx, "calfnxt", onUriScheme, nullptr, nullptr);
-  auto* sec = webkit_web_context_get_security_manager(g.ctx);
-  webkit_security_manager_register_uri_scheme_as_local(sec, "calfnxt");
-  webkit_security_manager_register_uri_scheme_as_secure(sec, "calfnxt");
-  webkit_security_manager_register_uri_scheme_as_cors_enabled(sec, "calfnxt");
-
-  auto* ucm = webkit_user_content_manager_new();
-  g_signal_connect(ucm, "script-message-received::calfnxt", G_CALLBACK(onScriptMessage), nullptr);
-  webkit_user_content_manager_register_script_message_handler(ucm, "calfnxt");
-
-  static const char bridge[] =
-    "window.__calfnxtHostQ=window.__calfnxtHostQ||[];"
-    "window.__calfnxtUiVisible=true;"
-    "window.__calfnxtVizDump=window.__calfnxtVizDump||{};"
-    "window.__calfnxtDumpViz=function(){"
-    "var bag=window.__calfnxtVizDump||{};"
-    "var out={};"
-    "for(var k in bag){if(!Object.prototype.hasOwnProperty.call(bag,k))continue;"
-    "var v=bag[k];out[k]=v&&typeof v.slice==='function'?Array.prototype.slice.call(v):v;}"
-    "var json=JSON.stringify(out,null,2);"
-    "try{window.webkit.messageHandlers.calfnxt.postMessage('DUMPVIZ\\n'+json);}catch(e){}"
-    "console.log(json);return json;};"
-    "window.__calfnxtOnHost=window.__calfnxtOnHost||function(m){"
-    "if(m&&m.t==='viz'&&m.id!=null&&Array.isArray(m.v))"
-    "window.__calfnxtVizDump[String(m.id)+':'+String(m.kind)]=m.v;"
-    "window.__calfnxtHostQ.push(m);};"
-    "window.calfnxtNative={post:function(m){"
-    "var src=typeof m==='string'?JSON.parse(m):m;"
-    "var o={t:src.t};"
-    "if(src.id!=null&&src.t!=='vizcfg')o.id=src.id|0;"
-    "if(src.t==='set'&&typeof src.v==='number'){o.q=Math.round(src.v*1e6);o.d=1e6;}"
-    "if(src.t==='viewport'){"
-    "if(src.w!=null)o.w=src.w|0;if(src.h!=null)o.h=src.h|0;"
-    "}"
-    "if(src.t==='_diag'){"
-    "if(src.msg!=null)o.msg=String(src.msg);"
-    "if(src.w!=null)o.w=src.w|0;if(src.h!=null)o.h=src.h|0;"
-    "}"
-    "if(src.t==='vizcfg'){"
-    "if(src.id!=null)o.id=String(src.id);if(src.bins!=null)o.bins=src.bins|0;"
-    "}"
-    "if(src.t==='vizhz'){"
-    "if(src.hz!=null)o.hz=src.hz|0;"
-    "}"
-    "if(src.t==='ir'){"
-    "if(src.cmd!=null)o.cmd=String(src.cmd);"
-    "if(src.path!=null)o.path=String(src.path);"
-    "}"
-    "if(src.t==='midi'){"
-    "if(src.cmd!=null)o.cmd=String(src.cmd);"
-    "}"
-    "if(src.t==='meter'){"
-    "if(src.cmd!=null)o.cmd=String(src.cmd);"
-    "}"
-    "window.webkit.messageHandlers.calfnxt.postMessage(JSON.stringify(o));}};"
-    ;
-
-  // When Inspector/Debug is on, offer a click dump — DAWs often steal Enter.
-  std::string bridgeSrc = bridge;
-  if (envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR"))
-  {
-    bridgeSrc +=
-      "(function(){"
-      "function mount(){"
-      "if(document.getElementById('calfnxt-dump-viz'))return;"
-      "var b=document.createElement('button');"
-      "b.id='calfnxt-dump-viz';"
-      "b.type='button';"
-      "b.textContent='Dump viz';"
-      "b.title='Write /tmp/calfnxt-viz-dump.json';"
-      "b.style.cssText='position:fixed;top:4px;right:4px;z-index:2147483647;"
-      "font:12px/1.2 sans-serif;padding:6px 10px;cursor:pointer;"
-      "background:#222;color:#fff;border:1px solid #666;border-radius:3px;';"
-      "b.addEventListener('click',function(ev){"
-      "ev.preventDefault();ev.stopPropagation();"
-      "if(typeof window.__calfnxtDumpViz==='function')window.__calfnxtDumpViz();"
-      "b.textContent='Dumped';"
-      "setTimeout(function(){b.textContent='Dump viz';},1200);"
-      "});"
-      "document.documentElement.appendChild(b);"
-      "}"
-      "if(document.readyState==='loading')"
-      "document.addEventListener('DOMContentLoaded',mount);"
-      "else mount();"
-      "})();";
-  }
-
-  auto* script = webkit_user_script_new(bridgeSrc.c_str(), WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
-                                        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, nullptr, nullptr);
-  webkit_user_content_manager_add_script(ucm, script);
-  webkit_user_script_unref(script);
-
-  // Ensure page chrome is opaque even if the SPA CSS loads late.
-  {
-    static const char css[] =
-      "html,body,#root{background:#000!important;min-width:100%;min-height:100%;}";
-    auto* style = webkit_user_style_sheet_new(css, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
-                                              WEBKIT_USER_STYLE_LEVEL_AUTHOR, nullptr, nullptr);
-    webkit_user_content_manager_add_style_sheet(ucm, style);
-    webkit_user_style_sheet_unref(style);
-  }
-
-  g.webview = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "web-context", g.ctx,
-                                          "user-content-manager", ucm, nullptr));
-  g_object_unref(ucm);
-
-  auto* settings = webkit_web_view_get_settings(g.webview);
-  const bool noGpu = envFlag("CALFNXT_WEB_NO_GPU");
-  webkit_settings_set_hardware_acceleration_policy(
-    settings,
-    noGpu ? WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER
-          : WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
-
-  // Trim unused browser subsystems (plugin UI is a single local SPA + canvas/SVG).
-  // Keep HTML5 localStorage for Header prefs; leave JS / WebGL for charts.
-  webkit_settings_set_enable_page_cache(settings, FALSE);
-  webkit_settings_set_enable_html5_database(settings, FALSE);
-  webkit_settings_set_enable_media(settings, FALSE);
-  webkit_settings_set_enable_media_stream(settings, FALSE);
-  webkit_settings_set_enable_mediasource(settings, FALSE);
-  webkit_settings_set_enable_encrypted_media(settings, FALSE);
-  webkit_settings_set_enable_media_capabilities(settings, FALSE);
-  webkit_settings_set_enable_webrtc(settings, FALSE);
-  webkit_settings_set_enable_webaudio(settings, FALSE);
-  webkit_settings_set_enable_html5_local_storage(settings, TRUE);
-
-  const bool webDebug = envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR");
-  webkit_settings_set_enable_developer_extras(settings, webDebug ? TRUE : FALSE);
-  if (webDebug)
-    webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
-
   hostLog("[calfnxt-web-host] build=gfx-probe-1 hw-accel=%s cache=document-viewer xwayland_nudge=%s\n",
-          noGpu ? "never" : "always", envFlag("CALFNXT_XWAYLAND_NUDGE") ? "1" : "(unset)");
-  if (envFlag("CALFNXT_WEB_DEBUG"))
-  {
-    hostLog("[calfnxt-web-host] env dmabuf_disable=%s compositing_disable=%s no_gpu=%s xwayland_nudge=%s\n",
-            std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER") ? std::getenv("WEBKIT_DISABLE_DMABUF_RENDERER")
-                                                            : "(unset)",
-            std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE") ? std::getenv("WEBKIT_DISABLE_COMPOSITING_MODE")
-                                                           : "(unset)",
-            noGpu ? "1" : "(unset)",
-            envFlag("CALFNXT_XWAYLAND_NUDGE") ? "1" : "(unset)");
-  }
+          envFlag("CALFNXT_WEB_NO_GPU") ? "never" : "always",
+          envFlag("CALFNXT_XWAYLAND_NUDGE") ? "1" : "(unset)");
 
   // Kill the XEmbed/GTK white flash before WebKit paints the SPA.
   {
@@ -1816,30 +1637,9 @@ int main(int argc, char** argv)
     g_object_unref(provider);
   }
 
-  // Opaque WebView clear color (does not fix XEmbed present; helps if paint works).
-  {
-    GdkRGBA bg {0.0, 0.0, 0.0, 1.0};
-    webkit_web_view_set_background_color(g.webview, &bg);
-  }
-
   g.plug = gtk_plug_new(static_cast<Window>(parentXid));
   gtk_widget_set_size_request(g.plug, g.width, g.height);
-  gtk_container_add(GTK_CONTAINER(g.plug), GTK_WIDGET(g.webview));
-  gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
-  gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
-
-  auto paintBlackOnRealize = +[](GtkWidget* widget, gpointer) {
-    GdkWindow* win = gtk_widget_get_window(widget);
-    if (!win)
-      return;
-    GdkRGBA bg {0.0, 0.0, 0.0, 1.0};
-    gdk_window_set_background_rgba(win, &bg);
-    gtk_widget_queue_draw(widget);
-  };
   g_signal_connect(g.plug, "realize", G_CALLBACK(paintBlackOnRealize), nullptr);
-  g_signal_connect(g.webview, "realize", G_CALLBACK(paintBlackOnRealize), nullptr);
-
-  // If the socket keeps handing us 1×1, re-apply Gdk-sized allocation on idle.
   g_signal_connect(g.plug, "size-allocate",
                    G_CALLBACK(+[](GtkWidget*, GdkRectangle* allocation, gpointer) {
                      if (g.inSizeAllocate)
@@ -1850,23 +1650,11 @@ int main(int argc, char** argv)
                    }),
                    nullptr);
 
-  g_signal_connect(g.webview, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
-  g_signal_connect(g.webview, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
-  g_signal_connect(g.webview, "load-failed",
-                   G_CALLBACK(+[](WebKitWebView*, WebKitLoadEvent, const gchar* failingUri,
-                                  GError* error, gpointer) -> gboolean {
-                     hostLog("[calfnxt-web-host] load-failed: %s (%s)\n",
-                             failingUri ? failingUri : "?",
-                             error && error->message ? error->message : "?");
-                     return FALSE;
-                   }),
-                   nullptr);
-
-  // Start SPA load before show/map so WebProcess overlaps XEmbed mapping.
-  char uri[512];
-  std::snprintf(uri, sizeof uri, "calfnxt://bundle/%s", g.entryHtml);
-  hostLog("[calfnxt-web-host] load %s\n", uri);
-  webkit_web_view_load_uri(g.webview, uri);
+  if (!createWebUi())
+  {
+    hostLog("[calfnxt-web-host] createWebUi failed\n");
+    return 1;
+  }
 
   gtk_widget_show_all(g.plug);
   syncNativeSize();
@@ -1898,6 +1686,7 @@ int main(int argc, char** argv)
     g_source_remove(g.liveNudgeSource);
     g.liveNudgeSource = 0;
   }
+  // Plug may already be gone via requestShutdown.
   if (g.plug)
   {
     gtk_widget_destroy(g.plug);

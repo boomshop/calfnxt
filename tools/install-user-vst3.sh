@@ -186,9 +186,12 @@ for id in "${PLUGIN_IDS[@]}"; do
 done
 
 echo "==> build + embed (-j$JOBS): ${CMAKE_TARGETS[*]}"
-cmake --build "$BUILD" --target "${CMAKE_TARGETS[@]}" calfnxt-web-host -j"$JOBS"
+# calfnxt-web-host-gtk4 is optional (skipped if webkitgtk-6.0 missing).
+cmake --build "$BUILD" --target "${CMAKE_TARGETS[@]}" calfnxt-web-host -j"$JOBS" \
+  || exit $?
+cmake --build "$BUILD" --target calfnxt-web-host-gtk4 -j"$JOBS" 2>/dev/null || true
 
-# Refresh web-host next to bundles (shared helper; cheap if already built).
+# Refresh web-host(+gtk4) next to bundles (shared helpers; cheap if already built).
 cmake --build "$BUILD" --target calfnxt-web-host-bundles -j"$JOBS"
 
 echo "==> install → $SHOW_DEST"

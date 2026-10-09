@@ -6,9 +6,11 @@
 
 **calfNXT** is the successor to [Calf Studio Gear](https://calf-studio-gear.org):
 a **VST3** plugin suite with a React + AUX web UI (**Linux + X11**). WebKitGTK
-runs in a separate **`calfnxt-web-host`** process (X11 embed) so the plugin `.so`
-stays free of GTK — required for hosts like Ardour. Classic Calf DSP heritage is
-reused where it fits, substantially reworked for this stack.
+runs in a separate helper process so the plugin `.so` stays free of GTK —
+required for hosts like Ardour. The default helper is **`calfnxt-web-host`**
+(GTK 3 `GtkPlug` / XEmbed). An optional floating **`calfnxt-web-host-gtk4`**
+avoids XEmbed entirely ([Floating GTK4 helper](#floating-gtk4-helper)). Classic
+Calf DSP heritage is reused where it fits, substantially reworked for this stack.
 
 - Site: [https://calfnxt.org](https://calfnxt.org/)
 - Branding / namespace: **calfNXT** (shared SPA packed per plugin into each
@@ -139,7 +141,8 @@ Optional: **Ninja**.
 | Module           | Purpose                                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `gtk+-3.0`       | GtkPlug / X11 embed (**only** `calfnxt-web-host`, never the `.so`)                                                        |
-| `webkit2gtk-4.1` | WebKitGTK **for GTK 3** in the helper (`2` = WebKit2 engine, **not** GTK 2; do **not** substitute 4.0 or `webkitgtk-6.0`) |
+| `webkit2gtk-4.1` | WebKitGTK **for GTK 3** in the default helper (`2` = WebKit2 engine, **not** GTK 2)                                      |
+| `gtk4` + `webkitgtk-6.0` | Optional floating helper `calfnxt-web-host-gtk4` (`CALFNXT_WEB_HOST=gtk4`). Same SPA / ui-dist; not a drop-in for the embed host. |
 
 Usually pulled in as deps: GLib, GObject, Cairo, Soup, X11.
 
@@ -147,6 +150,8 @@ Usually pulled in as deps: GLib, GObject, Cairo, Soup, X11.
 
 ```bash
 sudo pacman -S --needed base-devel cmake ninja pkgconf python nodejs npm gtk3 webkit2gtk-4.1
+# optional floating helper:
+sudo pacman -S --needed gtk4 webkitgtk-6.0
 ```
 
 **Debian / Ubuntu:**
@@ -155,6 +160,8 @@ sudo pacman -S --needed base-devel cmake ninja pkgconf python nodejs npm gtk3 we
 sudo apt install --no-install-recommends \
   build-essential cmake ninja-build pkg-config python3 nodejs npm \
   libgtk-3-dev libwebkit2gtk-4.1-dev
+# optional floating helper:
+sudo apt install --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev
 ```
 
 Host for testing (e.g. **Carla**, Ardour) is not required to compile.
@@ -299,20 +306,23 @@ Example: `CALFNXT_WEB_DEBUG=1 carla …`.
 | `CALFNXT_UI_SCALE`         | float ≈ `0.05`…`8` | Force editor scale (HiDPI) instead of measuring CSS vs host pixels. Invalid → ignored.                                                                                         |
 | `CALFNXT_WEB_DEBUG`        | non-empty          | Extra stderr logging; WebKit developer extras + console→stdout. File log is always `/tmp/calfnxt-ui.log` (capped at 512 KiB, then truncated).                                  |
 | `CALFNXT_WEB_INSPECTOR`    | non-empty          | Open WebKit Inspector on editor load.                                                                                                                                          |
-| `CALFNXT_WEB_NO_GPU`       | non-empty          | Hardware accel **off** (`NEVER`). Default is **on** (`ALWAYS`). Use if the embed paints blank.                                                                                 |
+| `CALFNXT_WEB_NO_GPU`       | non-empty          | Hardware accel **off** (`NEVER`). Default is **on** (`ALWAYS`). Last-resort blank-window fix — usually **laggy**. Prefer DMA-BUF / GTK4 workarounds first ([Blank UI](#blank-or-black-editor-nvidia--dma-buf)). |
+| `CALFNXT_WEB_HOST`         | `gtk4` / `float` / `wayland` | Opt-in **floating** helper `calfnxt-web-host-gtk4` (GTK 4 + `webkitgtk-6.0`, **no XEmbed**). Opens a separate window. See [Floating GTK4 helper](#floating-gtk4-helper). Alias: `CALFNXT_WEB_FLOATING=1`. |
+| `CALFNXT_WEB_FLOATING`     | non-empty          | Same as `CALFNXT_WEB_HOST=gtk4`.                                                                                                                                               |
 | `CALFNXT_XWAYLAND_NUDGE`   | non-empty          | Opt-in GNOME/Mutter + Ardour on Wayland workaround. **Off by default.** See [Editor black or frozen on GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland).                |
 | `CALFNXT_KEEP_HOST_LDPATH` | non-empty          | Copy the host `LD_LIBRARY_PATH` into the helper’s spawn `envp`. Default: omit it **for the child only** (Mixbus/Ardour bundled glib). Never touches the DAW’s own environment. |
 
-Lean WebKit defaults (always on, not env-gated): `WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER`, media/WebRTC/WebAudio/page-cache off; HTML5 **localStorage** stays on for Header prefs.
+Lean WebKit defaults (always on, not env-gated): `WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER`, media/WebRTC/WebAudio/page-cache off; HTML5 **localStorage** stays on for Header prefs (theme, viz Hz, Ardour tip dismiss).
 
-Related (not calfNXT-owned):
+Related (not calfNXT-owned — set on the **plugin host** so the helper inherits them):
 
-| Variable                          | Notes                                                            |
-| --------------------------------- | ---------------------------------------------------------------- |
-| `GDK_BACKEND=x11`                 | Force X11 for the helper on Wayland-only sessions.               |
-| `WEBKIT_DISABLE_DMABUF_RENDERER`  | Blank-window workaround on some drivers; set yourself if needed. |
-| `WEBKIT_DISABLE_COMPOSITING_MODE` | Last-resort compositing disable; not set by calfNXT.             |
-| `DISPLAY`                         | Required for the X11 `GtkPlug` embed.                            |
+| Variable                          | Notes                                                                                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `GDK_BACKEND=x11`                 | Force X11 for the helper on Wayland-only sessions.                                                                                    |
+| `WEBKIT_DISABLE_DMABUF_RENDERER`  | Prefer this for blank UI on proprietary NVIDIA / some WebKit builds. Keeps acceleration when the stack allows; see [Blank UI](#blank-or-black-editor-nvidia--dma-buf). |
+| `WEBKIT_DMABUF_RENDERER_FORCE_SHM`| Narrower DMA-BUF workaround on some WebKitGTK 2.52+ builds (shared-memory transport, hardware DMA-BUF off). Try if `DISABLE_DMABUF` feels too soft. |
+| `WEBKIT_DISABLE_COMPOSITING_MODE` | Last-resort compositing disable; not set by calfNXT. Often worse than DMA-BUF-only.                                                   |
+| `DISPLAY`                         | Required for the default X11 `GtkPlug` embed. Floating GTK4 may still use X11/XWayland depending on the session.                      |
 
 ### Install helpers
 
@@ -348,20 +358,25 @@ ABI and abort. **calfNXT does not do that.** The VST3 `.so` is DSP plus a thin
 editor proxy. GTK 3 and WebKitGTK live in a separate helper process.
 
 ```
-DAW process                            helper process
-───────────                            ──────────────
+DAW process                            helper process (default)
+───────────                            ───────────────────────
 calfNXT*.so                            calfnxt-web-host
   DSP (no GUI toolkit)                   GTK 3 GtkPlug
   WebEditor (VST3 IPlugView proxy)       WebKitGTK (webkit2gtk-4.1)
   posix_spawn + Unix socketpair          XEmbed into the host X11 window
+
+Optional: CALFNXT_WEB_HOST=gtk4 → calfnxt-web-host-gtk4 (GTK 4 + webkitgtk-6.0,
+floating window, no XEmbed). Same socket bridge / SPA. See below.
 ```
 
 - **`ldd` on the plugin `.so` must not list `libgtk-3` or `libwebkit`.** Only
-  `calfnxt-web-host` links those (`common/ui/CMakeLists.txt`). CMake
+  the helpers link those (`common/ui/CMakeLists.txt`). CMake
   `pkg_check_modules` for GTK/WebKit is there, not on the plugin targets.
-- Each bundle ships `Contents/<arch>/calfnxt-web-host` next to the `.so`.
-- Linux VST3 editors are **X11**. On a Wayland session the embed runs under
-  XWayland (see [GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland)).
+- Each bundle ships `Contents/<arch>/calfnxt-web-host` (and
+  `calfnxt-web-host-gtk4` when built) next to the `.so`.
+- Default Linux VST3 editors are **X11** embeds. On a Wayland session that path
+  runs under XWayland (see [GNOME/Wayland](#editor-black-or-frozen-on-gnomewayland)).
+  The floating GTK4 helper skips the embed socket entirely.
 
 Official Ardour binaries can load the `.so` because it does not pull system
 GTK into Ardour. The custom editor is the helper using system WebKitGTK.
@@ -448,6 +463,129 @@ from a tagged release. Details: [Packaging / offline UI](#packaging--offline-ui)
 npm is only a UI-source tool: changing React/TS, `npm run dev` (HMR), or
 cutting a new ui-dist (`./tools/release.sh`). Then CMake runs `npm ci` from
 `ui/package-lock.json`.
+
+---
+
+## Floating GTK4 helper
+
+Opt-in alternative to the default **GTK 3 `GtkPlug` / XEmbed** helper. Same
+React SPA and JSON bridge; different process binary and windowing model.
+
+```bash
+CALFNXT_WEB_HOST=gtk4 carla          # or: float / wayland
+# alias:
+CALFNXT_WEB_FLOATING=1 ardour9
+```
+
+Needs `calfnxt-web-host-gtk4` built into the bundle (`gtk4` + `webkitgtk-6.0`
+dev packages at compile time). If the gtk4 binary is missing, the editor falls
+back to classic `calfnxt-web-host`.
+
+### What you get
+
+- **Separate floating window** — not painted inside the host’s plugin frame.
+  The DAW may still open an empty embed chrome; the real UI is the helper
+  window. Close that window to tear the UI down.
+- **No XEmbed / `GtkPlug`.** Far fewer touch points with the host toolkit:
+  the plugin `.so` still spawns the helper and talks over the socketpair, but
+  the helper does not plug into the host X11 socket. That avoids the worst
+  XEmbed failure modes (host freeze if the plug process dies while still
+  embedded; GNOME/Wayland “black until resize” present bugs on the embed path).
+- **Cleaner lifecycle:** hide/close → helper **exits**; reopen → WebEditor
+  respawns. No long-lived “parked” WebKit process for that path.
+- Often a practical escape hatch when the **embedded** WebKitGTK surface stays
+  blank on proprietary NVIDIA / DMA-BUF stacks (see next section).
+
+### Trade-offs
+
+- Not a drop-in for hosts that insist on a single embedded editor rectangle.
+- Still WebKit: GPU/DMA-BUF quirks can appear on `webkitgtk-6.0` too — try the
+  same WebKit env vars if needed.
+- Default remains the GtkPlug helper for Carla/Reaper/Ardour embed workflows.
+
+---
+
+## Blank or black editor (NVIDIA / DMA-BUF)
+
+Different from the GNOME/Wayland “black until resize” case below: here the
+page **finishes loading** and the embed is mapped, but the surface stays
+black/blank because WebKit’s **DMA-BUF / GBM** path fails.
+
+Typical log line in `/tmp/calfnxt-ui.log` (or helper stderr):
+
+```text
+Failed to create GBM buffer of size …: Invalid argument
+```
+
+Seen especially with **proprietary NVIDIA** drivers and some WebKitGTK
+releases (GTK 3 embed path). calfNXT issue:
+[boomshop/calfnxt#11](https://github.com/boomshop/calfnxt/issues/11). Upstream
+context includes [WebKit #259644](https://bugs.webkit.org/show_bug.cgi?id=259644)
+(blank screen on NVIDIA), [WebKit #262607](https://bugs.webkit.org/show_bug.cgi?id=262607)
+(DMA-BUF + NVIDIA), and related DMA-BUF / X11 notes such as
+[WebKit #280210](https://bugs.webkit.org/show_bug.cgi?id=280210).
+
+### Workarounds (try in order)
+
+Set these on the **plugin host** process (helper inherits them). Confirm in
+`/tmp/calfnxt-ui.log` that the flag arrived (`gfx dmabuf=…` / `no_gpu=…`).
+
+1. **`WEBKIT_DISABLE_DMABUF_RENDERER=1`** — preferred first try. Disables the
+   broken DMA-BUF transport; keeps hardware acceleration when the stack still
+   allows it. Example: `WEBKIT_DISABLE_DMABUF_RENDERER=1 reaper`
+2. **`WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`** — on some WebKitGTK 2.52+ builds a
+   narrower knob (shared-memory transport, hardware DMA-BUF off). Try if (1)
+   is unavailable or still soft.
+3. **`CALFNXT_WEB_HOST=gtk4`** — floating GTK4 helper ([above](#floating-gtk4-helper)).
+   Avoids the GtkPlug embed path entirely; often paints when the embed does not.
+4. **`CALFNXT_WEB_NO_GPU=1`** — forces WebKit hardware acceleration **off**
+   (`NEVER`). Usually **fixes paint but feels laggy** (software path). Last
+   resort, not the default recommendation.
+
+Do **not** set `CALFNXT_WEB_NO_GPU` globally “just in case” — it costs UI
+smoothness on every host that already accelerates fine. The GNOME/Wayland
+present bug is a **different** failure mode; DMA-BUF off does not fix “only
+updates on resize.”
+
+---
+
+## Ardour: closing the plugin UI leaves RAM in use
+
+**If you use Ardour and wonder why `calfnxt-web-host` sticks around after you
+close the plugin window — read this.**
+
+VST3 has `IPlugView::attached` / `removed`. Many hosts (Carla, Reaper) call
+`removed()` when the editor closes; calfNXT then shuts down the helper and
+reaps the process.
+
+**Ardour’s default is different:** closing a plugin GUI window only **hides**
+it. The view stays alive so reopen is fast. For calfNXT’s GTK 3 XEmbed helper
+that means the out-of-process WebKit stack can remain parked (often on the
+order of **hundreds of MB RSS per open UI**) until the plugin is removed from
+the track or Ardour destroys the GUI instance.
+
+Inside Ardour (English UI strings):
+
+1. **Edit** → **Preferences**
+2. **Plugins** → **GUI**
+3. Find **Closing a Plugin GUI Window**
+4. Choose **only destroys VST2/3 UIs, hides others**  
+   (or **destroys the GUI instance, releasing resources**)
+5. Close and reopen the plugin UI — the helper should exit on window close.
+
+With that preference, Ardour calls `removed()` on close and our normal
+teardown runs (same idea as Carla/Reaper).
+
+If you leave the default (“only hides the window”), calfNXT **deep-parks**
+safely (destroys the WebView/context, keeps the `GtkPlug` — killing the plug
+while Ardour still owns the XEmbed socket can freeze the DAW). That avoids a
+crash but does **not** fully free the helper process RSS. The floating GTK4
+helper is another escape hatch (separate window; exits on close).
+
+In the plugin header, Ardour + GTK 3 embed shows an orange warning control with
+the same steps. **Don’t show again** stores a dismiss flag in the editor
+`localStorage` (`calfnxt.ardourGuiTip.dismissed`). Clear it from the WebKit
+Inspector (`CALFNXT_WEB_INSPECTOR=1`) if you need the tip back.
 
 ---
 
