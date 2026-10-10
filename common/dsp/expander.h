@@ -246,6 +246,8 @@ public:
 private:
   void recomputeCoeffs()
   {
+    // Not clock milliseconds: tau ≈ control/4 ms. The VST unit is blank.
+    // Do not change 4000 — that retunes every existing preset.
     attackCoeffBase_ =
       std::min(1.f, 1.f / (attackMs_ * sampleRate_ / 4000.f));
     releaseCoeffBase_ =

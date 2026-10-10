@@ -152,6 +152,8 @@ public:
       releaseScale *= 1.f + 2.5f * grDepth;
     }
 
+    // Not clock milliseconds: tau ≈ control/4 ms. The VST unit is blank.
+    // Do not change 4000 — that retunes every existing preset.
     const float attackCoeff = std::min(
       1.f, 1.f / (attackMs_ * attackScale * sampleRate_ / 4000.f));
     const float releaseCoeff = std::min(
