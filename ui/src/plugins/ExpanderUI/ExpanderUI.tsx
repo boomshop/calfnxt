@@ -31,7 +31,12 @@ import {
 } from '../../host/expanderHost';
 import '../PluginUI.scss';
 import './ExpanderUI.scss';
-import { expanderInfo } from './expanderInfo';
+import {
+  expanderDetectorInfo,
+  expanderInfo,
+  expanderInv1Info,
+  expanderInv2Info,
+} from './expanderInfo';
 
 export interface ExpanderUIProps {
   host: IExpanderHost;
@@ -366,14 +371,16 @@ export function ExpanderUI({ host }: ExpanderUIProps) {
       </Header>
 
       <div className="history">
-        <HistoryChart
-          data$={host.historyData$}
-          vizId="exp"
-          autoScale
-          series={historySeries}
-          persistId="expander"
-          persistToggles={EXPANDER_HISTORY_TOGGLES}
-        />
+        <WithInfo title={expanderInfo.history}>
+          <HistoryChart
+            data$={host.historyData$}
+            vizId="exp"
+            autoScale
+            series={historySeries}
+            persistId="expander"
+            persistToggles={EXPANDER_HISTORY_TOGGLES}
+          />
+        </WithInfo>
         {showKeyMeters ? (
           <WithInfo title={expanderInfo.keyMeters} className="key-meters">
             <MultiMeter
@@ -424,7 +431,13 @@ export function ExpanderUI({ host }: ExpanderUIProps) {
             hpMode$={isDetector ? host.hpMode$ : inv.hpMode$}
             lpMode$={isDetector ? host.lpMode$ : inv.lpMode$}
             listen$={isDetector ? host.listen$ : inv.listen$}
-            listenInfo={isDetector ? undefined : expanderInfo.invListen}
+            info={
+              isDetector
+                ? expanderDetectorInfo
+                : panel === 'inv2'
+                  ? expanderInv2Info
+                  : expanderInv1Info
+            }
             hipassDefault={expanderParamDefault(
               isDetector ? 'hipass' : `${invPrefix}_hipass`,
             )}
@@ -657,6 +670,7 @@ export function ExpanderUI({ host }: ExpanderUIProps) {
             levels={[1, 3, 6, 12]}
           />
         </WithInfo>
+        <WithInfo title={expanderInfo.transfer}>
         <DynamicsChart
           type="expander"
           threshold$={host.threshold$}
@@ -677,6 +691,7 @@ export function ExpanderUI({ host }: ExpanderUIProps) {
             host.endEdit(paramIds.release_threshold);
           }}
         />
+        </WithInfo>
       </div>
     </div>
   );

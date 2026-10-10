@@ -8,6 +8,7 @@ import {
   MenuButton,
   MultiMeter,
   Toggle,
+  WithInfo,
 } from '../../widgets';
 import {
   createHeaderIo,
@@ -36,6 +37,7 @@ import {
   ardourGuiTipVisible$,
 } from '../../prefs/ardourGuiTip';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
+import { headerInfo } from './headerInfo';
 
 export interface HeaderProps {
   title?: string;
@@ -86,20 +88,22 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
 
       <div className="in io" data-io="in">
         <span className="tag">In</span>
-        <Knob
-          className="gain"
-          size="small"
-          value$={io.inGain$}
-          beginEdit={io.beginInGainEdit}
-          endEdit={io.endInGainEdit}
-          min={ioGainMeta.min}
-          max={ioGainMeta.max}
-          reset={ioGainMeta.default}
-          label={false}
-          base={0}
-          scale="decibel"
-          log_factor={3}
-        />
+        <WithInfo title={headerInfo.inGain}>
+          <Knob
+            className="gain"
+            size="small"
+            value$={io.inGain$}
+            beginEdit={io.beginInGainEdit}
+            endEdit={io.endInGainEdit}
+            min={ioGainMeta.min}
+            max={ioGainMeta.max}
+            reset={ioGainMeta.default}
+            label={false}
+            base={0}
+            scale="decibel"
+            log_factor={3}
+          />
+        </WithInfo>
         <MultiMeter
           value$={io.levelIn$}
           count$={io.inputChannelCount$}
@@ -123,20 +127,22 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
           auto_clip={[5000, 5000]}
           clipping={[0.000001, 0.000001]}
         />
-        <Knob
-          className="gain"
-          size="small"
-          value$={io.outGain$}
-          beginEdit={io.beginOutGainEdit}
-          endEdit={io.endOutGainEdit}
-          min={ioGainMeta.min}
-          max={ioGainMeta.max}
-          reset={ioGainMeta.default}
-          label={false}
-          base={0}
-          scale="decibel"
-          log_factor={3}
-        />
+        <WithInfo title={headerInfo.outGain}>
+          <Knob
+            className="gain"
+            size="small"
+            value$={io.outGain$}
+            beginEdit={io.beginOutGainEdit}
+            endEdit={io.endOutGainEdit}
+            min={ioGainMeta.min}
+            max={ioGainMeta.max}
+            reset={ioGainMeta.default}
+            label={false}
+            base={0}
+            scale="decibel"
+            log_factor={3}
+          />
+        </WithInfo>
         <span className="tag">Out</span>
       </div>
 

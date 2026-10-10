@@ -1,25 +1,171 @@
+/** Hover titles for Bender controls (musicians / producers). */
+
+import { infoDoc } from '../../widgets/WithInfo/infoDoc';
+
 export const benderInfo = {
-  bypass:
-    'Turns the shifter off so you hear the delayed dry path (In/Out gains still apply). Latency stays reported to the host so timing does not jump. A/B whether the throw is adding drama or just making the part sound thin and grainy.',
+  bypass: infoDoc({
+    name: 'Bypass',
+    lead: 'Lets the signal through with no pitch shift. You still hear the delayed dry path, so the timing does not jump.',
+    meta: [
+      { label: 'DAW name', value: 'Bypass' },
+      { label: 'Parameter ID', value: '2' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'The delay stays in the path, and the host keeps the reported latency. The header In and Out gains are unity while it is on.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  mono:
-    'Process the Left channel only and copy the result to both outs. Halves the Hermite delay reads — free CPU on mono guitar/bass DI or a single vocal. Right-channel content is ignored while on. Leave off for real stereo that should keep its image through the throw.',
+  mono: infoDoc({
+    name: 'Mono',
+    lead: 'Reads the left channel only and copies the result to both outputs.',
+    meta: [
+      { label: 'DAW name', value: 'Mono' },
+      { label: 'Parameter ID', value: '9' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          { p: 'Right-channel content is ignored. Leave it off when the two sides should keep their own image through the throw.' },
+        ],
+      },
+    ],
+  }),
 
-  pitch:
-    'The pedal. Centre is unison; up raises pitch (chipmunk / dive-up), down drops it (monster / dive-bomb), ±24 semitones = two octaves either way. This is a blind delay-line shift, not a tuner: chords survive, formants ride along with the pitch, and there is no “wrong note” for the detector to grab. Automate this like an expression pedal. Extreme throws get grainier — that is the vintage character, not a bug.',
+  pitch: infoDoc({
+    name: 'Pitch',
+    lead: 'The throw, in semitones. Centre is unison.',
+    meta: [
+      { label: 'DAW name', value: 'Pitch' },
+      { label: 'Parameter ID', value: '3' },
+      { label: 'Range', value: '−24 … +24 st' },
+      { label: 'Default', value: '0 st' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Up raises the pitch. Down drops it. This is a delay-line shift, so chords go through and the formants ride with the pitch. Near unison the shifter parks on one tap, so Mix does not comb. Snap decides whether this knob is free or locked to a grid.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  snap:
-    'Locks Pitch to a musical grid in both the knob and the DSP — what you hear is what the parameter stores. Free = continuous (classic pedal sweep, in-between notes, slow dives). ST = whole semitones (musical steps, easy +5 / −7 / +12). WT = whole tones (two semitones at a time). Switching ST/WT pulls the current value onto that grid so you are not left between ticks. Automation of Pitch while ST/WT is on is quantized the same way; leave Free if you want a recorded sweep to glide.',
+  snap: infoDoc({
+    name: 'Snap',
+    lead: 'Locks Pitch to a grid, in the knob and in the sound.',
+    meta: [
+      { label: 'DAW name', value: 'Snap' },
+      { label: 'Parameter ID', value: '4' },
+      { label: 'Stored range', value: '0…2. The buttons send Free 0, ST 1, WT 2.' },
+      { label: 'Default', value: '0 (Free)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Free is a continuous pedal. ST is whole semitones. WT is whole tones, two semitones at a time. Switching onto a grid pulls the current Pitch onto it. Automation is quantized the same way.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  quality:
-    'Grain size vs latency — larger window = fewer splices, cleaner sustains, later in the host. Fast ≈ 16 ms (about 8 ms PDC): snappy, a bit grainy, closest to those 90s pedals that felt almost live. Normal doubles that. Smooth is 64 ms grain / ~32 ms PDC — the usual print setting. Studio doubles again (128 ms / ~64 ms): +octave gets much quieter, +two octaves still has some gargle, attacks smear more, and it is not for playing through. Changing Quality can make the host re-compensate latency — do it while stopped if the graph jumps.',
+  quality: infoDoc({
+    name: 'Quality',
+    lead: 'Sets the grain length, and with it the latency.',
+    meta: [
+      { label: 'DAW name', value: 'Quality' },
+      { label: 'Parameter ID', value: '5' },
+      { label: 'Stored range', value: '0…3. The buttons send Fast 0, Normal 1, Smooth 2, Studio 3.' },
+      { label: 'Default', value: '2 (Smooth)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'The grains are 16, 32, 64, and 128 ms. The reported latency is about half of that. Fast is snappy and grainier. Studio is the cleanest sustain and the latest in the host. Changing it can make the host re-compensate.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  mix:
-    'Dry vs shifted. 100% = classic lead (only the thrown pitch). Lower = harmony / doubling — original plus interval, like the pedal’s harmony modes. Dry is delayed to the same latency as the shifter so Mix is not a PDC comb at unison; once you leave 0 the wet delay is moving, so 50/50 can still chorus a little — that is the old harmonizer sound. If the blend feels hollow, push Mix toward 100% or stay closer to unison.',
+  mix: infoDoc({
+    name: 'Mix',
+    lead: 'Blends the shifted signal with a dry copy that is delayed by the same amount.',
+    meta: [
+      { label: 'DAW name', value: 'Mix' },
+      { label: 'Parameter ID', value: '6' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '100 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: '100 % is only the throw. Lower values keep the original beside the interval. Because the dry copy is delayed with the wet one, unison does not comb. Away from unison the two delays are not the same length, so a mid mix can chorus a little.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  glide:
-    'How fast Pitch catches the knob (or automation). Short (a few ms) = the pedal is under your foot, zipper-free but immediate. Longer = portamento / dive — the interval eases in instead of stepping. Pair with ST/WT when you want audible slides between grid notes. Too long and the throw lags the groove; too short on big jumps can click — if it does, add a few milliseconds.',
+  glide: infoDoc({
+    name: 'Glide',
+    lead: 'Sets how fast Pitch catches the knob.',
+    meta: [
+      { label: 'DAW name', value: 'Glide' },
+      { label: 'Parameter ID', value: '7' },
+      { label: 'Range', value: '0.5 … 250 ms' },
+      { label: 'Default', value: '8 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'These are real milliseconds. The time constant of the slew is this number. Short is under the foot. Longer is a slide between notes, including between the steps of ST or WT.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  tone:
-    'Brightness of the shifted path only (a gentle low-pass). Open = full digital top, fizzy on big throw-ups. Darker tames the metallic grain and aliases that delay-line shifters add when you go up — more “box of the 90s”, less “sample-rate trash”. Dry Mix is untouched, so darkening wet against a bright dry can sit a harmony under a guitar. If the part disappeared, you went too dark; if it hurts, you went too bright on a +octave.',
-};
+  tone: infoDoc({
+    name: 'Tone',
+    lead: 'A lowpass on the shifted path only.',
+    meta: [
+      { label: 'DAW name', value: 'Tone' },
+      { label: 'Parameter ID', value: '8' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '80 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: '0 puts the corner at 900 Hz. 100 % puts it at 18 kHz. The dry side of Mix is not filtered. Darken the throw when a big upward shift gets fizzy.',
+          },
+        ],
+      },
+    ],
+  }),
+} as const;

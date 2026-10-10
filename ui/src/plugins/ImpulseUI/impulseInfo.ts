@@ -1,49 +1,309 @@
+/** Hover titles for Impulse controls (musicians / producers). */
+
+import { infoDoc } from '../../widgets/WithInfo/infoDoc';
+import type { FrequencyRangeInfo } from '../../widgets/FrequencyRange/frequencyRangeInfo';
+
+const slope =
+  'The buttons send Off 0, 12 dB 1, 24 dB 2, 48 dB 4.';
+
 export const impulseInfo = {
-  active:
-    'Power for the convolution path. On = wet IR at the Wet level (Dry still applies). Off = dry only — instant mute of the room without unloading the file. Latency stays reported while an IR is loaded so the host graph does not jump. Same idea as Reverb/Delay power, not a compressor-style bypass icon.',
+  active: infoDoc({
+    name: 'Active',
+    lead: 'Turns the convolution on. Off, you hear the dry signal, delayed by the same hop as the room.',
+    meta: [
+      { label: 'DAW name', value: 'Bypass' },
+      { label: 'Parameter ID', value: '2' },
+      { label: 'Stored value', value: 'The button is lit when convolution is on. The host stores Bypass: 0 is on, 1 is off.' },
+      { label: 'Default', value: 'On (Bypass 0)' },
+    ],
+    sections: [
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'Off, the convolver is not run. The Dry and Wet knobs are not in that path: you hear the latency-matched input, and the header In and Out gains are unity. The loaded file stays. Turning it back on brings the room in without reloading. The reported latency stays at 512 samples while an impulse is loaded.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  source:
-    'What feeds the IR — dry stays the original stereo so an insert does not collapse the source. Stereo = L and R independently (true-stereo files use all four paths). L or R = that channel into both convolver inputs: a mono send from one side, or a true-stereo hall “from the left/right speaker.” L+R = (L+R)/2 into both — the usual vocal/bus mono-into-the-room without a 6 dB bump when the sides agree. On a send you will often want L+R even on a stereo track so the image of the dry is not baked into the wet twice. Stereo IRs still come back as stereo from a mono feed; they just share one source.',
+  source: infoDoc({
+    name: 'Source',
+    lead: 'Chooses what is sent into the impulse. The dry path stays the original stereo.',
+    meta: [
+      { label: 'DAW name', value: 'Source' },
+      { label: 'Parameter ID', value: '12' },
+      { label: 'Stored range', value: '0…3. The buttons send Stereo 0, Left 1, Right 2, L+R 3.' },
+      { label: 'Default', value: '0 (Stereo)' },
+    ],
+    sections: [
+      {
+        heading: 'Which one, and why',
+        blocks: [
+          {
+            ul: [
+              'Stereo feeds left and right on their own. A four-channel file uses all four paths.',
+              'Left or Right feeds that side into both inputs of the room.',
+              'L+R feeds the average of the two sides into both inputs, so a centred source is not doubled.',
+            ],
+          },
+        ],
+      },
+    ],
+  }),
 
-  quality:
-    'CPU vs how much of the IR’s spatial wiring actually runs. Rebuilds the engine like Decay — click-free crossfade, not a live stutter. Hop latency stays 512 samples either way.\n\n' +
-    'Lo — one mono impulse: stereo files become (L+R)/2, true-stereo files (LL+RR)/2. About 2× cheaper than Mid and 4× cheaper than Hi on a 4-channel hall. The wet image is the same in both speakers; use it for stacks of instances, mono sends, or a weak CPU. A mono WAV does not get cheaper.\n\n' +
-    'Mid — stereo L/R only. True-stereo files keep LL and RR and drop the wrap-around (L→R / R→L). Half the work of Hi, still a left/right room. Typical stereo IRs already are this.\n\n' +
-    'Hi — default / as captured. Four-channel true-stereo IRs use all paths (L→L, L→R, R→L, R→R). Leave it here when the file is the featured space and CPU allows.',
+  quality: infoDoc({
+    name: 'Quality',
+    lead: 'Chooses how much of the impulse’s stereo wiring is actually convolved.',
+    meta: [
+      { label: 'DAW name', value: 'Quality' },
+      { label: 'Parameter ID', value: '14' },
+      { label: 'Stored range', value: '0…2. The buttons send Lo 0, Mid 1, Hi 2.' },
+      { label: 'Default', value: '2 (Hi)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            ul: [
+              'Lo collapses the file to one channel. A stereo file becomes the average of left and right. A four-channel file becomes the average of the two direct paths.',
+              'Mid keeps a stereo left/right pair. A four-channel file keeps the direct paths and drops the wrap from left into right and right into left.',
+              'Hi keeps the file as captured, including all four paths of a true-stereo hall.',
+            ],
+          },
+          {
+            p: 'Changing it rebuilds the engine and crossfades. The hop stays 512 samples. A file that is already mono does not get cheaper on Lo.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  decay:
-    'Shortens the captured tail without inventing extra reverb. 100% = the IR as recorded — no extra fade, and the overlay on the waveform disappears. Lower values apply a fade and truncate: the hall dies earlier, denser, less wash. Shape is how that extra envelope falls; the handle on the waveform is this same length control. Loading another file snaps Decay back to 100% (and turns Reverse off) so you hear the new capture as it is. Dragging past the original length does nothing: a measured IR cannot honestly get longer. If the room vanished, you went too short; if it still clouds the source, go further down and check Mix.',
+  decay: infoDoc({
+    name: 'Decay',
+    lead: 'Shortens the captured tail. 100 % is the impulse as it was loaded.',
+    meta: [
+      { label: 'DAW name', value: 'Decay' },
+      { label: 'Parameter ID', value: '3' },
+      { label: 'Range', value: '15 … 100 %. Stored as 0.15…1.' },
+      { label: 'Default', value: '100 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Below 100 % a fade is applied and the tail is cut. The room dies earlier. It does not invent length past the file. The handle on the waveform is this same control. Loading another file sets it back to 100 % and turns Reverse off. Shape is how that extra fade falls.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  shape:
-    'How the extra Decay envelope falls from the start of the IR to the cut. Only does anything below 100% Decay — at 100% there is no attenuation. 1 is a straight drop in dB: the tail thins immediately. Higher values stay louder longer, then drop harder toward the cut — 2 is quadratic, 8 hangs on almost the whole way and then falls off a cliff. Default 4 keeps more of the early room. Same length either way; use a little Shape when you want the start to stay, more when the tail is wash. Dragging rebuilds the engine like Decay.',
+  shape: infoDoc({
+    name: 'Shape',
+    lead: 'Sets how the extra Decay fade falls, from the start of the impulse to the cut.',
+    meta: [
+      { label: 'DAW name', value: 'Shape' },
+      { label: 'Parameter ID', value: '13' },
+      { label: 'Range', value: '1 … 8' },
+      { label: 'Default', value: '4' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'At 100 % Decay there is no fade, so this does nothing. 1 is a straight drop in level. Higher values stay louder for longer and then fall harder. 8 hangs and then drops. Changing it rebuilds the engine the same way Decay does.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  predelay:
-    'Extra silence in front of the wet IR (on top of the convolver’s own hop latency). Keeps a vocal or snare in front of the room before the first reflection. The waveform on the chart starts at this time — the x-axis always covers the IR plus 500 ms of headroom so the scale does not jump while you drag. The dry path is delayed to the convolution hop so Mix does not comb at time zero; this knob only pushes the wet later. 0 = IR timing as captured; 20–60 ms is a typical vocal slot; large values become an audible slap before the hall.',
+  predelay: infoDoc({
+    name: 'Predelay',
+    lead: 'Adds silence in front of the wet impulse, after the convolver’s own hop.',
+    meta: [
+      { label: 'DAW name', value: 'Predelay' },
+      { label: 'Parameter ID', value: '4' },
+      { label: 'Range', value: '0 … 500 ms' },
+      { label: 'Default', value: '0 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'These are real milliseconds. The dry path is already delayed by the 512-sample hop so the blend does not comb at the start. This knob only pushes the wet later. The waveform on the chart starts at this time, and the axis always includes 500 ms of room past the impulse.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  reverse:
-    'Plays the IR backwards before convolution — the classic reverse-reverb bloom (swell into the hit, then cut). Decay still shortens the original tail first, then the clip is reversed, so the handle on the waveform is the same cut. Rebuilds the engine click-free (crossfade), not a live stutter. Combine with Predelay so the swell lands on the downbeat. Off = natural room direction. Choosing a different IR turns this off automatically.',
+  reverse: infoDoc({
+    name: 'Reverse',
+    lead: 'Plays the impulse backwards.',
+    meta: [
+      { label: 'DAW name', value: 'Reverse' },
+      { label: 'Parameter ID', value: '9' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Decay shortens the file first, then the clip is reversed, so the handle is the same cut. The engine crossfades. Choosing another file turns this off.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  hipass:
-    'High-pass on the wet IR only. Rolls rumble and muddy bloom out of the hall without thinning the dry source. Use when a church IR blooms the kick or a plate makes the vocal chesty. Too high and the room becomes small and hissy — you are hearing the IR’s noise floor.',
+  dry: infoDoc({
+    name: 'Dry',
+    lead: 'Sets the level of the latency-matched dry path while the convolution is on.',
+    meta: [
+      { label: 'DAW name', value: 'Dry' },
+      { label: 'Parameter ID', value: '10' },
+      { label: 'Range', value: '−60 … +12 dB' },
+      { label: 'Default', value: '0 dB' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'On an insert, leave it near 0 and set Wet under it. On a send, where the mixer already has the dry, pull this down. It is not in the path while Active is off.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  lopass:
-    'Low-pass on the wet IR only. Darkens a brittle or overly bright hall (stone, tiled, cheap impulse). Complements HP: together they are a wet-only frequency range, even-order slopes that do not comb against dry. If the space disappeared, you filtered out the body of the IR.',
+  amount: infoDoc({
+    name: 'Wet',
+    lead: 'Sets the level of the convolved room.',
+    meta: [
+      { label: 'DAW name', value: 'Wet' },
+      { label: 'Parameter ID', value: '11' },
+      { label: 'Range', value: '−60 … +12 dB' },
+      { label: 'Default', value: '−12 dB' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Files are peak-normalized to about −6 dBFS on load, so switching files does not jump to full scale. This knob is the trim after that. The wet filter is on this path.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  hpMode:
-    'Slope of the wet high-pass. Off = no HP. 12 / 24 / 48 dB Linkwitz–Riley (36 maps to 24 — odd order cannot sit clean against dry). Steeper = tighter rumble cut, more phase rotation in the wet. Start at 12 dB unless the IR is a basement.',
+  library: infoDoc({
+    name: 'Library',
+    lead: 'Chooses the folder of impulse responses. One click loads a file.',
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'The scan is recursive and reads WAV and uncompressed AIFF. Open folders and the scroll position are stored in the session. Rescan after you add files. The loaded impulse is stored in the session even if the file later moves. Select… and Rescan are not parameters.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  lpMode:
-    'Slope of the wet low-pass. Off = no LP. Same even-order LR family as HP. 12 dB is a gentle darken; 48 dB is a hard lid on a fizzy impulse. Listen in mono if you push both HP and LP hard — the wet image can collapse a little.',
+  filter: infoDoc({
+    name: 'Filter',
+    lead: 'Narrows the tree by filename.',
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'The match is case-insensitive and looks at the name only. A folder stays if a file inside it matches. This box is not a parameter.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  dry:
-    'Level of the latency-matched dry path. 0 dB = unity with In gain. Drop it on an aux/send where the DAW already has the dry; keep it up for insert “in the room” blending. Mute-style: slam it to −60 if you only want the IR on a send.',
+  chart: infoDoc({
+    name: 'Waveform',
+    lead: 'Shows the loaded impulse, the Decay cut, and the Predelay.',
+    sections: [
+      {
+        heading: 'What you see',
+        blocks: [
+          {
+            p: 'The vertical handle is Decay. At 100 % there is no fade overlay. Shape draws how that fade falls. The trace starts after Predelay, and the axis always includes 500 ms past the file. Dragging the handle writes Decay.',
+          },
+        ],
+      },
+    ],
+  }),
+} as const;
 
-  amount:
-    'Level of the convolved wet. IRs are peak-normalized on load so one-click switches do not explode; this is the mix trim after that. Typical insert: −12 to −6 dB wet with dry at 0. On a send, push wet up and pull Dry down. If two files still jump in loudness, the IR itself is unusually dense — ride Wet, do not chase In gain.',
-
-  library:
-    'Pick the folder that holds your IR collection once. The plugin scans WAV and uncompressed AIFF recursively and shows the tree here — one click loads. Which folders are open and where you scrolled is stored in the session, so reopening the editor lands you in the same place. Filter matches names only (not tags). Rescan after you drop new files in. The current IR is stored in the session even if the file later moves; the tree will show it missing until you point Library at the new place.',
-
-  filter:
-    'Name filter for the tree (case-insensitive). Folders stay if a child matches. Clear it to see the whole library again. Does not search inside the WAV — only the filename.',
+export const impulseFilterInfo: FrequencyRangeInfo = {
+  hipass: infoDoc({
+    name: 'Highpass',
+    lead: 'Sets how much low end is taken out of the room.',
+    meta: [
+      { label: 'DAW name', value: 'HP Freq' },
+      { label: 'Parameter ID', value: '5' },
+      { label: 'Range', value: '20 … 20 000 Hz' },
+      { label: 'Default', value: '60 Hz' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [{ p: 'Dry is not filtered. The slope has to be above Off or this corner is not in the room. The default slope is 24 dB/oct, so this corner is already in the sound.' }],
+      },
+    ],
+  }),
+  lopass: infoDoc({
+    name: 'Lowpass',
+    lead: 'Sets how much top is taken out of the room.',
+    meta: [
+      { label: 'DAW name', value: 'LP Freq' },
+      { label: 'Parameter ID', value: '6' },
+      { label: 'Range', value: '20 … 20 000 Hz' },
+      { label: 'Default', value: '10 000 Hz' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [{ p: 'Dry is not filtered. The slope starts at Off, so this corner does nothing until you turn the lowpass on.' }],
+      },
+    ],
+  }),
+  hpMode: infoDoc({
+    name: 'Highpass slope',
+    lead: 'Sets how steeply the lows are taken out of the room.',
+    meta: [
+      { label: 'DAW name', value: 'HP Mode' },
+      { label: 'Parameter ID', value: '7' },
+      { label: 'Stored range', value: slope },
+      { label: 'Default', value: '2 (24 dB)' },
+    ],
+  }),
+  lpMode: infoDoc({
+    name: 'Lowpass slope',
+    lead: 'Sets how steeply the highs are taken out of the room.',
+    meta: [
+      { label: 'DAW name', value: 'LP Mode' },
+      { label: 'Parameter ID', value: '8' },
+      { label: 'Stored range', value: slope },
+      { label: 'Default', value: '0 (Off)' },
+    ],
+  }),
 };

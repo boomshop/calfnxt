@@ -8,7 +8,13 @@
     grid-column: 1 / -1;
     min-height: 0;
 
-    > .EnvelopeChart {
+    > .EnvelopeChart,
+    > .WithInfo:has(> .EnvelopeChart) {
+      height: 100%;
+      min-height: 0;
+    }
+
+    > .WithInfo:has(> .EnvelopeChart) > .EnvelopeChart {
       height: 100%;
     }
   }

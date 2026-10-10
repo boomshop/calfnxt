@@ -18,7 +18,7 @@ import {
   type IHarmonicsHost,
 } from '../../host/harmonicsHost';
 import type { HarmonicsPresetId } from './harmonicsPresets';
-import { harmonicsInfo } from './harmonicsInfo';
+import { harmonicsFeedInfo, harmonicsInfo, harmonicsPostInfo } from './harmonicsInfo';
 import '../PluginUI.scss';
 import './HarmonicsUI.scss';
 
@@ -101,6 +101,7 @@ export function HarmonicsUI(props: HarmonicsUIProps) {
             lpMode$={host.preLpMode$}
             listen$={host.preListen$}
             listenInfo={harmonicsInfo.preListen}
+            info={harmonicsFeedInfo}
             modeEntries={FREQUENCY_RANGE_LR_MODE_ENTRIES}
             hipassDefault={harmonicsParamDefault('pre_hipass')}
             lopassDefault={harmonicsParamDefault('pre_lopass')}
@@ -273,6 +274,7 @@ export function HarmonicsUI(props: HarmonicsUIProps) {
             lpMode$={host.postLpMode$}
             listen$={host.listen$}
             listenInfo={harmonicsInfo.listen}
+            info={harmonicsPostInfo}
             modeEntries={FREQUENCY_RANGE_LR_MODE_ENTRIES}
             hipassDefault={harmonicsParamDefault('post_hipass')}
             lopassDefault={harmonicsParamDefault('post_lopass')}

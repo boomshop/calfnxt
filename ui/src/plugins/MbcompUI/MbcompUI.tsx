@@ -133,18 +133,20 @@ function BandStrip(props: {
       data-band={band.id}>
       <div
         className={['history', bypass && 'disabled'].filter(Boolean).join(' ')}>
-        <HistoryChart
-          data$={band.historyData$}
-          vizId="mbcomp"
-          windowMs={MB_BAND_HISTORY_MS}
-          autoScale
-          autoScaleReleaseTauS={4}
-          maxBins={MB_BAND_HISTORY_BINS}
-          syncBins={band.index === 0}
-          persistToggles={LIMITER_HISTORY_TOGGLES}
-          className={['compact', bypass && 'disabled'].filter(Boolean).join(' ')}
-          series={MBCOMP_HISTORY_SERIES}
-        />
+        <WithInfo title={mbcompInfo.history}>
+          <HistoryChart
+            data$={band.historyData$}
+            vizId="mbcomp"
+            windowMs={MB_BAND_HISTORY_MS}
+            autoScale
+            autoScaleReleaseTauS={4}
+            maxBins={MB_BAND_HISTORY_BINS}
+            syncBins={band.index === 0}
+            persistToggles={LIMITER_HISTORY_TOGGLES}
+            className={['compact', bypass && 'disabled'].filter(Boolean).join(' ')}
+            series={MBCOMP_HISTORY_SERIES}
+          />
+        </WithInfo>
       </div>
 
       <div className="meters">
@@ -462,6 +464,7 @@ function BandDetail(props: {
             levels={[1, 3, 6, 12]}
           />
         </WithInfo>
+        <WithInfo title={mbcompInfo.transfer}>
         <DynamicsChart
           key={band.id}
           threshold$={band.threshold$}
@@ -478,6 +481,7 @@ function BandDetail(props: {
             band.endEdit('ratio');
           }}
         />
+        </WithInfo>
       </div>
     </div>
   );
@@ -580,6 +584,7 @@ export function MbcompUI(props: MbcompUIProps) {
         </WithInfo>
       </Header>
 
+      <WithInfo title={mbcompInfo.chart}>
       <MultibandChart
         bandCount={numBands}
         slope$={host.slope$}
@@ -596,6 +601,7 @@ export function MbcompUI(props: MbcompUIProps) {
         thresholdEdit={thresholdEdit}
         xoverEdit={xoverEdit}
       />
+      </WithInfo>
 
       <div className="strips">
         {host.bands.slice(0, numBands).map((band) => (

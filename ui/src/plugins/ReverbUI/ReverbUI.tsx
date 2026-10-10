@@ -22,7 +22,7 @@ import {
 } from '../../host/reverbHost';
 import type { ReverbPresetId } from './reverbPresets';
 import { formatHz } from '../../utils/formatHz';
-import { reverbInfo } from './reverbInfo';
+import { reverbFeedInfo, reverbInfo } from './reverbInfo';
 import '../PluginUI.scss';
 import './ReverbUI.scss';
 
@@ -303,6 +303,7 @@ export function ReverbUI({ host }: ReverbUIProps) {
         </WithInfo>
       </Header>
 
+      <WithInfo title={reverbInfo.chart} className="chart">
       <ReverbChart
         predelay$={chartPredelay$}
         attack$={chartAttack$}
@@ -327,6 +328,7 @@ export function ReverbUI({ host }: ReverbUIProps) {
           host.endEdit(paramIds.er_level);
         }}
       />
+      </WithInfo>
 
       <div className="block space">
         <div className="title">Space</div>
@@ -434,6 +436,7 @@ export function ReverbUI({ host }: ReverbUIProps) {
         <div className="panel-content">
           {panel === 'filter' ? (
             <FrequencyRange
+              info={reverbFeedInfo}
               title="Feed into ER & Late"
               hipass$={host.hipass$}
               lopass$={host.lopass$}

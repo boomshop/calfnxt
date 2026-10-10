@@ -19,7 +19,7 @@ import {
 } from '../../host/transientsHost';
 import '../PluginUI.scss';
 import './TransientsUI.scss';
-import { transientsInfo } from './transientsInfo';
+import { transientsDetectorInfo, transientsInfo } from './transientsInfo';
 
 export interface TransientsUIProps {
   host: ITransientsHost;
@@ -142,17 +142,20 @@ export function TransientsUI(props: TransientsUIProps) {
       </Header>
 
       <div className="history">
-        <EnvelopeChart
-          data$={host.envelopeData$}
-          view$={host.view$}
-          autoScale
-        />
+        <WithInfo title={transientsInfo.history}>
+          <EnvelopeChart
+            data$={host.envelopeData$}
+            view$={host.view$}
+            autoScale
+          />
+        </WithInfo>
       </div>
 
       <div className="block envelope">
         <div className="title">Detector</div>
 
         <FrequencyRange
+          info={transientsDetectorInfo}
           hipass$={host.hipass$}
           lopass$={host.lopass$}
           hpMode$={host.hpMode$}

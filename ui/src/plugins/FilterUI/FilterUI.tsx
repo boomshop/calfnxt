@@ -227,16 +227,18 @@ export function FilterUI(props: FilterUIProps) {
 
       <div className="block chart">
         <div className="title">Response</div>
-        <EQChart
-          bands={host.filterBands}
-          interactive
-          showLabels
-          yRange={{ min: -60, max: 24 }}
-          dbGrid={12}
-          spectrumIn$={host.spectrumIn$}
-          spectrumOut$={host.spectrumOut$}
-          spectrumMode={Math.round(spectrumMode)}
-        />
+        <WithInfo title={filterInfo.chart}>
+          <EQChart
+            bands={host.filterBands}
+            interactive
+            showLabels
+            yRange={{ min: -60, max: 24 }}
+            dbGrid={12}
+            spectrumIn$={host.spectrumIn$}
+            spectrumOut$={host.spectrumOut$}
+            spectrumMode={Math.round(spectrumMode)}
+          />
+        </WithInfo>
       </div>
 
       <div className="block envelope">

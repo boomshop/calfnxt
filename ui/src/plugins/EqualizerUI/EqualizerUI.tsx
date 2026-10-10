@@ -466,15 +466,17 @@ export function EqualizerUI(props: EqualizerUIProps) {
         </WithInfo>
       </Header>
 
-      <EQChart
-        bands={bands}
-        size="normal"
-        selectedBandId={selectedBandId}
-        onSelectBand={selectBand}
-        spectrumIn$={host.spectrumIn$}
-        spectrumOut$={host.spectrumOut$}
-        spectrumMode={Math.round(spectrumMode)}
-      />
+      <WithInfo title={equalizerInfo.chart} className="graph">
+        <EQChart
+          bands={bands}
+          size="normal"
+          selectedBandId={selectedBandId}
+          onSelectBand={selectBand}
+          spectrumIn$={host.spectrumIn$}
+          spectrumOut$={host.spectrumOut$}
+          spectrumMode={Math.round(spectrumMode)}
+        />
+      </WithInfo>
 
       {selectedBand ? (
         <BandControls band={selectedBand} host={host} mono={mono} />

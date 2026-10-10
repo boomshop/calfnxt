@@ -113,7 +113,9 @@ export function FlangerUI(props: FlangerUIProps) {
 
       <div className="block chart">
         <div className="title">Peaks &amp; Notches</div>
-        <ModulationChart data$={host.response$} mode="comb" dbMin={-36} dbMax={24} />
+        <WithInfo title={flangerInfo.chart}>
+          <ModulationChart data$={host.response$} mode="comb" dbMin={-36} dbMax={24} />
+        </WithInfo>
       </div>
 
       <div className="block stereo">

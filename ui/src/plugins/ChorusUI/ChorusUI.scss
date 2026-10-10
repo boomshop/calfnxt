@@ -34,7 +34,22 @@
 
   > .chart {
     grid-area: chart;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
+
+    > .WithInfo {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+    }
+
+    > .WithInfo > .ChorusChart {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+    }
   }
 
   > .post {

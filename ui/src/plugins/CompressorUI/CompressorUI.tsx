@@ -23,7 +23,7 @@ import {
 } from '../../host/compressorHost';
 import '../PluginUI.scss';
 import './CompressorUI.scss';
-import { compressorInfo } from './compressorInfo';
+import { compressorDetectorInfo, compressorInfo } from './compressorInfo';
 
 export interface CompressorUIProps {
   host: ICompressorHost;
@@ -124,13 +124,15 @@ export function CompressorUI(props: CompressorUIProps) {
       </Header>
 
       <div className="history">
-        <HistoryChart
-          data$={host.historyData$}
-          vizId="comp"
-          autoScale
-          series={COMP_HISTORY_SERIES}
-          persistToggles={DYNAMICS_TRIG_GR_TOGGLES}
-        />
+        <WithInfo title={compressorInfo.history}>
+          <HistoryChart
+            data$={host.historyData$}
+            vizId="comp"
+            autoScale
+            series={COMP_HISTORY_SERIES}
+            persistToggles={DYNAMICS_TRIG_GR_TOGGLES}
+          />
+        </WithInfo>
       </div>
 
       <div className="block detector">
@@ -142,6 +144,8 @@ export function CompressorUI(props: CompressorUIProps) {
           hpMode$={host.hpMode$}
           lpMode$={host.lpMode$}
           listen$={host.listen$}
+          listenInfo={compressorInfo.listen}
+          info={compressorDetectorInfo}
           hipassDefault={compressorParamDefault('hipass')}
           lopassDefault={compressorParamDefault('lopass')}
           hipassEdit={edit(paramIds.hipass)}
@@ -335,6 +339,7 @@ export function CompressorUI(props: CompressorUIProps) {
             levels={[1, 3, 6, 12]}
           />
         </WithInfo>
+        <WithInfo title={compressorInfo.transfer}>
         <DynamicsChart
           threshold$={host.threshold$}
           ratio$={host.ratio$}
@@ -350,6 +355,7 @@ export function CompressorUI(props: CompressorUIProps) {
             host.endEdit(paramIds.ratio);
           }}
         />
+        </WithInfo>
       </div>
     </div>
   );

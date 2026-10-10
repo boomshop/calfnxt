@@ -13,13 +13,37 @@
     min-width: 0;
     min-height: 0;
 
-    > .HistoryChart {
+    > .WithInfo {
+      display: flex;
       height: 100%;
+      min-height: 0;
+    }
+
+    > .HistoryChart,
+    > .WithInfo > .HistoryChart {
+      height: 100%;
+      width: 100%;
     }
   }
 
   > .response {
     grid-area: response;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+
+    > .WithInfo {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+    }
+
+    > .WithInfo > .CrusherChart {
+      flex: 1;
+      width: 100%;
+      min-height: 0;
+    }
   }
 
   > .bits {

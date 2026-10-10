@@ -18,7 +18,7 @@ import {
   type IImpulseHost,
 } from '../../host/impulseHost';
 import type { IrNode } from '../../utils/irTypes';
-import { impulseInfo } from './impulseInfo';
+import { impulseFilterInfo, impulseInfo } from './impulseInfo';
 import '../PluginUI.scss';
 import './ImpulseUI.scss';
 
@@ -234,13 +234,15 @@ export function ImpulseUI(props: ImpulseUIProps) {
         </WithInfo>
       </Header>
 
-      <ImpulseChart
-        data$={host.wave$}
-        decay$={host.decay$}
-        predelay$={host.predelay$}
-        shape$={host.shape$}
-        {...edit(paramIds.decay)}
-      />
+      <WithInfo title={impulseInfo.chart} className="wave">
+        <ImpulseChart
+          data$={host.wave$}
+          decay$={host.decay$}
+          predelay$={host.predelay$}
+          shape$={host.shape$}
+          {...edit(paramIds.decay)}
+        />
+      </WithInfo>
 
       <div className="lib block">
         <div className="title">Library</div>
@@ -300,6 +302,7 @@ export function ImpulseUI(props: ImpulseUIProps) {
           hipassEdit={edit(paramIds.hipass)}
           lopassEdit={edit(paramIds.lopass)}
           layout="vertical"
+          info={impulseFilterInfo}
         />
 
         <div className="left">

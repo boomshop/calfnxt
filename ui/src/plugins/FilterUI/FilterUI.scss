@@ -82,8 +82,11 @@
     flex-direction: column;
     min-width: 0;
 
-    > .EQChart {
+    > .EQChart,
+    > .WithInfo:has(> .EQChart),
+    > .WithInfo:has(> .EQChart) > .EQChart {
       flex: 1;
+      min-height: 0;
       background: var(--background);
 
       /* Main sum response only — Equalizer keeps solid --color. */

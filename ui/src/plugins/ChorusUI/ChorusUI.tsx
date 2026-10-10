@@ -15,7 +15,7 @@ import {
   chorusParamDefault,
   type IChorusHost,
 } from '../../host/chorusHost';
-import { chorusInfo } from './chorusInfo';
+import { chorusInfo, chorusPostInfo } from './chorusInfo';
 import '../PluginUI.scss';
 import './ChorusUI.scss';
 
@@ -279,6 +279,7 @@ export function ChorusUI(props: ChorusUIProps) {
             lpMode$={host.lpMode$}
             listen$={host.listen$}
             listenInfo={chorusInfo.listen}
+            info={chorusPostInfo}
             modeEntries={FREQUENCY_RANGE_LR_MODE_ENTRIES}
             hipassDefault={chorusParamDefault('hipass')}
             lopassDefault={chorusParamDefault('lopass')}
