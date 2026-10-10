@@ -1,5 +1,7 @@
 #include "web_host_shared.h"
 
+#include <gio/gio.h>
+
 #include <algorithm>
 #include <cerrno>
 #include <cstdarg>
@@ -183,6 +185,52 @@ void startStderrCapture()
 bool stderrCaptureActive()
 {
   return stderrCap.saved >= 0;
+}
+
+bool openExternalHttpUrl(const char* url)
+{
+  if (!url)
+    return false;
+  const size_t n = std::strlen(url);
+  if (n < 8 || n > 2048)
+    return false;
+  for (size_t i = 0; i < n; ++i)
+  {
+    const unsigned char c = static_cast<unsigned char>(url[i]);
+    if (c <= 32 || c >= 127)
+      return false;
+  }
+  const bool https = std::strncmp(url, "https://", 8) == 0;
+  const bool http = std::strncmp(url, "http://", 7) == 0;
+  if (!https && !http)
+    return false;
+  const char* host = url + (https ? 8 : 7);
+  if (*host == '\0' || *host == '/' || *host == '?' || *host == '#')
+    return false;
+
+  GError* err = nullptr;
+  if (!g_app_info_launch_default_for_uri(url, nullptr, &err))
+  {
+    hostLog("[calfnxt-web-host] open url failed: %s\n",
+            err && err->message ? err->message : url);
+    if (err)
+      g_error_free(err);
+    return false;
+  }
+  hostLog("[calfnxt-web-host] open url %s\n", url);
+  return true;
+}
+
+bool consumeUiCommand(const char* s)
+{
+  if (!s)
+    return false;
+  static constexpr char kPrefix[] = "OPENURL\n";
+  constexpr size_t n = sizeof kPrefix - 1;
+  if (std::strncmp(s, kPrefix, n) != 0)
+    return false;
+  openExternalHttpUrl(s + n);
+  return true;
 }
 
 void hostLog(const char* fmt, ...)

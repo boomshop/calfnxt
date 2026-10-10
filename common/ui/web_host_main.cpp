@@ -1179,6 +1179,35 @@ void onUriScheme(WebKitURISchemeRequest* request, gpointer)
   g_object_unref(file);
 }
 
+/** https/http leaves the plug-in page and opens in the desktop handler. */
+gboolean onDecidePolicy(WebKitWebView*, WebKitPolicyDecision* decision,
+                        WebKitPolicyDecisionType type, gpointer)
+{
+  if (type != WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION
+      && type != WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION)
+    return FALSE;
+  WebKitNavigationAction* action =
+    webkit_navigation_policy_decision_get_navigation_action(
+      WEBKIT_NAVIGATION_POLICY_DECISION(decision));
+  WebKitURIRequest* req = action ? webkit_navigation_action_get_request(action) : nullptr;
+  const char* uri = req ? webkit_uri_request_get_uri(req) : nullptr;
+  if (!uri || (!g_str_has_prefix(uri, "https://") && !g_str_has_prefix(uri, "http://")))
+    return FALSE;
+  W::openExternalHttpUrl(uri);
+  webkit_policy_decision_ignore(decision);
+  return TRUE;
+}
+
+/** target=_blank: do not spawn a second WebView inside the plug-in. */
+GtkWidget* onCreateWebView(WebKitWebView*, WebKitNavigationAction* action, gpointer)
+{
+  WebKitURIRequest* req = action ? webkit_navigation_action_get_request(action) : nullptr;
+  const char* uri = req ? webkit_uri_request_get_uri(req) : nullptr;
+  if (uri)
+    W::openExternalHttpUrl(uri);
+  return nullptr;
+}
+
 void onScriptMessage(WebKitUserContentManager*, WebKitJavascriptResult* js, gpointer)
 {
   JSCValue* value = webkit_javascript_result_get_js_value(js);
@@ -1187,6 +1216,11 @@ void onScriptMessage(WebKitUserContentManager*, WebKitJavascriptResult* js, gpoi
   char* s = jsc_value_is_string(value) ? jsc_value_to_string(value) : jsc_value_to_json(value, 0);
   if (!s)
     return;
+  if (W::consumeUiCommand(s))
+  {
+    g_free(s);
+    return;
+  }
   // Mouse-friendly viz capture for studio (DAW hosts often eat Inspector Enter).
   static constexpr char kDumpPrefix[] = "DUMPVIZ\n";
   if (std::strncmp(s, kDumpPrefix, sizeof kDumpPrefix - 1) == 0)
@@ -1522,6 +1556,8 @@ bool createWebUi()
   gtk_widget_set_hexpand(GTK_WIDGET(g.webview), TRUE);
   gtk_widget_set_vexpand(GTK_WIDGET(g.webview), TRUE);
   g_signal_connect(g.webview, "realize", G_CALLBACK(paintBlackOnRealize), nullptr);
+  g_signal_connect(g.webview, "decide-policy", G_CALLBACK(onDecidePolicy), nullptr);
+  g_signal_connect(g.webview, "create", G_CALLBACK(onCreateWebView), nullptr);
   g_signal_connect(g.webview, "load-changed", G_CALLBACK(onLoadChanged), nullptr);
   g_signal_connect(g.webview, "web-process-terminated", G_CALLBACK(onWebProcessTerminated), nullptr);
   g_signal_connect(g.webview, "load-failed",

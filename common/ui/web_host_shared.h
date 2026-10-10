@@ -24,6 +24,15 @@ const char* envOrUnset(const char* name);
 void hostLog(const char* fmt, ...) G_GNUC_PRINTF(1, 2);
 void logEvalJsError(const char* message);
 
+/**
+ * Open http(s) in the desktop handler. Rejects other schemes and whitespace.
+ * Returns false when the URL is refused or the launch fails.
+ */
+bool openExternalHttpUrl(const char* url);
+
+/** True when `s` is `OPENURL\\n…` (consumed; does not forward to the plug-in). */
+bool consumeUiCommand(const char* s);
+
 /** Dup stderr → /tmp/calfnxt-ui.log (WebKit GBM warnings). Call before GTK init. */
 void startStderrCapture();
 bool stderrCaptureActive();
