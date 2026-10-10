@@ -90,6 +90,16 @@ const RELEASE_LABELS = [
   { pos: 2000, label: '2s' },
 ];
 
+/** Main Release is the 4000 speed scale, not milliseconds. Inv release keeps RELEASE_LABELS. */
+const MAIN_RELEASE_LABELS = [
+  { pos: 1, label: '1' },
+  { pos: 100, label: '100' },
+  { pos: 200, label: '200' },
+  { pos: 500, label: '500' },
+  { pos: 1000, label: '1000' },
+  { pos: 2000, label: '2000' },
+];
+
 const RANGE_DOTS = [-90, -60, -48, -36, -24, -12, 0];
 const RANGE_LABELS = [
   { pos: -90, label: '−90' },
@@ -552,7 +562,7 @@ export function ExpanderUI({ host }: ExpanderUIProps) {
               scale="log2"
               log_factor={4}
               dots={RELEASE_DOTS}
-              labels={RELEASE_LABELS}
+              labels={MAIN_RELEASE_LABELS}
               size="small"
               {...{ 'value.format': (v: number) => `${v.toFixed(0)}` }}
               {...edit(paramIds.release)}

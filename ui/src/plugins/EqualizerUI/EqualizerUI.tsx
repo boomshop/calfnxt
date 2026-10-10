@@ -94,8 +94,8 @@ const EQ_DYN_RELEASE_LABELS = [
   { pos: 100, label: '100' },
   { pos: 200, label: '200' },
   { pos: 500, label: '500' },
-  { pos: 1000, label: '1s' },
-  { pos: 2000, label: '2s' },
+  { pos: 1000, label: '1000' },
+  { pos: 2000, label: '2000' },
 ];
 
 const EQ_DYN_THRESH_DOTS = [-60, -48, -36, -24, -12, -6, 0];
