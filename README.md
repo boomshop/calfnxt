@@ -34,20 +34,6 @@ UI building blocks include GPL-licensed `@deutschesoft/aux-widgets` / AWML.
 
 ---
 
-## 2.0.0 — breaking rename (trademark)
-
-**This major bump exists for trademark reasons, not because the DSP changed.**
-
-The pitch-pedal plugin is now **Bender** (`calfNXTBender.vst3`, `#bender`). The
-previous plugin identity — bundle name, VST3 UID, and plugin id — is
-**discontinued**. We will not keep shipping a third-party trademark.
-
-Hosts will **not** map old sessions, presets, or automations onto Bender. That
-incompatibility is intentional. Replace the insert with Bender and remove the
-old `.vst3` from your plugin folder.
-
----
-
 ## Plugins
 
 Install paths are always `~/.vst3/<Bundle>` (or `$CALFNXT_VST3_DIR` /
@@ -117,6 +103,20 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 
 Site and per-plugin descriptors: [calfnxt.org](https://calfnxt.org/),
 `dsp/<id>/<id>.plugin.json`.
+
+---
+
+## 2.0.0 — breaking rename (trademark)
+
+**This major bump exists for trademark reasons, not because the DSP changed.**
+
+The pitch-pedal plugin is now **Bender** (`calfNXTBender.vst3`, `#bender`). The
+previous plugin identity — bundle name, VST3 UID, and plugin id — is
+**discontinued**. We will not keep shipping a third-party trademark.
+
+Hosts will **not** map old sessions, presets, or automations onto Bender. That
+incompatibility is intentional. Replace the insert with Bender and remove the
+old `.vst3` from your plugin folder.
 
 ---
 
@@ -319,7 +319,8 @@ Related (not calfNXT-owned — set on the **plugin host** so the helper inherits
 | Variable                          | Notes                                                                                                                                 |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `GDK_BACKEND=x11`                 | Force X11 for the helper on Wayland-only sessions.                                                                                    |
-| `WEBKIT_DISABLE_DMABUF_RENDERER`  | Prefer this for blank UI on proprietary NVIDIA / some WebKit builds. Keeps acceleration when the stack allows; see [Blank UI](#blank-or-black-editor-nvidia--dma-buf). |
+| `__NV_DISABLE_EXPLICIT_SYNC`      | NVIDIA proprietary: often fixes Wayland Error 71 / broken DMA-BUF **without** turning DMA-BUF off. Prefer before `WEBKIT_DISABLE_DMABUF_*`. See [Blank UI](#blank-or-black-editor-nvidia--dma-buf) / [WebKit #280210](https://bugs.webkit.org/show_bug.cgi?id=280210). |
+| `WEBKIT_DISABLE_DMABUF_RENDERER`  | Blank UI on proprietary NVIDIA / some WebKit builds when the NV explicit-sync flag is not enough. Can cost performance.             |
 | `WEBKIT_DMABUF_RENDERER_FORCE_SHM`| Narrower DMA-BUF workaround on some WebKitGTK 2.52+ builds (shared-memory transport, hardware DMA-BUF off). Try if `DISABLE_DMABUF` feels too soft. |
 | `WEBKIT_DISABLE_COMPOSITING_MODE` | Last-resort compositing disable; not set by calfNXT. Often worse than DMA-BUF-only.                                                   |
 | `DISPLAY`                         | Required for the default X11 `GtkPlug` embed. Floating GTK4 may still use X11/XWayland depending on the session.                      |
@@ -508,44 +509,50 @@ back to classic `calfnxt-web-host`.
 ## Blank or black editor (NVIDIA / DMA-BUF)
 
 Different from the GNOME/Wayland “black until resize” case below: here the
-page **finishes loading** and the embed is mapped, but the surface stays
-black/blank because WebKit’s **DMA-BUF / GBM** path fails.
+page **finishes loading** (or the helper dies at start) because WebKit’s
+**DMA-BUF / GBM / explicit-sync** path fails with proprietary **NVIDIA**.
 
-Typical log line in `/tmp/calfnxt-ui.log` (or helper stderr):
+Typical symptoms / log lines (`/tmp/calfnxt-ui.log` or helper stderr):
 
 ```text
 Failed to create GBM buffer of size …: Invalid argument
 ```
 
-Seen especially with **proprietary NVIDIA** drivers and some WebKitGTK
-releases (GTK 3 embed path). calfNXT issue:
-[boomshop/calfnxt#11](https://github.com/boomshop/calfnxt/issues/11). Upstream
-context includes [WebKit #259644](https://bugs.webkit.org/show_bug.cgi?id=259644)
-(blank screen on NVIDIA), [WebKit #262607](https://bugs.webkit.org/show_bug.cgi?id=262607)
-(DMA-BUF + NVIDIA), and related DMA-BUF / X11 notes such as
-[WebKit #280210](https://bugs.webkit.org/show_bug.cgi?id=280210).
+```text
+Error 71 (Protocol error) dispatching to Wayland display
+explicit sync is used, but no acquire point is set
+```
+
+calfNXT issue: [boomshop/calfnxt#11](https://github.com/boomshop/calfnxt/issues/11).
+Upstream: [WebKit #259644](https://bugs.webkit.org/show_bug.cgi?id=259644),
+[WebKit #262607](https://bugs.webkit.org/show_bug.cgi?id=262607),
+[WebKit #280210](https://bugs.webkit.org/show_bug.cgi?id=280210) (Error 71 /
+missing acquire point; X11 often shows the GBM line instead).
 
 ### Workarounds (try in order)
 
 Set these on the **plugin host** process (helper inherits them). Confirm in
-`/tmp/calfnxt-ui.log` that the flag arrived (`gfx dmabuf=…` / `no_gpu=…`).
+`/tmp/calfnxt-ui.log` that flags arrived (`gfx dmabuf=…` / `no_gpu=…`).
 
-1. **`WEBKIT_DISABLE_DMABUF_RENDERER=1`** — preferred first try. Disables the
-   broken DMA-BUF transport; keeps hardware acceleration when the stack still
-   allows it. Example: `WEBKIT_DISABLE_DMABUF_RENDERER=1 reaper`
-2. **`WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`** — on some WebKitGTK 2.52+ builds a
-   narrower knob (shared-memory transport, hardware DMA-BUF off). Try if (1)
-   is unavailable or still soft.
-3. **`CALFNXT_WEB_HOST=gtk4`** — floating GTK4 helper ([above](#floating-gtk4-helper)).
-   Avoids the GtkPlug embed path entirely; often paints when the embed does not.
-4. **`CALFNXT_WEB_NO_GPU=1`** — forces WebKit hardware acceleration **off**
-   (`NEVER`). Usually **fixes paint but feels laggy** (software path). Last
-   resort, not the default recommendation.
+1. **`__NV_DISABLE_EXPLICIT_SYNC=1`** — **try first on proprietary NVIDIA.**
+   Keeps the DMA-BUF renderer on and usually preserves performance. Reported
+   fix for Wayland Error 71 in [WebKit #280210](https://bugs.webkit.org/show_bug.cgi?id=280210);
+   several reporters prefer it over disabling DMA-BUF. Example:
+   `__NV_DISABLE_EXPLICIT_SYNC=1 reaper`
+2. **`WEBKIT_DISABLE_DMABUF_RENDERER=1`** — if (1) is not enough (common for
+   the X11/XWayland GBM `Invalid argument` case). Disables DMA-BUF; can feel
+   slower than (1).
+3. **`WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`** — on some WebKitGTK 2.52+ builds a
+   narrower knob (shared-memory transport, hardware DMA-BUF off).
+4. **`CALFNXT_WEB_HOST=gtk4`** — floating GTK4 helper ([above](#floating-gtk4-helper)).
+   Avoids the GtkPlug embed path; often paints when the embed does not.
+5. **`CALFNXT_WEB_NO_GPU=1`** — forces WebKit hardware acceleration **off**
+   (`NEVER`). Usually **fixes paint but feels laggy**. Last resort.
 
 Do **not** set `CALFNXT_WEB_NO_GPU` globally “just in case” — it costs UI
 smoothness on every host that already accelerates fine. The GNOME/Wayland
-present bug is a **different** failure mode; DMA-BUF off does not fix “only
-updates on resize.”
+present bug is a **different** failure mode; these DMA-BUF / NVIDIA flags do
+not fix “only updates on resize.”
 
 ---
 
