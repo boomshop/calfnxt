@@ -32,6 +32,12 @@ namespace W = calfNXT::Ui::WebHostShared;
 
 namespace {
 
+/**
+ * Wayland xdg_toplevel app id (compositor class). GTK 4's gtk_init() takes no
+ * argv, so without g_set_prgname() the compositor falls back to "GTK Application".
+ */
+constexpr const char* kWaylandAppId = "org.calfnxt.WebHost";
+
 struct HostState
 {
   int sock = -1;
@@ -559,6 +565,21 @@ void onScriptMessage(WebKitUserContentManager*, JSCValue* value, gpointer)
   g_free(s);
 }
 
+/** Page <title> is the plugin name (calfNXT Delay, …). Keep the brand until then. */
+void applyWindowTitleFromPage()
+{
+  if (!g.window)
+    return;
+  const char* title = g.webview ? webkit_web_view_get_title(g.webview) : nullptr;
+  if (!title || std::strncmp(title, "calfNXT", 7) != 0)
+    title = "calfNXT";
+  const char* current = gtk_window_get_title(GTK_WINDOW(g.window));
+  if (current && std::strcmp(current, title) == 0)
+    return;
+  gtk_window_set_title(GTK_WINDOW(g.window), title);
+  W::hostLog("[calfnxt-web-host-gtk4] title=%s\n", title);
+}
+
 void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
 {
   if (ev == WEBKIT_LOAD_STARTED)
@@ -574,6 +595,7 @@ void onLoadChanged(WebKitWebView*, WebKitLoadEvent ev, gpointer)
   else if (ev == WEBKIT_LOAD_FINISHED)
   {
     W::hostLog("[calfnxt-web-host-gtk4] load-finished → _ready\n");
+    applyWindowTitleFromPage();
     reportWindowSize("load-finished");
     sendLine("{\"t\":\"_ready\"}");
   }
@@ -710,6 +732,10 @@ gboolean onCloseRequest(GtkWindow*, gpointer)
 
 int main(int argc, char** argv)
 {
+  // Before gtk_init(): Wayland reads this as the xdg_toplevel app id.
+  g_set_prgname(kWaylandAppId);
+  g_set_application_name("calfNXT");
+
   W::CliArgs cli;
   const int cliRc = W::parseCli(argc, argv, cli, "calfnxt-web-host-gtk4");
   if (cliRc != 0)
@@ -732,8 +758,8 @@ int main(int argc, char** argv)
   // Prefer Wayland — do not call gdk_set_allowed_backends("x11").
   gtk_init();
 
-  W::hostLog("[calfnxt-web-host-gtk4] start parent=0x%lx root=%s entry=%s %dx%d\n",
-             cli.parentXid, g.webRoot, g.entryHtml, g.width, g.height);
+  W::hostLog("[calfnxt-web-host-gtk4] start parent=0x%lx root=%s entry=%s %dx%d app-id=%s\n",
+             cli.parentXid, g.webRoot, g.entryHtml, g.width, g.height, kWaylandAppId);
   W::hostLog("[calfnxt-web-host-gtk4] versions webkit=%u.%u.%u gtk=%u.%u.%u\n",
              webkit_get_major_version(), webkit_get_minor_version(), webkit_get_micro_version(),
              gtk_get_major_version(), gtk_get_minor_version(), gtk_get_micro_version());
@@ -824,6 +850,9 @@ int main(int argc, char** argv)
 
   g.window = gtk_window_new();
   gtk_window_set_title(GTK_WINDOW(g.window), "calfNXT");
+  g_signal_connect(g.webview, "notify::title",
+                   G_CALLBACK(+[](GObject*, GParamSpec*, gpointer) { applyWindowTitleFromPage(); }),
+                   nullptr);
   gtk_window_set_default_size(GTK_WINDOW(g.window), g.width, g.height);
   gtk_widget_set_size_request(g.window, g.width, g.height);
   gtk_window_set_child(GTK_WINDOW(g.window), GTK_WIDGET(g.webview));

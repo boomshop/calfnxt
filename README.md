@@ -496,6 +496,9 @@ back to classic `calfnxt-web-host`.
   respawns. No long-lived “parked” WebKit process for that path.
 - Often a practical escape hatch when the **embedded** WebKitGTK surface stays
   blank on proprietary NVIDIA / DMA-BUF stacks (see next section).
+- **Stable Wayland app id** `org.calfnxt.WebHost` (Hyprland `class`, Sway
+  `app_id`, KDE window class). The title follows the page title, for example
+  `calfNXT Delay`, so several open editors can be told apart.
 
 ### Trade-offs
 
