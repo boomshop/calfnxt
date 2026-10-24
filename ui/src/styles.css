@@ -125,6 +125,7 @@
   --theme-gradient: linear-gradient(
     to right,
     var(--color-accent) 0%,
+    #e45400 50%,
     var(--color-warn) 100%
   );
 }
@@ -143,6 +144,7 @@
   --theme-gradient: linear-gradient(
     to right,
     var(--color-accent) 0%,
+    #56b61f 50%,
     var(--color-warn) 100%
   );
 }
@@ -161,6 +163,7 @@
   --theme-gradient: linear-gradient(
     to right,
     var(--color-accent) 0%,
+    #008cff 50%,
     var(--color-warn) 100%
   );
 }
