@@ -17,7 +17,11 @@ import {
   persistedHistoryVisible$,
 } from '../../prefs/historySeriesVisible';
 import { themeMode$ } from '../../prefs/theme';
-import { themeColors$ } from '../../theme/themeColors';
+import {
+  themeColors$,
+  themeGradientStops,
+  type GradientStop,
+} from '../../theme/themeColors';
 import { Toggle } from '../Toggle';
 import {
   SPECTRUM_MAX_BINS,
@@ -514,10 +518,9 @@ function lerpByte(a: number, b: number, t: number): number {
 }
 
 /**
- * Same dB stops either theme. Night field is black, day field is white.
- * Night: black → accent → warn → white (brighter = louder).
- * Day: white → warn → accent → black (darker = louder), so luminance
- * stays monotonic and the peak is still the strongest mark.
+ * Same dB anchors either theme. Night field is black, day field is white.
+ * Theme stops map onto LO…HI (offset 0 → LO, 1 → HI). Day flips the ramp
+ * so louder still darkens: white → hot→cold → black.
  */
 const WF_FLOOR_DB = -66;
 const WF_LO_DB = -54;
@@ -526,15 +529,16 @@ const WF_PEAK_DB = -18;
 const WF_BLACK: [number, number, number] = [0, 0, 0];
 const WF_WHITE: [number, number, number] = [255, 255, 255];
 
+type WfRgb = [number, number, number];
+
 function waterfallPixel(
   db: number,
-  accent: [number, number, number],
-  warn: [number, number, number],
+  theme: GradientStop[],
   day: boolean,
 ): [number, number, number, number] {
   const mix = (
-    a: [number, number, number],
-    b: [number, number, number],
+    a: WfRgb,
+    b: WfRgb,
     t: number,
   ): [number, number, number, number] => {
     const u = Math.min(1, Math.max(0, t));
@@ -547,15 +551,29 @@ function waterfallPixel(
   };
   const floor = day ? WF_WHITE : WF_BLACK;
   const peak = day ? WF_BLACK : WF_WHITE;
-  const lo = day ? warn : accent;
-  const hi = day ? accent : warn;
+  const span = WF_HI_DB - WF_LO_DB;
+  const ramp: { db: number; rgb: WfRgb }[] = [
+    { db: WF_FLOOR_DB, rgb: floor },
+  ];
+  for (const s of theme) {
+    const t = day ? 1 - s.offset : s.offset;
+    ramp.push({
+      db: WF_LO_DB + t * span,
+      rgb: parseCssColor(s.color),
+    });
+  }
+  ramp.sort((a, b) => a.db - b.db);
+  ramp.push({ db: WF_PEAK_DB, rgb: peak });
+
   if (db <= WF_FLOOR_DB) return [floor[0], floor[1], floor[2], 0];
   if (db >= WF_PEAK_DB) return [peak[0], peak[1], peak[2], 255];
-  if (db < WF_LO_DB)
-    return mix(floor, lo, (db - WF_FLOOR_DB) / (WF_LO_DB - WF_FLOOR_DB));
-  if (db < WF_HI_DB)
-    return mix(lo, hi, (db - WF_LO_DB) / (WF_HI_DB - WF_LO_DB));
-  return mix(hi, peak, (db - WF_HI_DB) / (WF_PEAK_DB - WF_HI_DB));
+
+  let i = 0;
+  while (i < ramp.length - 1 && ramp[i + 1]!.db < db) i++;
+  const a = ramp[i]!;
+  const b = ramp[Math.min(i + 1, ramp.length - 1)]!;
+  const seg = b.db - a.db;
+  return mix(a.rgb, b.rgb, seg <= 1e-9 ? 0 : (db - a.db) / seg);
 }
 
 function parseCssColor(c: string): [number, number, number] {
@@ -729,9 +747,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
       // Clear bottom row (will fill with new spectrum).
       img.data.fill(0, (h - 1) * rowBytes);
 
-      const colors = themeColors$.value;
-      const accent = parseCssColor(colors.accent);
-      const warn = parseCssColor(colors.warn);
+      const theme = themeGradientStops(themeColors$.value);
       const day = themeModeRef.current === 'day';
       const n = payload.bins;
       const y0 = (h - 1) * rowBytes;
@@ -740,7 +756,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
         const bin = Math.min(n - 1, Math.floor((x / w) * n));
         const raw = payload.avg[bin] ?? SPECTRUM_DSP_FLOOR_DB;
         const db = tiltDb(raw, binToHz(bin, n), slope);
-        const [r, g, b, a] = waterfallPixel(db, accent, warn, day);
+        const [r, g, b, a] = waterfallPixel(db, theme, day);
         const i = y0 + x * 4;
         img.data[i] = r;
         img.data[i + 1] = g;

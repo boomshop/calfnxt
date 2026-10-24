@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { MultiMeter as AuxMultiMeter } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
@@ -80,6 +80,22 @@ export function MultiMeter(props: MultiMeterProps) {
   const rafRef = useRef(0);
   const unsubRef = useRef<(() => void) | null>(null);
 
+  const min = typeof props.min === 'number' ? props.min : MultiMeterOptions.min;
+  const max = typeof props.max === 'number' ? props.max : MultiMeterOptions.max;
+  const scale =
+    typeof props.scale === 'string' ? props.scale : MultiMeterOptions.scale;
+  const log_factor =
+    typeof props.log_factor === 'number'
+      ? props.log_factor
+      : MultiMeterOptions.log_factor;
+  const propGradient = props.gradient as Record<string, string> | undefined;
+  const gradient = useMemo(
+    () =>
+      propGradient ??
+      levelMeterGradientMap(colors, { min, max, scale, log_factor }),
+    [propGradient, colors, min, max, scale, log_factor],
+  );
+
   const schedulePin = useCallback((mm: AuxMultiMeterInstance) => {
     cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => pinScaleBase(mm));
@@ -117,20 +133,20 @@ export function MultiMeter(props: MultiMeterProps) {
 
   useEffect(() => () => detach(), [detach]);
 
-  // Push theme paints when accents / day-night change (inherit_options on bars).
+  // Push theme paints when accents / day-night / scale range change.
   useEffect(() => {
     const mm = mmRef.current;
     if (!mm || mm.isDestructed()) return;
     mm.set('foreground', colors.background);
-    mm.set('gradient', levelMeterGradientMap(colors));
-  }, [colors]);
+    mm.set('gradient', gradient);
+  }, [colors, gradient]);
 
   return (
     <MultiMeterWidget
       {...props}
       widgetRef={widgetRef}
       foreground={colors.background}
-      gradient={levelMeterGradientMap(colors)}
+      gradient={gradient}
     />
   );
 }

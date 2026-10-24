@@ -4,7 +4,11 @@ import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import type { DynamicValue } from '@deutschesoft/awml';
 import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
 import { bindAuxOptions } from '../../utils/aux_bindings';
-import { themeColors$, type ThemeColors } from '../../theme/themeColors';
+import {
+  themeColors$,
+  themeGradientStops,
+  type ThemeColors,
+} from '../../theme/themeColors';
 import { addGraphClasses } from '../../styles/graphStyles';
 import './GonioMeter.scss';
 
@@ -64,9 +68,29 @@ const GONIO_TRAIL_OPACITIES = [1, 0.66, 0.33] as const;
 let gonioGradSeq = 0;
 
 /**
- * One horizontal paint server on the chart SVG: S → M → S (warn → accent → warn).
- * Dots stay a single path; the renderer samples the gradient (no per-dot color).
- * Fill and stroke both use the same URL so a thin outline fattens the dots.
+ * Mirror theme stops into S → M → S: stop at t maps to
+ * `0.5·(1−t)` and `0.5+0.5·t` (sides = hot/100, centre = cold/0).
+ */
+function gonioMsStops(
+  c: ThemeColors,
+): { offset: number; color: string }[] {
+  const byOff = new Map<number, string>();
+  for (const s of themeGradientStops(c)) {
+    const left = Math.round(0.5 * (1 - s.offset) * 1e6) / 1e6;
+    const right = Math.round((0.5 + 0.5 * s.offset) * 1e6) / 1e6;
+    byOff.set(left, s.color);
+    byOff.set(right, s.color);
+  }
+  return [...byOff.entries()]
+    .map(([offset, color]) => ({ offset, color }))
+    .sort((a, b) => a.offset - b.offset);
+}
+
+/**
+ * One horizontal paint server on the chart SVG: S → M → S from
+ * `--theme-gradient` (mirrored). Dots stay a single path; the renderer
+ * samples the gradient (no per-dot color). Fill and stroke both use the same
+ * URL so a thin outline fattens the dots.
  */
 function installMsGradient(svg: SVGSVGElement): () => void {
   const ns = 'http://www.w3.org/2000/svg';
@@ -81,19 +105,22 @@ function installMsGradient(svg: SVGSVGElement): () => void {
   const grad = document.createElementNS(ns, 'linearGradient');
   grad.id = gradId;
   grad.setAttribute('gradientUnits', 'userSpaceOnUse');
-  const stops: SVGStopElement[] = [];
-  for (const offset of ['0%', '50%', '100%'] as const) {
-    const stop = document.createElementNS(ns, 'stop');
-    stop.setAttribute('offset', offset);
-    grad.appendChild(stop);
-    stops.push(stop);
-  }
   defs.appendChild(grad);
 
   const syncStops = (c: ThemeColors) => {
-    stops[0]!.setAttribute('stop-color', c.warn);
-    stops[1]!.setAttribute('stop-color', c.accent);
-    stops[2]!.setAttribute('stop-color', c.warn);
+    const want = gonioMsStops(c);
+    const existing = [...grad.querySelectorAll('stop')];
+    while (existing.length > want.length) existing.pop()?.remove();
+    for (let i = 0; i < want.length; i++) {
+      let stop = existing[i];
+      if (!stop) {
+        stop = document.createElementNS(ns, 'stop') as SVGStopElement;
+        grad.appendChild(stop);
+      }
+      const s = want[i]!;
+      stop.setAttribute('offset', `${s.offset * 100}%`);
+      stop.setAttribute('stop-color', s.color);
+    }
   };
   syncStops(themeColors$.value);
 

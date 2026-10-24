@@ -98,9 +98,8 @@
       }
 
       &.m1 > .title {
-        color: color-mix(in srgb, var(--color-accent) 50%, var(--color-warn));
-        border-bottom: 1px solid
-          color-mix(in srgb, var(--color-accent) 50%, var(--color-warn));
+        color: var(--palette-50);
+        border-bottom: 1px solid var(--palette-50);
       }
       &.m2 > .title {
         color: var(--color-warn);
