@@ -167,6 +167,25 @@ export const EQ_FREQ_MAX = 20000;
 export const EQ_GAIN_MIN = -36;
 export const EQ_GAIN_MAX = 36;
 export const EQ_Q_MIN = 0.1;
+
+/**
+ * Y-axis for EQ band miniatures. Full ±36 dB on ~30 px hides moderate gains
+ * and turns wide low-Q bells into flat tops with a fake right-edge peak.
+ * Zoom symmetrically around 0 dB by `|gain|` so the null line stays centered
+ * in every thumbnail. Pass filters use a fixed deeper floor (0 dB near top).
+ */
+export function miniBandYRange(
+  gain: number,
+  type: EqFilterType,
+): { min: number; max: number } {
+  if (type === 'lowpass' || type === 'highpass') {
+    return { min: -48, max: 12 };
+  }
+  const pad = 6;
+  const g = Math.abs(Number.isFinite(gain) ? gain : 0);
+  const half = Math.min(EQ_GAIN_MAX, Math.max(12, g + pad));
+  return { min: -half, max: half };
+}
 export const EQ_Q_MAX = 30;
 export const EQ_DYN_ATTACK_MIN = 0.1;
 export const EQ_DYN_ATTACK_MAX = 500;

@@ -32,6 +32,7 @@ import {
   bandSupportsDyn,
   eqChannelClass,
   isPassFilter,
+  miniBandYRange,
   type EqFilterType,
   type IEqualizerBand,
   type IEqualizerHost,
@@ -129,6 +130,7 @@ function BandRow(props: {
   const { band, index, selected, mono, onSelect } = props;
   const active = useDynamicValueReadonly(band.active$, false);
   const freq = useDynamicValueReadonly(band.frequency$, 0);
+  const gain = useDynamicValueReadonly(band.effectiveGain$, 0);
   const filterType = useDynamicValueReadonly<EqFilterType>(
     band.type$,
     'parametric',
@@ -137,6 +139,10 @@ function BandRow(props: {
   const listen = useDynamicValueReadonly(band.listen$, false);
   const channel = useDynamicValueReadonly(band.channel$, 0);
   const dynActive = bandSupportsDyn(filterType) && dyn;
+  const miniY = useMemo(
+    () => miniBandYRange(gain, filterType),
+    [gain, filterType],
+  );
   // Global Mono always runs the Left path — stripe shows Stereo, not L/R/M/S.
   const freqChannelClass =
     active && !mono
@@ -173,6 +179,7 @@ function BandRow(props: {
           bands={[band]}
           size="mini"
           interactive={false}
+          yRange={miniY}
           className={active ? undefined : 'eq-band-off'}
         />
       </button>
