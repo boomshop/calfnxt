@@ -26,6 +26,8 @@ import {
   type ThemeAccent,
   type ThemeMode,
 } from '../../prefs/theme';
+// Ensure --palette-* is injected in plugin bundles (entries skip main.tsx).
+import '../../theme/themeColors';
 import {
   setVizHz,
   syncVizHzToHost,

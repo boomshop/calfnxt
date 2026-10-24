@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useId, useRef } from 'react';
 import { themeColors$ } from '../theme/themeColors';
+import type { GradientStop } from '../theme/themeGradient';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
  * Primary level gradient on the chart SVG (`url(#…)`).
- * Default (reverse: false): top warn (hot) → bottom accent (cold).
+ * Default (reverse: false): top warn (hot) → bottom accent (cold),
+ * using all stops from `--theme-gradient`.
  */
 export const GRAPH_GRADIENT_VAR = '--graph-gradient';
 /**
@@ -45,7 +47,7 @@ export type UseChartGradientOptions = {
   paint?: ChartGradientPaint;
   /**
    * Optional stop opacities: `cut` = cold / accent end, `boost` = hot / warn
-   * end. Defaults to fully opaque (1, 1).
+   * end. Mid stops lerp between them. Defaults to fully opaque (1, 1).
    */
   opacities?: { cut: number; boost: number };
   /** Height for userSpaceOnUse y1/y2. Defaults to svg clientHeight. */
@@ -56,8 +58,8 @@ export type UseChartGradientOptions = {
    */
   reverse?: boolean;
   /**
-   * Stop offsets along top→bottom. `cut` = first stop (top), `boost` = second
-   * (bottom). Default is a normal full-height span (`0%`…`100%`).
+   * Span of the gradient along top→bottom. `cut` = top edge, `boost` = bottom.
+   * Theme stops are mapped into this range. Default `0%`…`100%`.
    */
   stopOffsets?: { cut: string; boost: string };
   /**
@@ -83,18 +85,10 @@ function clearPaint(el: SVGElement, paint: ChartGradientPaint): void {
 function ensureLinearGradient(
   defs: Element,
   id: string,
-  topOff: string,
-  botOff: string,
-): {
-  grad: SVGLinearGradientElement;
-  stopTop: SVGStopElement;
-  stopBot: SVGStopElement;
-} {
+): SVGLinearGradientElement {
   let grad = defs.querySelector(
     `:scope > #${CSS.escape(id)}`,
   ) as SVGLinearGradientElement | null;
-  let stopTop: SVGStopElement;
-  let stopBot: SVGStopElement;
   if (!grad) {
     grad = document.createElementNS(
       SVG_NS,
@@ -104,18 +98,62 @@ function ensureLinearGradient(
     grad.setAttribute('gradientUnits', 'userSpaceOnUse');
     grad.setAttribute('x1', '0');
     grad.setAttribute('x2', '0');
-    stopTop = document.createElementNS(SVG_NS, 'stop') as SVGStopElement;
-    stopTop.setAttribute('offset', topOff);
-    stopBot = document.createElementNS(SVG_NS, 'stop') as SVGStopElement;
-    stopBot.setAttribute('offset', botOff);
-    grad.appendChild(stopTop);
-    grad.appendChild(stopBot);
     defs.appendChild(grad);
-  } else {
-    stopTop = grad.querySelectorAll('stop')[0] as SVGStopElement;
-    stopBot = grad.querySelectorAll('stop')[1] as SVGStopElement;
   }
-  return { grad, stopTop, stopBot };
+  return grad;
+}
+
+/** Parse `12%` / `0.12` → 0…1. */
+function parseOffset(s: string, fallback: number): number {
+  const t = s.trim();
+  if (t.endsWith('%')) {
+    const n = Number(t.slice(0, -1));
+    return Number.isFinite(n) ? Math.max(0, Math.min(1, n / 100)) : fallback;
+  }
+  const n = Number(t);
+  return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback;
+}
+
+/**
+ * Theme ramp is accent(0)→warn(1). Chart hot is warn at top → accent at bottom
+ * (`flip`), inv keeps accent→warn top→bottom.
+ */
+function chartStopsFromTheme(
+  theme: GradientStop[],
+  flip: boolean,
+  top: number,
+  bot: number,
+): GradientStop[] {
+  const span = bot - top;
+  const mapped = theme.map((s) => {
+    const t = flip ? 1 - s.offset : s.offset;
+    return { offset: top + t * span, color: s.color };
+  });
+  mapped.sort((a, b) => a.offset - b.offset);
+  return mapped;
+}
+
+function syncGradientStops(
+  grad: SVGLinearGradientElement,
+  stops: GradientStop[],
+  opacityAt: (t: number) => number,
+): void {
+  const existing = [...grad.querySelectorAll('stop')];
+  while (existing.length > stops.length) {
+    existing.pop()?.remove();
+  }
+  for (let i = 0; i < stops.length; i++) {
+    let stop = existing[i];
+    if (!stop) {
+      stop = document.createElementNS(SVG_NS, 'stop') as SVGStopElement;
+      grad.appendChild(stop);
+    }
+    const s = stops[i]!;
+    // `t` along the authored theme direction (0=accent, 1=warn) for opacity.
+    stop.setAttribute('offset', `${s.offset * 100}%`);
+    stop.setAttribute('stop-color', s.color);
+    stop.setAttribute('stop-opacity', String(opacityAt(s.offset)));
+  }
 }
 
 /** Mix `#rrggbb` toward white by `t` (0 = keep, 1 = white). */
@@ -148,8 +186,8 @@ function resolvePaintVar(cssVar: string): string {
 }
 
 /**
- * Install vertical level gradients on an AUX chart SVG:
- *   `--graph-gradient` / `-inv`       vivid warn↔accent
+ * Install vertical level gradients on an AUX chart SVG from `--theme-gradient`:
+ *   `--graph-gradient` / `-inv`       vivid (warn↑/accent↓ by default)
  *   `--graph-grad-light` / `-inv`     same, stops mixed toward white
  * (`reverse: true` swaps which URL is bound to which var.)
  * Also mirrors `--chart-level-stroke` / `--chart-level-stroke-inv`.
@@ -189,10 +227,10 @@ export function useChartGradient(options: UseChartGradientOptions): () => void {
       svg.insertBefore(defs, svg.firstChild);
     }
 
-    const hot = ensureLinearGradient(defs, hotId, topOff, botOff);
-    const inv = ensureLinearGradient(defs, coldId, topOff, botOff);
-    const hotLight = ensureLinearGradient(defs, hotLightId, topOff, botOff);
-    const invLight = ensureLinearGradient(defs, coldLightId, topOff, botOff);
+    const hot = ensureLinearGradient(defs, hotId);
+    const inv = ensureLinearGradient(defs, coldId);
+    const hotLight = ensureLinearGradient(defs, hotLightId);
+    const invLight = ensureLinearGradient(defs, coldLightId);
 
     const hotUrl = `url(#${hotId})`;
     const invUrl = `url(#${coldId})`;
@@ -223,31 +261,53 @@ export function useChartGradient(options: UseChartGradientOptions): () => void {
     };
     bindVars();
 
-    const paintStop = (
-      stop: SVGStopElement,
-      offset: string,
-      color: string,
-      opacity: number,
-    ) => {
-      stop.setAttribute('offset', offset);
-      stop.setAttribute('stop-color', color);
-      stop.setAttribute('stop-opacity', String(opacity));
-    };
+    const top = parseOffset(topOff, 0);
+    const bot = parseOffset(botOff, 1);
 
     const syncStops = () => {
       const c = themeColors$.value;
-      const warnL = mixHexTowardWhite(c.warn, lightMix);
-      const accentL = mixHexTowardWhite(c.accent, lightMix);
+      const theme = c.gradientStops.length
+        ? c.gradientStops
+        : [
+            { offset: 0, color: c.accent },
+            { offset: 1, color: c.warn },
+          ];
 
-      paintStop(hot.stopTop, topOff, c.warn, boostOpacity);
-      paintStop(hot.stopBot, botOff, c.accent, cutOpacity);
-      paintStop(inv.stopTop, topOff, c.accent, cutOpacity);
-      paintStop(inv.stopBot, botOff, c.warn, boostOpacity);
+      // Hot: warn at top (flip). Inv: accent at top (theme order).
+      const hotStops = chartStopsFromTheme(theme, true, top, bot);
+      const invStops = chartStopsFromTheme(theme, false, top, bot);
+      const hotLightStops = hotStops.map((s) => ({
+        ...s,
+        color: mixHexTowardWhite(s.color, lightMix),
+      }));
+      const invLightStops = invStops.map((s) => ({
+        ...s,
+        color: mixHexTowardWhite(s.color, lightMix),
+      }));
 
-      paintStop(hotLight.stopTop, topOff, warnL, boostOpacity);
-      paintStop(hotLight.stopBot, botOff, accentL, cutOpacity);
-      paintStop(invLight.stopTop, topOff, accentL, cutOpacity);
-      paintStop(invLight.stopBot, botOff, warnL, boostOpacity);
+      // Opacity: boost at warn end, cut at accent end (along theme t).
+      // Hot chart offset maps theme t as (1 - visualT); recover theme t from
+      // the unflipped stop list when painting.
+      const opacityTheme = (themeT: number) =>
+        cutOpacity + (boostOpacity - cutOpacity) * themeT;
+
+      syncGradientStops(hot, hotStops, (chartOff) => {
+        // chartOff in [top,bot] with flip → themeT = 1 - visualT
+        const visualT = bot === top ? 0 : (chartOff - top) / (bot - top);
+        return opacityTheme(1 - visualT);
+      });
+      syncGradientStops(inv, invStops, (chartOff) => {
+        const visualT = bot === top ? 0 : (chartOff - top) / (bot - top);
+        return opacityTheme(visualT);
+      });
+      syncGradientStops(hotLight, hotLightStops, (chartOff) => {
+        const visualT = bot === top ? 0 : (chartOff - top) / (bot - top);
+        return opacityTheme(1 - visualT);
+      });
+      syncGradientStops(invLight, invLightStops, (chartOff) => {
+        const visualT = bot === top ? 0 : (chartOff - top) / (bot - top);
+        return opacityTheme(visualT);
+      });
     };
 
     const apply = () => {
@@ -261,7 +321,7 @@ export function useChartGradient(options: UseChartGradientOptions): () => void {
 
     const syncGeom = () => {
       const h = Math.max(1, getHeight?.(svg) || svg.clientHeight || 1);
-      for (const g of [hot.grad, inv.grad, hotLight.grad, invLight.grad]) {
+      for (const g of [hot, inv, hotLight, invLight]) {
         g.setAttribute('y1', '0');
         g.setAttribute('y2', String(h));
       }
@@ -301,10 +361,10 @@ export function useChartGradient(options: UseChartGradientOptions): () => void {
       ) {
         svg.style.removeProperty(cssVar);
       }
-      hot.grad.remove();
-      inv.grad.remove();
-      hotLight.grad.remove();
-      invLight.grad.remove();
+      hot.remove();
+      inv.remove();
+      hotLight.remove();
+      invLight.remove();
       if (defs && !defs.childElementCount) defs.remove();
     };
   }, [
