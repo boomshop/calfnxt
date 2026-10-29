@@ -26,6 +26,7 @@ import type {
   IBenderHost,
   IImpulseHost,
   ITamerHost,
+  IAlignerHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -1184,6 +1185,63 @@ export function applyTamerDemo(
   }
 }
 
+export function applyAlignerDemo(
+  host: IAlignerHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.anchor$, params.anchor);
+  setNum(host.masterVolume$, params.master_volume);
+  setNum(host.masterTrim$, params.master_trim);
+  setNum(host.analysisHp$, params.analysis_hp);
+  setNum(host.analysisLp$, params.analysis_lp);
+  setNum(host.analysisHpMode$, params.analysis_hp_mode);
+  setNum(host.analysisLpMode$, params.analysis_lp_mode);
+  if (params.wave_span != null) setNum(host.waveSpan$, params.wave_span);
+  setBool(host.filterHit$, params.filter_hit);
+  setBool(host.filterWaves$, params.filter_waves);
+  setBool(host.filterCorr$, params.filter_corr);
+
+  for (let i = 0; i < host.lanes.length; ++i) {
+    const n = String(i + 1).padStart(2, '0');
+    const lane = host.lanes[i]!;
+    setBool(lane.mute$, params[`b${n}_mute`]);
+    setBool(lane.solo$, params[`b${n}_solo`]);
+    setBool(lane.phase$, params[`b${n}_phase`]);
+    setBool(lane.join$, params[`b${n}_join`]);
+    setNum(lane.delay$, params[`b${n}_delay`]);
+    setNum(lane.gain$, params[`b${n}_gain`]);
+    setNum(lane.pan$, params[`b${n}_pan`]);
+  }
+
+  // Direct sets (like Impulse wave) — surviving even if pushViz listeners lag.
+  const ctrl = viz.ctrl ?? viz.envelope;
+  const applyCtrl = () => {
+    if (!ctrl || ctrl.length < 2 + host.lanes.length) return;
+    host.latencyMs$.set(ctrl[0] ?? 0);
+    host.maxLag$.set(ctrl[1] ?? 0);
+    for (let i = 0; i < host.lanes.length; ++i)
+      host.lanes[i]!.corr$.set(ctrl[2 + i] ?? 0);
+  };
+  if (viz.wave) host.wave$.set(viz.wave);
+  applyCtrl();
+
+  const applyMeters = () => {
+    applySharedViz(viz);
+    // kind "ctrl": [latencyMs, maxLaneMs, corr×8]
+    if (ctrl) pushViz('aligner', 'ctrl', ctrl);
+    if (viz.wave) {
+      host.wave$.set(viz.wave);
+      pushViz('aligner', 'wave', viz.wave);
+    }
+    applyCtrl();
+  };
+  applyMeters();
+  const hold = window.setInterval(applyMeters, 50);
+  return () => window.clearInterval(hold);
+}
+
 export type DemoApplier = (
   host: unknown,
   params: Record<string, unknown>,
@@ -1217,4 +1275,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   bender: applyBenderDemo as DemoApplier,
   impulse: applyImpulseDemo as DemoApplier,
   tamer: applyTamerDemo as DemoApplier,
+  aligner: applyAlignerDemo as DemoApplier,
 };

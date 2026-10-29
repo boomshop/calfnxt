@@ -93,6 +93,8 @@ private:
   void beginVizBatch();
   void endVizBatch();
   int queryBusChannelCount(Steinberg::Vst::BusDirection dir, int busIndex) const;
+  /** Sum of kMain audio input channels (excludes kAux sidechain / Reference). */
+  int queryMainInputChannelCount() const;
   int queryIoChannelCount() const;
 
   void requestHostSize();

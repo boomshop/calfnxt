@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useId, useRef } from 'react';
 import { themeColors$ } from '../theme/themeColors';
-import type { GradientStop } from '../theme/themeGradient';
+import {
+  sampleGradient,
+  type GradientStop,
+} from '../theme/themeGradient';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -31,6 +34,13 @@ export const CHART_LEVEL_STROKE_INV_VAR = '--chart-level-stroke-inv';
 export const GRAPH_GRAD_LIGHT_MIX = 0.6;
 
 export type ChartGradientPaint = 'stroke' | 'fill' | 'both';
+
+/**
+ * `level` — suite default: warn (top) → accent (bottom) from `--theme-gradient`.
+ * `center` — bipolar / waveform: warn at both ends, accent at mid, with
+ *            25%/75% supports from the theme mid-stop (palette, not grey lerp).
+ */
+export type ChartGradientProfile = 'level' | 'center';
 
 export type UseChartGradientOptions = {
   svg: SVGSVGElement | null | undefined;
@@ -66,6 +76,8 @@ export type UseChartGradientOptions = {
    * White mix for light gradients (0…1). Default {@link GRAPH_GRAD_LIGHT_MIX}.
    */
   lightMix?: number;
+  /** Stop layout. Default `level`. */
+  profile?: ChartGradientProfile;
 };
 
 function applyPaint(
@@ -131,6 +143,34 @@ function chartStopsFromTheme(
   });
   mapped.sort((a, b) => a.offset - b.offset);
   return mapped;
+}
+
+/**
+ * Bipolar / waveform profile from `--theme-gradient` (accent→…→warn).
+ * Primary: warn at ±ends, accent at mid; 25%/75% = theme mid-stop (vivid).
+ * `invert`: accent at ends, warn at mid.
+ */
+function chartStopsCenter(
+  theme: GradientStop[],
+  invert: boolean,
+  top: number,
+  bot: number,
+): GradientStop[] {
+  const span = bot - top;
+  const at = (t: number) => top + t * span;
+  const accent = sampleGradient(theme, 0);
+  const warn = sampleGradient(theme, 1);
+  // Authored mid stop (e.g. #9d00ff) — not a muddy accent↔warn lerp.
+  const mid = sampleGradient(theme, 0.5);
+  const end = invert ? accent : warn;
+  const center = invert ? warn : accent;
+  return [
+    { offset: at(0), color: end },
+    { offset: at(0.25), color: mid },
+    { offset: at(0.5), color: center },
+    { offset: at(0.75), color: mid },
+    { offset: at(1), color: end },
+  ];
 }
 
 function syncGradientStops(
@@ -205,6 +245,7 @@ export function useChartGradient(options: UseChartGradientOptions): () => void {
     reverse = false,
     stopOffsets,
     lightMix = GRAPH_GRAD_LIGHT_MIX,
+    profile = 'level',
   } = options;
   const idBase = `chart-level-grad-${useId().replace(/:/g, '')}`;
   const hotId = `${idBase}-hot`;
@@ -273,9 +314,16 @@ export function useChartGradient(options: UseChartGradientOptions): () => void {
             { offset: 1, color: c.warn },
           ];
 
-      // Hot: warn at top (flip). Inv: accent at top (theme order).
-      const hotStops = chartStopsFromTheme(theme, true, top, bot);
-      const invStops = chartStopsFromTheme(theme, false, top, bot);
+      // Hot level: warn↑→accent↓. Inv level: accent↑→warn↓.
+      // Hot center: warn at ±ends, accent mid (+ palette mid at 25%/75%).
+      const hotStops =
+        profile === 'center'
+          ? chartStopsCenter(theme, false, top, bot)
+          : chartStopsFromTheme(theme, true, top, bot);
+      const invStops =
+        profile === 'center'
+          ? chartStopsCenter(theme, true, top, bot)
+          : chartStopsFromTheme(theme, false, top, bot);
       const hotLightStops = hotStops.map((s) => ({
         ...s,
         color: mixHexTowardWhite(s.color, lightMix),
@@ -384,6 +432,7 @@ export function useChartGradient(options: UseChartGradientOptions): () => void {
     cutOpacity,
     boostOpacity,
     lightMix,
+    profile,
   ]);
 
   return useCallback(() => applyRef.current(), []);

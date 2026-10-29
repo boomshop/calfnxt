@@ -92,6 +92,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 | **Analyzer** | `calfNXTAnalyzer.vst3` | Spectrum, difference, waterfall, loudness, goniometer (passthrough) |
 | **Stereo**   | `calfNXTStereo.vst3`   | Width / M/S imaging                               |
 | **Split**    | `calfNXTSplit.vst3`    | Mono in → stereo out                              |
+| **Aligner**  | `calfNXTAligner.vst3`  | 8 mono → stereo mic align (delay / phase / pan)   |
 
 ### Pitch
 

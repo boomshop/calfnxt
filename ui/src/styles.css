@@ -47,6 +47,7 @@
   --font-size-small: 13px;
   --font-size: 16px;
   --font-size-large: 20px;
+  --font-size-huge: 24px;
 
   --aux-main-smallfontsize: var(--font-size-tiny);
   --aux-main-fontsize: var(--font-size);

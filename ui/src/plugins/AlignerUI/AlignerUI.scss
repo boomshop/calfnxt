@@ -1,0 +1,248 @@
+.AlignerUI {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'lanes analyze'
+    'lanes master';
+  align-content: stretch;
+  align-items: stretch;
+  justify-items: stretch;
+
+  > .lanes {
+    grid-area: lanes;
+  }
+
+  > .analyze {
+    grid-area: analyze;
+  }
+
+  > .master {
+    grid-area: master;
+  }
+
+  .lanes {
+    display: flex;
+    flex-direction: column;
+
+    > .lane {
+      flex: 1;
+      display: grid;
+      grid-template-columns: auto auto 1fr auto;
+      align-items: center;
+      gap: var(--gap);
+      margin-bottom: var(--gap);
+      border-radius: var(--radius, 4px);
+      padding: 0 var(--gap);
+      position: relative;
+      overflow: visible;
+
+      &.joined-down {
+        margin-bottom: 0;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        border-bottom-width: 0;
+      }
+
+      &.joined-up {
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+        border-top-width: 0;
+
+        .join {
+          top: -12px;
+        }
+      }
+
+      &.joined {
+        margin-bottom: 0;
+        border-radius: 0;
+        border-top-width: 0;
+        border-bottom-width: 0;
+
+        .join {
+          top: -12px;
+        }
+      }
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .join {
+        position: absolute;
+        z-index: 2;
+        top: -18px;
+        left: var(--gap);
+
+        > .Toggle {
+          width: 24px;
+          height: 24px;
+
+          > .aux-icon {
+            --aux-icon-size: 18px;
+          }
+        }
+      }
+
+      .anchor {
+        > .Button {
+          padding: 0 var(--gap);
+          height: auto;
+          gap: var(--gap);
+
+          > .aux-label {
+            font-size: var(--font-size-huge);
+          }
+        }
+      }
+
+      .Toggle {
+        width: 28px;
+        height: 28px;
+      }
+
+      .lane-toggles {
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: 4px;
+      }
+
+      .lane-mid {
+        align-self: stretch;
+        flex: 1;
+        position: relative;
+        padding: 2px 0;
+
+        > .wave {
+          min-width: 0;
+          width: 100%;
+          height: 100%;
+        }
+
+        > .meter {
+          position: absolute;
+          z-index: 1;
+          bottom: 1px;
+          right: 1px;
+          width: 100px;
+          pointer-events: none;
+
+          > .info-tip {
+            pointer-events: auto;
+          }
+
+          > .CorrelationMeter {
+            --aux-meter-size: 2px;
+            width: 100%;
+
+            > .aux-scale {
+              display: none;
+            }
+          }
+        }
+      }
+
+      .lane-right {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 2px;
+
+        .Knob {
+          margin: 0;
+          margin-top: -2px;
+
+          > .aux-knob {
+            > svg {
+              > .aux-circular {
+                > .aux-labels {
+                  > .aux-label {
+                    font-size: 7px;
+                  }
+                }
+              }
+            }
+          }
+
+          > .aux-label {
+            font-size: 11px;
+            bottom: -5px;
+          }
+        }
+
+        .Toggle {
+          margin-right: var(--gap);
+        }
+      }
+    }
+  }
+
+  .analyze {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap);
+
+    > .filter-targets {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: var(--gap);
+      margin-top: 8px;
+      align-self: stretch;
+
+      > .WithInfo {
+        flex: 1;
+      }
+
+      .Toggle {
+        padding: 2px;
+        height: auto;
+      }
+    }
+  }
+
+  .master {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--gap);
+
+    > .master-waves {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      width: 100%;
+      flex: 1;
+
+      > .master-wave-row {
+        display: flex;
+        align-items: stretch;
+        gap: var(--gap);
+        flex: 1;
+        min-height: 44px;
+
+        > .master-wave-label {
+          width: 1em;
+          align-self: center;
+          opacity: 0.7;
+          font-size: var(--font-size-small);
+        }
+
+        > .master-wave {
+          flex: 1;
+          min-width: 0;
+          min-height: 64px;
+        }
+      }
+    }
+
+    > .master-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: calc(var(--gap) * 2);
+      width: 100%;
+    }
+  }
+}

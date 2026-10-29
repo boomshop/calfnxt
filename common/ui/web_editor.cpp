@@ -6,6 +6,7 @@
 #include "../dsp/spectrum_bins.h"
 
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
+#include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/vstspeaker.h"
 
 #include <algorithm>
@@ -1413,7 +1414,8 @@ void WebEditor::flushViz()
           v = 0.f;
         envBuf[i] = v;
       }
-      flushVizArray(vizSource_->vizEnvelopeId(), "envelope", envBuf, nEnv);
+      flushVizArray(vizSource_->vizEnvelopeId(), vizSource_->vizEnvelopeKind(), envBuf,
+                    nEnv);
     }
 
     if (const char* pitchId = vizSource_->vizPitchId())
@@ -1821,8 +1823,9 @@ void WebEditor::flushViz()
 
   if (const char* irId = vizSource_->vizIrWaveId())
   {
-    float wave[2048];
-    const int n = vizSource_->takeIrWaveform(wave, 2048);
+    // Aligner: 3 + 8×1024; Impulse: 3 + ≤1024.
+    float wave[16384];
+    const int n = vizSource_->takeIrWaveform(wave, 16384);
     if (n >= 3)
       flushVizArray(irId, "wave", wave, n);
   }
@@ -1923,6 +1926,34 @@ int WebEditor::queryBusChannelCount(BusDirection dir, int busIndex) const
   return ch > kMax ? kMax : ch;
 }
 
+int WebEditor::queryMainInputChannelCount() const
+{
+  constexpr int kDefault = 2;
+  constexpr int kMax = 8;
+  if (!controller_)
+    return kDefault;
+
+  IComponent* comp = nullptr;
+  if (controller_->queryInterface(IComponent::iid, (void**)&comp) != kResultOk || !comp)
+    return queryBusChannelCount(kInput, 0);
+
+  const int32 nBuses = comp->getBusCount(kAudio, kInput);
+  int sum = 0;
+  for (int32 i = 0; i < nBuses; ++i)
+  {
+    BusInfo info {};
+    if (comp->getBusInfo(kAudio, kInput, i, info) != kResultOk)
+      continue;
+    if (info.busType != kMain)
+      continue;
+    sum += static_cast<int>(info.channelCount);
+  }
+  comp->release();
+  if (sum < 1)
+    return queryBusChannelCount(kInput, 0);
+  return sum > kMax ? kMax : sum;
+}
+
 int WebEditor::queryIoChannelCount() const
 {
   return queryBusChannelCount(kOutput, 0);
@@ -1932,7 +1963,7 @@ void WebEditor::pushIoChannels()
 {
   if (sock_ < 0)
     return;
-  const int inCh = queryBusChannelCount(kInput, 0);
+  const int inCh = queryMainInputChannelCount();
   const int outCh = queryBusChannelCount(kOutput, 0);
   char js[160];
   std::snprintf(js, sizeof js,

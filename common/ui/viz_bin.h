@@ -50,7 +50,9 @@ inline constexpr std::size_t kHeaderSize = 20;
 inline constexpr std::size_t kBatchHeaderSize = 12;
 inline constexpr std::size_t kMaxIdLen = 64;
 inline constexpr std::size_t kMaxKindLen = 32;
-inline constexpr std::size_t kMaxSamples = 6 * (512 * 3) + 1; // mbcomp envelope worst case
+  // Aligner hit-window: hdr(5) + (8 lanes + mixL/R + refL/R) × 1024 ≈ 12k.
+  // Keep in sync with WebEditor::flushViz take buffer (16384).
+  inline constexpr std::size_t kMaxSamples = 16384;
 inline constexpr std::uint32_t kMaxBatchFrames = 64;
 
 enum class Fmt : std::uint8_t

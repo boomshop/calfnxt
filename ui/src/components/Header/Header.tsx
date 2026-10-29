@@ -111,9 +111,9 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
           count$={io.inputChannelCount$}
           labels={inLabels}
           layout="top"
-          show_clip={[true, true]}
-          auto_clip={[5000, 5000]}
-          clipping={[0.000001, 0.000001]}
+          show_clip={true}
+          auto_clip={5000}
+          clipping={0.000001}
         />
       </div>
 

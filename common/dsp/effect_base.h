@@ -47,6 +47,13 @@ protected:
                                 const Steinberg::Vst::TChar* sidechainName = nullptr);
   void addMonoInStereoOut(const Steinberg::Vst::TChar* inName = nullptr,
                           const Steinberg::Vst::TChar* outName = nullptr);
+  /** N mono main inputs + stereo output (e.g. Aligner 8→2). */
+  void addNMonoInStereoOut(Steinberg::int32 nIns,
+                           const Steinberg::Vst::TChar* outName = nullptr);
+  /** Like {@link addNMonoInStereoOut} plus a stereo kAux reference / sidechain. */
+  void addNMonoInStereoOutWithRef(Steinberg::int32 nIns,
+                                  const Steinberg::Vst::TChar* outName = nullptr,
+                                  const Steinberg::Vst::TChar* refName = nullptr);
   /** Event input bus for note hold / MIDI overlay plugins (16 channels). */
   void addMidiInput(const Steinberg::Vst::TChar* name = nullptr);
 
@@ -85,6 +92,8 @@ protected:
 
   Steinberg::ViewRect editorSize_;
   bool sidechainInput_ = false;
+  bool multiMonoInput_ = false;
+  Steinberg::int32 multiMonoCount_ = 0;
 
 private:
   /** Plains captured at the end of setState; re-applied while suppress > 0. */

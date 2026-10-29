@@ -29,13 +29,31 @@ tresult PLUGIN_API EffectBase::canProcessSampleSize(int32 symbolicSampleSize)
 tresult PLUGIN_API EffectBase::setBusArrangements(SpeakerArrangement* inputs, int32 numIns,
                                                   SpeakerArrangement* outputs, int32 numOuts)
 {
-  if (sidechainInput_ && numIns == 2 && numOuts == 1 && inputs && outputs)
+  if (sidechainInput_ && !multiMonoInput_ && numIns == 2 && numOuts == 1 && inputs && outputs)
   {
     if (SpeakerArr::getChannelCount(inputs[0]) == 2 &&
         SpeakerArr::getChannelCount(inputs[1]) == 2 &&
         SpeakerArr::getChannelCount(outputs[0]) == 2)
       return SingleComponentEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
     return kResultFalse;
+  }
+  // N mono mains (± stereo aux ref) → stereo out (Aligner).
+  if (multiMonoInput_ && numOuts == 1 && inputs && outputs)
+  {
+    if (SpeakerArr::getChannelCount(outputs[0]) != 2)
+      return kResultFalse;
+    const bool withRef = sidechainInput_ && numIns == multiMonoCount_ + 1;
+    const bool mainsOnly = numIns == multiMonoCount_;
+    if (!withRef && !mainsOnly)
+      return kResultFalse;
+    for (int32 i = 0; i < multiMonoCount_; ++i)
+    {
+      if (SpeakerArr::getChannelCount(inputs[i]) != 1)
+        return kResultFalse;
+    }
+    if (withRef && SpeakerArr::getChannelCount(inputs[multiMonoCount_]) != 2)
+      return kResultFalse;
+    return SingleComponentEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
   }
   if (numIns == 1 && numOuts == 1 && inputs && outputs)
   {
@@ -86,6 +104,30 @@ void EffectBase::addMonoInStereoOut(const TChar* inName, const TChar* outName)
 {
   addAudioInput(inName ? inName : STR16("Mono In"), SpeakerArr::kMono);
   addAudioOutput(outName ? outName : STR16("Stereo Out"), SpeakerArr::kStereo);
+}
+
+void EffectBase::addNMonoInStereoOut(int32 nIns, const TChar* outName)
+{
+  static const TChar* const kNames[] = {
+    STR16("In 1"), STR16("In 2"), STR16("In 3"), STR16("In 4"),
+    STR16("In 5"), STR16("In 6"), STR16("In 7"), STR16("In 8"),
+  };
+  constexpr int32 kNamed = static_cast<int32>(sizeof(kNames) / sizeof(kNames[0]));
+  multiMonoInput_ = true;
+  multiMonoCount_ = nIns > 0 ? nIns : 0;
+  for (int32 i = 0; i < multiMonoCount_; ++i)
+  {
+    const TChar* name = (i < kNamed) ? kNames[i] : STR16("In");
+    addAudioInput(name, SpeakerArr::kMono);
+  }
+  addAudioOutput(outName ? outName : STR16("Stereo Out"), SpeakerArr::kStereo);
+}
+
+void EffectBase::addNMonoInStereoOutWithRef(int32 nIns, const TChar* outName, const TChar* refName)
+{
+  addNMonoInStereoOut(nIns, outName);
+  addAudioInput(refName ? refName : STR16("Reference"), SpeakerArr::kStereo, kAux, 0);
+  sidechainInput_ = true;
 }
 
 void EffectBase::addMidiInput(const TChar* name)

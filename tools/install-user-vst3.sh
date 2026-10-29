@@ -50,6 +50,7 @@ declare -A PLUGIN_TARGET=(
   [bender]=calfnxt-bender
   [impulse]=calfnxt-impulse
   [tamer]=calfnxt-tamer
+  [aligner]=calfnxt-aligner
 )
 declare -A PLUGIN_VST3=(
   [equalizer]=calfNXTEqualizer
@@ -78,6 +79,7 @@ declare -A PLUGIN_VST3=(
   [bender]=calfNXTBender
   [impulse]=calfNXTImpulse
   [tamer]=calfNXTTamer
+  [aligner]=calfNXTAligner
 )
 
 usage() {

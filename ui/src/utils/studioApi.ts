@@ -31,7 +31,8 @@ export type PluginId =
   | 'octaver'
   | 'bender'
   | 'impulse'
-  | 'tamer';
+  | 'tamer'
+  | 'aligner';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -60,6 +61,7 @@ const PLUGIN_IDS: PluginId[] = [
   'bender',
   'impulse',
   'tamer',
+  'aligner',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -228,6 +230,12 @@ export {
   createBoundTamerHost,
   type ITamerHost,
 } from '../host/tamerHost';
+
+export { AlignerUI } from '../plugins/AlignerUI/AlignerUI';
+export {
+  createBoundAlignerHost,
+  type IAlignerHost,
+} from '../host/alignerHost';
 
 export { createHeaderIo, type IHeaderIo } from '../host/headerMeters';
 

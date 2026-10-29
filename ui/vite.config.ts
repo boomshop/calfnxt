@@ -44,6 +44,7 @@ const knownPlugins = [
   "bender",
   "impulse",
   "tamer",
+  "aligner",
 ] as const;
 
 export default defineConfig(({ command }) => {

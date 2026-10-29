@@ -25,6 +25,7 @@ import { pluginMeta as octaverMeta } from "../../generated/octaverModel";
 import { pluginMeta as benderMeta } from "../../generated/benderModel";
 import { pluginMeta as impulseMeta } from "../../generated/impulseModel";
 import { pluginMeta as tamerMeta } from "../../generated/tamerModel";
+import { pluginMeta as alignerMeta } from "../../generated/alignerModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
 export const editorSizes: Record<PluginId, { width: number; height: number }> = {
@@ -54,4 +55,5 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   bender: benderMeta.editor,
   impulse: impulseMeta.editor,
   tamer: tamerMeta.editor,
+  aligner: alignerMeta.editor,
 };

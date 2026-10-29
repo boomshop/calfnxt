@@ -351,6 +351,11 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         viz["lfoActivity"] = d["lfo:unit"]
     if "ringmod:ctrl" in d:
         viz["ctrl"] = d["ringmod:ctrl"]
+    if "aligner:ctrl" in d and "ctrl" not in viz:
+        # [latencyMs, maxLaneMs, corr×8]
+        viz["ctrl"] = d["aligner:ctrl"]
+    if "aligner:wave" in d and "wave" not in viz:
+        viz["wave"] = d["aligner:wave"]
 
     for gr_key in ("comp:gr", "deess:gr", "exp:gr", "limiter:gr"):
         if gr_key in d:
@@ -402,6 +407,7 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         "tempo",
         "shape",
         "hz",
+        "wave",
     ):
         if k in d and k not in viz:
             viz[k] = d[k]
@@ -420,14 +426,21 @@ def to_viz(d: dict, plugin: str = "") -> dict:
         viz["envelope"] = expand_mbcomp_envelope_to_3ch(env)
 
     # Near-silence meter snapshots look empty in studio shots — keep readable demo levels.
+    # Only replace true silence (−80); quieter-but-live multi-bus captures (Aligner 8-in)
+    # must keep their channel count.
     for key, fallback in (("levelsIn", [-12.0, -12.5]), ("levelsOut", [-13.0, -13.4])):
         levels = viz.get(key)
-        if isinstance(levels, list) and levels and all(
-            isinstance(x, (int, float)) and float(x) < -24.0 for x in levels
-        ):
-            viz[key] = list(fallback)
-        elif isinstance(levels, list) and len(levels) >= 2:
-            # Live captures often mute one side (−96); mirror the live channel.
+        if not isinstance(levels, list) or not levels:
+            continue
+        if all(isinstance(x, (int, float)) and float(x) < -80.0 for x in levels):
+            if len(levels) == len(fallback):
+                viz[key] = list(fallback)
+            elif len(levels) > len(fallback):
+                viz[key] = [-12.0 - 0.35 * i for i in range(len(levels))]
+            else:
+                viz[key] = list(fallback)
+        elif len(levels) == 2:
+            # Live stereo captures often mute one side (−96); mirror the live channel.
             a, b = float(levels[0]), float(levels[1])
             if b < -60.0 and a > -60.0:
                 viz[key] = [a, a - 0.4]
