@@ -29,7 +29,23 @@ tresult PLUGIN_API EffectBase::canProcessSampleSize(int32 symbolicSampleSize)
 tresult PLUGIN_API EffectBase::setBusArrangements(SpeakerArrangement* inputs, int32 numIns,
                                                   SpeakerArrangement* outputs, int32 numOuts)
 {
-  if (sidechainInput_ && !multiMonoInput_ && numIns == 2 && numOuts == 1 && inputs && outputs)
+  // One N-channel main (± stereo aux) → stereo out (Aligner / Ardour-friendly).
+  if (multiChannelInput_ && numOuts == 1 && inputs && outputs)
+  {
+    if (SpeakerArr::getChannelCount(outputs[0]) != 2)
+      return kResultFalse;
+    const bool withRef = sidechainInput_ && numIns == 2;
+    const bool mainsOnly = numIns == 1;
+    if (!withRef && !mainsOnly)
+      return kResultFalse;
+    if (SpeakerArr::getChannelCount(inputs[0]) != multiChannelCount_)
+      return kResultFalse;
+    if (withRef && SpeakerArr::getChannelCount(inputs[1]) != 2)
+      return kResultFalse;
+    return SingleComponentEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
+  }
+  if (sidechainInput_ && !multiMonoInput_ && !multiChannelInput_ && numIns == 2 && numOuts == 1
+      && inputs && outputs)
   {
     if (SpeakerArr::getChannelCount(inputs[0]) == 2 &&
         SpeakerArr::getChannelCount(inputs[1]) == 2 &&
@@ -37,7 +53,7 @@ tresult PLUGIN_API EffectBase::setBusArrangements(SpeakerArrangement* inputs, in
       return SingleComponentEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
     return kResultFalse;
   }
-  // N mono mains (± stereo aux ref) → stereo out (Aligner).
+  // N separate mono mains (± stereo aux ref) → stereo out.
   if (multiMonoInput_ && numOuts == 1 && inputs && outputs)
   {
     if (SpeakerArr::getChannelCount(outputs[0]) != 2)
@@ -123,9 +139,18 @@ void EffectBase::addNMonoInStereoOut(int32 nIns, const TChar* outName)
   addAudioOutput(outName ? outName : STR16("Stereo Out"), SpeakerArr::kStereo);
 }
 
-void EffectBase::addNMonoInStereoOutWithRef(int32 nIns, const TChar* outName, const TChar* refName)
+void EffectBase::addMultiChannelInStereoOutWithRef(int32 nChannels, const TChar* outName,
+                                                   const TChar* refName)
 {
-  addNMonoInStereoOut(nIns, outName);
+  multiChannelInput_ = true;
+  multiChannelCount_ = nChannels > 0 ? nChannels : 0;
+  // Discrete N-channel main (first N speaker flags). One bus so hosts that only
+  // support a single VST3 main + one kAux (Ardour) map the Reference correctly.
+  SpeakerArrangement arr = 0;
+  for (int32 i = 0; i < multiChannelCount_; ++i)
+    arr |= static_cast<SpeakerArrangement>(1) << i;
+  addAudioInput(STR16("Inputs"), arr);
+  addAudioOutput(outName ? outName : STR16("Stereo Out"), SpeakerArr::kStereo);
   addAudioInput(refName ? refName : STR16("Reference"), SpeakerArr::kStereo, kAux, 0);
   sidechainInput_ = true;
 }

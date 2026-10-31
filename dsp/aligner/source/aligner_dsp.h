@@ -17,8 +17,8 @@ class AlignerPlugin : public Plugin::EffectBase, public Ui::IVizSource
 {
 public:
   static constexpr int kLanes = 8;
-  /** Stereo aux Reference bus index (after the 8 mono mains). */
-  static constexpr int kRefBus = kLanes;
+  /** Stereo aux Reference bus index (after the single N-channel main). */
+  static constexpr int kRefBus = 1;
   static constexpr float kMaxLaneMs = 50.f;
   static constexpr float kMaxMasterMs = 50.f;
 
@@ -135,6 +135,7 @@ private:
   float waveEnv_ = 0.f;
   float wavePrevA_ = 0.f;
   float wavePrev2A_ = 0.f;
+  bool bypassPrev_ = false;
 
   std::atomic<float> vizCorr_[kLanes] {};
   std::atomic<float> vizMaxLag_ {0.f};

@@ -38,7 +38,7 @@ tresult PLUGIN_API AlignerPlugin::initialize(FUnknown* context)
   tresult r = EffectBase::initialize(context);
   if (r != kResultOk)
     return r;
-  addNMonoInStereoOutWithRef(kLanes, STR16("Stereo Out"), STR16("Reference"));
+  addMultiChannelInStereoOutWithRef(kLanes, STR16("Stereo Out"), STR16("Reference"));
   registerParameters(parameters);
   readParamPlains(params_, kParamCount);
   return kResultOk;
@@ -229,7 +229,10 @@ tresult PLUGIN_API AlignerPlugin::process(ProcessData& data)
   const bool bypass = params_[kParamBypass] >= 0.5f;
   const float inGain = bypass ? 1.f : Dsp::dbToLin(params_[kParamInGain]);
   const float outGain = bypass ? 1.f : Dsp::dbToLin(params_[kParamOutGain]);
-  const float trimMs = std::clamp(params_[kParamMasterTrim], -kMaxMasterMs, kMaxMasterMs);
+  // Master Trim is the only intentional stem delay; on bypass it is skipped in
+  // audio (PDC hold still uses reportLat below) and in the wave pack.
+  const float trimMs =
+    bypass ? 0.f : std::clamp(params_[kParamMasterTrim], -kMaxMasterMs, kMaxMasterMs);
   const float hp = params_[kParamAnalysisHp];
   const float lp = params_[kParamAnalysisLp];
   const int hpStages = Dsp::filterModeToStages(params_[kParamAnalysisHpMode]);
@@ -265,23 +268,48 @@ tresult PLUGIN_API AlignerPlugin::process(ProcessData& data)
   for (int i = 0; i < kLanes; ++i)
     anySolo = anySolo || lanes_[i].solo;
 
-  float maxLaneMs = effectiveLaneDelayMs(0);
-  for (int i = 1; i < kLanes; ++i)
-    maxLaneMs = std::max(maxLaneMs, effectiveLaneDelayMs(i));
+  float maxLaneMs = bypass ? 0.f : effectiveLaneDelayMs(0);
+  if (!bypass)
+  {
+    for (int i = 1; i < kLanes; ++i)
+      maxLaneMs = std::max(maxLaneMs, effectiveLaneDelayMs(i));
+  }
   vizMaxLag_.store(maxLaneMs, std::memory_order_relaxed);
 
   float lanePadMs = 0.f, masterMs = 0.f, masterDelayMs = 0.f, reportMs = 0.f;
-  makeDelayPlan(trimMs, lanePadMs, masterMs, masterDelayMs, reportMs);
-  vizLatencyMs_.store(reportMs, std::memory_order_relaxed);
+  if (bypass)
+  {
+    // Hold the last reported latency so the host PDC does not jump; do not
+    // apply Master Trim or lane pads as audible delay while bypassed.
+    reportMs = vizLatencyMs_.load(std::memory_order_relaxed);
+  }
+  else
+  {
+    makeDelayPlan(trimMs, lanePadMs, masterMs, masterDelayMs, reportMs);
+    vizLatencyMs_.store(reportMs, std::memory_order_relaxed);
+  }
 
-  const int lanePadSamp = msToDelaySamples(lanePadMs);
-  const int outDelayClamped = msToDelaySamples(masterDelayMs);
+  const int lanePadSamp = bypass ? 0 : msToDelaySamples(lanePadMs);
+  const int outDelayClamped = bypass ? 0 : msToDelaySamples(masterDelayMs);
   const uint32 reportLat = static_cast<uint32>(msToDelaySamples(reportMs));
   updateLatency(reportLat, /*notifyHost=*/true);
+
+  // Bypass edge: re-snapshot the last hit window so packs match undelayed taps.
+  if (bypass != bypassPrev_ && waveHave_)
+  {
+    const int anc =
+      std::clamp(static_cast<int>(std::lround(params_[kParamAnchor])), 0, kLanes - 1);
+    captureHitWave(anc);
+  }
+  bypassPrev_ = bypass;
 
   const float corrCoeff =
     1.f - std::exp(-1.f / std::max(1.f, 0.05f * static_cast<float>(sampleRate_)));
 
+  // Bus 0 = N-channel main (lanes), bus 1 = stereo Reference aux.
+  const bool mainActive = data.numInputs > 0 && isAudioInputActive(0);
+  const int mainCh =
+    (mainActive && data.inputs) ? static_cast<int>(data.inputs[0].numChannels) : 0;
   const bool refActive = data.numInputs > kRefBus && isAudioInputActive(kRefBus);
 
   auto processBlock = [&](auto** outBuf, auto getIn, auto getRef) {
@@ -291,7 +319,7 @@ tresult PLUGIN_API AlignerPlugin::process(ProcessData& data)
       for (int i = 0; i < kLanes; ++i)
       {
         float x = 0.f;
-        if (i < data.numInputs && data.inputs && isAudioInputActive(i))
+        if (i < mainCh)
           x = getIn(i, s) * inGain;
         raw[i] = x;
         peakIn_.accumulate(i, x);
@@ -309,7 +337,7 @@ tresult PLUGIN_API AlignerPlugin::process(ProcessData& data)
       int dSamp[kLanes] {};
       for (int i = 0; i < kLanes; ++i)
       {
-        active[i] = isAudioInputActive(i);
+        active[i] = i < mainCh;
         filtered[i] = analysis_[i].processMono(raw[i]);
         analysisDelay_[i].write(filtered[i]);
         laneDelay_[i].write(raw[i]);
@@ -339,7 +367,8 @@ tresult PLUGIN_API AlignerPlugin::process(ProcessData& data)
         float r = (dSamp[i] <= 0 || bypass)
                     ? raw[i]
                     : laneDelay_[i].read(std::max(1, dSamp[i]));
-        if (lanes_[i].phase)
+        // Phase is part of alignment (with Delay), not the mix — skip on Bypass.
+        if (!bypass && lanes_[i].phase)
         {
           f = -f;
           r = -r;
@@ -375,13 +404,9 @@ tresult PLUGIN_API AlignerPlugin::process(ProcessData& data)
 
       for (int i = 0; i < kLanes; ++i)
       {
-        float y = alignedRaw[i] * lanes_[i].gainLin;
-        if (bypass)
-        {
-          y = raw[i] * lanes_[i].gainLin;
-          if (lanes_[i].phase)
-            y = -y;
-        }
+        // Bypass: undelayed, unflipped raw — Gain/Pan/Mute/Solo still apply.
+        float y =
+          bypass ? raw[i] * lanes_[i].gainLin : alignedRaw[i] * lanes_[i].gainLin;
 
         const bool audible = !lanes_[i].mute && (!anySolo || lanes_[i].solo);
         const float gL = panL(lanes_[i].pan);
@@ -414,8 +439,11 @@ tresult PLUGIN_API AlignerPlugin::process(ProcessData& data)
       useR *= masterVol;
 
       float oL = 0.f, oR = 0.f;
+      // Active: only Master Trim (positive) through the delay line; negative
+      // trim + lane pad are host PDC (reportLat). Bypass: delay by reportLat
+      // only so dry stays aligned with the host's compensation.
       const int delayForOut =
-        bypass ? outDelayClamped + static_cast<int>(reportLat) : outDelayClamped;
+        bypass ? static_cast<int>(reportLat) : outDelayClamped;
       masterDelay_.process(useL, useR, delayForOut, oL, oR);
       oL *= outGain;
       oR *= outGain;
@@ -431,10 +459,12 @@ tresult PLUGIN_API AlignerPlugin::process(ProcessData& data)
     auto** out = data.outputs[0].channelBuffers32;
     processBlock(
       out,
-      [&](int bus, int32 s) -> float {
-        if (!data.inputs[bus].channelBuffers32 || data.inputs[bus].numChannels < 1)
+      [&](int ch, int32 s) -> float {
+        if (!data.inputs || !data.inputs[0].channelBuffers32)
           return 0.f;
-        return data.inputs[bus].channelBuffers32[0][s];
+        if (ch < 0 || ch >= data.inputs[0].numChannels || !data.inputs[0].channelBuffers32[ch])
+          return 0.f;
+        return data.inputs[0].channelBuffers32[ch][s];
       },
       [&](int ch, int32 s) -> float {
         if (!data.inputs[kRefBus].channelBuffers32)
@@ -450,10 +480,12 @@ tresult PLUGIN_API AlignerPlugin::process(ProcessData& data)
     auto** out = data.outputs[0].channelBuffers64;
     processBlock(
       out,
-      [&](int bus, int32 s) -> double {
-        if (!data.inputs[bus].channelBuffers64 || data.inputs[bus].numChannels < 1)
+      [&](int ch, int32 s) -> double {
+        if (!data.inputs || !data.inputs[0].channelBuffers64)
           return 0.0;
-        return data.inputs[bus].channelBuffers64[0][s];
+        if (ch < 0 || ch >= data.inputs[0].numChannels || !data.inputs[0].channelBuffers64[ch])
+          return 0.0;
+        return data.inputs[0].channelBuffers64[ch][s];
       },
       [&](int ch, int32 s) -> double {
         if (!data.inputs[kRefBus].channelBuffers64)
@@ -595,8 +627,11 @@ int AlignerPlugin::takeIrWaveform(float* out, int maxOut)
   out[3] = waveViewPreMs_;
   out[4] = waveViewPostMs_;
 
+  const bool bypass = params_[kParamBypass] >= 0.5f;
   const float anchorDelaySamp =
-    effectiveLaneDelayMs(anchor) * 0.001f * static_cast<float>(sampleRate_);
+    bypass
+      ? 0.f
+      : effectiveLaneDelayMs(anchor) * 0.001f * static_cast<float>(sampleRate_);
   const float scale = static_cast<float>(viewLen - 1) / static_cast<float>(bins - 1);
 
   auto sampleRaw = [&](const float* src, float srcIdx) -> float {
@@ -620,22 +655,25 @@ int AlignerPlugin::takeIrWaveform(float* out, int maxOut)
   for (int l = 0; l < kLanes; ++l)
   {
     const float delaySamp =
-      effectiveLaneDelayMs(l) * 0.001f * static_cast<float>(sampleRate_) - anchorDelaySamp;
-    const float sign = lanes_[l].phase ? -1.f : 1.f;
+      bypass
+        ? 0.f
+        : effectiveLaneDelayMs(l) * 0.001f * static_cast<float>(sampleRate_) - anchorDelaySamp;
+    const float sign = (!bypass && lanes_[l].phase) ? -1.f : 1.f;
     pack(out + kHdr + l * bins, waveRaw_[l], delaySamp, sign);
   }
 
-  // Mix is delay-aligned in capture; shift vs anchor, then Master Delay vs ref.
+  // Master outline vs Reference: only Master Trim moves the mix. Lane / anchor
+  // delays are already in the mix capture when active; do not also subtract
+  // anchorDelay here (that made Bypass look like a jump).
   const float masterTrimSamp =
-    std::clamp(params_[kParamMasterTrim], -kMaxMasterMs, kMaxMasterMs) * 0.001f
-    * static_cast<float>(sampleRate_);
-  const float mixDelaySamp = -anchorDelaySamp + masterTrimSamp;
-  pack(out + kHdr + kLanes * bins, waveRawMix_[0], mixDelaySamp, 1.f);
-  pack(out + kHdr + (kLanes + 1) * bins, waveRawMix_[1], mixDelaySamp, 1.f);
-  // Ref stays on the anchor timeline (no master trim) so Delay moves mix vs SC.
-  const float refDelaySamp = -anchorDelaySamp;
-  pack(out + kHdr + (kLanes + 2) * bins, waveRawRef_[0], refDelaySamp, 1.f);
-  pack(out + kHdr + (kLanes + 3) * bins, waveRawRef_[1], refDelaySamp, 1.f);
+    bypass
+      ? 0.f
+      : std::clamp(params_[kParamMasterTrim], -kMaxMasterMs, kMaxMasterMs) * 0.001f
+          * static_cast<float>(sampleRate_);
+  pack(out + kHdr + kLanes * bins, waveRawMix_[0], masterTrimSamp, 1.f);
+  pack(out + kHdr + (kLanes + 1) * bins, waveRawMix_[1], masterTrimSamp, 1.f);
+  pack(out + kHdr + (kLanes + 2) * bins, waveRawRef_[0], 0.f, 1.f);
+  pack(out + kHdr + (kLanes + 3) * bins, waveRawRef_[1], 0.f, 1.f);
 
   return kNeed;
 }

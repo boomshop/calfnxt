@@ -47,13 +47,17 @@ protected:
                                 const Steinberg::Vst::TChar* sidechainName = nullptr);
   void addMonoInStereoOut(const Steinberg::Vst::TChar* inName = nullptr,
                           const Steinberg::Vst::TChar* outName = nullptr);
-  /** N mono main inputs + stereo output (e.g. Aligner 8→2). */
+  /** N mono main inputs + stereo output. */
   void addNMonoInStereoOut(Steinberg::int32 nIns,
                            const Steinberg::Vst::TChar* outName = nullptr);
-  /** Like {@link addNMonoInStereoOut} plus a stereo kAux reference / sidechain. */
-  void addNMonoInStereoOutWithRef(Steinberg::int32 nIns,
-                                  const Steinberg::Vst::TChar* outName = nullptr,
-                                  const Steinberg::Vst::TChar* refName = nullptr);
+  /**
+   * One N-channel main bus + stereo out + stereo kAux reference.
+   * Prefer this over N separate mono mains when a host only supports one main
+   * + one aux (Ardour VST3) — otherwise the aux can bleed into early lanes.
+   */
+  void addMultiChannelInStereoOutWithRef(Steinberg::int32 nChannels,
+                                         const Steinberg::Vst::TChar* outName = nullptr,
+                                         const Steinberg::Vst::TChar* refName = nullptr);
   /** Event input bus for note hold / MIDI overlay plugins (16 channels). */
   void addMidiInput(const Steinberg::Vst::TChar* name = nullptr);
 
@@ -94,6 +98,8 @@ protected:
   bool sidechainInput_ = false;
   bool multiMonoInput_ = false;
   Steinberg::int32 multiMonoCount_ = 0;
+  bool multiChannelInput_ = false;
+  Steinberg::int32 multiChannelCount_ = 0;
 
 private:
   /** Plains captured at the end of setState; re-applied while suppress > 0. */
