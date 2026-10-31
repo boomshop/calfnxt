@@ -200,9 +200,9 @@ export interface AlignWaveStripProps {
   /** Master channel index (0=L, 1=R). */
   channel?: 0 | 1;
   /**
-   * Lane delay (ms). When set in lane mode, horizontal drag (AUX DragValue)
-   * writes this param; the outline shifts by delay − captureDelay until the
-   * next hit pack arrives.
+   * Delay (ms). Horizontal drag writes this param (lane Delay or Master Trim).
+   * The outline shifts by delay − captureDelay until the next hit pack arrives.
+   * Master: mix outline only (Reference fill stays put).
    */
   delay$?: DynamicValue<number>;
   delayMin?: number;
@@ -282,13 +282,17 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
     delayRange.set('max', delayMaxRef.current);
   }, []);
 
+  const lastAxisRef = useRef<{ pre: number; post: number }>({ pre: NaN, post: NaN });
   const syncRangeX = useCallback(
     (raw: number[] | undefined) => {
       const inst = chartRef.current;
       if (!inst || inst.isDestructed?.() || !raw || raw.length < WAVE_HDR) return;
       const { pre, post } = waveWindowMs(raw);
+      // Axis is Wave-knob only — skip redundant set() so live fill cannot flicker the grid.
+      const prev = lastAxisRef.current;
+      if (prev.pre === pre && prev.post === post) return;
+      lastAxisRef.current = { pre, post };
       inst.set('range_x', { min: -pre, max: post });
-      // Vertical time ticks (−pre…+post ms); 0 = hit. Step follows window span.
       inst.set('grid_x', buildBipolarTimeGridX(-pre, post));
       syncDelayDragRange(pre, post);
     },
@@ -321,7 +325,14 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
         const side = ch === 1 ? 1 : 0;
         const mixOff = extraOff + side * bins;
         const refOff = extraOff + 2 * bins + side * bins;
-        const mixDots = packChannel(v, bins, mixOff, pre, post);
+        // Live Master Trim nudge on the mix outline only (ref fill stays).
+        const bypassOn = bypass$Ref.current?.value === true;
+        const d$ = delay$Ref.current;
+        const shiftMs =
+          bypassOn || !d$
+            ? 0
+            : (typeof d$.value === 'number' ? d$.value : 0) - captureDelayRef.current;
+        const mixDots = packChannel(v, bins, mixOff, pre, post, shiftMs);
         if (!mixDots) {
           for (const g of graphs) g.set('dots', null);
           return null;
@@ -399,7 +410,7 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
   const attachDrag = useCallback(
     (inst: AuxChartInstance) => {
       destroyDrag();
-      if (metaRef.current.mode !== 'lane' || !delay$Ref.current) return;
+      if (!delay$Ref.current) return;
       const node = (inst.element as HTMLElement | undefined) ?? inst.svg;
       if (!node) return;
 
@@ -606,7 +617,7 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
   const cls = [
     'AlignWaveStrip',
     className ?? '',
-    mode === 'lane' && delay$ ? 'is-draggable' : '',
+    delay$ ? 'is-draggable' : '',
   ]
     .filter(Boolean)
     .join(' ');
