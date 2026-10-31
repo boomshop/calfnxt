@@ -199,7 +199,11 @@ export function AlignerUI(props: AlignerUIProps) {
               wave$={host.wave$}
               mode="master"
               channel={0}
+              delay$={host.masterTrim$}
+              delayMin={-50}
+              delayMax={50}
               bypass$={host.bypass$}
+              {...edit(paramIds.master_trim)}
             />
           </div>
           <div className="master-wave-row">
@@ -209,7 +213,11 @@ export function AlignerUI(props: AlignerUIProps) {
               wave$={host.wave$}
               mode="master"
               channel={1}
+              delay$={host.masterTrim$}
+              delayMin={-50}
+              delayMax={50}
               bypass$={host.bypass$}
+              {...edit(paramIds.master_trim)}
             />
           </div>
         </WithInfo>
