@@ -30,6 +30,26 @@ declare module '@deutschesoft/aux-widgets/src/widgets/icon.js' {
   export const Icon: new (...args: unknown[]) => unknown;
 }
 
+declare module '@deutschesoft/aux-widgets/src/modules/dragvalue.js' {
+  export const DragValue: new (
+    parent: unknown,
+    options?: Record<string, unknown>,
+  ) => {
+    destroy: () => void;
+    set: (key: string, value: unknown) => void;
+    on: (event: string, cb: (...args: unknown[]) => void) => void;
+  };
+}
+
+declare module '@deutschesoft/aux-widgets/src/modules/range.js' {
+  export const Range: new (options?: Record<string, unknown>) => {
+    options: { min: number; max: number; basis: number };
+    set: (key: string, value: unknown) => void;
+    get: (key: string) => unknown;
+    destroy?: () => void;
+  };
+}
+
 declare module '@deutschesoft/aux-widgets/src/utils/biquad.js' {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export function biquadFilter(...trafos: any[]): any;

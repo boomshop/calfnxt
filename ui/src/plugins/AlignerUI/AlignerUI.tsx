@@ -195,6 +195,7 @@ export function AlignerUI(props: AlignerUIProps) {
               wave$={host.wave$}
               mode="master"
               channel={0}
+              bypass$={host.bypass$}
             />
           </div>
           <div className="master-wave-row">
@@ -204,6 +205,7 @@ export function AlignerUI(props: AlignerUIProps) {
               wave$={host.wave$}
               mode="master"
               channel={1}
+              bypass$={host.bypass$}
             />
           </div>
         </WithInfo>
@@ -301,7 +303,16 @@ function LaneRow(props: {
 
       <div className="lane-mid">
         <WithInfo title={alignerInfo.wave} className="wave">
-          <AlignWaveStrip wave$={host.wave$} lane={i} anchor={anchor} />
+          <AlignWaveStrip
+            wave$={host.wave$}
+            lane={i}
+            anchor={anchor}
+            delay$={lane.delay$}
+            delayMin={-50}
+            delayMax={50}
+            bypass$={host.bypass$}
+            {...edit(laneParamId(i, 'delay'))}
+          />
         </WithInfo>
         <WithInfo title={alignerInfo.corr} className="meter">
           {/* show_scale must stay on — PhaseMeter.draw assumes this.scale exists. */}

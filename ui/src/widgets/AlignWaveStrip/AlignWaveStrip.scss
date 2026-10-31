@@ -4,4 +4,32 @@
   min-height: 48px;
   min-width: 0;
   background: var(--background);
+
+  &.is-draggable {
+    cursor: ew-resize;
+    touch-action: none;
+  }
+
+  &.aux-dragging {
+    cursor: col-resize;
+  }
+
+  // Hit-window time (ms): quiet ticks, readable majors / zero.
+  .aux-grid > .aux-gridline {
+    > .aux-label {
+      font-size: 9px;
+      opacity: 0.55;
+    }
+
+    &.major > .aux-label,
+    &.base > .aux-label {
+      opacity: 0.85;
+    }
+
+    // Hit / t=0 — foreground, stronger than the other time ticks.
+    &.base {
+      stroke: var(--color);
+      stroke-opacity: 0.55;
+    }
+  }
 }

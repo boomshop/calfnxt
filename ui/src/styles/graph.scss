@@ -28,6 +28,10 @@
  * (`reverse: true` swaps which URL is bound to which var — legacy accent-top
  * as primary.) Utilities: `.stroke-gradient` / `.fill-gradient` (+ `-inv`),
  * and `.stroke-grad-light` / `.fill-grad-light` (+ `-inv`).
+ *
+ * Discrete theme ramp (JS samples `--theme-gradient` → `--palette-0…100`,
+ * step 5): `.fill-palette-N` / `.stroke-palette-N` paint that stop directly.
+ * (`.palette-N` + `.fill-accent` remaps accent instead — different opt-in.)
  */
 
 :root {
@@ -225,6 +229,94 @@
 .aux-graph.fill-warn {
   fill: var(--color-warn);
 }
+
+/* Discrete --palette-0…100 (step 5). Prefer over .palette-N + .fill-accent
+ * when the graph should not remap --color-accent for siblings. */
+.fill-palette-0,
+.aux-graph.fill-palette-0 {
+  fill: var(--palette-0);
+}
+.fill-palette-5,
+.aux-graph.fill-palette-5 {
+  fill: var(--palette-5);
+}
+.fill-palette-10,
+.aux-graph.fill-palette-10 {
+  fill: var(--palette-10);
+}
+.fill-palette-15,
+.aux-graph.fill-palette-15 {
+  fill: var(--palette-15);
+}
+.fill-palette-20,
+.aux-graph.fill-palette-20 {
+  fill: var(--palette-20);
+}
+.fill-palette-25,
+.aux-graph.fill-palette-25 {
+  fill: var(--palette-25);
+}
+.fill-palette-30,
+.aux-graph.fill-palette-30 {
+  fill: var(--palette-30);
+}
+.fill-palette-35,
+.aux-graph.fill-palette-35 {
+  fill: var(--palette-35);
+}
+.fill-palette-40,
+.aux-graph.fill-palette-40 {
+  fill: var(--palette-40);
+}
+.fill-palette-45,
+.aux-graph.fill-palette-45 {
+  fill: var(--palette-45);
+}
+.fill-palette-50,
+.aux-graph.fill-palette-50 {
+  fill: var(--palette-50);
+}
+.fill-palette-55,
+.aux-graph.fill-palette-55 {
+  fill: var(--palette-55);
+}
+.fill-palette-60,
+.aux-graph.fill-palette-60 {
+  fill: var(--palette-60);
+}
+.fill-palette-65,
+.aux-graph.fill-palette-65 {
+  fill: var(--palette-65);
+}
+.fill-palette-70,
+.aux-graph.fill-palette-70 {
+  fill: var(--palette-70);
+}
+.fill-palette-75,
+.aux-graph.fill-palette-75 {
+  fill: var(--palette-75);
+}
+.fill-palette-80,
+.aux-graph.fill-palette-80 {
+  fill: var(--palette-80);
+}
+.fill-palette-85,
+.aux-graph.fill-palette-85 {
+  fill: var(--palette-85);
+}
+.fill-palette-90,
+.aux-graph.fill-palette-90 {
+  fill: var(--palette-90);
+}
+.fill-palette-95,
+.aux-graph.fill-palette-95 {
+  fill: var(--palette-95);
+}
+.fill-palette-100,
+.aux-graph.fill-palette-100 {
+  fill: var(--palette-100);
+}
+
 .fill-gradient,
 .aux-graph.fill-gradient {
   fill: var(--graph-gradient, var(--chart-level-stroke, var(--color-accent)));
@@ -266,6 +358,92 @@
 .aux-graph.stroke-warn {
   stroke: var(--color-warn);
 }
+
+.stroke-palette-0,
+.aux-graph.stroke-palette-0 {
+  stroke: var(--palette-0);
+}
+.stroke-palette-5,
+.aux-graph.stroke-palette-5 {
+  stroke: var(--palette-5);
+}
+.stroke-palette-10,
+.aux-graph.stroke-palette-10 {
+  stroke: var(--palette-10);
+}
+.stroke-palette-15,
+.aux-graph.stroke-palette-15 {
+  stroke: var(--palette-15);
+}
+.stroke-palette-20,
+.aux-graph.stroke-palette-20 {
+  stroke: var(--palette-20);
+}
+.stroke-palette-25,
+.aux-graph.stroke-palette-25 {
+  stroke: var(--palette-25);
+}
+.stroke-palette-30,
+.aux-graph.stroke-palette-30 {
+  stroke: var(--palette-30);
+}
+.stroke-palette-35,
+.aux-graph.stroke-palette-35 {
+  stroke: var(--palette-35);
+}
+.stroke-palette-40,
+.aux-graph.stroke-palette-40 {
+  stroke: var(--palette-40);
+}
+.stroke-palette-45,
+.aux-graph.stroke-palette-45 {
+  stroke: var(--palette-45);
+}
+.stroke-palette-50,
+.aux-graph.stroke-palette-50 {
+  stroke: var(--palette-50);
+}
+.stroke-palette-55,
+.aux-graph.stroke-palette-55 {
+  stroke: var(--palette-55);
+}
+.stroke-palette-60,
+.aux-graph.stroke-palette-60 {
+  stroke: var(--palette-60);
+}
+.stroke-palette-65,
+.aux-graph.stroke-palette-65 {
+  stroke: var(--palette-65);
+}
+.stroke-palette-70,
+.aux-graph.stroke-palette-70 {
+  stroke: var(--palette-70);
+}
+.stroke-palette-75,
+.aux-graph.stroke-palette-75 {
+  stroke: var(--palette-75);
+}
+.stroke-palette-80,
+.aux-graph.stroke-palette-80 {
+  stroke: var(--palette-80);
+}
+.stroke-palette-85,
+.aux-graph.stroke-palette-85 {
+  stroke: var(--palette-85);
+}
+.stroke-palette-90,
+.aux-graph.stroke-palette-90 {
+  stroke: var(--palette-90);
+}
+.stroke-palette-95,
+.aux-graph.stroke-palette-95 {
+  stroke: var(--palette-95);
+}
+.stroke-palette-100,
+.aux-graph.stroke-palette-100 {
+  stroke: var(--palette-100);
+}
+
 .stroke-gradient,
 .aux-graph.stroke-gradient {
   stroke: var(--graph-gradient, var(--chart-level-stroke, var(--color-accent)));

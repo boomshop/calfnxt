@@ -1,6 +1,8 @@
 /**
  * Shared graph paint recipes (utility class strings from `graph.scss`).
  * Append via `addGraphClasses(el, GRAPH_STYLE.…)` or put in `className`.
+ *
+ * Discrete theme stops: `fill-palette-0…100` / `stroke-palette-0…100` (step 5).
  */
 
 /** Apply space-separated utility / semantic classes onto an SVG node. */

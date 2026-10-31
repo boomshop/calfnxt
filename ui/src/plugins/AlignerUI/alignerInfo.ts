@@ -14,7 +14,7 @@ const laneId = (offset: number) =>
 export const alignerInfo = {
   bypass: infoDoc({
     name: 'Bypass',
-    lead: 'Turns the lane alignment delays off so you can compare the timed stem with the untimed sum.',
+    lead: 'A/B the alignment: turns lane Delay, Phase, and Master Delay off while the mix (Gain, Pan, Mute, Solo, Volume) stays as set.',
     meta: [
       { label: 'DAW name', value: 'Bypass' },
       { label: 'Parameter ID', value: '2' },
@@ -29,7 +29,7 @@ export const alignerInfo = {
         heading: 'What you hear',
         blocks: [
           {
-            p: 'Lane Delay is skipped. Mute, Solo, Phase, Gain, Pan, and Volume still run. Header In and Out gains are forced to unity while Bypass is on.',
+            p: 'Skipped: lane Delay, Phase, and Master Delay. Still active: Gain, Pan, Mute, Solo, and Volume. Header In and Out gains are forced to unity while Bypass is on. Use it to hear the timing difference without changing the balance.',
           },
         ],
       },
@@ -37,7 +37,7 @@ export const alignerInfo = {
         heading: 'In detail',
         blocks: [
           {
-            p: 'The output is still delayed by the reported plugin latency plus any positive Master Delay, so when the host applies PDC the stem does not jump forward relative to the rest of the session.',
+            p: 'Phase rides with Delay because polarity flips are part of lining hits up, not of the stem mix. Reported latency is held so host PDC does not jump; the dry sum is delayed only by that held amount. Wave packs show undelayed, unflipped captures until Bypass is cleared.',
           },
         ],
       },
@@ -219,7 +219,7 @@ export const alignerInfo = {
         heading: 'How to use it',
         blocks: [
           {
-            p: 'Watch the Master waves: the outline moves with this knob while the Reference fill stays put. Use it after the lanes are roughly aligned if the whole bus still sits early or late against a room or overhead Reference.',
+            p: 'Watch the Master waves: the outline moves with this knob only — Reference fill stays put, and lane Delay does not shift the Master overlay. Use it after the lanes are roughly aligned if the whole bus still sits early or late against a room or overhead Reference. Bypass ignores this knob.',
           },
         ],
       },
@@ -227,7 +227,7 @@ export const alignerInfo = {
         heading: 'In detail',
         blocks: [
           {
-            p: 'Reported latency is the pad needed for any negative lane Delay plus the absolute value of a negative Master Delay. Positive Master Delay only lengthens the internal master delay line.',
+            p: 'Reported latency is the pad needed for any negative lane Delay plus the absolute value of a negative Master Delay. Positive Master Delay only lengthens the internal master delay line. The Master wave pack shifts the mix by this value alone (no extra anchor offset).',
           },
         ],
       },
@@ -374,7 +374,7 @@ export const alignerInfo = {
 
   phase: infoDoc({
     name: 'Phase',
-    lead: 'Flips the polarity of this lane in the mix and in the analysis used for correlation and waveforms.',
+    lead: 'Flips the polarity of this lane for alignment — same family as Delay, not part of the Gain/Pan mix.',
     meta: [
       { label: 'DAW name', value: 'B1 Phase, and the same for B2…B8' },
       { label: 'Parameter ID', value: laneId(2) },
@@ -389,7 +389,7 @@ export const alignerInfo = {
         heading: 'How to use it',
         blocks: [
           {
-            p: 'If correlation sits near −1 while the waves look lined up, flip Phase. The outline in the strip flips with it on the next paint of the last capture.',
+            p: 'If correlation sits near −1 while the waves look lined up, flip Phase. The outline in the strip flips with it on the next paint of the last capture. Bypass turns Phase off with Delay so you can A/B the alignment.',
           },
         ],
       },
@@ -530,7 +530,7 @@ export const alignerInfo = {
         heading: 'How to use it',
         blocks: [
           {
-            p: 'Nudge Delay until the outlines share the same attack. Flip Phase if the shapes mirror. Empty strips mean that input is inactive or below the silence floor for drawing.',
+            p: 'Drag the strip horizontally to write Delay (same range as the knob), or nudge the knob. Line the outline up with the Anchor fill; flip Phase if the shapes mirror. Empty strips mean that input is inactive or below the silence floor for drawing.',
           },
         ],
       },
@@ -538,7 +538,7 @@ export const alignerInfo = {
         heading: 'In detail',
         blocks: [
           {
-            p: 'Not a scrolling DAW waveform. Width comes from Wave in the header. A new Anchor hit refreshes every strip; Delay and Phase move the outline immediately on the last capture.',
+            p: 'Not a scrolling DAW waveform. Width comes from Wave in the header. A new Anchor hit refreshes every strip. Drag and Delay shift the outline on the last capture until the next hit packs a new window.',
           },
         ],
       },

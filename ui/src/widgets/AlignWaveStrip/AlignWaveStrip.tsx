@@ -1,17 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
+import { DragValue } from '@deutschesoft/aux-widgets/src/modules/dragvalue.js';
+import { Range as AuxRange } from '@deutschesoft/aux-widgets/src/modules/range.js';
 import type { DynamicValue } from '@deutschesoft/awml';
 import type { Bindings } from '@deutschesoft/awml/src/bindings.js';
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { useChartGradient } from '../../hooks/useChartGradient';
+import { ALIGNER_LANES } from '../../host/alignerHost';
 import { addGraphClasses } from '../../styles/graphStyles';
+import { PALETTE_STEP } from '../../theme/themeGradient';
 import { bindAuxOptions } from '../../utils/aux_bindings';
+import { buildBipolarTimeGridX } from '../../utils/chartGrid';
 import './AlignWaveStrip.scss';
 
 const EMPTY_WAVE: number[] = [];
 /** Header: bins, nLanes, preBins, viewPreMs, viewPostMs. */
 const WAVE_HDR = 5;
 const SILENCE_PEAK = 1e-4;
+
+/** Map lane index 0…n-1 → palette step 0…100 (step 5), ends inclusive. */
+function paletteStepForIndex(
+  index: number,
+  count: number = ALIGNER_LANES,
+): number {
+  const n = Math.max(1, count | 0);
+  const i = Math.max(0, Math.min(n - 1, index | 0));
+  const t = n <= 1 ? 0 : i / (n - 1);
+  return Math.round((t * 100) / PALETTE_STEP) * PALETTE_STEP;
+}
 
 type WaveDot = { x: number; y: number };
 
@@ -23,13 +39,25 @@ type AuxGraph = {
   destroy?: () => void;
 };
 
+type AuxRangeLike = {
+  options: { min: number; max: number; basis: number };
+  set: (k: string, v: unknown) => void;
+};
+
 type AuxChartInstance = {
   isDestructed?: () => boolean;
   element?: Element;
   svg?: SVGSVGElement;
+  range_x?: AuxRangeLike;
   set: (k: string, v: unknown) => void;
   addGraph: (opts: unknown) => AuxGraph;
   removeGraph: (g: AuxGraph) => void;
+};
+
+type DragValueLike = {
+  destroy: () => void;
+  set: (k: string, v: unknown) => void;
+  on: (ev: string, cb: (...args: unknown[]) => void) => void;
 };
 
 function disposeGraph(chart: AuxChartInstance, g: AuxGraph) {
@@ -61,7 +89,8 @@ function waveWindowMs(v: number[]): { pre: number; post: number } {
 
 function channelPeak(v: number[], bins: number, off: number): number {
   let peak = 0;
-  for (let i = 0; i < bins; ++i) peak = Math.max(peak, Math.abs(v[off + i] ?? 0));
+  for (let i = 0; i < bins; ++i)
+    peak = Math.max(peak, Math.abs(v[off + i] ?? 0));
   return peak;
 }
 
@@ -72,16 +101,21 @@ function packChannel(
   off: number,
   pre: number,
   post: number,
+  shiftMs = 0,
 ): WaveDot[] | null {
   const peak = channelPeak(v, bins, off);
   if (peak < SILENCE_PEAK) return null;
   const span = pre + post;
   const pts: WaveDot[] = [];
   for (let i = 0; i < bins; ++i) {
-    const x = -pre + (i / (bins - 1)) * span;
+    const x = -pre + (i / (bins - 1)) * span + shiftMs;
     pts.push({ x, y: (v[off + i] ?? 0) / peak });
   }
   return pts;
+}
+
+function clampDelay(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
 }
 
 const ChartBindings = {};
@@ -91,7 +125,7 @@ const ChartOptions = {
   label: false,
   range_x: { min: -8, max: 24 },
   range_y: { min: -1, max: 1 },
-  grid_x: [{ pos: 0, label: '' }],
+  grid_x: buildBipolarTimeGridX(-8, 24),
   grid_y: [{ pos: 0, label: '' }],
 };
 
@@ -113,6 +147,18 @@ export interface AlignWaveStripProps {
   mode?: 'lane' | 'master';
   /** Master channel index (0=L, 1=R). */
   channel?: 0 | 1;
+  /**
+   * Lane delay (ms). When set in lane mode, horizontal drag (AUX DragValue)
+   * writes this param; the outline shifts by delay − captureDelay until the
+   * next hit pack arrives.
+   */
+  delay$?: DynamicValue<number>;
+  delayMin?: number;
+  delayMax?: number;
+  beginEdit?: () => void;
+  endEdit?: () => void;
+  /** When true, no live delay nudge / drag (DSP shows undelayed packs). */
+  bypass$?: DynamicValue<boolean>;
 }
 
 /**
@@ -120,32 +166,80 @@ export interface AlignWaveStripProps {
  * Master: one stereo side — Reference fill + mix outline.
  */
 export function AlignWaveStrip(props: AlignWaveStripProps) {
-  const { className, wave$, lane = 0, anchor = 0, mode = 'lane', channel = 0 } =
-    props;
+  const {
+    className,
+    wave$,
+    lane = 0,
+    anchor = 0,
+    mode = 'lane',
+    channel = 0,
+    delay$,
+    delayMin = -50,
+    delayMax = 50,
+    beginEdit,
+    endEdit,
+    bypass$,
+  } = props;
   const metaRef = useRef({ lane, anchor, mode, channel });
   metaRef.current = { lane, anchor, mode, channel };
 
   const chartRef = useRef<AuxChartInstance | null>(null);
   const graphsRef = useRef<AuxGraph[]>([]);
   const graphBindingsRef = useRef<Bindings[]>([]);
+  const dragRef = useRef<DragValueLike | null>(null);
+  const delayRangeRef = useRef<InstanceType<typeof AuxRange> | null>(null);
+  /** Delay at last wave pack — outline x += delay$ − this until next pack. */
+  const captureDelayRef = useRef(0);
+  const delay$Ref = useRef(delay$);
+  delay$Ref.current = delay$;
+  const bypass$Ref = useRef(bypass$);
+  bypass$Ref.current = bypass$;
+  const delayMinRef = useRef(delayMin);
+  const delayMaxRef = useRef(delayMax);
+  delayMinRef.current = delayMin;
+  delayMaxRef.current = delayMax;
+  const beginEditRef = useRef(beginEdit);
+  const endEditRef = useRef(endEdit);
+  beginEditRef.current = beginEdit;
+  endEditRef.current = endEdit;
+
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
   const [gradTargets, setGradTargets] = useState<SVGElement[]>([]);
 
+  // Suite standard level ramp: warn (hot) at top → accent (cold) at bottom.
   const reassertGrad = useChartGradient({
     svg: chartSvg,
     targets: gradTargets,
     paint: 'fill',
-    profile: 'center',
   });
   const reassertRef = useRef(reassertGrad);
   reassertRef.current = reassertGrad;
 
-  const syncRangeX = useCallback((raw: number[] | undefined) => {
-    const inst = chartRef.current;
-    if (!inst || inst.isDestructed?.() || !raw || raw.length < WAVE_HDR) return;
-    const { pre, post } = waveWindowMs(raw);
-    inst.set('range_x', { min: -pre, max: post });
+  const syncDelayDragRange = useCallback((pre: number, post: number) => {
+    const chart = chartRef.current;
+    const delayRange = delayRangeRef.current;
+    if (!chart?.range_x || !delayRange) return;
+    const span = Math.max(1e-6, pre + post);
+    const basis = Math.max(1, chart.range_x.options.basis || 1);
+    const delaySpan = Math.max(1e-6, delayMaxRef.current - delayMinRef.current);
+    // Match chart ms/px so 1 ms drag ≈ 1 ms on the wave axis.
+    delayRange.set('basis', (delaySpan * basis) / span);
+    delayRange.set('min', delayMinRef.current);
+    delayRange.set('max', delayMaxRef.current);
   }, []);
+
+  const syncRangeX = useCallback(
+    (raw: number[] | undefined) => {
+      const inst = chartRef.current;
+      if (!inst || inst.isDestructed?.() || !raw || raw.length < WAVE_HDR) return;
+      const { pre, post } = waveWindowMs(raw);
+      inst.set('range_x', { min: -pre, max: post });
+      // Vertical time ticks (−pre…+post ms); 0 = hit. Step follows window span.
+      inst.set('grid_x', buildBipolarTimeGridX(-pre, post));
+      syncDelayDragRange(pre, post);
+    },
+    [syncDelayDragRange],
+  );
 
   /** Paints outline (g1); returns fill dots for g0 (binding must not stomp them). */
   const paint = useCallback(
@@ -190,7 +284,15 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
       const lIdx = Math.max(0, Math.min(nLanes - 1, Math.round(li)));
       const aOff = WAVE_HDR + aIdx * bins;
       const lOff = WAVE_HDR + lIdx * bins;
-      const laneDots = packChannel(v, bins, lOff, pre, post);
+      // Live delay nudge until the next DSP hit pack replaces the capture.
+      // Bypass: DSP packs undelayed — do not keep a knob nudge on screen.
+      const bypassOn = bypass$Ref.current?.value === true;
+      const d$ = delay$Ref.current;
+      const shiftMs =
+        bypassOn || !d$
+          ? 0
+          : (typeof d$.value === 'number' ? d$.value : 0) - captureDelayRef.current;
+      const laneDots = packChannel(v, bins, lOff, pre, post, shiftMs);
       if (!laneDots) {
         graphs[0]?.set('dots', null);
         graphs[1]?.set('dots', null);
@@ -220,26 +322,99 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
           name: 'dots',
           backendValue: wave$,
           readonly: true,
-          transformReceive: (raw: number[]) => paint(raw),
+          transformReceive: (raw: number[]) => {
+            // New hit pack was captured at the current delay — zero the nudge.
+            const d$ = delay$Ref.current;
+            captureDelayRef.current =
+              d$ && typeof d$.value === 'number' ? d$.value : 0;
+            return paint(raw);
+          },
         },
       ]),
     ];
   }, [wave$, disposeGraphBindings, paint]);
 
-  const detach = useCallback(() => {
-    disposeGraphBindings();
-    const inst = chartRef.current;
-    const graphs = graphsRef.current;
-    graphsRef.current = [];
-    chartRef.current = null;
-    setChartSvg(null);
-    setGradTargets([]);
-    if (!inst || inst.isDestructed?.()) return;
-    for (const g of graphs) disposeGraph(inst, g);
-  }, [disposeGraphBindings]);
+  const destroyDrag = useCallback(() => {
+    try {
+      dragRef.current?.destroy();
+    } catch {
+      /* already gone */
+    }
+    dragRef.current = null;
+    delayRangeRef.current = null;
+  }, []);
+
+  const attachDrag = useCallback(
+    (inst: AuxChartInstance) => {
+      destroyDrag();
+      if (metaRef.current.mode !== 'lane' || !delay$Ref.current) return;
+      const node = (inst.element as HTMLElement | undefined) ?? inst.svg;
+      if (!node) return;
+
+      const delayRange = new AuxRange({
+        scale: 'linear',
+        min: delayMinRef.current,
+        max: delayMaxRef.current,
+        basis: 100,
+        step: 0,
+        snap: 0.01,
+        shift_up: 4,
+        shift_down: 0.25,
+      });
+      delayRangeRef.current = delayRange;
+
+      const drag = new DragValue(inst, {
+        node,
+        classes: node,
+        direction: 'horizontal',
+        cursor: true,
+        limit: true,
+        range: () => delayRange,
+        get: () => {
+          const d$ = delay$Ref.current;
+          return d$ && typeof d$.value === 'number' ? d$.value : 0;
+        },
+        set: (v: number) => {
+          if (bypass$Ref.current?.value === true) return;
+          const d$ = delay$Ref.current;
+          if (!d$) return;
+          d$.set(clampDelay(v, delayMinRef.current, delayMaxRef.current));
+        },
+        events: () => inst,
+      }) as DragValueLike;
+      drag.on('startdrag', () => beginEditRef.current?.());
+      drag.on('stopdrag', () => endEditRef.current?.());
+      dragRef.current = drag;
+
+      const raw = wave$.value as number[] | undefined;
+      if (raw && raw.length >= WAVE_HDR) {
+        const { pre, post } = waveWindowMs(raw);
+        syncDelayDragRange(pre, post);
+      }
+    },
+    [destroyDrag, syncDelayDragRange, wave$],
+  );
+
+  /** @param clearChartRef false = rebuild in place (HMR / mode); keep the Aux chart. */
+  const detach = useCallback(
+    (clearChartRef = true) => {
+      destroyDrag();
+      disposeGraphBindings();
+      const inst = chartRef.current;
+      const graphs = graphsRef.current;
+      graphsRef.current = [];
+      if (clearChartRef) chartRef.current = null;
+      setChartSvg(null);
+      setGradTargets([]);
+      if (!inst || inst.isDestructed?.()) return;
+      for (const g of graphs) disposeGraph(inst, g);
+    },
+    [destroyDrag, disposeGraphBindings],
+  );
 
   const attach = useCallback(
     (inst: AuxChartInstance) => {
+      // Always own the chart before sweeping — rebuild may pass the same instance.
       chartRef.current = inst;
       if (inst.isDestructed?.()) return;
 
@@ -253,10 +428,11 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
           mode: 'center',
           class: 'align-wave-ref',
         });
+        // Same recipe as lane strips: quiet ref fill, mix outline by side.
         addGraphClasses(
           refG.element,
           'align-wave-ref',
-          'fill-gradient fill-full stroke-none',
+          'fill-color fill-faint stroke-none',
         );
         // Outline only — mode "center" would stroke the mid close-edge.
         const mixG = inst.addGraph({
@@ -265,13 +441,16 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
           mode: 'line',
           class: 'align-wave-mix',
         });
+        const mixStroke =
+          metaRef.current.channel === 1 ? 'stroke-warn' : 'stroke-accent';
         addGraphClasses(
           mixG.element,
           'align-wave-mix',
-          'fill-none stroke-color stroke-medium',
+          'fill-none',
+          mixStroke,
+          'stroke-medium',
         );
         graphsRef.current = [refG, mixG];
-        if (refG.element) targets.push(refG.element);
       } else {
         const ghost = inst.addGraph({
           dots: null,
@@ -279,10 +458,11 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
           mode: 'center',
           class: 'align-wave-ghost',
         });
+        // Anchor ghost: quiet foreground fill. Lane outline: palette by strip.
         addGraphClasses(
           ghost.element,
           'align-wave-ghost',
-          'fill-gradient fill-full stroke-none',
+          'fill-color fill-faint stroke-none',
         );
         const laneG = inst.addGraph({
           dots: null,
@@ -293,35 +473,54 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
         addGraphClasses(
           laneG.element,
           'align-wave-lane',
-          'fill-none stroke-color stroke-medium',
+          'fill-none',
+          `stroke-palette-${paletteStepForIndex(metaRef.current.lane)}`,
+          'stroke-medium',
         );
         graphsRef.current = [ghost, laneG];
-        if (ghost.element) targets.push(ghost.element);
       }
 
       setGradTargets(targets);
       setChartSvg(inst.svg ?? null);
       attachGraphBindings();
+      attachDrag(inst);
+      // Force paint — binding may not re-fire if wave$ already holds the fixture.
+      const dots = paint((wave$.value as number[] | undefined) ?? EMPTY_WAVE);
+      graphsRef.current[0]?.set('dots', dots);
     },
-    [attachGraphBindings],
+    [attachGraphBindings, attachDrag, paint, wave$],
   );
 
-  const widgetRef = useCallback(
-    (inst: AuxChartInstance | null) => {
-      if (!inst) {
-        detach();
-        return;
-      }
-      if (chartRef.current && chartRef.current !== inst) detach();
-      attach(inst);
-    },
-    [attach, detach],
-  );
+  const attachRef = useRef(attach);
+  const detachRef = useRef(detach);
+  attachRef.current = attach;
+  detachRef.current = detach;
+
+  // Stable callback identity — changing attach/detach must not go through
+  // widgetRef(null) or the following useEffect cleanup will wipe a fresh attach.
+  const widgetRef = useCallback((inst: AuxChartInstance | null) => {
+    if (!inst) {
+      detachRef.current(true);
+      return;
+    }
+    if (chartRef.current && chartRef.current !== inst) detachRef.current(true);
+    attachRef.current(inst);
+  }, []);
+
+  // HMR / mode / lane: rebuild graphs on the live chart without dropping Aux.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || chart.isDestructed?.()) return;
+    detachRef.current(false);
+    attachRef.current(chart);
+  }, [attach, mode, lane, channel]);
 
   useEffect(() => {
     if (!chartRef.current || graphsRef.current.length === 0) return;
     attachGraphBindings();
-  }, [attachGraphBindings]);
+    const dots = paint((wave$.value as number[] | undefined) ?? EMPTY_WAVE);
+    graphsRef.current[0]?.set('dots', dots);
+  }, [attachGraphBindings, paint, wave$]);
 
   useEffect(() => {
     const g0 = graphsRef.current[0];
@@ -329,8 +528,35 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
     g0?.set('dots', dots);
   }, [lane, anchor, mode, channel, wave$, paint]);
 
-  useEffect(() => () => detach(), [detach]);
+  // Knob / drag writes: nudge the outline without waiting for a new hit pack.
+  useEffect(() => {
+    if (!delay$) return;
+    return delay$.subscribe(() => {
+      const g0 = graphsRef.current[0];
+      if (!g0) return;
+      const dots = paint((wave$.value as number[] | undefined) ?? EMPTY_WAVE);
+      g0.set('dots', dots);
+    }, false);
+  }, [delay$, paint, wave$]);
 
-  const cls = ['AlignWaveStrip', className ?? ''].filter(Boolean).join(' ');
+  useEffect(() => {
+    if (!bypass$) return;
+    return bypass$.subscribe(() => {
+      const g0 = graphsRef.current[0];
+      if (!g0) return;
+      const dots = paint((wave$.value as number[] | undefined) ?? EMPTY_WAVE);
+      g0.set('dots', dots);
+    }, false);
+  }, [bypass$, paint, wave$]);
+
+  useEffect(() => () => detachRef.current(true), []);
+
+  const cls = [
+    'AlignWaveStrip',
+    className ?? '',
+    mode === 'lane' && delay$ ? 'is-draggable' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   return <ChartWidget className={cls} widgetRef={widgetRef} />;
 }
