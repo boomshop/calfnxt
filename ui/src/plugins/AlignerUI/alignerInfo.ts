@@ -46,7 +46,7 @@ export const alignerInfo = {
 
   waveSpan: infoDoc({
     name: 'Wave',
-    lead: 'Sets how wide the captured hit window is around the Anchor transient, in real milliseconds.',
+    lead: 'Zooms the hit strips around the locked Anchor transient. The lock always keeps up to 240 ms after the hit in the ring snapshot; this knob only chooses how much of that you see.',
     meta: [
       { label: 'DAW name', value: 'Wave' },
       { label: 'Parameter ID', value: '10' },
@@ -58,7 +58,7 @@ export const alignerInfo = {
         heading: 'How to use it',
         blocks: [
           {
-            p: 'Narrower windows zoom in on the attack. Wider windows show more of the decay so you can compare ring and spill across lanes.',
+            p: 'Narrower windows zoom in on the attack. Wider windows show more of the decay so you can compare ring and spill across lanes. Turning Wave re-crops the last lock immediately.',
           },
         ],
       },
@@ -66,7 +66,7 @@ export const alignerInfo = {
         heading: 'In detail',
         blocks: [
           {
-            p: 'A quarter of the span sits before the detected peak and three quarters after. The strips are not a scrolling DAW waveform — they redraw when the Anchor detector fires a new hit.',
+            p: 'A quarter of the visible span sits before the lock and three quarters after. x≈0 is the first half-period peak after armed/wait-rise (amplitude is compared only across zero-crossings). While later half-periods get louder, only the max is tracked; after a fall, the next rise locks again — except during a mute of about half the Wave span, so a wide window can show two hits without jumping. The previous pack stays on screen until the new Wave window is full, then one redraw replaces it.',
           },
         ],
       },
@@ -179,7 +179,7 @@ export const alignerInfo = {
         heading: 'How to use it',
         blocks: [
           {
-            p: 'Route a stereo bus into the Reference input in the host. Turn Master Delay to slide the outline against the fill. A new Anchor hit refreshes the capture; Delay updates shift the outline immediately on the last capture.',
+            p: 'Route a stereo bus into the Reference input in the host. Drag L or R horizontally (or turn Master Delay) to slide the mix outline against the Reference fill — both sides write the same Master Delay. A new Anchor hit refreshes the capture once the Wave window is full.',
           },
         ],
       },
@@ -283,7 +283,7 @@ export const alignerInfo = {
             ul: [
               'Only the stored Anchor index arms the detector. Partner highlighting is UI only.',
               'Wave fills follow the stereo ghost rules (see Waveform): stereo Anchor → L↔L / R↔R on stereo lanes, L+R mid on mono; mono Anchor → that single lane everywhere.',
-              'A new capture arms when the filtered Anchor level shows a peak above the detector floor and above a fraction of its recent envelope, then waits out the post window before packing all lanes, the mix, and the Reference.',
+              'A new capture locks on the first half-period peak after a rise; louder half-periods only update the max. After a fall, the next rise locks again unless the ~½ Wave-span mute is still active. The ring then fills post into a fixed Wave axis and packs all lanes, the mix, and the Reference.',
             ],
           },
         ],
@@ -543,7 +543,7 @@ export const alignerInfo = {
         heading: 'In detail',
         blocks: [
           {
-            p: 'Not a scrolling DAW waveform. Width comes from Wave in the header. A new Anchor hit refreshes every strip. Drag and Delay shift the outline on the last capture until the next hit packs a new window. The stereo ghost uses the first two lanes of the Anchor’s Join group; the hit detector still listens only to the clicked Anchor index.',
+            p: 'Not a scrolling DAW waveform. Width comes from Wave in the header (crop of the last lock). After a lock the outline grows as post arrives, then holds. Drag, Delay, Phase, and Wave re-pack when they change. The stereo ghost uses the first two lanes of the Anchor’s Join group; the hit detector listens only to the clicked Anchor index.',
           },
         ],
       },
