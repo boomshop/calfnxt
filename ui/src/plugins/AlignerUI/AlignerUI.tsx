@@ -19,6 +19,7 @@ import {
   type IAlignerHost,
 } from '../../host/alignerHost';
 import { alignerInfo } from './alignerInfo';
+import { anchorRole, ghostForLane } from './alignerStereo';
 import '../PluginUI.scss';
 import './AlignerUI.scss';
 
@@ -127,18 +128,21 @@ export function AlignerUI(props: AlignerUIProps) {
       </Header>
 
       <div className="lanes">
-        {Array.from({ length: ALIGNER_LANES }, (_, i) => (
-          <LaneRow
-            key={i}
-            index={i}
-            host={host}
-            anchor={Math.round(anchor)}
-            isAnchor={Math.round(anchor) === i}
-            joinClass={joinClassName(i, joinOn)}
-            joined={i > 0 && joinOn[i]!}
-            edit={edit}
-          />
-        ))}
+        {Array.from({ length: ALIGNER_LANES }, (_, i) => {
+          const a = Math.round(anchor);
+          return (
+            <LaneRow
+              key={i}
+              index={i}
+              host={host}
+              anchorRole={anchorRole(i, a, joinOn)}
+              ghost={ghostForLane(i, a, joinOn)}
+              joinClass={joinClassName(i, joinOn)}
+              joined={i > 0 && joinOn[i]!}
+              edit={edit}
+            />
+          );
+        })}
       </div>
 
       <div className="block analyze">
@@ -251,15 +255,26 @@ export function AlignerUI(props: AlignerUIProps) {
 function LaneRow(props: {
   index: number;
   host: IAlignerHost;
-  anchor: number;
-  isAnchor: boolean;
+  anchorRole: 'primary' | 'partner' | 'none';
+  ghost: number | [number, number];
   joinClass: string;
   joined: boolean;
   edit: (id: number) => { beginEdit: () => void; endEdit: () => void };
 }) {
-  const { index: i, host, anchor, isAnchor, joinClass, joined, edit } = props;
+  const {
+    index: i,
+    host,
+    anchorRole: role,
+    ghost,
+    joinClass,
+    joined,
+    edit,
+  } = props;
   const lane = host.lanes[i]!;
   const blockClass = ['lane', 'block', joinClass].filter(Boolean).join(' ');
+  const isPrimary = role === 'primary';
+  const isPartner = role === 'partner';
+  const anchorActive = isPrimary || isPartner;
 
   return (
     <div className={blockClass}>
@@ -277,9 +292,9 @@ function LaneRow(props: {
         <Button
           onClick={() => host.anchor$.set(i)}
           label={i + 1 + ''}
-          state={isAnchor}
-          className="warn"
-          icon={isAnchor ? 'sine' : 'blank'}
+          state={anchorActive}
+          className={isPrimary ? 'warn' : ''}
+          icon={anchorActive ? 'sine' : 'blank'}
         />
       </WithInfo>
 
@@ -306,7 +321,7 @@ function LaneRow(props: {
           <AlignWaveStrip
             wave$={host.wave$}
             lane={i}
-            anchor={anchor}
+            ghost={ghost}
             delay$={lane.delay$}
             delayMin={-50}
             delayMax={50}

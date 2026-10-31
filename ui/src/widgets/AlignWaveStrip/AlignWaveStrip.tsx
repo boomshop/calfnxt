@@ -114,6 +114,53 @@ function packChannel(
   return pts;
 }
 
+/** Peak-normalize the sum of two lanes (stereo Anchor → mono ghost = L+R). */
+function packChannelSum(
+  v: number[],
+  bins: number,
+  offA: number,
+  offB: number,
+  pre: number,
+  post: number,
+  shiftMs = 0,
+): WaveDot[] | null {
+  let peak = 0;
+  for (let i = 0; i < bins; ++i)
+    peak = Math.max(peak, Math.abs((v[offA + i] ?? 0) + (v[offB + i] ?? 0)));
+  if (peak < SILENCE_PEAK) return null;
+  const span = pre + post;
+  const pts: WaveDot[] = [];
+  for (let i = 0; i < bins; ++i) {
+    const x = -pre + (i / (bins - 1)) * span + shiftMs;
+    pts.push({ x, y: ((v[offA + i] ?? 0) + (v[offB + i] ?? 0)) / peak });
+  }
+  return pts;
+}
+
+function packGhost(
+  v: number[],
+  bins: number,
+  nLanes: number,
+  ghost: number | [number, number],
+  pre: number,
+  post: number,
+): WaveDot[] | null {
+  if (Array.isArray(ghost)) {
+    const a = Math.max(0, Math.min(nLanes - 1, Math.round(ghost[0])));
+    const b = Math.max(0, Math.min(nLanes - 1, Math.round(ghost[1])));
+    return packChannelSum(
+      v,
+      bins,
+      WAVE_HDR + a * bins,
+      WAVE_HDR + b * bins,
+      pre,
+      post,
+    );
+  }
+  const g = Math.max(0, Math.min(nLanes - 1, Math.round(ghost)));
+  return packChannel(v, bins, WAVE_HDR + g * bins, pre, post);
+}
+
 function clampDelay(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
@@ -141,7 +188,12 @@ export interface AlignWaveStripProps {
   wave$: DynamicValue<number[]>;
   /** Lane strip: which mix lane (0…7). Ignored in master mode. */
   lane?: number;
-  /** Ghost reference lane for lane mode. */
+  /**
+   * Fill / ghost source. One lane index, or a stereo pair summed to L+R.
+   * Defaults to `lane` when omitted (unused); callers pass the Anchor ghost.
+   */
+  ghost?: number | [number, number];
+  /** @deprecated Prefer `ghost` — kept as alias for the hit-trigger lane index. */
   anchor?: number;
   /** Master: one channel (0=L, 1=R) — ref fill + mix outline. */
   mode?: 'lane' | 'master';
@@ -170,6 +222,7 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
     className,
     wave$,
     lane = 0,
+    ghost,
     anchor = 0,
     mode = 'lane',
     channel = 0,
@@ -180,8 +233,9 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
     endEdit,
     bypass$,
   } = props;
-  const metaRef = useRef({ lane, anchor, mode, channel });
-  metaRef.current = { lane, anchor, mode, channel };
+  const ghostSrc: number | [number, number] = ghost ?? anchor;
+  const metaRef = useRef({ lane, ghost: ghostSrc, mode, channel });
+  metaRef.current = { lane, ghost: ghostSrc, mode, channel };
 
   const chartRef = useRef<AuxChartInstance | null>(null);
   const graphsRef = useRef<AuxGraph[]>([]);
@@ -244,7 +298,7 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
   /** Paints outline (g1); returns fill dots for g0 (binding must not stomp them). */
   const paint = useCallback(
     (raw: number[] | undefined): WaveDot[] | null => {
-      const { lane: li, anchor: a, mode: m, channel: ch } = metaRef.current;
+      const { lane: li, ghost: gh, mode: m, channel: ch } = metaRef.current;
       syncRangeX(raw);
       const graphs = graphsRef.current;
       const v = raw && raw.length >= WAVE_HDR ? raw : EMPTY_WAVE;
@@ -280,9 +334,7 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
       }
 
       if (graphs.length < 2) return null;
-      const aIdx = Math.max(0, Math.min(nLanes - 1, Math.round(a)));
       const lIdx = Math.max(0, Math.min(nLanes - 1, Math.round(li)));
-      const aOff = WAVE_HDR + aIdx * bins;
       const lOff = WAVE_HDR + lIdx * bins;
       // Live delay nudge until the next DSP hit pack replaces the capture.
       // Bypass: DSP packs undelayed — do not keep a knob nudge on screen.
@@ -298,7 +350,7 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
         graphs[1]?.set('dots', null);
         return null;
       }
-      const ghostDots = packChannel(v, bins, aOff, pre, post);
+      const ghostDots = packGhost(v, bins, nLanes, gh, pre, post);
       graphs[1]?.set('dots', laneDots);
       graphs[1]?.toFront?.();
       queueMicrotask(() => reassertRef.current());
@@ -526,7 +578,7 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
     const g0 = graphsRef.current[0];
     const dots = paint((wave$.value as number[] | undefined) ?? EMPTY_WAVE);
     g0?.set('dots', dots);
-  }, [lane, anchor, mode, channel, wave$, paint]);
+  }, [lane, ghostSrc, mode, channel, wave$, paint]);
 
   // Knob / drag writes: nudge the outline without waiting for a new hit pack.
   useEffect(() => {

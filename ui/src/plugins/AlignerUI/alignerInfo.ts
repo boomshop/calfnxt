@@ -257,7 +257,7 @@ export const alignerInfo = {
 
   anchor: infoDoc({
     name: 'Anchor',
-    lead: 'Chooses which mix lane is the timing reference: hit trigger for captures and the filled ghost in every lane waveform.',
+    lead: 'Chooses the hit-trigger lane for captures. Both sides of a stereo Join pair show the sine mark (wave source); the clicked lane lights warn (hit), the partner lights accent.',
     meta: [
       { label: 'DAW name', value: 'Anchor' },
       { label: 'Parameter ID', value: '3' },
@@ -272,7 +272,7 @@ export const alignerInfo = {
         heading: 'How to use it',
         blocks: [
           {
-            p: 'Pick the lane with the clearest shared transient in the Analyze band. Correlation and wave ghosts are measured against that lane after its own Delay and Phase.',
+            p: 'Pick the lane with the clearest shared transient in the Analyze band. For a stereo OH or similar pair: Join the two lanes first, then click either side — that side becomes the hit trigger (warn), the partner stays accent. Correlation still uses the clicked lane after its Delay and Phase.',
           },
         ],
       },
@@ -280,7 +280,11 @@ export const alignerInfo = {
         heading: 'In detail',
         blocks: [
           {
-            p: 'A new capture arms when the filtered Anchor level shows a peak above the detector floor and above a fraction of its recent envelope, then waits out the post window before packing all lanes, the mix, and the Reference.',
+            ul: [
+              'Only the stored Anchor index arms the detector. Partner highlighting is UI only.',
+              'Wave fills follow the stereo ghost rules (see Waveform): stereo Anchor → L↔L / R↔R on stereo lanes, L+R mid on mono; mono Anchor → that single lane everywhere.',
+              'A new capture arms when the filtered Anchor level shows a peak above the detector floor and above a fraction of its recent envelope, then waits out the post window before packing all lanes, the mix, and the Reference.',
+            ],
           },
         ],
       },
@@ -289,7 +293,7 @@ export const alignerInfo = {
 
   join: infoDoc({
     name: 'Join',
-    lead: 'Links this lane to the group above so one top Delay moves the pair (or chain), while this lane keeps its own relative offset.',
+    lead: 'Links this lane to the group above so one top Delay moves the pair (or chain), while this lane keeps its own relative offset. A two-lane Join is also the stereo Anchor pair for wave ghosts.',
     meta: [
       { label: 'DAW name', value: 'B2 Join, and the same for B3…B8 (lane 1 has no Join)' },
       { label: 'Parameter ID', value: laneId(3) },
@@ -304,7 +308,7 @@ export const alignerInfo = {
         heading: 'How to use it',
         blocks: [
           {
-            p: 'Use it for a stereo pair or a tight group that should stay locked while you nudge the whole group from the top lane. Then trim Rel on the member if one side still leads or lags.',
+            p: 'Use it for a stereo pair or a tight group that should stay locked while you nudge the whole group from the top lane. Then trim Rel on the member if one side still leads or lags. With exactly two lanes Joined, clicking either Anchor button marks both: warn on the hit side, accent on the partner — and every strip’s fill uses L↔L / R↔R (mono lanes get L+R).',
           },
         ],
       },
@@ -315,6 +319,7 @@ export const alignerInfo = {
             ul: [
               'Effective delay for a joined member is group-root Delay plus that member’s Delay (Rel).',
               'Chains walk upward while Join is on; the first lane without Join above is the root.',
+              'Stereo ghost pairing uses the first two lanes of the Anchor’s Join group. Longer chains still delay as one group; deeper members see the L+R mid fill.',
               'Mute, Solo, Phase, Gain, and Pan stay independent.',
               'Toggling Join converts the member’s Delay between absolute and relative so the audible time does not jump.',
             ],
@@ -512,16 +517,16 @@ export const alignerInfo = {
 
   wave: infoDoc({
     name: 'Waveform',
-    lead: 'Hit window around the last Anchor transient for this lane. Filled curve is the Anchor; outline is this lane.',
+    lead: 'Hit window around the last Anchor transient for this lane. Filled curve is the Anchor ghost; outline is this lane.',
     sections: [
       {
         heading: 'How to read it',
         blocks: [
           {
             ul: [
-              'Fill — Anchor, peak-normalized on its own.',
+              'Fill — Anchor ghost, peak-normalized on its own. Mono Anchor: that lane. Stereo Join Anchor: matching side on a stereo lane (L↔L, R↔R); L+R mid on a mono lane.',
               'Outline — this lane after Delay and Phase, peak-normalized on its own.',
-              'Horizontal shift is relative to the Anchor’s delay so lined-up hits sit on top of each other.',
+              'Horizontal shift is relative to this lane’s delay so lined-up hits sit on top of the ghost.',
             ],
           },
         ],
@@ -530,7 +535,7 @@ export const alignerInfo = {
         heading: 'How to use it',
         blocks: [
           {
-            p: 'Drag the strip horizontally to write Delay (same range as the knob), or nudge the knob. Line the outline up with the Anchor fill; flip Phase if the shapes mirror. Empty strips mean that input is inactive or below the silence floor for drawing.',
+            p: 'Drag the strip horizontally to write Delay (same range as the knob), or nudge the knob. Line the outline up with the fill; flip Phase if the shapes mirror. On a stereo pair, join first and pick either side as Anchor so left compares to left and right to right. Empty strips mean that input is inactive or below the silence floor for drawing.',
           },
         ],
       },
@@ -538,7 +543,7 @@ export const alignerInfo = {
         heading: 'In detail',
         blocks: [
           {
-            p: 'Not a scrolling DAW waveform. Width comes from Wave in the header. A new Anchor hit refreshes every strip. Drag and Delay shift the outline on the last capture until the next hit packs a new window.',
+            p: 'Not a scrolling DAW waveform. Width comes from Wave in the header. A new Anchor hit refreshes every strip. Drag and Delay shift the outline on the last capture until the next hit packs a new window. The stereo ghost uses the first two lanes of the Anchor’s Join group; the hit detector still listens only to the clicked Anchor index.',
           },
         ],
       },
