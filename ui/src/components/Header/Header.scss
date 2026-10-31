@@ -13,6 +13,13 @@
     width: auto;
     flex-shrink: 0;
     color: var(--color);
+    cursor: default;
+    position: relative;
+    z-index: 2; // above .title (negative margin overlaps the mark)
+
+    &:focus {
+      outline: none;
+    }
   }
 
   > .title {
@@ -20,6 +27,7 @@
     margin-left: -48px;
     font-size: var(--font-size-small);
     flex-shrink: 0;
+    pointer-events: none;
   }
 
   > .io {

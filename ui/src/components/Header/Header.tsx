@@ -39,7 +39,21 @@ import {
   ardourGuiTipVisible$,
 } from '../../prefs/ardourGuiTip';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
+import { dumpVizToTmp } from '../../utils/bridge';
 import { headerInfo } from './headerInfo';
+
+/** Secret dump chord. Super/meta often eaten by the DE — Ctrl+Shift always reaches WebKit. */
+function isDumpClick(e: React.MouseEvent): boolean {
+  if (e.ctrlKey && e.shiftKey && !e.altKey)
+    return true;
+  if (e.metaKey)
+    return true;
+  try {
+    return e.getModifierState('OS') || e.getModifierState('Super');
+  } catch {
+    return false;
+  }
+}
 
 export interface HeaderProps {
   title?: string;
@@ -85,7 +99,16 @@ export function Header(props: React.PropsWithChildren<HeaderProps>) {
 
   return (
     <div className="Header">
-      <CalfNxtLogo className="logo" />
+      <CalfNxtLogo
+        className="logo"
+        onClick={(e) => {
+          if (!isDumpClick(e))
+            return;
+          e.preventDefault();
+          e.stopPropagation();
+          dumpVizToTmp();
+        }}
+      />
       {title ? <div className="title">{title}</div> : null}
 
       <div className="in io" data-io="in">
