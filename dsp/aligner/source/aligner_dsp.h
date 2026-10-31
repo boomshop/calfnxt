@@ -9,6 +9,7 @@
 #include "aligner_params.h"
 
 #include <atomic>
+#include <cstdint>
 
 namespace calfNXT {
 namespace Aligner {
@@ -45,9 +46,13 @@ public:
   const char* vizEnvelopeKind() const override { return "ctrl"; }
 
   /**
-   * Hit waveforms:
+   * Hit waveforms (change-gated — 0 when the packed view is unchanged):
    * [bins, nLanes, preBins, viewPreMs, viewPostMs,
    *  lane0…lane7, mixL, mixR, refL, refR].
+   * Lock from half-period |peaks| (ZC→ZC): first rise after armed/wait-rise,
+   * track max while rising, wait after a fall. Re-lock blocked for ~½ Wave
+   * span so a wide window can show two hits without jumping. Viz publishes
+   * once the current Wave window is full (previous pack stays until then).
    */
   int takeIrWaveform(float* out, int maxOut) override;
   const char* vizIrWaveId() const override { return "aligner"; }
@@ -83,8 +88,31 @@ private:
   int msToDelaySamples(float ms) const;
   void writeLaneDelayPlain(int lane, float plainMs);
   void syncJoinPrevFromParams();
-  void captureHitWave(int anchor);
-  void tickHitWaveTrigger(int anchor, float anchorSample, bool anchorActive);
+
+  /** Max-span view/pad/win geometry (Wave knob only crops the viz pack). */
+  void waveGeomForSpan(float spanMs, int& viewPre, int& viewPost, int& pad, int& win) const;
+  void resetWaveHit();
+  /** Lock with the attack sample `peakAge` samples in the past (1 = now). */
+  void armWaveLock(int peakAge);
+  /** Copy ring → waveRaw_; peak at pad+pre, `peakAge` = samples since that max.
+   *  When `publish`, bump fillSeq so the UI may take a new pack. */
+  void snapshotWaveFromRing(int peakAge, bool publish);
+  /** Hump state-machine lock + live post fill (hit tap, per sample). */
+  void tickWaveHit(float sample, bool active);
+
+  /** Inputs that change the packed viz crop / delay alignment / fill step. */
+  struct WaveVizSig
+  {
+    Steinberg::uint32 gen = 0;
+    Steinberg::uint32 fillSeq = 0;
+    float spanMs = 0.f;
+    float masterTrimMs = 0.f;
+    float laneDelayMs[kLanes] {};
+    std::uint8_t phase[kLanes] {};
+    std::uint8_t bypass = 0;
+    std::uint8_t anchor = 0;
+  };
+  void fillWaveVizSig(WaveVizSig& sig) const;
 
   float params_[kParamCount] {};
   LaneState lanes_[kLanes] {};
@@ -120,21 +148,48 @@ private:
   static constexpr float kWaveSpanMsMax = 240.f;
   static constexpr float kWavePadMs = 50.f;
   static constexpr int kWaveRawMax = 32768;
+  /** Abs floor for a countable half-period peak. */
+  static constexpr float kWaveOnsetFloor = 0.02f;
+  /** Re-trigger mute ≈ this fraction of the Wave knob span. */
+  static constexpr float kWaveRefractorySpan = 0.5f;
+  /** Silent raw extend while filling past the first published Wave window. */
+  static constexpr int kWaveFillRawStride = 64;
+
+  enum class WaveHitPhase : std::uint8_t
+  {
+    Armed = 0,    // ready for first half-period peak
+    InHit = 1,    // locked; remember max while period peaks rise
+    WaitRise = 2, // saw a fall; next rise (after a ZC) locks
+  };
+
   float waveRaw_[kLanes][kWaveRawMax] {};
   float waveRawMix_[2][kWaveRawMax] {};
   float waveRawRef_[2][kWaveRawMax] {};
   int waveRawLen_ = 0;
   int wavePeakIndex_ = 0;
-  int waveViewPre_ = 0;
-  int waveViewPost_ = 0;
-  float waveViewPreMs_ = 8.f;
-  float waveViewPostMs_ = 24.f;
+  int waveCapPre_ = 0;
+  int waveCapPost_ = 0;
+  int wavePostTail_ = 0;
+  /** Age of the locked attack; grows with wall-clock while filling. */
+  int wavePeakAge_ = 1;
+  bool waveFilling_ = false;
+  /** True until the current Wave post window has been published once. */
+  bool wavePendingViz_ = false;
   bool waveHave_ = false;
-  int wavePending_ = 0;
-  int waveCooldown_ = 0;
-  float waveEnv_ = 0.f;
-  float wavePrevA_ = 0.f;
-  float wavePrev2A_ = 0.f;
+  Steinberg::uint32 waveCapGen_ = 0;
+  Steinberg::uint32 waveFillSeq_ = 0;
+  WaveVizSig waveVizSent_ {};
+  bool waveVizHaveSent_ = false;
+
+  // Half-period (ZC) peak state machine → x=0.
+  WaveHitPhase waveHitPhase_ = WaveHitPhase::Armed;
+  float waveHitMax_ = 0.f;
+  float waveLastHump_ = 0.f;
+  float waveHitPrev_ = 0.f;
+  float wavePeriodPeak_ = 0.f;
+  int wavePeriodPeakAge_ = 1;
+  int waveRefractoryLeft_ = 0;
+
   bool bypassPrev_ = false;
 
   std::atomic<float> vizCorr_[kLanes] {};

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace calfNXT {
 namespace Aligner {
@@ -102,13 +103,7 @@ tresult PLUGIN_API AlignerPlugin::setActive(TBool state)
       analysisRef_[c].reset();
     }
     masterDelay_.reset();
-    waveHave_ = false;
-    wavePending_ = 0;
-    waveCooldown_ = 0;
-    waveEnv_ = wavePrevA_ = wavePrev2A_ = 0.f;
-    waveRawLen_ = wavePeakIndex_ = waveViewPre_ = waveViewPost_ = 0;
-    waveViewPreMs_ = 8.f;
-    waveViewPostMs_ = 24.f;
+    resetWaveHit();
   }
   else
   {
@@ -294,13 +289,9 @@ tresult PLUGIN_API AlignerPlugin::process(ProcessData& data)
   const uint32 reportLat = static_cast<uint32>(msToDelaySamples(reportMs));
   updateLatency(reportLat, /*notifyHost=*/true);
 
-  // Bypass edge: re-snapshot the last hit window so packs match undelayed taps.
+  // Bypass edge: re-snapshot so packs match undelayed / delayed taps.
   if (bypass != bypassPrev_ && waveHave_)
-  {
-    const int anc =
-      std::clamp(static_cast<int>(std::lround(params_[kParamAnchor])), 0, kLanes - 1);
-    captureHitWave(anc);
-  }
+    snapshotWaveFromRing(std::max(1, wavePeakAge_), /*publish=*/true);
   bypassPrev_ = bypass;
 
   const float corrCoeff =
@@ -355,7 +346,7 @@ tresult PLUGIN_API AlignerPlugin::process(ProcessData& data)
       refRawDelay_[1].write(refIn[1]);
 
       const float hitSample = filterHit ? filtered[anchor] : raw[anchor];
-      tickHitWaveTrigger(anchor, hitSample, active[anchor]);
+      tickWaveHit(hitSample, active[anchor]);
 
       float alignedFilt[kLanes] {};
       float alignedRaw[kLanes] {};
@@ -503,18 +494,18 @@ tresult PLUGIN_API AlignerPlugin::process(ProcessData& data)
   return kResultOk;
 }
 
-void AlignerPlugin::tickHitWaveTrigger(int anchor, float anchorSample, bool anchorActive)
+void AlignerPlugin::waveGeomForSpan(float spanMs, int& viewPre, int& viewPost, int& pad,
+                                    int& win) const
 {
-  const float span = std::clamp(params_[kParamWaveSpan], kWaveSpanMsMin, kWaveSpanMsMax);
+  const float span = std::clamp(spanMs, kWaveSpanMsMin, kWaveSpanMsMax);
   const float preMs = span * 0.25f;
   const float postMs = span - preMs;
-  int viewPre =
+  viewPre =
     std::clamp(static_cast<int>(std::lround(preMs * 0.001 * sampleRate_)), 16, 16384);
-  int viewPost =
+  viewPost =
     std::clamp(static_cast<int>(std::lround(postMs * 0.001 * sampleRate_)), 32, 16384);
-  int pad =
-    std::clamp(static_cast<int>(std::lround(kWavePadMs * 0.001 * sampleRate_)), 64, 8192);
-  int win = pad + viewPre + viewPost + pad;
+  pad = std::clamp(static_cast<int>(std::lround(kWavePadMs * 0.001 * sampleRate_)), 64, 8192);
+  win = pad + viewPre + viewPost + pad;
   if (win > kWaveRawMax)
   {
     int room = kWaveRawMax - viewPre - viewPost;
@@ -529,48 +520,79 @@ void AlignerPlugin::tickHitWaveTrigger(int anchor, float anchorSample, bool anch
     pad = std::max(64, room / 2);
     win = pad + viewPre + viewPost + pad;
   }
-  const int peakIndex = pad + viewPre;
-  const int postTail = win - peakIndex;
-
-  if (wavePending_ > 0)
-  {
-    --wavePending_;
-    if (wavePending_ == 0)
-      captureHitWave(anchor);
-  }
-
-  const float a = anchorActive ? std::fabs(anchorSample) : 0.f;
-  waveEnv_ = std::max(a, waveEnv_ * 0.995f);
-  const bool peak = wavePrevA_ > wavePrev2A_ && wavePrevA_ >= a && wavePrevA_ > 0.02f
-                    && wavePrevA_ > waveEnv_ * 0.55f && wavePrevA_ > 1.0e-4f;
-  wavePrev2A_ = wavePrevA_;
-  wavePrevA_ = a;
-
-  if (waveCooldown_ > 0)
-  {
-    --waveCooldown_;
-    return;
-  }
-  if (wavePending_ > 0 || !peak || !anchorActive)
-    return;
-
-  wavePending_ = postTail;
-  waveCooldown_ = postTail + static_cast<int>(0.12 * sampleRate_);
-  wavePeakIndex_ = peakIndex;
-  waveViewPre_ = viewPre;
-  waveViewPost_ = viewPost;
-  waveViewPreMs_ = static_cast<float>(viewPre) * 1000.f / static_cast<float>(sampleRate_);
-  waveViewPostMs_ = static_cast<float>(viewPost) * 1000.f / static_cast<float>(sampleRate_);
-  waveRawLen_ = win;
 }
 
-void AlignerPlugin::captureHitWave(int anchor)
+void AlignerPlugin::fillWaveVizSig(WaveVizSig& sig) const
 {
-  (void)anchor;
-  const int win = waveRawLen_;
-  const int peak = wavePeakIndex_;
-  if (peak < 8 || win < peak + 8 || win > kWaveRawMax)
+  sig = {};
+  sig.gen = waveCapGen_;
+  sig.fillSeq = waveFillSeq_;
+  sig.spanMs = std::clamp(params_[kParamWaveSpan], kWaveSpanMsMin, kWaveSpanMsMax);
+  sig.masterTrimMs = std::clamp(params_[kParamMasterTrim], -kMaxMasterMs, kMaxMasterMs);
+  sig.bypass = params_[kParamBypass] >= 0.5f ? 1 : 0;
+  sig.anchor =
+    static_cast<std::uint8_t>(std::clamp(static_cast<int>(std::lround(params_[kParamAnchor])),
+                                         0, kLanes - 1));
+  for (int i = 0; i < kLanes; ++i)
+  {
+    sig.laneDelayMs[i] = effectiveLaneDelayMs(i);
+    sig.phase[i] = lanes_[i].phase ? 1 : 0;
+  }
+}
+
+void AlignerPlugin::resetWaveHit()
+{
+  waveHave_ = false;
+  waveFilling_ = false;
+  wavePendingViz_ = false;
+  wavePeakAge_ = 1;
+  wavePostTail_ = 0;
+  waveRawLen_ = wavePeakIndex_ = waveCapPre_ = waveCapPost_ = 0;
+  waveCapGen_ = 0;
+  waveFillSeq_ = 0;
+  waveVizSent_ = {};
+  waveVizHaveSent_ = false;
+  waveHitPhase_ = WaveHitPhase::Armed;
+  waveHitMax_ = waveLastHump_ = 0.f;
+  waveHitPrev_ = 0.f;
+  wavePeriodPeak_ = 0.f;
+  wavePeriodPeakAge_ = 1;
+  waveRefractoryLeft_ = 0;
+}
+
+void AlignerPlugin::armWaveLock(int peakAge)
+{
+  int viewPre = 0, viewPost = 0, pad = 0, win = 0;
+  waveGeomForSpan(kWaveSpanMsMax, viewPre, viewPost, pad, win);
+  wavePeakIndex_ = pad + viewPre;
+  waveCapPre_ = viewPre;
+  waveCapPost_ = viewPost;
+  wavePostTail_ = win - wavePeakIndex_;
+  wavePeakAge_ = std::clamp(peakAge, 1, wavePostTail_);
+  waveFilling_ = true;
+  wavePendingViz_ = true;
+  ++waveCapGen_;
+  // Seed raw only — keep the previous UI pack until the Wave window is full.
+  snapshotWaveFromRing(wavePeakAge_, /*publish=*/false);
+}
+
+void AlignerPlugin::snapshotWaveFromRing(int peakAge, bool publish)
+{
+  int viewPre = 0, viewPost = 0, pad = 0, fullWin = 0;
+  waveGeomForSpan(kWaveSpanMsMax, viewPre, viewPost, pad, fullWin);
+  const int peakIndex = pad + viewPre;
+  const int postTail = fullWin - peakIndex;
+  peakAge = std::clamp(peakAge, 1, postTail);
+  const int win = peakIndex + peakAge;
+  if (peakIndex < 8 || win < peakIndex + 1 || win > kWaveRawMax)
     return;
+
+  wavePeakIndex_ = peakIndex;
+  waveRawLen_ = win;
+  waveCapPre_ = viewPre;
+  waveCapPost_ = viewPost;
+  wavePostTail_ = postTail;
+  wavePeakAge_ = peakAge;
 
   for (int l = 0; l < kLanes; ++l)
   {
@@ -592,7 +614,143 @@ void AlignerPlugin::captureHitWave(int anchor)
       waveRawRef_[c][i] = refSrc.read(std::max(1, age));
     }
   }
+
   waveHave_ = true;
+  if (publish)
+  {
+    ++waveFillSeq_;
+    waveVizHaveSent_ = false;
+  }
+}
+
+void AlignerPlugin::tickWaveHit(float sample, bool active)
+{
+  // Grow post after the locked hump until max span (+ pad) is present.
+  // UI sees one publish when the current Wave window is full; older pack stays.
+  if (waveFilling_)
+  {
+    ++wavePeakAge_;
+    int wantPre = 0, wantPost = 0, wantPad = 0, wantWin = 0;
+    waveGeomForSpan(std::clamp(params_[kParamWaveSpan], kWaveSpanMsMin, kWaveSpanMsMax),
+                    wantPre, wantPost, wantPad, wantWin);
+    (void)wantPre;
+    (void)wantPad;
+    (void)wantWin;
+
+    if (wavePeakAge_ >= wavePostTail_)
+    {
+      const bool pub = wavePendingViz_;
+      wavePendingViz_ = false;
+      snapshotWaveFromRing(wavePostTail_, pub);
+      waveFilling_ = false;
+    }
+    else if (wavePendingViz_ && wavePeakAge_ >= wantPost)
+    {
+      // Clear pending before publish so takeIr cannot send a half-empty pack
+      // (gen already advanced on lock) or skip the ready pack.
+      wavePendingViz_ = false;
+      snapshotWaveFromRing(wavePeakAge_, /*publish=*/true);
+    }
+    else if ((wavePeakAge_ % kWaveFillRawStride) == 0)
+    {
+      // Keep extending raw silently (wider Wave knob / later re-crop).
+      snapshotWaveFromRing(wavePeakAge_, /*publish=*/false);
+    }
+  }
+
+  if (waveRefractoryLeft_ > 0)
+    --waveRefractoryLeft_;
+
+  if (!active)
+  {
+    waveHitPhase_ = WaveHitPhase::Armed;
+    waveHitMax_ = waveLastHump_ = 0.f;
+    waveHitPrev_ = 0.f;
+    wavePeriodPeak_ = 0.f;
+    wavePeriodPeakAge_ = 1;
+    waveRefractoryLeft_ = 0;
+    return;
+  }
+
+  const float x = sample;
+  const float ax = std::fabs(x);
+
+  // One amplitude sample per half-period (between zero-crossings). A double
+  // peak without a ZC is just the louder value of that half-period — no rise.
+  if (ax >= wavePeriodPeak_)
+  {
+    wavePeriodPeak_ = ax;
+    wavePeriodPeakAge_ = 1; // delay already holds this sample
+  }
+  else
+  {
+    ++wavePeriodPeakAge_;
+  }
+
+  const bool zc =
+    (waveHitPrev_ < 0.f && x >= 0.f) || (waveHitPrev_ > 0.f && x <= 0.f);
+  waveHitPrev_ = x;
+  if (!zc)
+    return;
+
+  const float P = wavePeriodPeak_;
+  const int peakAge = std::max(1, wavePeriodPeakAge_);
+  wavePeriodPeak_ = ax;
+  wavePeriodPeakAge_ = 1;
+
+  if (P <= kWaveOnsetFloor && waveLastHump_ <= kWaveOnsetFloor)
+  {
+    waveLastHump_ = P;
+    return;
+  }
+
+  auto tryLock = [&]() {
+    if (waveFilling_ || waveRefractoryLeft_ > 0)
+      return;
+    armWaveLock(peakAge);
+    const float spanMs =
+      std::clamp(params_[kParamWaveSpan], kWaveSpanMsMin, kWaveSpanMsMax);
+    waveRefractoryLeft_ = std::max(
+      1, static_cast<int>(std::lround(kWaveRefractorySpan * spanMs * 0.001 * sampleRate_)));
+  };
+
+  switch (waveHitPhase_)
+  {
+  case WaveHitPhase::Armed:
+    if (P > kWaveOnsetFloor)
+    {
+      tryLock();
+      waveHitMax_ = waveLastHump_ = P;
+      waveHitPhase_ = WaveHitPhase::InHit;
+    }
+    break;
+
+  case WaveHitPhase::InHit:
+    if (P >= waveLastHump_)
+    {
+      waveHitMax_ = std::max(waveHitMax_, P);
+      waveLastHump_ = P;
+    }
+    else
+    {
+      waveLastHump_ = P;
+      waveHitPhase_ = WaveHitPhase::WaitRise;
+    }
+    break;
+
+  case WaveHitPhase::WaitRise:
+    if (P > waveLastHump_)
+    {
+      tryLock();
+      waveHitMax_ = waveLastHump_ = P;
+      waveHitPhase_ = WaveHitPhase::InHit;
+    }
+    else
+    {
+      waveLastHump_ = P;
+    }
+    break;
+  }
 }
 
 int AlignerPlugin::takeIrWaveform(float* out, int maxOut)
@@ -602,12 +760,31 @@ int AlignerPlugin::takeIrWaveform(float* out, int maxOut)
   const int nCh = kLanes + kWaveExtra;
   if (!out || maxOut < kHdr + nCh * 8 || !waveHave_ || waveRawLen_ < 8)
     return 0;
+  // Lock bumps gen immediately; raw post is still short. Hold the previous
+  // UI pack until the Wave window is full (wavePendingViz_ cleared on publish).
+  if (wavePendingViz_)
+    return 0;
+
+  WaveVizSig sig;
+  fillWaveVizSig(sig);
+  if (waveVizHaveSent_ && std::memcmp(&sig, &waveVizSent_, sizeof(sig)) == 0)
+    return 0;
 
   const int win = waveRawLen_;
-  const int peak = std::clamp(wavePeakIndex_, 1, win - 2);
-  const int viewPre = std::clamp(waveViewPre_, 1, peak);
-  const int viewPost = std::clamp(waveViewPost_, 1, win - peak - 1);
+  const int peak = std::clamp(wavePeakIndex_, 1, std::max(1, win - 1));
+
+  int wantPre = 0, wantPost = 0, wantPad = 0, wantWin = 0;
+  waveGeomForSpan(sig.spanMs, wantPre, wantPost, wantPad, wantWin);
+  (void)wantPad;
+  (void)wantWin;
+
+  // Axis is fixed by the Wave knob — never shrink post to the live fill length
+  // (that made the time grid jump while the ring grew).
+  const int viewPre = std::clamp(wantPre, 1, peak);
+  const int viewPost = std::max(1, wantPost);
   const int viewLen = viewPre + viewPost;
+  if (viewLen < 2 || peak - viewPre < 0)
+    return 0;
   const int viewStart = peak - viewPre;
 
   const int bins = std::clamp(
@@ -619,28 +796,32 @@ int AlignerPlugin::takeIrWaveform(float* out, int maxOut)
   const int preBins =
     std::clamp(static_cast<int>(std::lround(static_cast<double>(viewPre) / (viewLen - 1) * (bins - 1))),
                1, bins - 2);
-  const int anchor = std::clamp(static_cast<int>(std::lround(params_[kParamAnchor])), 0, kLanes - 1);
 
   out[0] = static_cast<float>(bins);
   out[1] = static_cast<float>(kLanes);
   out[2] = static_cast<float>(preBins);
-  out[3] = waveViewPreMs_;
-  out[4] = waveViewPostMs_;
+  out[3] = static_cast<float>(viewPre) * 1000.f / static_cast<float>(sampleRate_);
+  out[4] = static_cast<float>(viewPost) * 1000.f / static_cast<float>(sampleRate_);
 
-  const bool bypass = params_[kParamBypass] >= 0.5f;
+  const bool bypass = sig.bypass != 0;
+  const int anchor = sig.anchor;
   const float anchorDelaySamp =
     bypass
       ? 0.f
       : effectiveLaneDelayMs(anchor) * 0.001f * static_cast<float>(sampleRate_);
   const float scale = static_cast<float>(viewLen - 1) / static_cast<float>(bins - 1);
+  const float winLast = static_cast<float>(std::max(0, win - 1));
 
   auto sampleRaw = [&](const float* src, float srcIdx) -> float {
-    if (srcIdx <= 0.f)
+    // Past the live-filled tail → silence (axis stays full Wave span).
+    if (srcIdx < 0.f || srcIdx > winLast)
+      return 0.f;
+    if (win <= 1)
       return src[0];
-    if (srcIdx >= static_cast<float>(win - 1))
-      return src[win - 1];
     const int i0 = static_cast<int>(srcIdx);
     const float frac = srcIdx - static_cast<float>(i0);
+    if (i0 >= win - 1)
+      return src[win - 1];
     return src[i0] + (src[i0 + 1] - src[i0]) * frac;
   };
 
@@ -662,19 +843,15 @@ int AlignerPlugin::takeIrWaveform(float* out, int maxOut)
     pack(out + kHdr + l * bins, waveRaw_[l], delaySamp, sign);
   }
 
-  // Master outline vs Reference: only Master Trim moves the mix. Lane / anchor
-  // delays are already in the mix capture when active; do not also subtract
-  // anchorDelay here (that made Bypass look like a jump).
   const float masterTrimSamp =
-    bypass
-      ? 0.f
-      : std::clamp(params_[kParamMasterTrim], -kMaxMasterMs, kMaxMasterMs) * 0.001f
-          * static_cast<float>(sampleRate_);
+    bypass ? 0.f : sig.masterTrimMs * 0.001f * static_cast<float>(sampleRate_);
   pack(out + kHdr + kLanes * bins, waveRawMix_[0], masterTrimSamp, 1.f);
   pack(out + kHdr + (kLanes + 1) * bins, waveRawMix_[1], masterTrimSamp, 1.f);
   pack(out + kHdr + (kLanes + 2) * bins, waveRawRef_[0], 0.f, 1.f);
   pack(out + kHdr + (kLanes + 3) * bins, waveRawRef_[1], 0.f, 1.f);
 
+  waveVizSent_ = sig;
+  waveVizHaveSent_ = true;
   return kNeed;
 }
 
