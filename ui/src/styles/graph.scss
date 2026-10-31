@@ -16,7 +16,8 @@
  *   fill-semi, fill-color
  *
  * Opacity tiers (identical for fill and stroke):
- *   full 1 | rich 0.75 | mostly 0.63 | semi 0.5 | soft 0.37 | faint 0.25 | ghost 0.12 | none 0
+ *   full 1 | rich 0.75 | mostly 0.63 | semi 0.5 | soft 0.37 | faint 0.25 |
+ *   pale 0.15 | ghost 0.1 | none 0
  *
  * Note: `.stroke-medium` is stroke-*width* (1.5px). Opacity uses `.stroke-mostly`
  * / `.fill-mostly` so the names do not collide.
@@ -61,6 +62,7 @@
   --graph-opacity-semi: 0.5;
   --graph-opacity-soft: 0.37;
   --graph-opacity-faint: 0.25;
+  --graph-opacity-pale: 0.2;
   --graph-opacity-ghost: 0.1;
   --graph-opacity-none: 0;
 
@@ -71,6 +73,7 @@
   --graph-stroke-opacity-semi: var(--graph-opacity-semi);
   --graph-stroke-opacity-soft: var(--graph-opacity-soft);
   --graph-stroke-opacity-faint: var(--graph-opacity-faint);
+  --graph-stroke-opacity-pale: var(--graph-opacity-pale);
   --graph-stroke-opacity-ghost: var(--graph-opacity-ghost);
   --graph-stroke-opacity-none: var(--graph-opacity-none);
 
@@ -81,6 +84,7 @@
   --graph-fill-opacity-semi: var(--graph-opacity-semi);
   --graph-fill-opacity-soft: var(--graph-opacity-soft);
   --graph-fill-opacity-faint: var(--graph-opacity-faint);
+  --graph-fill-opacity-pale: var(--graph-opacity-pale);
   --graph-fill-opacity-ghost: var(--graph-opacity-ghost);
   --graph-fill-opacity-none: var(--graph-opacity-none);
 
@@ -167,6 +171,10 @@
 .aux-graph.stroke-faint {
   stroke-opacity: var(--graph-stroke-opacity-faint);
 }
+.stroke-pale,
+.aux-graph.stroke-pale {
+  stroke-opacity: var(--graph-stroke-opacity-pale);
+}
 .stroke-ghost,
 .aux-graph.stroke-ghost {
   stroke-opacity: var(--graph-stroke-opacity-ghost);
@@ -201,6 +209,10 @@
 .fill-faint,
 .aux-graph.fill-faint {
   fill-opacity: var(--graph-fill-opacity-faint);
+}
+.fill-pale,
+.aux-graph.fill-pale {
+  fill-opacity: var(--graph-fill-opacity-pale);
 }
 .fill-ghost,
 .aux-graph.fill-ghost {

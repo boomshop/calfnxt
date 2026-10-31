@@ -282,11 +282,15 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
     delayRange.set('max', delayMaxRef.current);
   }, []);
 
-  const lastAxisRef = useRef<{ pre: number; post: number }>({ pre: NaN, post: NaN });
+  const lastAxisRef = useRef<{ pre: number; post: number }>({
+    pre: NaN,
+    post: NaN,
+  });
   const syncRangeX = useCallback(
     (raw: number[] | undefined) => {
       const inst = chartRef.current;
-      if (!inst || inst.isDestructed?.() || !raw || raw.length < WAVE_HDR) return;
+      if (!inst || inst.isDestructed?.() || !raw || raw.length < WAVE_HDR)
+        return;
       const { pre, post } = waveWindowMs(raw);
       // Axis is Wave-knob only — skip redundant set() so live fill cannot flicker the grid.
       const prev = lastAxisRef.current;
@@ -331,7 +335,8 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
         const shiftMs =
           bypassOn || !d$
             ? 0
-            : (typeof d$.value === 'number' ? d$.value : 0) - captureDelayRef.current;
+            : (typeof d$.value === 'number' ? d$.value : 0) -
+              captureDelayRef.current;
         const mixDots = packChannel(v, bins, mixOff, pre, post, shiftMs);
         if (!mixDots) {
           for (const g of graphs) g.set('dots', null);
@@ -354,7 +359,8 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
       const shiftMs =
         bypassOn || !d$
           ? 0
-          : (typeof d$.value === 'number' ? d$.value : 0) - captureDelayRef.current;
+          : (typeof d$.value === 'number' ? d$.value : 0) -
+            captureDelayRef.current;
       const laneDots = packChannel(v, bins, lOff, pre, post, shiftMs);
       if (!laneDots) {
         graphs[0]?.set('dots', null);
@@ -495,7 +501,7 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
         addGraphClasses(
           refG.element,
           'align-wave-ref',
-          'fill-color fill-faint stroke-none',
+          'fill-color fill-pale stroke-none',
         );
         // Outline only — mode "center" would stroke the mid close-edge.
         const mixG = inst.addGraph({
@@ -511,7 +517,7 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
           'align-wave-mix',
           'fill-none',
           mixStroke,
-          'stroke-medium',
+          'stroke-thick',
         );
         graphsRef.current = [refG, mixG];
       } else {
@@ -525,7 +531,7 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
         addGraphClasses(
           ghost.element,
           'align-wave-ghost',
-          'fill-color fill-faint stroke-none',
+          'fill-color fill-pale stroke-none',
         );
         const laneG = inst.addGraph({
           dots: null,
@@ -538,7 +544,7 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
           'align-wave-lane',
           'fill-none',
           `stroke-palette-${paletteStepForIndex(metaRef.current.lane)}`,
-          'stroke-medium',
+          'stroke-thick',
         );
         graphsRef.current = [ghost, laneG];
       }
@@ -614,11 +620,7 @@ export function AlignWaveStrip(props: AlignWaveStripProps) {
 
   useEffect(() => () => detachRef.current(true), []);
 
-  const cls = [
-    'AlignWaveStrip',
-    className ?? '',
-    delay$ ? 'is-draggable' : '',
-  ]
+  const cls = ['AlignWaveStrip', className ?? '', delay$ ? 'is-draggable' : '']
     .filter(Boolean)
     .join(' ');
   return <ChartWidget className={cls} widgetRef={widgetRef} />;
