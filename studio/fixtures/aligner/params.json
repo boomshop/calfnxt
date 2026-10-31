@@ -2,7 +2,7 @@
   "in_gain": 0,
   "out_gain": 0,
   "bypass": false,
-  "anchor": 0.0,
+  "anchor": 2,
   "master_trim": -1.5,
   "analysis_hp": 40.0,
   "analysis_lp": 400.0,
