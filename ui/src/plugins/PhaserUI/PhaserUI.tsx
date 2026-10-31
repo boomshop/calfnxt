@@ -138,7 +138,9 @@ export function PhaserUI(props: PhaserUIProps) {
 
       <div className="block chart">
         <div className="title">Frequency Response</div>
-        <ModulationChart data$={host.response$} dbMin={-36} dbMax={24} />
+        <WithInfo title={phaserInfo.chart}>
+          <ModulationChart data$={host.response$} dbMin={-36} dbMax={24} />
+        </WithInfo>
       </div>
 
       <div className="block stereo">

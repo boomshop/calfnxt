@@ -8,7 +8,10 @@ import {
 import { EQChart, Knob, Select, Toggle } from '../';
 import { WithInfo } from '../WithInfo';
 import type { AuxOnSet } from '../editGesture';
-import { frequencyRangeInfo } from './frequencyRangeInfo';
+import {
+  frequencyRangeInfo,
+  type FrequencyRangeInfo,
+} from './frequencyRangeInfo';
 import './FrequencyRange.scss';
 
 /** HP/LP mode plains: 0=off, 1/2/3/4 = 12/24/36/48 dB. */
@@ -71,6 +74,8 @@ export interface FrequencyRangeProps {
   listen$?: DynamicValue<boolean>;
   /** Override hover text for the listen toggle (default: shared FrequencyRange copy). */
   listenInfo?: string;
+  /** Plugin-specific copy. Missing keys use the shared FrequencyRange text. */
+  info?: FrequencyRangeInfo;
   /** Slope select entries (default: Off/12/24/36/48). */
   modeEntries?: { label: string; value: number }[];
   hipassDefault?: number;
@@ -94,6 +99,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
     lpMode$,
     listen$,
     listenInfo,
+    info,
     modeEntries = FREQUENCY_RANGE_MODE_ENTRIES,
     hipassDefault = 100,
     lopassDefault = 5000,
@@ -190,25 +196,42 @@ export function FrequencyRange(props: FrequencyRangeProps) {
   return (
     <div className={cls}>
       {listen$ ? (
-        <WithInfo title={listenInfo ?? frequencyRangeInfo.listen}>
+        <WithInfo
+          title={
+            listenInfo ?? info?.listen ?? frequencyRangeInfo.listen
+          }>
           <Toggle state$={listen$} icon="headphones" className="listen warn" />
         </WithInfo>
       ) : null}
-      <EQChart
-        bands={filterBands}
-        interactive
-        showLabels={false}
-        yRange={FREQ_RANGE_Y}
-        zRange={FREQ_RANGE_Z}
-        dbGrid={12}
-        hideEmptyBaseline={false}
-      />
+      {info?.chart ? (
+        <WithInfo title={info.chart}>
+          <EQChart
+            bands={filterBands}
+            interactive
+            showLabels={false}
+            yRange={FREQ_RANGE_Y}
+            zRange={FREQ_RANGE_Z}
+            dbGrid={12}
+            hideEmptyBaseline={false}
+          />
+        </WithInfo>
+      ) : (
+        <EQChart
+          bands={filterBands}
+          interactive
+          showLabels={false}
+          yRange={FREQ_RANGE_Y}
+          zRange={FREQ_RANGE_Z}
+          dbGrid={12}
+          hideEmptyBaseline={false}
+        />
+      )}
 
       <div className="left">
-        <WithInfo title={frequencyRangeInfo.hpMode}>
+        <WithInfo title={info?.hpMode ?? frequencyRangeInfo.hpMode}>
           <Select value$={hpMode$} entries={modeEntries} />
         </WithInfo>
-        <WithInfo title={frequencyRangeInfo.hipass}>
+        <WithInfo title={info?.hipass ?? frequencyRangeInfo.hipass}>
           <Knob
             label="HP Hz"
             value$={hipass$}
@@ -225,7 +248,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
       </div>
 
       <div className="right">
-        <WithInfo title={frequencyRangeInfo.lopass}>
+        <WithInfo title={info?.lopass ?? frequencyRangeInfo.lopass}>
           <Knob
             label="LP Hz"
             value$={lopass$}
@@ -239,7 +262,7 @@ export function FrequencyRange(props: FrequencyRangeProps) {
             {...lopassEdit}
           />
         </WithInfo>
-        <WithInfo title={frequencyRangeInfo.lpMode}>
+        <WithInfo title={info?.lpMode ?? frequencyRangeInfo.lpMode}>
           <Select value$={lpMode$} entries={modeEntries} />
         </WithInfo>
       </div>

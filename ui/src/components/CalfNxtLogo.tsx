@@ -3,7 +3,7 @@ import { useId, type SVGProps } from 'react';
 /**
  * Inline calfNXT mark so fills track the theme:
  * calf silhouette → `currentColor` / `--color`;
- * NXT wordmark → accent→warn gradient via CSS vars.
+ * NXT wordmark → theme palette (0 → 50 → 100) via CSS vars.
  */
 export function CalfNxtLogo(props: SVGProps<SVGSVGElement>) {
   const { className, ...rest } = props;
@@ -19,8 +19,9 @@ export function CalfNxtLogo(props: SVGProps<SVGSVGElement>) {
     >
       <defs>
         <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0" stopColor="var(--color-accent)" />
-          <stop offset="1" stopColor="var(--color-warn)" />
+          <stop offset="0" stopColor="var(--palette-0)" />
+          <stop offset="0.5" stopColor="var(--palette-50)" />
+          <stop offset="1" stopColor="var(--palette-100)" />
         </linearGradient>
       </defs>
       <path

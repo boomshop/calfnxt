@@ -1,51 +1,404 @@
 /** Hover titles for Filter controls (musicians / producers). */
 
+import { infoDoc } from '../../widgets/WithInfo/infoDoc';
+
 export const filterInfo = {
-  bypass:
-    'Turns the filter off so you hear dry input (In/Out gains and meters still work). Use this to A/B whether the filter is shaping tone usefully or just thinning / hollowing the track.',
+  bypass: infoDoc({
+    name: 'Bypass',
+    lead: 'Lets the signal through with no filter, so you can compare the sweep with the untouched sound.',
+    meta: [
+      { label: 'DAW name', value: 'Bypass' },
+      { label: 'Parameter ID', value: '2' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'In detail',
+        blocks: [
+          { p: 'While it is on, the header In and Out gains are unity. The cutoff sits on Frequency, or on a held MIDI note.' },
+        ],
+      },
+    ],
+  }),
 
-  mono:
-    'Process the Left channel only and copy the result to both outs. Roughly halves filter CPU — ideal on mono tracks. While on, Stereo/L/R/Mid/Side is hidden and ignored. Right-channel content is discarded.',
+  mono: infoDoc({
+    name: 'Mono',
+    lead: 'Runs the filter on the left input only, and copies that result to both outputs.',
+    meta: [
+      { label: 'DAW name', value: 'Mono' },
+      { label: 'Parameter ID', value: '16' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Use it on a mono source. The right input is ignored, and Channel is hidden. The envelope listens to the left as well.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  mode:
-    'Filter shape. Low-pass = darkens / removes highs (mud control, dulling harshness, synth “closed filter”). High-pass = thins / removes lows (cleanup, rumble, air without boom). Band-pass = mid “wah” / telephone / auto-wah territory. Band-reject (notch) = scoops a band (hum, resonance, harsh spot). Allpass ≈ same loudness curve but twists phase — subtle when soloed; with Mix < 100% it can add comb-like color. Steeper slopes (24 / 48) cut harder and sound more “surgical”; gentler slopes sound smoother and more musical.',
+  mode: infoDoc({
+    name: 'Mode',
+    lead: 'Sets the shape and the steepness.',
+    meta: [
+      { label: 'DAW name', value: 'Mode' },
+      { label: 'Parameter ID', value: '3' },
+      { label: 'Stored range', value: '0…12. See the list.' },
+      { label: 'Default', value: '0 (Low Pass 12)' },
+    ],
+    sections: [
+      {
+        heading: 'Which one, and why',
+        blocks: [
+          {
+            ul: [
+              'Low Pass 12, 24, 48 removes what is above the cutoff. Steeper removes it more completely.',
+              'High Pass 12, 24, 48 removes what is below it.',
+              'Band Pass 6, 12, 18 leaves a region around the cutoff.',
+              'Band Reject 6, 12, 18 takes that region out.',
+              'Allpass keeps the level and turns the phase. On its own it is quiet as a tone change. With Mix below 100 % it colours.',
+            ],
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'The buttons send Low Pass 12/24/48 as 0/1/2, High Pass 12/24/48 as 3/4/5, Band Pass 6/12/18 as 6/7/8, Band Reject 6/12/18 as 9/10/11, and Allpass as 12. Low-pass and high-pass are the shapes whose Mix can stay flat. The others accept more coloration when dry is blended in.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  channel:
-    'Which stereo path the filter processes. Stereo = both channels. Left / Right = only that side — fix one channel without touching the other. Mid = shared centre (vocals, kick, bass). Side = width and ambience. Mid/Side is encode → filter → decode. Hidden while header Mono is on (Mono always filters L only). Envelope detection follows the same path.',
+  channel: infoDoc({
+    name: 'Channel',
+    lead: 'Chooses which part of the stereo signal is filtered. The envelope listens to the same part.',
+    meta: [
+      { label: 'DAW name', value: 'Channel' },
+      { label: 'Parameter ID', value: '17' },
+      {
+        label: 'Stored range',
+        value: '0…4. The buttons send Stereo 0, Left 1, Right 2, Mid 3, Side 4.',
+      },
+      { label: 'Default', value: '0 (Stereo)' },
+    ],
+    sections: [
+      {
+        heading: 'Which one, and why',
+        blocks: [
+          {
+            ul: [
+              'Stereo filters both sides.',
+              'Left or Right filters that side and leaves the other alone.',
+              'Mid filters the centre. Side filters the wide part.',
+            ],
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          { p: 'Hidden while Mono is on. The detector follows the louder of the two sides it is given.' },
+        ],
+      },
+    ],
+  }),
 
-  resonance:
-    'Emphasis at the cutoff / center. Low (≈0.7) = smooth Butterworth-ish, natural. Higher = a peak or “sing” at the edge — classic filter scream, auto-wah bite, synth resonance. Very high Q can ring, whistle, or make Mix sound hollow when dry is blended in (the complementary dry path softens then — expect some coloration).',
+  resonance: infoDoc({
+    name: 'Resonance',
+    lead: 'Sets how much the filter emphasises the cutoff.',
+    meta: [
+      { label: 'DAW name', value: 'Resonance' },
+      { label: 'Parameter ID', value: '4' },
+      { label: 'Range', value: '0.707 … 32' },
+      { label: 'Default', value: '0.707. Two decimal places, so it reads 0.71.' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'At the bottom the corner is smooth. Higher makes a peak at the cutoff, the classic filter ring. Very high can whistle. On a low-pass or high-pass, a high resonance also means Mix no longer stays as flat. Soft Clip rounds those peaks on the filtered path.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  frequency:
-    'Where the filter sits (Hz). On a low-pass it’s the “open/closed” point; on high-pass the cleanup floor; on band-pass/reject the center. With Envelope on, this is the start of the sweep (quiet detector → here). Drag Target below Freq for a downward sweep (e.g. ducking filter). Held MIDI notes temporarily park the cutoff on that pitch (A440, with Inertia) until note-off — moving this knob clears any held MIDI so the dial is the target again.',
+  frequency: infoDoc({
+    name: 'Frequency',
+    lead: 'Sets where the filter sits when the envelope is quiet, and where it sits with the envelope off.',
+    meta: [
+      { label: 'DAW name', value: 'Frequency' },
+      { label: 'Parameter ID', value: '5' },
+      { label: 'Range', value: '10 … 20 000 Hz' },
+      { label: 'Default', value: '1 000 Hz' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'With the envelope off, this is the cutoff. With it on, quiet passages sit here and loud ones move toward Target. A held MIDI note parks the cutoff on that pitch, using A as 440 Hz, until the note ends. Moving this knob clears that note so the dial is in charge again. Inertia eases the move.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  inertia:
-    'How lazily Frequency and Resonance catch up when you move them (or when the envelope jumps). Low = snappy, zipper-free but still quick — good for deliberate tweaks. Higher = portamento / “liquid” filter moves — musical on envelope auto-wah, less twitchy on busy sources. Too high can feel laggy behind the groove.',
+  inertia: infoDoc({
+    name: 'Inertia',
+    lead: 'Sets how long Frequency and Resonance take to catch up.',
+    meta: [
+      { label: 'DAW name', value: 'Inertia' },
+      { label: 'Parameter ID', value: '6' },
+      { label: 'Range', value: '5 … 100 ms' },
+      { label: 'Default', value: '20 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'These are real milliseconds. A short time follows the knob and the envelope quickly. A long time smears the sweep, which is often what you want from an auto-wah and too slow when you are dialling a fixed cutoff by hand.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  envPower:
-    'Turns the envelope follower on: level drives cutoff between Frequency (quiet) and Target (loud). Off = fixed filter (studio EQ-style). On = auto-wah / envelope filter / ducking filter territory — great on guitars, synths, drums when you want movement locked to the playing.',
+  envPower: infoDoc({
+    name: 'Envelope',
+    lead: 'Lets the level move the cutoff between Frequency and Target.',
+    meta: [
+      { label: 'DAW name', value: 'Envelope' },
+      { label: 'Parameter ID', value: '7' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Off, the filter stays where you put it. On, a quiet signal sits at Frequency and a loud one moves toward Target. Put Target above Frequency and the filter opens on the hits. Put it below and the filter closes on the hits.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  mix:
-    'Dry vs filtered — always available, Envelope on or off. 100% = full wet (pure filter). Lower = parallel blend — keep body while filtering air or mids. For LP/HP at moderate Resonance, dry is a complementary opposite filter so Mix stays closer to “flat when summed” instead of comb notches; high Resonance or BP/BR/Allpass accept more coloration. If Mix feels phasey or hollow, raise Mix or lower Resonance.',
+  mix: infoDoc({
+    name: 'Mix',
+    lead: 'Blends the filtered signal with the dry one. 100 % is fully filtered.',
+    meta: [
+      { label: 'DAW name', value: 'Mix' },
+      { label: 'Parameter ID', value: '8' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '100 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Lower it to keep some of the original beside the filter. On a low-pass or a high-pass the dry path is the complementary opposite, so a moderate resonance still adds back without a notch. Band-pass, band-reject, allpass, and a very high resonance will colour the blend. If it sounds hollow, raise Mix or lower Resonance.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          { p: 'Soft Clip is on the filtered path only. At 0 % you do not hear it.' },
+        ],
+      },
+    ],
+  }),
 
-  softClip:
-    'Rounds hot resonant peaks on the filtered (wet) path so high Resonance screams less and sits better in a mix. 0 = clean linear filter. Raise it when LP/HP/BP with high Res gets harsh, whistly, or digital — you keep the “sing” but with softer edges. Soft Clip does not touch the dry Mix path; at Mix 0 it has no effect. Too much can dull transients and add odd harmonics — A/B with the knob at 0.',
+  softClip: infoDoc({
+    name: 'Soft Clip',
+    lead: 'Rounds resonant peaks on the filtered path.',
+    meta: [
+      { label: 'DAW name', value: 'Soft Clip' },
+      { label: 'Parameter ID', value: '14' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '0 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'At 0 the filter is linear. Raise it when a high resonance screams. The ring stays, the edges get softer. Too far dulls the attack and adds harmonics. It does not touch the dry half of Mix.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  spectrum:
-    'Analyzer fill behind the filter curve (post-filter, before Out gain). Off = no FFT cost. Linear = raw dBFS. −3 / −4.5 dB/oct = pink-style tilt pivoted at 1 kHz — same as the Equalizer overlay.',
+  spectrum: infoDoc({
+    name: 'Spectrum',
+    lead: 'Tilts the analyzer drawn behind the response. It does not change the sound.',
+    meta: [
+      { label: 'DAW name', value: 'Spectrum' },
+      { label: 'Parameter ID', value: '15' },
+      {
+        label: 'Stored range',
+        value: '0…3. The buttons send Off 0, Lin 1, −3 dB 2, −4.5 dB 3.',
+      },
+      { label: 'Default', value: '0 (Off)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Off draws no analyzer. Lin is the raw level. The two tilts lift the picture toward the top, pivoted at 1 kHz. You see the input and the output of the filter.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  target:
-    'Where the envelope sends the cutoff when the detector is loud (env = 1). Above Frequency = opens/brightens on hits (classic auto-wah). Below Frequency = closes/darkens on hits (ducking filter). Set the range so quiet notes sit at Freq and accents reach Target — then tune Attack/Release so it follows the groove, not the noise floor.',
+  chart: infoDoc({
+    name: 'Response',
+    lead: 'Shows the filter curve, and the spectrum when that is on.',
+    sections: [
+      {
+        heading: 'What you see',
+        blocks: [
+          {
+            p: 'The curve is the shape at the cutoff the filter is using, including a sweep and a MIDI note. Dragging the handle writes Frequency. The second handle, when the envelope is on, is Target.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  activation:
-    'How hard the detector pushes the envelope (dB). Higher = quieter signals already open the filter — more movement, easier auto-wah. Lower = only louder hits move it — tighter, more gated feel. If it barely moves, raise Activation; if it sits wide open and chatters, lower it.',
+  target: infoDoc({
+    name: 'Target',
+    lead: 'Sets where the cutoff goes when the envelope is fully open.',
+    meta: [
+      { label: 'DAW name', value: 'Target' },
+      { label: 'Parameter ID', value: '9' },
+      { label: 'Range', value: '10 … 20 000 Hz' },
+      { label: 'Default', value: '4 000 Hz' },
+    ],
+    sections: [
+      {
+        heading: 'How to set it',
+        blocks: [
+          {
+            p: 'The move is along pitch, not a straight line in hertz. Quiet sits at Frequency. Loud arrives here. Above Frequency opens on the hits. Below Frequency closes on them. You only hear it while Envelope is on.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  attack:
-    'How fast the envelope rises with the signal. Fast = snappy wah on the front of the note (plucks, picks). Slow = smoother swell, less “quack,” better on pads and legato. Too fast on busy material can sound jittery; too slow misses the hit.',
+  activation: infoDoc({
+    name: 'Activation',
+    lead: 'Sets how loud the signal has to be before the envelope reaches Target.',
+    meta: [
+      { label: 'DAW name', value: 'Activation' },
+      { label: 'Parameter ID', value: '10' },
+      { label: 'Range', value: '−24 … +24 dB' },
+      { label: 'Default', value: '0 dB' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'At 0 dB a full-scale peak reaches Target. Turn it up and quieter notes already get there. Turn it down and even a full-scale peak only moves part of the way. If the filter barely moves, raise it. If it sits open on the noise, lower it.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  release:
-    'How fast the envelope falls after the hit. Fast = filter snaps back (rhythmic, funky). Slow = long filter tails / bloom after the note. Match the song tempo: short release for 16ths, longer for held chords. If it pumps or chatters, lengthen Release or switch detector mode.',
+  attack: infoDoc({
+    name: 'Attack',
+    lead: 'Sets how quickly the envelope opens toward Target.',
+    meta: [
+      { label: 'DAW name', value: 'Attack' },
+      { label: 'Parameter ID', value: '11' },
+      { label: 'Range', value: '0.1 … 500' },
+      { label: 'Default', value: '20' },
+      { label: 'Display', value: 'No unit: this is not a clock time in milliseconds.' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'A lower number puts the sweep on the start of the note. A higher number lets the note begin at Frequency and then move. Double the number and the opening is about twice as slow. Inertia still eases the cutoff after this.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'Same speed scale as the Compressor. About a quarter of the number is the time constant in milliseconds.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  detection:
-    'How loudness is measured into the envelope. Peak = follows spikes (drums, plosives) — lively, can be twitchy. RMS = average energy — smoother, more “musical” on chords and buses. Opto = softer, photocell-like tracking — often the most natural auto-wah on guitars and complex sources.',
+  release: infoDoc({
+    name: 'Release',
+    lead: 'Sets how quickly the envelope returns toward Frequency.',
+    meta: [
+      { label: 'DAW name', value: 'Release' },
+      { label: 'Parameter ID', value: '12' },
+      { label: 'Range', value: '1 … 2000' },
+      { label: 'Default', value: '200' },
+      { label: 'Display', value: 'Whole numbers. No unit: this is not a clock time in milliseconds.' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'A lower number snaps the filter back after the hit. A higher number lets it bloom. If it chatters, lengthen it. Same translation as Attack: about a quarter of the number is the time constant in milliseconds.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  detection: infoDoc({
+    name: 'Detection',
+    lead: 'Sets how the envelope measures loudness.',
+    meta: [
+      { label: 'DAW name', value: 'Detection' },
+      { label: 'Parameter ID', value: '13' },
+      { label: 'Stored range', value: '0…2. The buttons send Peak 0, RMS 1, Opto 2.' },
+      { label: 'Default', value: '2 (Opto)' },
+    ],
+    sections: [
+      {
+        heading: 'Which one, and why',
+        blocks: [
+          {
+            ul: [
+              'Peak follows the spike. The envelope still eases with Attack and Release.',
+              'RMS follows a short average, so the body of the note moves the filter more than one click.',
+              'Opto eases the measured level with Attack and Release. It is a generic behaviour, not a copy of a particular optical follower. This is the starting mode.',
+            ],
+          },
+        ],
+      },
+    ],
+  }),
 } as const;

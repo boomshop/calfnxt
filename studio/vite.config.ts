@@ -27,6 +27,14 @@ export default defineConfig({
       ),
     },
   },
+  // Deep AUX module imports (DragValue / Range) — keep prebundle in sync or
+  // HMR hits 504 Outdated Optimize Dep after AlignWaveStrip first pulls them in.
+  optimizeDeps: {
+    include: [
+      '@deutschesoft/aux-widgets/src/modules/dragvalue.js',
+      '@deutschesoft/aux-widgets/src/modules/range.js',
+    ],
+  },
   server: {
     host: '127.0.0.1',
     port: 5174,

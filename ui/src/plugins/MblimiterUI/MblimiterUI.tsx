@@ -135,18 +135,20 @@ function BandStrip(props: { band: IMblimiterBand; compactKnobs: boolean }) {
   return (
     <div className="strip block" data-band={band.id}>
       <div className="history">
-        <HistoryChart
-          data$={band.historyData$}
-          vizId="mblimiter"
-          autoScale
-          autoScaleReleaseTauS={4}
-          maxBins={MB_BAND_HISTORY_BINS}
-          syncBins={band.index === 0}
-          windowMs={MB_BAND_HISTORY_MS}
-          persistToggles={LIMITER_HISTORY_TOGGLES}
-          className="compact"
-          series={MBLIMITER_HISTORY_SERIES}
-        />
+        <WithInfo title={mblimiterInfo.history}>
+          <HistoryChart
+            data$={band.historyData$}
+            vizId="mblimiter"
+            autoScale
+            autoScaleReleaseTauS={4}
+            maxBins={MB_BAND_HISTORY_BINS}
+            syncBins={band.index === 0}
+            windowMs={MB_BAND_HISTORY_MS}
+            persistToggles={LIMITER_HISTORY_TOGGLES}
+            className="compact"
+            series={MBLIMITER_HISTORY_SERIES}
+          />
+        </WithInfo>
       </div>
 
       <div className="meters">
@@ -329,6 +331,7 @@ export function MblimiterUI(props: MblimiterUIProps) {
         </WithInfo>
       </Header>
 
+      <WithInfo title={mblimiterInfo.chart}>
       <MultibandChart
         bandCount={numBands}
         slope$={host.slope$}
@@ -341,6 +344,7 @@ export function MblimiterUI(props: MblimiterUIProps) {
         spectrumScale$={host.scale$}
         xoverEdit={xoverEdit}
       />
+      </WithInfo>
 
       <div className="strips">
         {host.bands.slice(0, numBands).map((band) => (

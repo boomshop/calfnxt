@@ -4,6 +4,7 @@ import type { DynamicValue } from '@deutschesoft/awml';
 import {
   meterGradientForRange,
   useThemeColors,
+  type MeterScaleOpts,
 } from '../../theme/themeColors';
 import './LevelMeter.scss';
 
@@ -57,19 +58,43 @@ export interface LevelMeterProps {
   [key: string]: unknown;
 }
 
+function scaleOptsFromProps(props: {
+  scale?: unknown;
+  log_factor?: unknown;
+}): MeterScaleOpts {
+  return {
+    scale: typeof props.scale === 'string' ? props.scale : 'linear',
+    log_factor:
+      typeof props.log_factor === 'number' ? props.log_factor : 1,
+  };
+}
+
 export function LevelMeter(props: LevelMeterProps) {
-  const { size = 'normal', foreground, gradient, min, max, ...rest } = props;
+  const {
+    size = 'normal',
+    foreground,
+    gradient,
+    min,
+    max,
+    scale,
+    log_factor,
+    ...rest
+  } = props;
   const colors = useThemeColors();
 
   const lo = typeof min === 'number' ? min : -96;
   const hi = typeof max === 'number' ? max : 12;
+  const scaleOpts = scaleOptsFromProps({ scale, log_factor });
 
   const themed = {
     min: lo,
     max: hi,
+    scale: scaleOpts.scale,
+    log_factor: scaleOpts.log_factor,
     foreground: (foreground as string | undefined) ?? colors.background,
     gradient:
-      (gradient as unknown) ?? meterGradientForRange(colors, lo, hi),
+      (gradient as unknown) ??
+      meterGradientForRange(colors, lo, hi, scaleOpts),
   };
 
   const options =

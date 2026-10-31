@@ -10,7 +10,7 @@ namespace Ui {
  *
  * Not VST3 parameters — high-rate display data only.
  * Protocol (host→UI via binary CNXV → Float32Array `v`; see viz_bin.h):
- *   {t:"io", ch:N}                         // bus channel count (WebEditor)
+ *   {t:"io", ch:N, in, out}                // main I/O channel counts (WebEditor)
  *   {t:"viz", id:"in"|"out", kind:"levels", v:[...dBFS]}
  *   …
  *   Helper→plugin {t:"_visible", v:0|1} when the XEmbed parent maps/unmaps
@@ -133,6 +133,13 @@ public:
 
   /** Stream id for envelope display. */
   virtual const char* vizEnvelopeId() const { return "env"; }
+
+  /**
+   * Viz kind for takeEnvelopeDisplay. Default `"envelope"` is I16±1 (history
+   * meters). Status-style payloads with ms / enums must return a full-float
+   * kind such as `"ctrl"` — otherwise values >1 clamp to 1 on the wire.
+   */
+  virtual const char* vizEnvelopeKind() const { return "envelope"; }
 
   /**
    * Spectrum snapshot: v[0]=N, v[1]=hold, then avg[N], max[N], L[N], R[N]
@@ -380,8 +387,9 @@ public:
 
   /**
    * IR waveform envelope (Impulse).
-   * Layout: [bins, origLengthMs, usedLengthMs, db0…dbN-1] (dB, typically −90…6).
-   * Returns 3+bins, or 0 if unused.
+   * Impulse layout: [bins, origLengthMs, usedLengthMs, db0…dbN-1] (dB, typically −90…6).
+   * Aligner layout: [bins, nLanes, preBins, viewPreMs, viewPostMs, lane0[bins]…]
+   * (linear, Analyze band). Returns header+payload length, or 0 if unused / not dirty.
    * Flushed as {t:"viz", id, kind:"wave", v:[…]}.
    */
   virtual int takeIrWaveform(float* out, int maxOut)

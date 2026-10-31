@@ -1,24 +1,235 @@
+/** Hover titles for Flanger controls (musicians / producers). */
+
+import { infoDoc } from '../../widgets/WithInfo/infoDoc';
+
 export const flangerInfo = {
-  active:
-    'Turns the wet (flanged) path off so you hear Dry only — same idea as Delay/Reverb Power. In/Out gains still apply; LFO and the response chart keep moving.',
-  channel:
-    'Which stereo path gets the flanger. Stereo = both channels (Stereo offset still sweeps L vs R). Left / Right = flange one side only. Mid = whoosh the centre while leaving width dry. Side = widen ambience without chewing the mono sum. Mid/Side use a single wet engine (not L/R averaged — that cancelled notches when Stereo≈180°). Dry/Amount still blend on the selected path. Encode → flange → decode.',
-  minDelay:
-    'Shortest delay of the comb (ms). Lower = denser, brighter notches; higher = thicker, more “jet” spacing. Classic flanging sits around a few tenths of a millisecond.',
-  modDepth:
-    'How far the LFO stretches the delay above Min Delay (ms). Small depth = subtle swirl; larger = dramatic whoosh. Depth + Min set the comb spacing you hear in the chart.',
-  modRate:
-    'LFO speed in Hz. Slow (~0.05–0.2) = classic through-zero whoosh; faster = vibrato-like flutter. Pair with Depth so the sweep still covers musically useful bands.',
-  feedback:
-    'Feeds the delayed signal back into the delay. Positive = sharper metallic peaks; negative = complementary notches. Near ±1 can ring hard — musical as an effect, careful on a full mix.',
-  stereo:
-    'LFO phase offset between Left and Right in degrees. 0 = mono image; 90 = classic wide Calf default; 180 = opposite sweep. Sweep the knob to animate the stereo field.',
-  amount:
-    'Wet (flanged) level in dB. Raise for stronger color; lower to sit under Dry. Above 0 dB can push peaks hot with Feedback.',
-  dry:
-    'Dry (unflanged) level in dB. Keep near 0 for parallel flanging; pull down for a more washed / wet-only sound.',
-  lfo:
-    'Runs or freezes the modulation LFO. Off holds the current comb positions — useful to tune Delay/Depth/Feedback, or for a static flange color. On resumes the sweep from where it stopped.',
-  reset:
-    'Resets LFO phases (Left = 0°, Right = Stereo offset). Use after tempo changes or when L and R feel stuck out of sync.',
-};
+  active: infoDoc({
+    name: 'Active',
+    lead: 'Turns the flanged signal on or off. Dry stays at the level you set.',
+    meta: [
+      { label: 'DAW name', value: 'Active' },
+      { label: 'Parameter ID', value: '2' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '1 (on)' },
+    ],
+    sections: [
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'Off, you hear Dry only. The LFO and the response chart keep moving. The header In and Out gains always apply.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  channel: infoDoc({
+    name: 'Channel',
+    lead: 'Chooses which part of the stereo signal is flanged.',
+    meta: [
+      { label: 'DAW name', value: 'Channel' },
+      { label: 'Parameter ID', value: '12' },
+      { label: 'Stored range', value: '0…4. The buttons send Stereo 0, Left 1, Right 2, Mid 3, Side 4.' },
+      { label: 'Default', value: '0 (Stereo)' },
+    ],
+    sections: [
+      {
+        heading: 'Which one, and why',
+        blocks: [
+          {
+            ul: [
+              'Stereo flanges both sides. Stereo Phase is the offset between their LFOs.',
+              'Left or Right flanges that side. The other stays dry.',
+              'Mid flanges the centre. Side flanges the wide part. Each uses one flanger, then the picture is decoded.',
+            ],
+          },
+        ],
+      },
+    ],
+  }),
+
+  minDelay: infoDoc({
+    name: 'Min Delay',
+    lead: 'Sets the shortest delay of the comb.',
+    meta: [
+      { label: 'DAW name', value: 'Min Delay' },
+      { label: 'Parameter ID', value: '3' },
+      { label: 'Range', value: '0.1 … 10 ms' },
+      { label: 'Default', value: '0.5 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'These are real milliseconds. Shorter packs the notches tighter and brighter. Longer spaces them further apart. Mod Depth is added on top of this minimum.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  modDepth: infoDoc({
+    name: 'Depth',
+    lead: 'Sets how far the LFO stretches the delay above the minimum.',
+    meta: [
+      { label: 'DAW name', value: 'Mod Depth' },
+      { label: 'Parameter ID', value: '4' },
+      { label: 'Range', value: '0.1 … 10 ms' },
+      { label: 'Default', value: '2 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'These are real milliseconds. A small depth is a gentle swirl. A large one is the whoosh. The comb you hear runs from Min Delay to Min Delay plus this depth.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  modRate: infoDoc({
+    name: 'Rate',
+    lead: 'Sets how fast the LFO moves the delay.',
+    meta: [
+      { label: 'DAW name', value: 'Mod Rate' },
+      { label: 'Parameter ID', value: '5' },
+      { label: 'Range', value: '0.01 … 20 Hz' },
+      { label: 'Default', value: '0.1 Hz' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          { p: 'These are real cycles per second. 0.1 Hz is one sweep every 10 seconds. LFO off holds the comb where it stopped.' },
+        ],
+      },
+    ],
+  }),
+
+  feedback: infoDoc({
+    name: 'Feedback',
+    lead: 'Feeds the delayed signal back into the delay.',
+    meta: [
+      { label: 'DAW name', value: 'Feedback' },
+      { label: 'Parameter ID', value: '6' },
+      { label: 'Range', value: '−0.99 … +0.99' },
+      { label: 'Default', value: '0.8' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Positive sharpens the metallic peaks. Negative deepens the notches the other way. Near either end the comb can ring. The default is already strong.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  stereo: infoDoc({
+    name: 'Stereo Phase',
+    lead: 'Offsets the right LFO against the left, in degrees.',
+    meta: [
+      { label: 'DAW name', value: 'Stereo Phase' },
+      { label: 'Parameter ID', value: '7' },
+      { label: 'Range', value: '0 … 360°' },
+      { label: 'Default', value: '90°' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: '0 sweeps both sides together. 90, the default, is a quarter-cycle apart. 180 sweeps them opposite. Mid and Side use one flanger, so this offset is not that path.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  amount: infoDoc({
+    name: 'Amount',
+    lead: 'Sets the level of the flanged signal that is added to Dry.',
+    meta: [
+      { label: 'DAW name', value: 'Amount' },
+      { label: 'Parameter ID', value: '9' },
+      { label: 'Range', value: '−60 … +12 dB' },
+      { label: 'Default', value: '−6 dB' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          { p: 'This is added, not a crossfade. Above 0 dB the peaks can get hot with Feedback up. Active off takes this path out.' },
+        ],
+      },
+    ],
+  }),
+
+  dry: infoDoc({
+    name: 'Dry',
+    lead: 'Sets the level of the signal that is not flanged.',
+    meta: [
+      { label: 'DAW name', value: 'Dry' },
+      { label: 'Parameter ID', value: '10' },
+      { label: 'Range', value: '−60 … +12 dB' },
+      { label: 'Default', value: '0 dB' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          { p: 'Leave it near 0 and the comb sits beside the original. Turn it down for a wetter sweep. It stays audible while Active is off.' },
+        ],
+      },
+    ],
+  }),
+
+  lfo: infoDoc({
+    name: 'LFO',
+    lead: 'Runs or holds the sweep.',
+    meta: [
+      { label: 'DAW name', value: 'LFO' },
+      { label: 'Parameter ID', value: '11' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '1 (on)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          { p: 'Off, the comb stays where the LFO stopped. On, the sweep continues from there.' },
+        ],
+      },
+    ],
+  }),
+
+  reset: infoDoc({
+    name: 'Reset',
+    lead: 'Puts the left LFO at 0° and the right LFO at the Stereo Phase.',
+    meta: [
+      { label: 'DAW name', value: 'Reset' },
+      { label: 'Parameter ID', value: '8' },
+      { label: 'Stored value', value: '0…1. The button writes a reset.' },
+      { label: 'Default', value: '0' },
+    ],
+  }),
+
+  chart: infoDoc({
+    name: 'Response',
+    lead: 'Shows the comb the flanger is making right now.',
+    sections: [
+      {
+        heading: 'What you see',
+        blocks: [
+          { p: 'The notches move between Min Delay and Min Delay plus Depth. Freeze the LFO and the picture holds. Feedback sharpens what you see.' },
+        ],
+      },
+    ],
+  }),
+} as const;

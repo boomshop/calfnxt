@@ -13,8 +13,16 @@
     min-width: 0;
     min-height: 0;
 
-    > .HistoryChart {
+    > .WithInfo {
+      display: flex;
       height: 100%;
+      min-height: 0;
+    }
+
+    > .HistoryChart,
+    > .WithInfo > .HistoryChart {
+      height: 100%;
+      width: 100%;
     }
   }
 

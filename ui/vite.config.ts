@@ -44,6 +44,7 @@ const knownPlugins = [
   "bender",
   "impulse",
   "tamer",
+  "aligner",
   "denoiser",
 ] as const;
 

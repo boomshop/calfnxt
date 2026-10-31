@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { DynamicValue } from '@deutschesoft/awml';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { postToHost } from '../../utils/bridge';
-import { useThemeColors } from '../../theme/themeColors';
+import {
+  paletteAt,
+  themeGradientStops,
+  useThemeColors,
+  type GradientStop,
+} from '../../theme/themeColors';
 import './PitchRollChart.scss';
 
 /** Fixed history window (ms) — keep in sync with Tuner DSP. */
@@ -65,27 +70,32 @@ function withAlpha(css: string, a: number): string {
   return css;
 }
 
-/** 0 ct = black, 100 = accent, 200 = warn, 400 = white. 1 px = 1 cent. */
+/**
+ * Pull strip: black → theme (mapped onto 100…200 ct) → white.
+ * Theme offset 0 → 100 ct, 1 → 200 ct (1 px = 1 cent).
+ */
 const CORR_LUT_CENTS = 400;
+const CORR_THEME_LO = 100;
+const CORR_THEME_HI = 200;
 let corrLutKey = '';
 let corrLut: Uint8ClampedArray | null = null;
 
-/**
- * Sample a CSS-style sRGB gradient (same mix as canvas/CSS linear-gradient
- * between adjacent stops — no extra hues between accent and warn).
- */
-function corrFill(cents: number, accent: string, warn: string): string {
-  const key = `${accent}|${warn}`;
+function corrFill(cents: number, theme: GradientStop[]): string {
+  const key = theme.map((s) => `${s.offset}:${s.color}`).join('|');
+  const fallback = theme[0]?.color ?? '#0066ff';
   if (!corrLut || corrLutKey !== key) {
     const c = document.createElement('canvas');
     c.width = CORR_LUT_CENTS + 1;
     c.height = 1;
     const gctx = c.getContext('2d');
-    if (!gctx) return accent;
+    if (!gctx) return fallback;
     const g = gctx.createLinearGradient(0, 0, CORR_LUT_CENTS, 0);
+    const span = CORR_THEME_HI - CORR_THEME_LO;
     g.addColorStop(0, '#000000');
-    g.addColorStop(100 / CORR_LUT_CENTS, accent);
-    g.addColorStop(200 / CORR_LUT_CENTS, warn);
+    for (const s of theme) {
+      const ct = CORR_THEME_LO + s.offset * span;
+      g.addColorStop(ct / CORR_LUT_CENTS, s.color);
+    }
     g.addColorStop(1, '#ffffff');
     gctx.fillStyle = g;
     gctx.fillRect(0, 0, CORR_LUT_CENTS + 1, 1);
@@ -95,11 +105,6 @@ function corrFill(cents: number, accent: string, warn: string): string {
   const i = Math.max(0, Math.min(CORR_LUT_CENTS, Math.round(Math.abs(cents))));
   const o = i * 4;
   return `rgb(${corrLut[o]},${corrLut[o + 1]},${corrLut[o + 2]})`;
-}
-
-/** Midpoint of accent→warn (same stop as the correction strip at 150 ct). */
-function midAccentWarn(accent: string, warn: string): string {
-  return corrFill(150, accent, warn);
 }
 
 /** Shared dashed style for dry (Octaver) and target (Tuner). */
@@ -192,8 +197,11 @@ export function PitchRollChart(props: PitchRollChartProps) {
     const laneWhiteOff = readCss(wrap, '--lane-white-off', '#121418');
     const laneBlackOn = readCss(wrap, '--lane-black-on', '#010203');
     const laneBlackOff = readCss(wrap, '--lane-black-off', '#000102');
-    const accent = readCss(wrap, '--color-accent', '#0066ff');
-    const warn = readCss(wrap, '--color-warn', '#ff0066');
+    const themeStops = themeGradientStops(theme);
+    const accent = themeStops[0]?.color ?? theme.accent;
+    const mid = paletteAt(0.5, theme);
+    const warn =
+      themeStops[themeStops.length - 1]?.color ?? theme.warn;
     const keyWhiteOn = readCss(wrap, '--key-white-on', '#fff');
     const keyWhiteOff = readCss(wrap, '--key-white-off', '#aaa');
     const keyWhiteOnLabel = readCss(wrap, '--key-white-on-label', '#000');
@@ -313,7 +321,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
         const x0 = xOf(i);
         const x1 = i + 1 < slots ? xOf(i + 1) : x0 + 1;
         const wSlot = Math.max(1, Math.abs(x1 - x0) + 0.5);
-        ctx.fillStyle = corrFill(corr, accent, warn);
+        ctx.fillStyle = corrFill(corr, themeStops);
         ctx.fillRect(Math.min(x0, x1), plotH + 1, wSlot, stripH - 1);
       }
     }
@@ -351,8 +359,7 @@ export function PitchRollChart(props: PitchRollChartProps) {
     if (modeRef.current === 'octaver') {
       const inMidi = (i: number) => data[i * HIST_CH + 0] ?? 0;
       const bitsOf = (i: number) => Math.round(data[i * HIST_CH + 1] ?? 0);
-      const mid = midAccentWarn(accent, warn);
-      // Dry dashed --color; −1 mid(accent,warn); −2 warn; +1 --color; sub accent.
+      // Dry dashed --color; −1 palette-50; −2 warn; +1 --color; sub accent.
       strokePitch(
         (i) => (bitsOf(i) & 1 ? inMidi(i) : 0),
         withAlpha(fg, 0.85),

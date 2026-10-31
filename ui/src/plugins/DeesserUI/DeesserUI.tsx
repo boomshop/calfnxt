@@ -128,13 +128,15 @@ export function DeesserUI(props: DeesserUIProps) {
         </WithInfo>
       </Header>
 
-      <HistoryChart
-        data$={host.historyData$}
-        vizId="deess"
-        autoScale
-        series={DEESS_HISTORY_SERIES}
-        persistToggles={DYNAMICS_TRIG_GR_TOGGLES}
-      />
+      <WithInfo title={deesserInfo.history}>
+        <HistoryChart
+          data$={host.historyData$}
+          vizId="deess"
+          autoScale
+          series={DEESS_HISTORY_SERIES}
+          persistToggles={DYNAMICS_TRIG_GR_TOGGLES}
+        />
+      </WithInfo>
 
       <div className="block dynamics">
         <div className="title">Dynamics</div>
@@ -248,6 +250,7 @@ export function DeesserUI(props: DeesserUIProps) {
             />
           </WithInfo>
         </div>
+        <WithInfo title={deesserInfo.gr}>
         <LevelMeter
           className="gr"
           value$={host.gr$}
@@ -263,17 +266,20 @@ export function DeesserUI(props: DeesserUIProps) {
           log_factor={5}
           levels={[1, 3, 6, 12]}
         />
+        </WithInfo>
       </div>
 
       <div className="block filters">
         <div className="title">Detection</div>
-        <EQChart
-          bands={host.filterBands}
-          interactive
-          showLabels={false}
-          yRange={{ min: -60, max: 24 }}
-          dbGrid={12}
-        />
+        <WithInfo title={deesserInfo.detectionChart}>
+          <EQChart
+            bands={host.filterBands}
+            interactive
+            showLabels={false}
+            yRange={{ min: -60, max: 24 }}
+            dbGrid={12}
+          />
+        </WithInfo>
         <div className="knobs">
           <WithInfo title={deesserInfo.hpQ}>
             <Knob

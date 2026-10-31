@@ -24,7 +24,7 @@ system WebKit); the **host `environ` is never mutated**. Opt out with
 `CALFNXT_KEEP_HOST_LDPATH`. Each bundle ships `Contents/<arch>/calfnxt-web-host`
 next to the `.so`. User-facing contract: `README.md` → Clarifications.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Impulse** (`#impulse`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`), **Tuner** (`#tuner`), **Octaver** (`#octaver`), **Bender** (`#bender`), **Tamer** (`#tamer`), **Denoiser** (`#denoiser`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Impulse** (`#impulse`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`), **Tuner** (`#tuner`), **Octaver** (`#octaver`), **Bender** (`#bender`), **Tamer** (`#tamer`), **Aligner** (`#aligner`), **Denoiser** (`#denoiser`).
 Suite focus is this set — no near-term new plugins unless explicitly requested.
 
 ---
@@ -46,7 +46,7 @@ Old brand spelling `CalfNXT` is obsolete — use **`calfNXT`**. Also never bring
 | URI scheme             | `calfnxt://bundle/...`                                                                                                                                                                                                                                                                                              |
 | JS bridge              | `window.calfnxtNative.post`, `__calfnxtOnHost`, `__calfnxtHostQ`                                                                                                                                                                                                                                                    |
 | Script message handler | `webkit.messageHandlers.calfnxt`                                                                                                                                                                                                                                                                                    |
-| Env flags              | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_VIZ_HZ`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_XWAYLAND_NUDGE`, `CALFNXT_KEEP_HOST_LDPATH` (full list in `README.md`)                                                                                                                                               |
+| Env flags              | `CALFNXT_WEB_DEBUG`, `CALFNXT_WEB_INSPECTOR`, `CALFNXT_UI_SCALE`, `CALFNXT_VIZ_HZ`, `CALFNXT_WEB_NO_GPU`, `CALFNXT_WEB_HOST` (`gtk4`/`float` → floating GTK4 helper), `CALFNXT_WEB_FLOATING`, `CALFNXT_XWAYLAND_NUDGE`, `CALFNXT_KEEP_HOST_LDPATH` (full list in `README.md`)                                                                                                                                               |
 | Install (packaging)    | `cmake --install` → `${prefix}/${CALFNXT_VST3_INSTALL_DIR}` (default `lib/vst3`); user copy via `./tools/install-user-vst3.sh` `[plugin…]` / `[--dest dir]`                                                                                                                                                         |
 | Msg type (TS)          | `calfNXTMsg`                                                                                                                                                                                                                                                                                                        |
 
@@ -83,7 +83,8 @@ dsp/octaver/   octaver.plugin.json + DSP + codegen
 dsp/bender/    bender.plugin.json + DSP + codegen
 dsp/impulse/   impulse.plugin.json + DSP + codegen
 dsp/tamer/     tamer.plugin.json + DSP + codegen
-dsp/denoiser/      denoiser.plugin.json + DSP + codegen
+dsp/aligner/   aligner.plugin.json + DSP + codegen
+dsp/denoiser/  denoiser.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
 ui/            React SPA (Vite), hash router #equalizer / … / #denoiser
 external/vst3sdk/
@@ -157,7 +158,7 @@ mode Off/Linear, selected band, etc.).
 - Optional host tempo (Delay): `IVizSource::takeHostTempo` / `vizTempoId()` → `{t:"viz",id:"delay",kind:"tempo",v:[valid,bpm]}` → `bindVizTempo`.
 - Host also pushes `{t:"io",ch:N}` (bus channel count).
 - Header (`createHeaderIo`) binds In/Out MultiMeters + In/Out gain knobs for all plugins.
-- Spectrum (Analyzer; shared `SpectrumTap` for later EQ overlay): `{t:"viz",id:"fft",kind:"spectrum",v:[bins,hold,avg…,max…,L…,R…]}`; UI→host `{t:"vizcfg",id:"fft",bins:N}`. Display tilt (Linear / −3 / −4.5 dB/oct) + midband corridor are UI-only. Wire path: binary `CNXV` frames (`viz_bin.h`), batched per flush tick as `CNXB` when ≥2 streams → `Float32Array`. When the XEmbed parent is unmapped, `calfnxt-web-host` parks WebKit (`terminate_web_process` + hide) and sends `{t:"_visible",v:0}` so DSP skips viz; on show it reloads the UI. Never block the host UI thread waiting on helper exit.
+- Spectrum (Analyzer; shared `SpectrumTap` for later EQ overlay): `{t:"viz",id:"fft",kind:"spectrum",v:[bins,hold,avg…,max…,L…,R…]}`; UI→host `{t:"vizcfg",id:"fft",bins:N}`. Display tilt (Linear / −3 / −4.5 dB/oct) + midband corridor are UI-only. Wire path: binary `CNXV` frames (`viz_bin.h`), batched per flush tick as `CNXB` when ≥2 streams → `Float32Array`. Editor hide: GTK3 XEmbed **deep-parks** (destroy WebView+context, keep GtkPlug — killing the plug under Ardour freezes the host); on show, recreate WebView. GTK4 floating exits on close/unmap. Reap via close-path `waitpid` burst; respawn only after parent hide→show. Never block the audio thread on helper exit.
 
 ---
 
@@ -399,7 +400,8 @@ Ideas only if explicitly revived — do not start these unprompted:
 | Bender DSP                  | `dsp/bender/source/*_dsp.*`, `common/dsp/bender_shifter.h`; UI `ui/src/plugins/BenderUI/*`, `host/benderHost.ts`                                                                                        |
 | Impulse DSP                 | `dsp/impulse/source/*_dsp.*`, `common/dsp/partitioned_convolver.h`, `wav_load.h`, `ir_library.h`; UI `ui/src/plugins/ImpulseUI/*`, `host/impulseHost.ts`, `widgets/ImpulseChart/*`                     |
 | Tamer DSP                   | `dsp/tamer/source/*_dsp.*`, `common/dsp/spectral_tamer.h`; UI `ui/src/plugins/TamerUI/*`, `host/tamerHost.ts`, `widgets/TamerChart/*`                                                                 |
-| Denoiser DSP                    | `dsp/denoiser/source/*_dsp.*`, `common/dsp/spectral_denoiser.h`; UI `ui/src/plugins/DenoiserUI/*`, `host/denoiserHost.ts`, `widgets/DenoiserChart/*`                                                                     |
+| Aligner DSP                 | `dsp/aligner/source/*_dsp.*`; UI `ui/src/plugins/AlignerUI/*`, `host/alignerHost.ts` — one 8-ch main → stereo + stereo Reference aux (display only; Ardour-friendly 1 main+1 aux); manual delay/phase; Master Trim vs mix                                                                 |
+| Denoiser DSP                | `dsp/denoiser/source/*_dsp.*`, `common/dsp/spectral_denoiser.h`; UI `ui/src/plugins/DenoiserUI/*`, `host/denoiserHost.ts`, `widgets/DenoiserChart/*`                                                                     |
 | Param bind                  | `ui/src/utils/bridge.ts`, `ui/src/utils/bind_param.ts`, `host/*Host.ts`                                                                                                                              |
 | Header I/O                  | `ui/src/components/Header/*`, `host/headerMeters.ts`                                                                                                                                                |
 | Meters                      | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*`                                                                                                                                                       |

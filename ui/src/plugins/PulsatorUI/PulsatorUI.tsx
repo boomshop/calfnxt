@@ -167,13 +167,15 @@ export function PulsatorUI(props: PulsatorUIProps) {
       </Header>
 
       <div className="history">
-        <HistoryChart
-          data$={host.historyData$}
-          vizId="pulsator"
-          dbMin={-60}
-          dbMax={60}
-          series={historySeries}
-        />
+        <WithInfo title={pulsatorInfo.history}>
+          <HistoryChart
+            data$={host.historyData$}
+            vizId="pulsator"
+            dbMin={-60}
+            dbMax={60}
+            series={historySeries}
+          />
+        </WithInfo>
       </div>
 
       <div className="block timing">

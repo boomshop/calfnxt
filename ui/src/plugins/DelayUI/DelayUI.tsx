@@ -17,7 +17,7 @@ import {
   delayParamDefault,
   type IDelayHost,
 } from '../../host/delayHost';
-import { delayInfo } from './delayInfo';
+import { delayFeedbackInfo, delayInfo } from './delayInfo';
 import '../PluginUI.scss';
 import './DelayUI.scss';
 
@@ -394,6 +394,7 @@ export function DelayUI(props: DelayUIProps) {
       <div className="right block">
         <div className="title">Feedback Filter</div>
         <FrequencyRange
+          info={delayFeedbackInfo}
           title="Feedback Filter"
           hipass$={host.hipass$}
           lopass$={host.lopass$}

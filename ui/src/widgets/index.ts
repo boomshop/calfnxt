@@ -3,6 +3,7 @@ export * from "./Knob";
 export * from "./LevelMeter";
 export * from "./MultiMeter";
 export * from "./CorrelationMeter";
+export * from "./AlignWaveStrip";
 export * from "./GonioMeter";
 export * from "./EQChart";
 export * from "./MultibandChart";

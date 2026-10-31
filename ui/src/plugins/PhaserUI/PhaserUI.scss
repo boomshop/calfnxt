@@ -26,9 +26,21 @@
 
   > .chart {
     grid-area: chart;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 
-    > .ModulationChart {
+    > .WithInfo {
+      display: flex;
       flex: 1;
+      min-height: 0;
+      width: 100%;
+    }
+
+    > .ModulationChart,
+    > .WithInfo > .ModulationChart {
+      flex: 1;
+      width: 100%;
       min-height: 180px;
     }
   }

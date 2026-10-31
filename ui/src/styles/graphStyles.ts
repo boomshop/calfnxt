@@ -1,6 +1,8 @@
 /**
  * Shared graph paint recipes (utility class strings from `graph.scss`).
  * Append via `addGraphClasses(el, GRAPH_STYLE.…)` or put in `className`.
+ *
+ * Discrete theme stops: `fill-palette-0…100` / `stroke-palette-0…100` (step 5).
  */
 
 /** Apply space-separated utility / semantic classes onto an SVG node. */
@@ -24,7 +26,7 @@ export function addGraphClasses(
  * 1.5px) unless a width utility is included.
  *
  * Opacity tiers (fill + stroke): full 1 | rich 0.75 | mostly 0.63 | semi 0.5 |
- * soft 0.37 | faint 0.25 | ghost 0.12 | none 0.
+ * soft 0.37 | faint 0.25 | pale 0.15 | ghost 0.1 | none 0.
  * (`stroke-medium` = width; opacity uses `stroke-mostly` / `fill-mostly`.)
  */
 export const GRAPH_STYLE = {

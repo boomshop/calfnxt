@@ -218,9 +218,11 @@ export function EQChart(props: EQChartProps) {
   });
 
   useEffect(() => {
-    if (!eq || isMini) return;
+    if (!eq) return;
+    // Minis need this too — a fixed ±36 dB range on ~30 px collapses wide
+    // low-Q bells to a flat line and makes the 0 dB edge look like a false peak.
     eq.set('range_y', { min: yRange.min, max: yRange.max });
-    eq.set('db_grid', dbGrid);
+    if (!isMini) eq.set('db_grid', dbGrid);
   }, [dbGrid, eq, isMini, yRange.max, yRange.min]);
 
   useEffect(() => {

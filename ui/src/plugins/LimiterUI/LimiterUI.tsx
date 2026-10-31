@@ -123,14 +123,15 @@ export function LimiterUI(props: LimiterUIProps) {
         </WithInfo>
       </Header>
 
-      <HistoryChart
-        data$={host.historyData$}
-        vizId="limiter"
-        autoScale
-        series={LIMITER_HISTORY_SERIES}
-        persistToggles={LIMITER_HISTORY_TOGGLES}
-        className="history"
-      />
+      <WithInfo title={limiterInfo.history} className="history">
+        <HistoryChart
+          data$={host.historyData$}
+          vizId="limiter"
+          autoScale
+          series={LIMITER_HISTORY_SERIES}
+          persistToggles={LIMITER_HISTORY_TOGGLES}
+        />
+      </WithInfo>
 
       <div className="main">
         <div className="block limit">

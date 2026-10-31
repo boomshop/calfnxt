@@ -32,6 +32,7 @@ export type PluginId =
   | 'bender'
   | 'impulse'
   | 'tamer'
+  | 'aligner'
   | 'denoiser';
 
 const PLUGIN_IDS: PluginId[] = [
@@ -61,6 +62,7 @@ const PLUGIN_IDS: PluginId[] = [
   'bender',
   'impulse',
   'tamer',
+  'aligner',
   'denoiser',
 ];
 
@@ -230,6 +232,12 @@ export {
   createBoundTamerHost,
   type ITamerHost,
 } from '../host/tamerHost';
+
+export { AlignerUI } from '../plugins/AlignerUI/AlignerUI';
+export {
+  createBoundAlignerHost,
+  type IAlignerHost,
+} from '../host/alignerHost';
 
 export { DenoiserUI } from '../plugins/DenoiserUI/DenoiserUI';
 export {

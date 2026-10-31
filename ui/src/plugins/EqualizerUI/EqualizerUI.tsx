@@ -32,6 +32,7 @@ import {
   bandSupportsDyn,
   eqChannelClass,
   isPassFilter,
+  miniBandYRange,
   type EqFilterType,
   type IEqualizerBand,
   type IEqualizerHost,
@@ -94,8 +95,8 @@ const EQ_DYN_RELEASE_LABELS = [
   { pos: 100, label: '100' },
   { pos: 200, label: '200' },
   { pos: 500, label: '500' },
-  { pos: 1000, label: '1s' },
-  { pos: 2000, label: '2s' },
+  { pos: 1000, label: '1000' },
+  { pos: 2000, label: '2000' },
 ];
 
 const EQ_DYN_THRESH_DOTS = [-60, -48, -36, -24, -12, -6, 0];
@@ -129,6 +130,7 @@ function BandRow(props: {
   const { band, index, selected, mono, onSelect } = props;
   const active = useDynamicValueReadonly(band.active$, false);
   const freq = useDynamicValueReadonly(band.frequency$, 0);
+  const gain = useDynamicValueReadonly(band.effectiveGain$, 0);
   const filterType = useDynamicValueReadonly<EqFilterType>(
     band.type$,
     'parametric',
@@ -137,6 +139,10 @@ function BandRow(props: {
   const listen = useDynamicValueReadonly(band.listen$, false);
   const channel = useDynamicValueReadonly(band.channel$, 0);
   const dynActive = bandSupportsDyn(filterType) && dyn;
+  const miniY = useMemo(
+    () => miniBandYRange(gain, filterType),
+    [gain, filterType],
+  );
   // Global Mono always runs the Left path — stripe shows Stereo, not L/R/M/S.
   const freqChannelClass =
     active && !mono
@@ -173,6 +179,7 @@ function BandRow(props: {
           bands={[band]}
           size="mini"
           interactive={false}
+          yRange={miniY}
           className={active ? undefined : 'eq-band-off'}
         />
       </button>
@@ -466,15 +473,17 @@ export function EqualizerUI(props: EqualizerUIProps) {
         </WithInfo>
       </Header>
 
-      <EQChart
-        bands={bands}
-        size="normal"
-        selectedBandId={selectedBandId}
-        onSelectBand={selectBand}
-        spectrumIn$={host.spectrumIn$}
-        spectrumOut$={host.spectrumOut$}
-        spectrumMode={Math.round(spectrumMode)}
-      />
+      <WithInfo title={equalizerInfo.chart} className="graph">
+        <EQChart
+          bands={bands}
+          size="normal"
+          selectedBandId={selectedBandId}
+          onSelectBand={selectBand}
+          spectrumIn$={host.spectrumIn$}
+          spectrumOut$={host.spectrumOut$}
+          spectrumMode={Math.round(spectrumMode)}
+        />
+      </WithInfo>
 
       {selectedBand ? (
         <BandControls band={selectedBand} host={host} mono={mono} />

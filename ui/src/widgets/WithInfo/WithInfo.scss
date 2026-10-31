@@ -13,9 +13,18 @@
     cursor: help;
     pointer-events: auto;
     line-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    appearance: none;
     color: var(--color-accent);
     background: var(--background);
     border-radius: 50%;
+
+    &.is-pinned {
+      outline: 1px solid var(--color-accent);
+      outline-offset: 1px;
+    }
   }
 
   &.info-block {
@@ -96,15 +105,17 @@
 }
 
 /*
- * Portaled to document.body. pointer-events:none so a clamped flyout that
- * overlaps the cursor cannot fire leave on the icon (flicker loop).
+ * Portaled to document.body. Scrolls inside the viewport. Hover keeps it
+ * open; click on the icon pins it. https links are handled in script.
  */
 .WithInfo-flyout {
   position: fixed;
   z-index: 1000;
-  max-width: min(520px, calc(100vw - 16px));
+  max-width: min(24rem, calc(100vw - 16px));
   padding: 8px 12px;
-  pointer-events: none;
+  overflow: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
   visibility: hidden;
   box-sizing: border-box;
   border-radius: var(--border-radius);
@@ -112,6 +123,88 @@
   color: var(--color);
   border: 1px solid var(--background-lesser);
   font-family: PragatiNarrow, sans-serif;
+  font-size: var(--font-size-small);
+  line-height: 1.35;
   white-space: pre-line;
   overflow-wrap: anywhere;
+
+  &.is-pinned {
+    border-color: var(--color-accent);
+  }
+}
+
+.WithInfo-flyout .info-html {
+  white-space: normal;
+}
+
+.WithInfo-flyout .info-doc {
+  margin: 0;
+
+  h1,
+  h2,
+  p,
+  ul,
+  dl {
+    margin: 0;
+  }
+
+  h1 {
+    margin-bottom: 4px;
+    font-size: var(--font-size);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  h2 {
+    margin: 8px 0 2px;
+    color: var(--color-accent);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .info-lead {
+    margin-bottom: 8px;
+    color: var(--color-less);
+  }
+
+  p + p,
+  ul + p,
+  p + ul {
+    margin-top: 4px;
+  }
+
+  ul {
+    padding-left: 1.1em;
+  }
+
+  li + li {
+    margin-top: 2px;
+  }
+
+  .info-meta {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 2px 10px;
+    margin-bottom: 2px;
+  }
+
+  .info-meta dt {
+    color: var(--color-least);
+  }
+
+  .info-meta dd {
+    margin: 0;
+    min-width: 0;
+  }
+
+  a {
+    color: var(--color-accent);
+  }
+
+  .info-note {
+    color: var(--color-lesser);
+  }
 }

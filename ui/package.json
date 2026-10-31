@@ -1,7 +1,7 @@
 {
   "name": "calfnxt-ui",
   "private": true,
-  "version": "2.12.6",
+  "version": "2.14.1",
   "type": "module",
   "scripts": {
     "dev": "vite",

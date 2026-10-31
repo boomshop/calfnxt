@@ -39,7 +39,9 @@ export type calfNXTMsg =
       bins?: number;
       /** Denoiser learned profile snapshots. */
       slots?: { i: number; valid: number; db?: number[] }[];
-    };
+    }
+  /** Host→UI tips (e.g. Ardour GTK3 embed preference). */
+  | { t: "host"; tip?: string; show?: number };
 
 /** Plain float from a host→UI param message (`v`, or legacy q/d). */
 export function plainFromMsg(msg: { v?: number; q?: number; d?: number }): number | undefined {
@@ -94,32 +96,34 @@ function vizSamplesForDump(v: ArrayLike<number>): number[] | Float32Array {
  * Snapshot bag → JSON. Also posts DUMPVIZ to calfnxt-web-host, which writes
  * `/tmp/calfnxt-viz-dump.json` (for studio import when the DAW eats Enter).
  */
+export function dumpVizToTmp(): string {
+  const bag = vizDumpBag();
+  const jsonReady: Record<string, number[]> = {};
+  for (const [k, v] of Object.entries(bag))
+    jsonReady[k] = Array.from(v);
+  const json = JSON.stringify(jsonReady, null, 2);
+  try {
+    void navigator.clipboard?.writeText(json);
+  } catch {
+    /* WebKit may deny clipboard without a gesture — still return the string. */
+  }
+  try {
+    const wh = (
+      window as Window & {
+        webkit?: { messageHandlers?: { calfnxt?: { postMessage: (m: string) => void } } };
+      }
+    ).webkit?.messageHandlers?.calfnxt;
+    wh?.postMessage(`DUMPVIZ\n${json}`);
+  } catch {
+    /* Host-only path; ignore in Vite / studio. */
+  }
+  console.log(json);
+  return json;
+}
+
 function installVizDumpApi(): void {
   // Keep / refresh the classic global (web-host injects a stub at document start).
-  window.__calfnxtDumpViz = () => {
-    const bag = vizDumpBag();
-    const jsonReady: Record<string, number[]> = {};
-    for (const [k, v] of Object.entries(bag))
-      jsonReady[k] = Array.from(v);
-    const json = JSON.stringify(jsonReady, null, 2);
-    try {
-      void navigator.clipboard?.writeText(json);
-    } catch {
-      /* WebKit may deny clipboard without a gesture — still return the string. */
-    }
-    try {
-      const wh = (
-        window as Window & {
-          webkit?: { messageHandlers?: { calfnxt?: { postMessage: (m: string) => void } } };
-        }
-      ).webkit?.messageHandlers?.calfnxt;
-      wh?.postMessage(`DUMPVIZ\n${json}`);
-    } catch {
-      /* Host-only path; ignore in Vite / studio. */
-    }
-    console.log(json);
-    return json;
-  };
+  window.__calfnxtDumpViz = dumpVizToTmp;
 }
 
 installVizDumpApi();

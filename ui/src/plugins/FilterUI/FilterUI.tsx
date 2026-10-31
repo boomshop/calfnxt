@@ -95,8 +95,8 @@ const RELEASE_LABELS = [
   { pos: 100, label: '100' },
   { pos: 200, label: '200' },
   { pos: 500, label: '500' },
-  { pos: 1000, label: '1s' },
-  { pos: 2000, label: '2s' },
+  { pos: 1000, label: '1000' },
+  { pos: 2000, label: '2000' },
 ];
 
 export function FilterUI(props: FilterUIProps) {
@@ -227,16 +227,18 @@ export function FilterUI(props: FilterUIProps) {
 
       <div className="block chart">
         <div className="title">Response</div>
-        <EQChart
-          bands={host.filterBands}
-          interactive
-          showLabels
-          yRange={{ min: -60, max: 24 }}
-          dbGrid={12}
-          spectrumIn$={host.spectrumIn$}
-          spectrumOut$={host.spectrumOut$}
-          spectrumMode={Math.round(spectrumMode)}
-        />
+        <WithInfo title={filterInfo.chart}>
+          <EQChart
+            bands={host.filterBands}
+            interactive
+            showLabels
+            yRange={{ min: -60, max: 24 }}
+            dbGrid={12}
+            spectrumIn$={host.spectrumIn$}
+            spectrumOut$={host.spectrumOut$}
+            spectrumMode={Math.round(spectrumMode)}
+          />
+        </WithInfo>
       </div>
 
       <div className="block envelope">

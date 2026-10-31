@@ -1,90 +1,557 @@
 /** Hover titles for Tuner controls (musicians / producers). */
 
+import { infoDoc } from '../../widgets/WithInfo/infoDoc';
+
 export const tunerInfo = {
-  bypass:
-    'Turns pitch correction off so you hear the delayed dry path (In/Out gains still apply). Latency stays reported to the host so timing does not jump. A/B whether the correction is saving the take or flattening life out of it.',
+  bypass: infoDoc({
+    name: 'Bypass',
+    lead: 'Turns the correction off. You still hear the delayed dry path, so the timing does not jump.',
+    meta: [
+      { label: 'DAW name', value: 'Bypass' },
+      { label: 'Parameter ID', value: '2' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'The reported latency stays. The header In and Out gains are unity while it is on. The wet path is ducked the same way an unvoiced sound is, so the return does not click.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  mono:
-    'Process the Left channel only and copy the result to both outs. Roughly halves PSOLA grain reads — ideal on mono vocals, DI bass, or single-mic strings. Right-channel content is ignored while on; Detect still follows Left when set to Mid/Mix.',
+  mono: infoDoc({
+    name: 'Mono',
+    lead: 'Reads the left channel only and copies the result to both outputs.',
+    meta: [
+      { label: 'DAW name', value: 'Mono' },
+      { label: 'Parameter ID', value: '35' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          { p: 'Right-channel content is ignored. Detect still follows whichever side you chose, but a Mid or Mix detect on a mono feed is just the left.' },
+        ],
+      },
+    ],
+  }),
 
-  profile:
-    'Starting points, like Reverb rooms — not a hidden extra law. Voice / Strings / Guitar write range, retune, threshold, flex, Keep, formant, unvoiced, and octave protection, and also pick hidden detector constants (voiced/unvoiced floors, note-centre smoothing, added-vibrato width). After the click, the knobs are the truth. Click again to reset that source’s defaults. Cher snap is Retune / Keep, not a fourth source. Bass lives under Guitar: drop Low to ~31 Hz (B0) for a 5-string; 4-string E can sit near 40 Hz.',
+  profile: infoDoc({
+    name: 'Source',
+    lead: 'Writes a starting set of knobs for voice, strings, or guitar.',
+    meta: [
+      { label: 'DAW name', value: 'Source' },
+      { label: 'Parameter ID', value: '3' },
+      { label: 'Stored range', value: '0…2. The buttons send Voice 0, Strings 1, Guitar 2.' },
+      { label: 'Default', value: '0 (Voice)' },
+    ],
+    sections: [
+      {
+        heading: 'What they set',
+        blocks: [
+          {
+            ul: [
+              'Voice: Low 80 Hz, High 700 Hz, Retune 80 ms, Threshold 10 ct, Flex 100 ct, Keep 75 %, Formant 85 %, Unvoiced 58 %, Octave 88 %.',
+              'Strings: Low 55 Hz, High 700 Hz, Retune 120 ms, Threshold 14 ct, Flex 150 ct, Keep 90 %, Formant 92 %, Unvoiced 45 %, Octave 85 %.',
+              'Guitar: Low 70 Hz, High 1 400 Hz, Retune 80 ms, Threshold 16 ct, Flex 250 ct, Keep 65 %, Formant 90 %, Unvoiced 60 %, Octave 75 %.',
+            ],
+          },
+          {
+            p: 'After the click, the knobs are the settings. The same choice also picks a few detector constants that are not on the panel: how the note centre is smoothed, and how wide an added vibrato may get. Click the source again to write those defaults once more. There is no separate hard-tune mode. That is Retune and Keep.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  quality:
-    'Lookahead / analysis window / shifter smoothness, traded for latency. Left = live-ish (short window, more octave mistakes on low notes). Default sits a bit right of centre for studio vocals. Far right = mix/HiQ (C2-safe F0, smoother grains, tens of ms PDC). Park it right for vocals, bowed strings, and guitar; left only if you must monitor through it.',
+  quality: infoDoc({
+    name: 'Quality',
+    lead: 'Sets the length of the pitch window, and with it the latency.',
+    meta: [
+      { label: 'DAW name', value: 'Quality' },
+      { label: 'Parameter ID', value: '4' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '75 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'The analysis window runs from 24 ms at the left to 92 ms at the right. The reported latency is half that window, plus one period of the Low frequency, plus a short margin. Left is quicker and more willing to pick the wrong octave on a low note. Right is steadier and later in the host. Low feeds the same latency.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  formant:
-    'How much of the original spectral envelope is put back after the shift. 100% = body/vowels/corpus stay put while pitch moves (no chipmunk). 0% = formants ride the pitch (toy piano, cartoon, hard-tune “electric”). Voice, strings, and guitar usually want this high. Drop it only when the processed “electric” tell is the point.',
+  formant: infoDoc({
+    name: 'Formant',
+    lead: 'Sets how much of the original tone colour is put back after the shift.',
+    meta: [
+      { label: 'DAW name', value: 'Formant' },
+      { label: 'Parameter ID', value: '5' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '85 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          { p: 'High keeps the body while the pitch moves. Low lets the colour ride with the pitch, which is the cartoon or hard-tune sound.' },
+        ],
+      },
+    ],
+  }),
 
-  retune:
-    'How fast pitch is pulled toward the target, in milliseconds — what you see is what you get (1 ms = instant snap, 80 ms = typical vocal, 400 ms = lazy glide). Fast = audible Cher, consonants can chirp, slides get ironed. Slow = the note eases in, including after a breath or rest: the next syllable should scoop at this speed, not click onto the grid. Voice/Strings/Guitar only write a starting value here; Cher is this knob, not a mode.',
+  retune: infoDoc({
+    name: 'Retune',
+    lead: 'Sets how fast the pitch is pulled toward the target.',
+    meta: [
+      { label: 'DAW name', value: 'Retune' },
+      { label: 'Parameter ID', value: '6' },
+      { label: 'Range', value: '1 … 400 ms' },
+      { label: 'Default', value: '80 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'These are real milliseconds. The pull is a time constant of this length. 1 ms is a snap. 80 ms, the start, is a vocal glide. 400 ms is lazy. Fast irons slides and can chirp on consonants. There is no separate hard-tune switch.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  release:
-    'How the correction lets go when the sound becomes unvoiced (breath, S, bow noise, pick scrape, room tail) or the note ends. Fast = correction drops immediately — clean for hard-tune, can click. Slow = the last pull eases out so the tail is not yanked onto a dead grid. Match it so S’s, bow noise, and mutes are not pitched.',
+  release: infoDoc({
+    name: 'Release',
+    lead: 'Sets how the correction lets go when the sound becomes unvoiced or the note ends.',
+    meta: [
+      { label: 'DAW name', value: 'Release' },
+      { label: 'Parameter ID', value: '7' },
+      { label: 'Range', value: '10 … 2 000 ms' },
+      { label: 'Default', value: '120 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'These are real milliseconds. Fast drops the correction as soon as the detector lets go. Slow eases the last pull out, so a tail is not yanked onto a dead grid.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  amount:
-    'How much of the computed correction is applied (0–100%). 100% = go all the way to the scale note (within Retune/Threshold/Flex). Lower = only pull part-way — “a bit in tune” without the autotune tell. On a wet string bus, backing off Amount often hides the room-mic lag more than slowing Retune.',
+  amount: infoDoc({
+    name: 'Amount',
+    lead: 'Sets how much of the computed correction is applied.',
+    meta: [
+      { label: 'DAW name', value: 'Amount' },
+      { label: 'Parameter ID', value: '8' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '100 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          { p: '100 % goes all the way to the target, within Retune, Threshold, and Flex. Lower stops part of the way there.' },
+        ],
+      },
+    ],
+  }),
 
-  threshold:
-    'Dead zone in cents: error inside this window is left alone. 0 = every wobble is a target. 8–20 ct = in-tune singing or playing (and natural vibrato around the centre) is not constantly grabbed. Too high and genuinely sharp/flat notes never move. Hard-tune wants this low; strings and guitar bends want it higher.',
+  threshold: infoDoc({
+    name: 'Threshold',
+    lead: 'A dead zone, in cents. Error inside it is left alone.',
+    meta: [
+      { label: 'DAW name', value: 'Threshold' },
+      { label: 'Parameter ID', value: '9' },
+      { label: 'Range', value: '0 … 50 ct' },
+      { label: 'Default', value: '10 ct' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: '0 treats every wobble as a target. A wider window leaves a note that is already close, including a small natural vibrato. Too wide and a note that is actually off never moves.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  flex:
-    'How large a bend/gliss (cents) is treated as expression instead of a mistake. Below this, fast pitch motion (scoops, fingerboard slides, guitar bends) is not ironed onto the nearest scale step. 0 = everything is a target (Cher). Strings and guitar want a lot; melisma vocals want some; rap-tune wants little.',
+  flex: infoDoc({
+    name: 'Flex',
+    lead: 'Sets how large a bend is treated as expression instead of a mistake.',
+    meta: [
+      { label: 'DAW name', value: 'Flex' },
+      { label: 'Parameter ID', value: '10' },
+      { label: 'Range', value: '0 … 400 ct' },
+      { label: 'Default', value: '100 ct' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Below this, a fast move is not ironed onto the nearest scale step. 0 makes everything a target. Guitar writes 250 ct. Voice writes 100 ct.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  keep:
-    'How much of the singer’s or player’s real vibrato is left alone. 100% = correct the note centre only, keep the 4–7 Hz shake. 0% = flatten instantaneous pitch onto the grid (Cher). If vibrato starts sounding like a trill between two scale notes, raise this or Threshold. This does not add wobble — that is the Vibrato block.',
+  keep: infoDoc({
+    name: 'Keep',
+    lead: 'Sets how much of the player’s own vibrato is left on the note.',
+    meta: [
+      { label: 'DAW name', value: 'Keep' },
+      { label: 'Parameter ID', value: '11' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '75 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'High corrects the centre and leaves the shake. 0 flattens the instantaneous pitch onto the grid. This does not add wobble. That is the Vibrato block.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  vibrato:
-    'Adds an artificial vibrato once the target note is held and the corrected pitch is already near it — not when the raw input happens to sit still. A sweep that Amount has stepped onto the scale can shake on each step; a gliss that Flex mostly lets through never parks, so you hear no LFO. Off = none. On = wait for Delay, then Fade in to Depth at Rate. Drops when the target note changes or the sound goes unvoiced.',
+  vibrato: infoDoc({
+    name: 'Vibrato',
+    lead: 'Adds a vibrato after the corrected pitch has sat on a note.',
+    meta: [
+      { label: 'DAW name', value: 'Vibrato' },
+      { label: 'Parameter ID', value: '31' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'It waits for Delay, then fades in to Depth at Rate. It drops when the target note changes or the sound goes unvoiced. A glide that Flex lets through never parks, so this LFO does not start.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  depth:
-    'How wide the added vibrato is, once it has faded in. 0 = rate/delay still run but you hear nothing. Around the middle = a sung or bowed sustain. Full = obviously artificial (Voice up to a semitone peak, guitar a little more, strings widest). Pair with Rate: slow+wide is seasick, fast+wide is a trill. The power switch must be on.',
+  depth: infoDoc({
+    name: 'Depth',
+    lead: 'Sets how wide the added vibrato is, once it has faded in.',
+    meta: [
+      { label: 'DAW name', value: 'Depth' },
+      { label: 'Parameter ID', value: '12' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '40 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: '0 runs the rate and the delay and you hear nothing. The widest peak depends on the source: voice is the narrowest of the three, then guitar, then strings. The Vibrato switch has to be on.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  vibDelay:
-    'Extra wait after the corrected pitch has sat on a note (~100 ms), before the added vibrato starts (0–2 s). 0 = shake as soon as the output is parked. 100 ms default = a short held step, then the wobble. Long delay = the attack stays dead-straight, vibrato only on the tail. A continuous gliss (Flex) never parks, so Delay never elapses.',
+  vibDelay: infoDoc({
+    name: 'Delay',
+    lead: 'Extra wait after the corrected pitch has sat on a note, before the added vibrato starts.',
+    meta: [
+      { label: 'DAW name', value: 'Delay' },
+      { label: 'Parameter ID', value: '32' },
+      { label: 'Range', value: '0 … 2 000 ms' },
+      { label: 'Default', value: '100 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          { p: 'These are real milliseconds. 0 starts as soon as the output is parked. A long delay leaves the attack straight and shakes only the tail.' },
+        ],
+      },
+    ],
+  }),
 
-  vibFade:
-    'How long the added vibrato takes to reach full Depth after Delay (0–2 s). 0 = it appears at full width. 200 ms default = it blooms in. Slow fade is the “exhale into the sustain”; fast fade is a switch.',
+  vibFade: infoDoc({
+    name: 'Fade',
+    lead: 'Sets how long the added vibrato takes to reach full Depth.',
+    meta: [
+      { label: 'DAW name', value: 'Fade' },
+      { label: 'Parameter ID', value: '33' },
+      { label: 'Range', value: '0 … 2 000 ms' },
+      { label: 'Default', value: '200 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [{ p: 'These are real milliseconds. 0 appears at full width. The start blooms in over 200 ms.' }],
+      },
+    ],
+  }),
 
-  vibRate:
-    'Speed of the added vibrato in Hz. ~5 Hz is typical sung / bowed / guitar vibrato. Lower = wide, lazy. Higher = nervous or electric. Independent of Keep — this only clocks the synthetic LFO.',
+  vibRate: infoDoc({
+    name: 'Rate',
+    lead: 'Sets the speed of the added vibrato.',
+    meta: [
+      { label: 'DAW name', value: 'Rate' },
+      { label: 'Parameter ID', value: '34' },
+      { label: 'Range', value: '2 … 10 Hz' },
+      { label: 'Default', value: '5 Hz' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [{ p: 'These are real cycles per second. This only clocks the added LFO. Keep is the player’s own shake.' }],
+      },
+    ],
+  }),
 
-  octaveProtect:
-    'How hard the detector refuses sudden octave jumps. High = stay in the current register unless confidence and continuity really say otherwise (cello C2 vs first harmonic, vocal fry, guitar 12th-fret harmonic). Low = nearest MIDI octave wins — faster, more “got the wrong octave” on low notes. Keep this high on a multi-mic string bus or a bass DI. Red dots on the roll are that hunt: the shifter passes dry until F0 agrees, so a wrong-octave grain train does not click.',
+  octaveProtect: infoDoc({
+    name: 'Octave',
+    lead: 'Sets how hard the detector refuses a sudden octave jump.',
+    meta: [
+      { label: 'DAW name', value: 'Octave' },
+      { label: 'Parameter ID', value: '13' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '88 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'High stays in the current register unless the detector is sure. Low lets the nearest octave win. The suspect dots on the roll are that hunt. Until the fundamental agrees, the shifter passes dry, so a wrong-octave grain does not click.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  unvoiced:
-    'How easily breath, S, bow scratch, pick scrape, and mutes are classified as unvoiced and left unpitched. Higher = more of the noisy stuff bypasses the shifter (safer S’s and tails). Lower = more of the take is treated as pitched — can pull sibilants and scratch onto a note. If S’s chirp, raise this; if quiet hummed notes or ghosted guitar notes are skipped, lower it.',
+  unvoiced: infoDoc({
+    name: 'Unvoiced',
+    lead: 'Sets how easily breath, bow noise, and pick noise are left unpitched.',
+    meta: [
+      { label: 'DAW name', value: 'Unvoiced' },
+      { label: 'Parameter ID', value: '14' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '58 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Higher leaves more of the noisy part alone. Lower treats more of the take as pitched, which can pull an S or a scrape onto a note. Gaps in the roll are these unvoiced stretches.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  detect:
-    'Where F0 is heard. Mid = (L+R)/2, the default for a summed vocal or section bus. Left / Right = that channel only (when one mic is cleaner). Mix = energy-weighted blend (the louder mic leads). One pitch, one shift ratio, both channels always — never independent L/R tuning, or the stereo image and phase die.',
+  detect: infoDoc({
+    name: 'Detect',
+    lead: 'Chooses where the one pitch is heard. Both sides are always shifted by that same ratio.',
+    meta: [
+      { label: 'DAW name', value: 'Detect' },
+      { label: 'Parameter ID', value: '15' },
+      { label: 'Stored range', value: '0…3. The buttons send Mid 0, Left 1, Right 2, Mix 3.' },
+      { label: 'Default', value: '0 (Mid)' },
+    ],
+    sections: [
+      {
+        heading: 'Which one, and why',
+        blocks: [
+          {
+            p: 'Mid is the average of the two sides. Left or Right is that side only. Mix lets the louder side lead. The two channels are never tuned apart.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  fmin:
-    'Lowest frequency the detector is allowed to call a fundamental. Voice ≈ 70–90 Hz. Strings (cello/viola/violin) down toward C2 (~65 Hz, sometimes 55 for open C). Guitar often ~70 Hz. Bass: 4-string E1 ≈ 41 Hz; 5-string B0 ≈ 31 Hz — drop Low to ~31 (floor is 25 Hz). Too high = low notes get heard as the octave above. Too low = more octave hunting and extra latency (Quality + Low both feed PDC). Six-string F♯0 (~23 Hz) sits under the window the detector can resolve.',
+  fmin: infoDoc({
+    name: 'Low',
+    lead: 'The lowest frequency the detector may call a fundamental.',
+    meta: [
+      { label: 'DAW name', value: 'Low' },
+      { label: 'Parameter ID', value: '16' },
+      { label: 'Range', value: '25 … 400 Hz' },
+      { label: 'Default', value: '80 Hz' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Voice writes 80 Hz. Strings writes 55 Hz. Guitar writes 70 Hz. Too high and a low note is heard as the octave above. Too low adds octave hunting, and the latency grows because one period of this frequency is part of it. The floor is 25 Hz.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  fmax:
-    'Highest fundamental considered. Voice default ≈ 700 Hz (~F5) — covers belted pop highs without leaving a 1 kHz-wide trap for harmonics. Soprano C6 ≈ 1 kHz: raise High. Guitar solos: 24th-fret E6 ≈ 1.3 kHz — the Guitar source writes High ≈ 1.4 kHz; the knob goes to 2 kHz. Too high invites harmonics and whistle; too low clips the top and the shifter goes metallic. Keep the window as tight as the part allows.',
+  fmax: infoDoc({
+    name: 'High',
+    lead: 'The highest fundamental the detector will consider.',
+    meta: [
+      { label: 'DAW name', value: 'High' },
+      { label: 'Parameter ID', value: '17' },
+      { label: 'Range', value: '200 … 2 000 Hz' },
+      { label: 'Default', value: '700 Hz' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Voice and Strings write 700 Hz. Guitar writes 1 400 Hz. Too high invites harmonics. Too low clips the top of the part and the shift goes thin. Keep the window as tight as the part allows.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  ref:
-    'Concert A in Hz (the “zero cents” of the scale). 440 = pop/studio. 442–444 = typical orchestra house pitch. 415 ≈ Baroque (about a semitone down). 432 = the alternate “natural” camp. 466 ≈ high historical Chorton (about a semitone up). This is not a transpose — it slides every target together. If the section is at 442 and you leave 440, everything sits a few cents “corrected” the wrong way.',
+  ref: infoDoc({
+    name: 'A4',
+    lead: 'Sets the concert pitch the scale is built on.',
+    meta: [
+      { label: 'DAW name', value: 'A4' },
+      { label: 'Parameter ID', value: '18' },
+      { label: 'Range', value: '415 … 466 Hz' },
+      { label: 'Default', value: '440 Hz' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Every target moves together. It is not a transpose of the melody. 440 is the start. 442 to 444 is a typical orchestra. 415 is about a semitone down. 466 is about a semitone up.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  notes:
-    'Which pitch classes are legal targets. Scales in this UI only set these twelve bits; the engine never sees “major”, only the mask. Toggle notes for custom sets (e.g. pentatonic, drone + fifths). All off is treated as chromatic so the plugin cannot freeze with nowhere to go. Held MIDI notes temporarily replace this mask (octaves ignored); the accent/warn marker follows the effective targets.',
+  notes: infoDoc({
+    name: 'Notes',
+    lead: 'The twelve pitch classes the corrector is allowed to aim at.',
+    meta: [
+      { label: 'DAW names', value: 'C, C#, D, D#, E, F, F#, G, G#, A, A#, B' },
+      { label: 'Parameter IDs', value: 'C is 19. Each next note is one higher. B is 30.' },
+      { label: 'Stored value', value: '0…1 each. On at 0.5 and above. The keys write 0 or 1.' },
+      { label: 'Default', value: 'All on' },
+    ],
+    sections: [
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'The engine sees this mask, not the name of a scale. All off is treated as chromatic, so there is always somewhere to go. Held MIDI notes replace the mask for as long as they are held. Octaves are ignored. Editing a key sets Scale to Custom.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  scale:
-    'Convenience only: writes the note toggles from a template, rotated by Key when one is selected (otherwise from C). Does not live on the DSP — automation/presets store the twelve notes. Custom means “I edited the keys myself” and does not rewrite anything. Changing Scale also clears any held MIDI override so these static bits apply again until you play MIDI. After reload the select resets to Chromatic even if the bits are still a saved mask — pick the scale again if you want the label to match.',
+  scale: infoDoc({
+    name: 'Scale',
+    lead: 'Writes the twelve note keys from a template. It is not a parameter.',
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Chromatic, Major, Minor, harmonic minor, Dorian, Mixolydian, the two pentatonics, Blues, and Whole tone. If a Key is lit, the template is rotated to that root. Otherwise it is written from C. Custom means the keys were edited, and choosing it does not rewrite them. Changing the scale clears a held MIDI override. After a reload the menu can show Chromatic while the stored keys are still a saved mask.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  key:
-    'Root for the current scale template (C major vs E♭ major, etc.). Nothing is highlighted until you pick one; then that root stays lit while Scale is not Custom. Changing Key rewrites the twelve bits from the current template and clears any held MIDI override. Editing any note key jumps Scale to Custom and clears this highlight.',
+  key: infoDoc({
+    name: 'Key',
+    lead: 'The root the current scale template is written from. It is not a parameter.',
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Nothing is highlighted until you pick one. Changing it rewrites the twelve notes from the current template and clears a held MIDI override. Editing any note clears this highlight and sets Scale to Custom.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  history:
-    'Scrolling piano roll (~10 s), display only — not a Melodyne editor. Blue = detected pitch (natural vibrato included). Faint dashed = scale target (the grid, not the audio). Warn colour = processed pitch (Retune scoop + added vibrato). Header In / Targ / Out hide each trace. Octave-suspect dots sit on In. The strip under the roll is pull amount: black = none, accent = a semitone, warn = a whole tone, white = two whole tones. Gaps are unvoiced (breath / S / bow / pick), left unpitched.',
+  history: infoDoc({
+    name: 'Roll',
+    lead: 'The last 10 seconds of detected pitch, target, and processed pitch. It is a display.',
+    sections: [
+      {
+        heading: 'What you see',
+        blocks: [
+          {
+            p: 'In is what was played, including the player’s vibrato. Target is the scale note being aimed at, drawn dashed. Out is the processed pitch, including Retune and the added vibrato. Suspect dots sit on In. Gaps are unvoiced. The strip under the roll is how far the pitch was pulled.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  traceIn:
-    'Shows the detected pitch (blue) — what was sung or played, including natural vibrato. Off when you only want the grid and the processed line. Octave-suspect dots ride this trace.',
+  traceIn: infoDoc({
+    name: 'In',
+    lead: 'Shows the detected pitch on the roll.',
+    sections: [
+      {
+        heading: 'What you see',
+        blocks: [{ p: 'This is the played pitch, including natural vibrato. The octave-suspect dots ride this trace. The chip is display only.' }],
+      },
+    ],
+  }),
 
-  traceTarg:
-    'Shows the scale target (faint dashed) — the note the corrector is aiming at, not the output. A guide only. Off when comparing In vs Out without the grid in the way.',
+  traceTarg: infoDoc({
+    name: 'Target',
+    lead: 'Shows the scale note the corrector is aiming at.',
+    sections: [
+      {
+        heading: 'What you see',
+        blocks: [{ p: 'It is the grid, not the audio. The chip is display only.' }],
+      },
+    ],
+  }),
 
-  traceOut:
-    'Shows the processed pitch (warn colour) — Retune plus added vibrato, i.e. what leaves the plugin. Natural vibrato stays in In; this line is In plus the DSP shift. Solo this to see scoops and the synthetic LFO.',
+  traceOut: infoDoc({
+    name: 'Out',
+    lead: 'Shows the pitch that leaves the plugin.',
+    sections: [
+      {
+        heading: 'What you see',
+        blocks: [{ p: 'Retune and the added vibrato are in this line. The player’s own vibrato stays in In. The chip is display only.' }],
+      },
+    ],
+  }),
 } as const;

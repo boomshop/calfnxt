@@ -1,4 +1,5 @@
 import type { DynamicValue } from "@deutschesoft/awml";
+import { setArdourGuiTipFromHost } from "../prefs/ardourGuiTip";
 import { isVizSamples, onHostMessage, plainFromMsg, postToHost, type calfNXTMsg } from "./bridge";
 import { SPECTRUM_MAX_BINS } from "./spectrum_bins";
 
@@ -130,6 +131,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizWaveApplies.get(msg.id)?.(msg.v);
   if (msg.t === "ir")
     irApplies.forEach((apply) => apply(msg));
+  if (msg.t === "host" && msg.tip === "ardour-gui")
+    setArdourGuiTipFromHost(msg.show === 1);
 }
 
 function ensureHostWire(): void {

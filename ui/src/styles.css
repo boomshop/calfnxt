@@ -23,6 +23,18 @@
   --contrast-warn: #ffffff;
   --color-hot: #ff6600;
 
+  /*
+   * Theme ramp SSOT. JS parses this into --palette-0…100 (step 5).
+   * Contract: linear-gradient only; sRGB default (no `in oklch`); stops =
+   * color + optional N%; var(--color-accent|warn) allowed. Add mid stops
+   * here to reshape the palette — UI without .palette-* stays unchanged.
+   */
+  --theme-gradient: linear-gradient(
+    to right,
+    var(--color-accent) 0%,
+    var(--color-warn) 100%
+  );
+
   --accent: hsl(
     var(--color-accent-h) var(--color-accent-s) var(--color-accent-l)
   );
@@ -35,6 +47,7 @@
   --font-size-small: 13px;
   --font-size: 16px;
   --font-size-large: 20px;
+  --font-size-huge: 24px;
 
   --aux-main-smallfontsize: var(--font-size-tiny);
   --aux-main-fontsize: var(--font-size);
@@ -90,6 +103,13 @@
   --color-warn: #ff0066;
   --contrast-warn: #ffffff;
   --color-hot: #ff6600;
+
+  --theme-gradient: linear-gradient(
+    to right,
+    var(--color-accent) 0%,
+    #9d00ff 50%,
+    var(--color-warn) 100%
+  );
 }
 
 :root.fire {
@@ -102,6 +122,13 @@
   --color-warn: #ffbb00;
   --contrast-warn: #000000;
   --color-hot: #ff0000;
+
+  --theme-gradient: linear-gradient(
+    to right,
+    var(--color-accent) 0%,
+    #e45400 50%,
+    var(--color-warn) 100%
+  );
 }
 
 :root.lime {
@@ -114,6 +141,13 @@
   --color-warn: #c3dd00;
   --contrast-warn: #000000;
   --color-hot: #ff9900;
+
+  --theme-gradient: linear-gradient(
+    to right,
+    var(--color-accent) 0%,
+    #56b61f 50%,
+    var(--color-warn) 100%
+  );
 }
 
 :root.sea {
@@ -126,6 +160,13 @@
   --color-warn: #00ccff;
   --contrast-warn: #000000;
   --color-hot: #ff5900;
+
+  --theme-gradient: linear-gradient(
+    to right,
+    var(--color-accent) 0%,
+    #008cff 50%,
+    var(--color-warn) 100%
+  );
 }
 
 :root.slick {
@@ -138,6 +179,86 @@
   --color-warn: #5f78bd;
   --contrast-warn: #ffffff;
   --color-hot: #ff7300;
+
+  --theme-gradient: linear-gradient(
+    to right,
+    var(--color-accent) 0%,
+    var(--color-warn) 100%
+  );
+}
+
+/*
+ * Opt-in accent remap from the sampled theme ramp (--palette-N set by JS).
+ * Default widgets keep --color-accent; .warn stays listen/danger (see below).
+ */
+.palette-0 {
+  --color-accent: var(--palette-0);
+}
+.palette-5 {
+  --color-accent: var(--palette-5);
+}
+.palette-10 {
+  --color-accent: var(--palette-10);
+}
+.palette-15 {
+  --color-accent: var(--palette-15);
+}
+.palette-20 {
+  --color-accent: var(--palette-20);
+}
+.palette-25 {
+  --color-accent: var(--palette-25);
+}
+.palette-30 {
+  --color-accent: var(--palette-30);
+}
+.palette-35 {
+  --color-accent: var(--palette-35);
+}
+.palette-40 {
+  --color-accent: var(--palette-40);
+}
+.palette-45 {
+  --color-accent: var(--palette-45);
+}
+.palette-50 {
+  --color-accent: var(--palette-50);
+}
+.palette-55 {
+  --color-accent: var(--palette-55);
+}
+.palette-60 {
+  --color-accent: var(--palette-60);
+}
+.palette-65 {
+  --color-accent: var(--palette-65);
+}
+.palette-70 {
+  --color-accent: var(--palette-70);
+}
+.palette-75 {
+  --color-accent: var(--palette-75);
+}
+.palette-80 {
+  --color-accent: var(--palette-80);
+}
+.palette-85 {
+  --color-accent: var(--palette-85);
+}
+.palette-90 {
+  --color-accent: var(--palette-90);
+}
+.palette-95 {
+  --color-accent: var(--palette-95);
+}
+.palette-100 {
+  --color-accent: var(--palette-100);
+}
+
+/* Listen / danger wins when combined with a palette class. */
+[class^='palette-'].warn,
+[class*=' palette-'].warn {
+  --color-accent: var(--color-warn);
 }
 
 /* Kill UA focus, apply ours only for keyboard / :focus-visible. */
@@ -665,5 +786,18 @@ textarea::selection {
   > input {
     background: transparent;
     color: var(--color);
+  }
+}
+
+/** Suite-wide attention pulse (EQ listen row, Ardour tip button, …). */
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+  100% {
+    opacity: 1;
   }
 }

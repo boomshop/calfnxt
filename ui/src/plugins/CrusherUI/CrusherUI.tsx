@@ -87,25 +87,29 @@ export function CrusherUI(props: CrusherUIProps) {
       </Header>
 
       <div className="history">
-        <HistoryChart
-          data$={host.historyData$}
-          vizId="crusher"
-          dbMin={-60}
-          dbMax={60}
-          series={historySeries}
-        />
+        <WithInfo title={crusherInfo.history}>
+          <HistoryChart
+            data$={host.historyData$}
+            vizId="crusher"
+            dbMin={-60}
+            dbMax={60}
+            series={historySeries}
+          />
+        </WithInfo>
       </div>
 
       <div className="block response">
         <div className="title">Response</div>
-        <CrusherChart
-          bits$={host.bits$}
-          morph$={host.morph$}
-          mode$={modeNum$}
-          dc$={host.dc$}
-          aa$={host.aa$}
-          viz$={host.shapePoint$}
-        />
+        <WithInfo title={crusherInfo.chart}>
+          <CrusherChart
+            bits$={host.bits$}
+            morph$={host.morph$}
+            mode$={modeNum$}
+            dc$={host.dc$}
+            aa$={host.aa$}
+            viz$={host.shapePoint$}
+          />
+        </WithInfo>
       </div>
 
       <div className="block bits">

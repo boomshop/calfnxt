@@ -1,102 +1,776 @@
 /** Hover titles for Multiband Limiter controls (musicians / producers). */
 
+import { infoDoc } from '../../widgets/WithInfo/infoDoc';
+
+/**
+ * Master parameters follow Bypass. Band slots start at 29, three each:
+ * Listen, Weight, Release. Band N is 29 + (N−1)×3 + offset.
+ * Mono is 47. Scale is 48.
+ * Band Release defaults: B1 0.5, B2 0.2, B3 −0.2, B4 −0.5, B5 −0.66, B6 −0.75.
+ */
+
+const bandId = (offset: number) =>
+  `Band 1 is parameter ${29 + offset}. Each next band is 3 higher.`;
+
 export const mblimiterInfo = {
-  bypass:
-    'Turns all limiting off so you hear the dry path (In/Out gains still apply). A/B the whole multiband treatment — loudness vs. squashed dynamics.',
+  bypass: infoDoc({
+    name: 'Bypass',
+    lead: 'Lets the signal through with no limiting, so you can compare the processed sound with the untouched one.',
+    meta: [
+      { label: 'DAW name', value: 'Bypass' },
+      { label: 'Parameter ID', value: '2' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Turn it on and the strips, the final limiter, and the color are out of the sound. The dry path is delayed to the same latency, so the comparison does not jump in time. The fade is a short equal-power crossfade.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            ul: [
+              'While it is on, the header In and Out gains are unity.',
+              'Every GR meter sits at 0. Each band history draws the slice and no reduction.',
+              'Mono still copies the left input to both outputs.',
+            ],
+          },
+        ],
+      },
+    ],
+  }),
 
-  mono:
-    'Process the Left channel only (one crossover path) and copy to both outs. Big CPU win with many bands / steep slopes — ideal on mono tracks. Right is ignored while on.',
+  mono: infoDoc({
+    name: 'Mono',
+    lead: 'Runs the split and both limiters on the left input only, and copies that result to both outputs.',
+    meta: [
+      { label: 'DAW name', value: 'Mono' },
+      { label: 'Parameter ID', value: '47' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Use it on a mono source. The right input is ignored, and there is only one crossover path to run.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  diffListen:
-    'Lets you hear only what the limiter removes (dry minus limited). Loud, clicky, or tonal junk here means you’re taking a lot away — often too much. Clean, brief “tick” on hits means tasteful peak control.',
+  diffListen: infoDoc({
+    name: 'Diff Listen',
+    lead: 'Lets you hear only what the final limiter removes.',
+    meta: [
+      { label: 'DAW name', value: 'Diff Listen' },
+      { label: 'Parameter ID', value: '24' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'The difference between the summed strips and the signal after the broadband limiter. A short tick on a hit means the final stage only caught a peak. A thick, constant residue means the ceiling is sitting on the body of the sound. The strip limiting itself is not in this solo, and neither is Color. Auto Level is in both sides, so it cancels.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  numBands:
-    'How many frequency bands you split into. Fewer = broader, simpler control (less crossover coloration). More = surgical (kick vs. vocal vs. cymbals), but more phase rotation and more to manage. Adding a band splits the top band at a new crossover.',
+  numBands: infoDoc({
+    name: 'Bands',
+    lead: 'Sets how many bands the signal is split into, from 2 to 6.',
+    meta: [
+      { label: 'DAW name', value: 'Bands' },
+      { label: 'Parameter ID', value: '3' },
+      { label: 'Range', value: '2 … 6' },
+      { label: 'Default', value: '4' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Fewer bands means each strip looks after a wider slice. More bands means a kick can be held without holding the voice. With nothing limiting, the bands add back without notches. Once a strip or the final limiter is working, that balance is what you are changing.',
+          },
+        ],
+      },
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'The − and + buttons change the count. Adding a band puts the new crossover on the geometric midpoint between the previous top split and 20 kHz. Bands above the count stay stored. They do not run.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  slope:
-    'Steepness of the Linkwitz-Riley crossovers. Steeper = tighter band separation (less bleed between bands) but more phase rotation — can sound more “processed.” Gentler slopes = smoother joins, bands influence each other more.',
+  slope: infoDoc({
+    name: 'Slope',
+    lead: 'Sets how steep every crossover is.',
+    meta: [
+      { label: 'DAW name', value: 'Slope' },
+      { label: 'Parameter ID', value: '4' },
+      { label: 'Stored range', value: 'The buttons send 24, 48, or 96 dB/oct.' },
+      { label: 'Default', value: '48 dB/oct' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Steeper means less of the neighbouring band leaks into the strip you are weighting. Gentler means the bands share more, so one strip still touches its neighbour. The joins stay flat when the gains are unity. There is no 12 or 36.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  scale:
-    'Display tilt for the background analyzer only (does not change the sound), pivoted at 1 kHz — same as the Analyzer. Linear = raw dBFS (natural treble roll-off). −3 dB/oct ≈ typical pop / general programme. −4.5 dB/oct ≈ modern, bass-heavy material. Helps you read band balance against a flatter-looking spectrum.',
+  scale: infoDoc({
+    name: 'Scale',
+    lead: 'Tilts the spectrum drawn behind the bands. It does not change the sound.',
+    meta: [
+      { label: 'DAW name', value: 'Scale' },
+      { label: 'Parameter ID', value: '48' },
+      { label: 'Stored range', value: '0…2. The buttons send Lin 0, −3 dB 1, −4.5 dB 2.' },
+      { label: 'Default', value: '0 (Lin)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Lin is the raw level. −3 dB per octave and −4.5 dB per octave lift the display toward the top, pivoted at 1 kHz. The limiters do not hear this tilt.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  xover:
-    'Crossover frequency between bands. Drag the vertical handles in the chart. Place splits where instruments live so each strip limiter works on a clear job.',
+  xover: infoDoc({
+    name: 'Crossover',
+    lead: 'Sets the frequency where one band hands over to the next.',
+    meta: [
+      { label: 'DAW names', value: 'Xover 1 … Xover 5' },
+      { label: 'Parameter IDs', value: '5, 6, 7, 8, 9' },
+      { label: 'Range', value: '20 … 20 000 Hz' },
+      { label: 'Defaults', value: '200, 800, 3 200, 8 000, 12 000 Hz' },
+    ],
+    sections: [
+      {
+        heading: 'How to set it',
+        blocks: [
+          {
+            p: 'Drag the vertical handle. Only the crossovers inside the current band count are in the sound. Listen on a band tells you whether the slice is the instrument you meant. Min Release, when it is on, uses the crossover under a band as that band’s lowest frequency.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  bandListen:
-    'Solos this band’s output so you hear only what that band is working on. Only one band at a time. Great for setting Weight / Release on kick vs. vocal without the full mix masking it.',
+  chart: infoDoc({
+    name: 'Bands',
+    lead: 'Shows each band’s slice, shifted by how far that slice is being turned down, and the spectrum behind it.',
+    sections: [
+      {
+        heading: 'What you see',
+        blocks: [
+          {
+            ul: [
+              'Each curve is that band’s crossover, shifted by its gain reduction. That reduction includes the final limiter, not only the strip.',
+              'The vertical handles are the crossovers. There is no threshold handle. Weight is what moves a band’s own ceiling.',
+              'The filled spectrum is the latency-matched input and the output. Scale tilts that picture only.',
+            ],
+          },
+        ],
+      },
+    ],
+  }),
 
-  bandWeight:
-    'How hard this band contributes to limiting relative to the others (−1…+1). Positive = this band gets more of the ceiling work; negative = it stays freer while siblings take more GR. Use Listen to hear the balance.',
+  bandListen: infoDoc({
+    name: 'Listen',
+    lead: 'Lets you hear only this band, after its strip limiter.',
+    meta: [
+      { label: 'DAW name', value: 'B1 Listen, and the same for B2…B6' },
+      { label: 'Parameter ID', value: bandId(0) },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'The slice after this strip. The final limiter is still on that solo, so a ceiling you set for the whole mix is still in what you hear. Only one Listen stays on. Turning another on turns this one off.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  bandRelease:
-    'Per-band release offset (−1…+1) around the master Release. Positive = slower recovery in this band; negative = faster. Lets lows settle calmly while highs recover quicker (or the reverse).',
+  bandWeight: infoDoc({
+    name: 'Weight',
+    lead: 'Moves this band’s own ceiling, and changes how hard the band pushes the reduction shared by every strip.',
+    meta: [
+      { label: 'DAW name', value: 'B1 Weight, and the same for B2…B6' },
+      { label: 'Parameter ID', value: bandId(1) },
+      { label: 'Range', value: '−1 … +1' },
+      { label: 'Default', value: '0' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'At 0 this band’s ceiling is the Limit. Turn it up and the band is allowed to sit higher on its own, up to four times the ceiling at +1, about 12 dB. It also counts for more in the shared pull, so a loud moment here holds the other strips down with it. Turn it down and this band’s own ceiling drops, to a quarter at −1, about 12 dB under Limit, and it pushes the others less.',
+          },
+        ],
+      },
+      {
+        heading: 'How to set it',
+        blocks: [
+          {
+            p: 'Listen to the band. If a slice is being pinned and you wanted it freer, raise Weight. If a slice is poking through the ceiling and taking the rest of the mix with it, lower Weight. The final limiter is still there either way.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  bandIn:
-    'Level of this band after the crossover split (pre-limit). Shows how loud that slice of the spectrum is going into the strip limiter.',
+  bandRelease: infoDoc({
+    name: 'Release',
+    lead: 'Scales the master Release for this band. It is not a time of its own.',
+    meta: [
+      { label: 'DAW name', value: 'B1 Release, and the same for B2…B6' },
+      { label: 'Parameter ID', value: bandId(2) },
+      { label: 'Range', value: '−1 … +1' },
+      {
+        label: 'Defaults',
+        value: 'B1 0.50, B2 0.20, B3 −0.20, B4 −0.50, B5 −0.66, B6 −0.75',
+      },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: '0 leaves the master time. Positive makes this strip let go more slowly. At +1 the time is four times the master Release. Negative makes it let go sooner. At −1 the time is a quarter of the master. The low bands start slower than the master, and the high bands start faster, so a kick can settle while a cymbal opens again.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'The scale is the master Release in milliseconds times 0.25 raised to minus this number. Min Release can keep a band from going shorter than that result. The final limiter uses the master Release, not this offset.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  bandOut:
-    'Level of this band after limiting. Compare to Band In to see how hard the strip is being worked.',
+  bandIn: infoDoc({
+    name: 'In',
+    lead: 'Shows how loud this band is after Color and the crossover, before the strip limiter.',
+    sections: [
+      {
+        heading: 'How to read it',
+        blocks: [
+          {
+            p: 'It is the slice the strip is looking at, from −60 dB to 0 dB. The final limiter is not in it.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  bandGr:
-    'How many dB this band’s strip limiter is currently pulling down. Deep constant GR means that range is being continuously squashed.',
+  bandOut: infoDoc({
+    name: 'Out',
+    lead: 'Shows this band after its strip limiter, before the bands are summed and the final limiter runs.',
+    sections: [
+      {
+        heading: 'How to read it',
+        blocks: [
+          {
+            p: 'Compare it with In to see what this strip did. The GR meter beside it also includes the final limiter, so GR can move while Out still matches a strip that barely worked.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  history:
-    'Scrolling history (about 4 seconds): this band’s level and its gain reduction. Use it to see whether GR tracks hits cleanly or rides the whole phrase.',
+  bandGr: infoDoc({
+    name: 'GR',
+    lead: 'Shows how many decibels this band is being turned down, by its strip and by the final limiter together.',
+    sections: [
+      {
+        heading: 'How to read it',
+        blocks: [
+          {
+            p: '0 means neither stage is reducing this slice. A higher number means more reduction, up to 60 dB on this meter, with marks at 1, 3, 6, and 12. Because the final limiter is included, every active band can show the same extra reduction when only the broadband ceiling is working.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  limit:
-    'The loudness ceiling. Lower = more of the signal hits the wall and gets turned down — the mix gets denser and “louder” sounding, but peaks lose headroom. With Auto Level on, turning Limit down also boosts the overall level so the ceiling still sits at full scale.',
+  history: infoDoc({
+    name: 'History',
+    lead: 'Shows the last 4 seconds of this band’s level, and how far the strip and the final limiter are turning it down.',
+    sections: [
+      {
+        heading: 'What you see',
+        blocks: [
+          {
+            ul: [
+              'One fill is the band before that combined gain. The other is the band after it. Auto Level is not in either.',
+              'The dashed line is the Limit you set. It is not this band’s weighted ceiling.',
+              'GR, on by default, is the combined gain. It sits at 0 dB when nothing is reduced.',
+            ],
+          },
+        ],
+      },
+    ],
+  }),
 
-  attack:
-    'How far ahead the limiter looks before a peak arrives. Longer = it can pull gain down earlier, so hard hits feel smoother and less “clipped”; shorter = more punch left on the attack, but more risk of a brief overshoot or harder grab. Longer look also means more latency in the DAW.',
+  limit: infoDoc({
+    name: 'Limit',
+    lead: 'Sets the ceiling for the strips and for the final limiter.',
+    meta: [
+      { label: 'DAW name', value: 'Limit' },
+      { label: 'Parameter ID', value: '10' },
+      { label: 'Range', value: '−24 … 0 dB' },
+      { label: 'Default', value: '0 dB' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'At 0 dB only what already reaches full scale is touched, unless a band’s Weight has lowered its own ceiling. Lower Limit and more of the phrase hits the wall. With Auto Level on, the result is turned back up so that ceiling sits at full scale again.',
+          },
+        ],
+      },
+      {
+        heading: 'How to set it',
+        blocks: [
+          {
+            p: 'Watch the main GR. A short jump on a hit means a peak was caught. A number that stays up means the ceiling is on the body of the sound. Weight moves one band’s own ceiling away from this one. The final limiter still uses this level.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'After the lookahead, the output is clamped to this level. True Peak’s margin works under it while True Peak is on. The history line stays on the level you set here. Each strip’s own ceiling is this level times that band’s weight.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  release:
-    'How fast level comes back up after a peak (master). Fast = punchy and lively, but can pump. Slow = calmer and more glued, but the whole mix can stay quieter for longer after loud hits. Per-band Release offsets this.',
+  attack: infoDoc({
+    name: 'Lookahead',
+    lead: 'Sets how far ahead every strip and the final limiter look before a peak arrives.',
+    meta: [
+      { label: 'DAW name', value: 'Lookahead' },
+      { label: 'Parameter ID', value: '11' },
+      { label: 'Range', value: '0.1 … 10 ms' },
+      { label: 'Default', value: '5 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Longer means the gain can be down before the hit arrives, so the grab is smoother and the punch is softer. Shorter leaves more of the attack, and a very short look can miss the tip of a peak. The plugin reports the longest look as latency, so moving this does not make the host restart the delay.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'These are real milliseconds. A change crossfades over about 20 ms. Oversampling above 1× adds a few samples on top of this look.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  minRelease:
-    'Keeps each strip’s effective release from going shorter than about 2.5 cycles of that band’s lowest frequency. Stops very fast release on low bands from churning and distorting; highs stay freer. Turn on when lows pump or sound grainy with short Release.',
+  release: infoDoc({
+    name: 'Release',
+    lead: 'Sets how quickly the gain comes back after a peak. The band Release knobs scale this time per strip.',
+    meta: [
+      { label: 'DAW name', value: 'Release' },
+      { label: 'Parameter ID', value: '12' },
+      { label: 'Range', value: '1 … 1000 ms' },
+      { label: 'Default', value: '50 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'A short time lets the level return quickly, and you can hear it pump. A long time keeps the gain down through the gap. The final limiter uses this time as you set it. Each strip uses it scaled by that band’s Release.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'These are real milliseconds. The scale mark at 1000 is one second. ASC, Emphasis, Hold, and Min Release can all make the recovery differ from this number.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  asc:
-    'Adaptive release that listens to recent peaks instead of always recovering the same way. On dense material it often sounds more natural and less “bouncey” than a fixed release — especially on full mixes and drums.',
+  minRelease: infoDoc({
+    name: 'Min Release',
+    lead: 'Stops a strip from letting go faster than about two and a half cycles of that band’s bottom.',
+    meta: [
+      { label: 'DAW name', value: 'Min Release' },
+      { label: 'Parameter ID', value: '13' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Turn it on when a low band chatters or grain on a short Release. The lowest band uses 30 Hz, so its floor is about 83 ms. Each higher band uses the crossover under it. High bands stay free to be fast. The final limiter is not given this floor.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  ascCoeff:
-    'How strongly ASC reshapes the release. Higher = recovery aims more toward the average loudness of recent peaks (often smoother on busy tracks). Lower = closer to a classic fixed release.',
+  asc: infoDoc({
+    name: 'ASC',
+    lead: 'Lets the release follow recent peaks instead of always recovering the same way.',
+    meta: [
+      { label: 'DAW name', value: 'ASC' },
+      { label: 'Parameter ID', value: '14' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '1 (on)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'On dense material the recovery often sits more calmly than a fixed release. It runs on the strips and on the final limiter. With it off, Emphasis can only lengthen the release, because there is no quieter average to compare a hit with.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  oversampling:
-    'Runs the limiter at a higher internal sample rate so sharp peaks between samples are caught better. Higher settings can sound a bit cleaner/safer on bright transients; 1× is lighter on CPU.',
+  ascCoeff: infoDoc({
+    name: 'ASC Level',
+    lead: 'Sets how strongly ASC reshapes the release.',
+    meta: [
+      { label: 'DAW name', value: 'ASC Level' },
+      { label: 'Parameter ID', value: '15' },
+      { label: 'Range', value: '0 … 1' },
+      { label: 'Default', value: '0.5' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Higher aims the recovery more toward the average of recent peaks. Lower stays closer to the Release time. At 0 the factor is 0.5, at 0.5 it is 1, and at 1 it is 2. It does nothing you can hear while ASC is off.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  autoLevel:
-    'When on, lowering the Limit automatically makes up the loudness so the output still peaks near 0 dB. That makes Limit feel like a “how hard do I smash” control. When off, Limit is a real quieter ceiling.',
+  oversampling: infoDoc({
+    name: 'Oversampling',
+    lead: 'Runs the limiters faster than the session so peaks between samples are caught.',
+    meta: [
+      { label: 'DAW name', value: 'Oversampling' },
+      { label: 'Parameter ID', value: '16' },
+      { label: 'Range', value: '1× … 4×' },
+      { label: 'Default', value: '1×' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: '1× is the session rate. Higher rates catch bright peaks that fall between samples. Changing it resets the lookahead. It does not crossfade. True Peak forces at least 2× while it is on.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  curve:
-    'The shape of the gain ride into and out of peaks. Linear = even, straightforward. Log = more “leveling” feel in dB. Cos = soft ease-in/out — usually the gentlest grab.',
+  autoLevel: infoDoc({
+    name: 'Auto Level',
+    lead: 'Turns the output back up so the Limit still sits at full scale.',
+    meta: [
+      { label: 'DAW name', value: 'Auto Level' },
+      { label: 'Parameter ID', value: '17' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '1 (on)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'With it on, lowering Limit makes the part louder as well as flatter. With it off, Limit is a quieter ceiling. The histories do not include this makeup, so you can still see the reduction on its own.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  knee:
-    'Softens the brickwall. 0 dB = hard stop — maximum loudness and a very clear “hit the ceiling” feel. Higher knee = reduction starts earlier and eases in, so limiting is less obvious and more glued.',
+  curve: infoDoc({
+    name: 'Curve',
+    lead: 'Sets the shape of the gain ride into and out of a peak.',
+    meta: [
+      { label: 'DAW name', value: 'Curve' },
+      { label: 'Parameter ID', value: '18' },
+      { label: 'Stored range', value: '0…2. The buttons send Lin 0, Log 1, Cos 2.' },
+      { label: 'Default', value: '0 (Lin)' },
+    ],
+    sections: [
+      {
+        heading: 'Which one, and why',
+        blocks: [
+          {
+            ul: [
+              'Lin rides the gain in a straight line.',
+              'Log squares the ride, so more of the move happens late.',
+              'Cos eases in and out. It is usually the softest grab.',
+            ],
+          },
+        ],
+      },
+    ],
+  }),
 
-  colorEnable:
-    'Turns on pre-limit saturation. Off = clean path into the brickwall; on = Color Amount shapes density/warmth. The Amount knob keeps its value while disabled so you can A/B without losing the setting.',
+  knee: infoDoc({
+    name: 'Soft Ceiling',
+    lead: 'Starts the limiting a little before the ceiling, instead of a hard stop.',
+    meta: [
+      { label: 'DAW name', value: 'Soft Ceiling' },
+      { label: 'Parameter ID', value: '19' },
+      { label: 'Range', value: '0 … 12 dB' },
+      { label: 'Default', value: '0 dB' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'At 0 the stop is hard. Raise it and reduction begins that many decibels under the ceiling and eases in. The width sits entirely below Limit. It is not centred on it.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  color:
-    'How much soft saturation before the limiter. Low = subtle glue; high = obvious drive. Only active when Color is switched on.',
+  colorEnable: infoDoc({
+    name: 'Color',
+    lead: 'Turns on a soft saturation before the signal is split.',
+    meta: [
+      { label: 'DAW name', value: 'Color Enable' },
+      { label: 'Parameter ID', value: '20' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Off is a clean path into the crossovers. On, the Color amount shapes the whole signal before any strip sees it. The amount stays stored while this is off. Diff Listen does not include it.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  truePeak:
-    'Turns on true-peak limiting (at least 2× oversampling + Margin). Off = classic sample-peak brickwall (louder possible). On = safer for streaming/bounces where inter-sample peaks would otherwise clip.',
+  color: infoDoc({
+    name: 'Color',
+    lead: 'Sets how hard that saturation is driven.',
+    meta: [
+      { label: 'DAW name', value: 'Color' },
+      { label: 'Parameter ID', value: '21' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '35 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Low is a little density. High is obvious drive. You only hear it while Color is on. It is a tanh curve. At 100 % the drive is five times the signal, blended with the dry.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  margin:
-    'Extra safety under the Limit while True Peak is on. Small (≈0.1 dB) stays loud; larger is cleaner after export but leaves more unused headroom. Only applies when True Peak is enabled.',
+  truePeak: infoDoc({
+    name: 'True Peak',
+    lead: 'Leaves a margin under the ceiling and forces at least 2× oversampling.',
+    meta: [
+      { label: 'DAW name', value: 'True Peak' },
+      { label: 'Parameter ID', value: '22' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Off is a sample-peak ceiling, and the output can still peak between samples after a bounce. On, the working ceiling is Limit minus TP Margin, so inter-sample peaks have room. The final clamp and the history line stay on the Limit you set.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  holdEnable:
-    'Turns on Release Hold. Off = release starts immediately after a peak; on = Time sets how long gain stays down first. Keeps the Time setting while disabled for easy A/B.',
+  margin: infoDoc({
+    name: 'TP Margin',
+    lead: 'Sets how far under Limit the working ceiling sits while True Peak is on.',
+    meta: [
+      { label: 'DAW name', value: 'TP Margin' },
+      { label: 'Parameter ID', value: '23' },
+      { label: 'Range', value: '0 … 3 dB' },
+      { label: 'Default', value: '0.1 dB' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'A small margin stays loud. A larger one leaves more unused room after export. It does nothing while True Peak is off.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  releaseHold:
-    'How long gain reduction stays down after a peak before release. Helps vocals not pump after consonants. Too much can duck the mix after every hit. Only active when Hold is on.',
+  holdEnable: infoDoc({
+    name: 'Hold',
+    lead: 'Holds the gain down for a moment after a peak before the release starts.',
+    meta: [
+      { label: 'DAW name', value: 'Hold Enable' },
+      { label: 'Parameter ID', value: '25' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Off means release can start as soon as the peak has passed. On, Release Hold sets the pause. The time stays stored while this is off. A deeper peak can still pull the gain down during the hold.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  emphasisEnable:
-    'Turns on program-dependent release. Off = fixed Release time; on = Amount makes transients recover faster and sustained material slower. Amount is remembered while off.',
+  releaseHold: infoDoc({
+    name: 'Release Hold',
+    lead: 'Sets how long the gain stays down before release, on the strips and on the final limiter.',
+    meta: [
+      { label: 'DAW name', value: 'Release Hold' },
+      { label: 'Parameter ID', value: '26' },
+      { label: 'Range', value: '0 … 500 ms' },
+      { label: 'Default', value: '25 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'A short hold keeps a consonant or a click from opening a pump right after the hit. Too long and the phrase stays ducked after every peak. These are real milliseconds. You only hear it while Hold is on.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  emphasis:
-    'How strongly release adapts to the material when Emphasis is on. Higher = more difference between punchy hits and long notes.',
+  emphasisEnable: infoDoc({
+    name: 'Emphasis',
+    lead: 'Lets the release differ between a sharp hit and a note that stays loud.',
+    meta: [
+      { label: 'DAW name', value: 'Emphasis Enable' },
+      { label: 'Parameter ID', value: '27' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Off, the release is the time you set, plus ASC and Min Release. On, the amount makes a hit recover differently from a sustained note. The amount stays stored while this is off.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  gr:
-    'Deepest gain reduction across all active band strips and the final broadband limiter (dB). Short spikes on hits are normal; a meter that stays deep means you’re continuously squashing somewhere — louder, but less dynamics.',
+  emphasis: infoDoc({
+    name: 'Emphasis',
+    lead: 'Sets how far that difference goes.',
+    meta: [
+      { label: 'DAW name', value: 'Emphasis' },
+      { label: 'Parameter ID', value: '28' },
+      { label: 'Range', value: '0 … 100 %. Stored as 0…1.' },
+      { label: 'Default', value: '40 %' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'With ASC on, a sharp hit can recover faster than a held note. At 100 % the fast end is about a quarter of the release and the slow end is a bit over twice it. With ASC off there is no quieter average to compare, so this only lengthens the release. You only hear it while Emphasis is on.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  gr: infoDoc({
+    name: 'GR',
+    lead: 'Shows the deepest gain reduction among the active strips and the final limiter.',
+    sections: [
+      {
+        heading: 'How to read it',
+        blocks: [
+          {
+            p: 'A short spike on a hit is a peak being caught. A number that stays up means something is being held through the phrase. The scale goes to 24 dB, with marks at 1, 3, 6, and 12. Each band’s own GR meter can show more, up to 60 dB, and already includes the final limiter.',
+          },
+        ],
+      },
+    ],
+  }),
 } as const;

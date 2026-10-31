@@ -8,7 +8,7 @@ set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
 set(SMTG_CREATE_PLUGIN_LINK OFF CACHE BOOL "" FORCE)
 
 project(calfnxt
-  VERSION 2.12.6
+  VERSION 2.14.1
   DESCRIPTION "calfNXT — VST3 + Web UI"
   LANGUAGES C CXX
 )
@@ -72,13 +72,15 @@ add_subdirectory(dsp/octaver)
 add_subdirectory(dsp/bender)
 add_subdirectory(dsp/impulse)
 add_subdirectory(dsp/tamer)
+add_subdirectory(dsp/aligner)
 add_subdirectory(dsp/denoiser)
 add_subdirectory(tools/offline)
 
 # After every plugin registered via calfnxt_copy_web_host: refresh helpers whenever
-# calfnxt-web-host is rebuilt (plugin .so may be unchanged).
+# a web-host binary is rebuilt (plugin .so may be unchanged).
 get_property(_calfnxt_web_host_plugins GLOBAL PROPERTY CALFNXT_WEB_HOST_PLUGIN_TARGETS)
 set(_calfnxt_web_host_bundle_cmds)
+set(_calfnxt_web_host_bundle_deps calfnxt-web-host)
 foreach(_t IN LISTS _calfnxt_web_host_plugins)
   list(APPEND _calfnxt_web_host_bundle_cmds
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${_t}>"
@@ -86,15 +88,25 @@ foreach(_t IN LISTS _calfnxt_web_host_plugins)
       "$<TARGET_FILE:calfnxt-web-host>"
       "$<TARGET_FILE_DIR:${_t}>/calfnxt-web-host"
   )
+  if(CALFNXT_HAVE_WEB_HOST_GTK4)
+    list(APPEND _calfnxt_web_host_bundle_cmds
+      COMMAND ${CMAKE_COMMAND} -E copy
+        "$<TARGET_FILE:calfnxt-web-host-gtk4>"
+        "$<TARGET_FILE_DIR:${_t}>/calfnxt-web-host-gtk4"
+    )
+  endif()
 endforeach()
+if(CALFNXT_HAVE_WEB_HOST_GTK4)
+  list(APPEND _calfnxt_web_host_bundle_deps calfnxt-web-host-gtk4)
+endif()
 add_custom_target(calfnxt-web-host-bundles
   ${_calfnxt_web_host_bundle_cmds}
-  DEPENDS calfnxt-web-host
-  COMMENT "Refresh calfnxt-web-host inside all plugin VST3 bundles"
+  DEPENDS ${_calfnxt_web_host_bundle_deps}
+  COMMENT "Refresh calfnxt-web-host(+gtk4) inside all plugin VST3 bundles"
 )
 
 # UI build needs generated models from every plugin descriptor
-add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen expander_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen limiter_codegen mblimiter_codegen harmonics_codegen analyzer_codegen filter_codegen ringmod_codegen pulsator_codegen crusher_codegen phaser_codegen flanger_codegen chorus_codegen split_codegen tuner_codegen octaver_codegen bender_codegen impulse_codegen tamer_codegen denoiser_codegen)
+add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen expander_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen limiter_codegen mblimiter_codegen harmonics_codegen analyzer_codegen filter_codegen ringmod_codegen pulsator_codegen crusher_codegen phaser_codegen flanger_codegen chorus_codegen split_codegen tuner_codegen octaver_codegen bender_codegen impulse_codegen tamer_codegen aligner_codegen denoiser_codegen)
 
 # Meta-target: all plugins + embedded UI packs (add new plugins here).
 add_custom_target(calfnxt-plugins
@@ -151,6 +163,8 @@ add_custom_target(calfnxt-plugins
     calfnxt-impulse-resources
     calfnxt-tamer
     calfnxt-tamer-resources
+    calfnxt-aligner
+    calfnxt-aligner-resources
     calfnxt-denoiser
     calfnxt-denoiser-resources
     calfnxt-web-host

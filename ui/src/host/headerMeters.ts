@@ -30,8 +30,11 @@ export function labelsForChannelCount(ch: number): ChannelLabels {
       return ['C'];
     case 2:
       return ['L', 'R'];
-    default:
+    case 3:
+    case 4:
       return Array.from({ length: ch }, (_, i) => String(i + 1));
+    default:
+      return [];
   }
 }
 

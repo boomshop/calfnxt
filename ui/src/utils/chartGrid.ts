@@ -52,14 +52,19 @@ export type TimeGridOpts = {
   ascending?: boolean;
 };
 
-/** Axis / handle time labels (ms → `250` or `1.5s`). */
+/** Axis / handle time labels (ms → `250`, `−8`, or `1.5s`). */
 export function formatTimeLabel(ms: number): string {
-  if (!(ms >= 0) || !Number.isFinite(ms)) return '—';
-  if (ms >= 1000) {
-    const s = ms / 1000;
-    return Number.isInteger(s) ? `${s}s` : `${s.toFixed(1)}s`;
+  if (!Number.isFinite(ms)) return '—';
+  const neg = ms < 0;
+  const a = Math.abs(ms);
+  let body: string;
+  if (a >= 1000) {
+    const s = a / 1000;
+    body = Number.isInteger(s) ? `${s}s` : `${s.toFixed(1)}s`;
+  } else {
+    body = `${Math.round(a)}`;
   }
-  return `${Math.round(ms)}`;
+  return neg ? `−${body}` : body;
 }
 
 export function buildTimeGridX(
@@ -111,4 +116,67 @@ export function timeGridStepMs(spanMs: number): number {
   if (span >= 4000) return 1000;
   if (span >= 2000) return 500;
   return 250;
+}
+
+/** Adaptive ms step for short hit windows (Aligner ~24…240 ms). */
+export function shortTimeGridStepMs(spanMs: number): number {
+  const span = Math.max(8, spanMs);
+  if (span >= 200) return 50;
+  if (span >= 120) return 25;
+  if (span >= 64) return 20;
+  if (span >= 40) return 10;
+  if (span >= 24) return 5;
+  return 4;
+}
+
+export type BipolarTimeGridOpts = {
+  stepMs?: number;
+  majorClass?: string;
+  zeroClass?: string;
+  /** Label every step (default: 0 + every 2nd step). */
+  labelEvery?: boolean;
+};
+
+/**
+ * Vertical time grid for axes that cross zero (e.g. AlignWave −preMs…+postMs).
+ * `0` is always the hit / sync mark.
+ */
+export function buildBipolarTimeGridX(
+  minMs: number,
+  maxMs: number,
+  opts: BipolarTimeGridOpts = {},
+): ChartGridLine[] {
+  const lo = Math.min(minMs, maxMs);
+  const hi = Math.max(minMs, maxMs);
+  const span = Math.max(1e-6, hi - lo);
+  const step = Math.max(1e-6, opts.stepMs ?? shortTimeGridStepMs(span));
+  const majorClass = opts.majorClass ?? 'major';
+  const zeroClass = opts.zeroClass ?? 'base';
+  const labelEvery = !!opts.labelEvery;
+  const lines: ChartGridLine[] = [];
+  const start = Math.ceil(lo / step - 1e-9) * step;
+  for (let t = start; t <= hi + 1e-6; t += step) {
+    const pos = Math.round(t);
+    if (pos < lo - 1e-6 || pos > hi + 1e-6) continue;
+    const atZero = pos === 0;
+    const stepIndex = Math.round(pos / step);
+    const major = labelEvery || atZero || stepIndex % 2 === 0;
+    const parts: string[] = [];
+    if (major && majorClass) parts.push(majorClass);
+    if (atZero && zeroClass) parts.push(zeroClass);
+    lines.push({
+      pos,
+      ...(major ? { label: formatTimeLabel(pos) } : {}),
+      ...(parts.length ? { class: parts.join(' ') } : {}),
+    });
+  }
+  if (!lines.some((l) => l.pos === 0) && lo <= 0 && hi >= 0) {
+    lines.push({
+      pos: 0,
+      label: '0',
+      class: [majorClass, zeroClass].filter(Boolean).join(' '),
+    });
+    lines.sort((a, b) => a.pos - b.pos);
+  }
+  return lines;
 }

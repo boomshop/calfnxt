@@ -26,6 +26,7 @@ import {
   BenderUI,
   ImpulseUI,
   TamerUI,
+  AlignerUI,
   DenoiserUI,
   createBoundCompressorHost,
   createBoundExpanderHost,
@@ -53,6 +54,7 @@ import {
   createBoundBenderHost,
   createBoundImpulseHost,
   createBoundTamerHost,
+  createBoundAlignerHost,
   createBoundDenoiserHost,
   showWidgetInfo$,
   type PluginId,
@@ -145,6 +147,10 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
     params: (await import('../fixtures/tamer/params.json')).default,
     viz: (await import('../fixtures/tamer/viz.json')).default,
   }),
+  aligner: async () => ({
+    params: (await import('../fixtures/aligner/params.json')).default,
+    viz: (await import('../fixtures/aligner/viz.json')).default,
+  }),
   denoiser: async () => ({
     params: (await import('../fixtures/denoiser/params.json')).default,
     viz: (await import('../fixtures/denoiser/viz.json')).default,
@@ -223,6 +229,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundImpulseHost();
       case 'tamer':
         return createBoundTamerHost();
+      case 'aligner':
+        return createBoundAlignerHost();
       case 'denoiser':
         return createBoundDenoiserHost();
       case 'limiter':
@@ -345,6 +353,10 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
     case 'tamer':
       return (
         <TamerUI host={host as ReturnType<typeof createBoundTamerHost>} />
+      );
+    case 'aligner':
+      return (
+        <AlignerUI host={host as ReturnType<typeof createBoundAlignerHost>} />
       );
     case 'denoiser':
       return (

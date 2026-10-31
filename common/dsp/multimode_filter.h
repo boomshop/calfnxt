@@ -99,6 +99,8 @@ public:
     attackMs_ = attackMs;
     releaseMs_ = releaseMs;
     coeffsDirty_ = false;
+    // Not clock milliseconds: tau ≈ control/4 ms. The VST unit is blank.
+    // Do not change 4000 — that retunes every existing preset.
     attackCoeff_ = std::min(1.f, 1.f / (attackMs_ * sampleRate_ / 4000.f));
     releaseCoeff_ = std::min(1.f, 1.f / (releaseMs_ * sampleRate_ / 4000.f));
     constexpr float kRmsWindowMs = 5.f;

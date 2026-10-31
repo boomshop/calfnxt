@@ -75,6 +75,7 @@ const ALL = [
   'bender',
   'impulse',
   'tamer',
+  'aligner',
   'denoiser',
 ];
 
