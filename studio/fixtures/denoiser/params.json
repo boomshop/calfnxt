@@ -6,6 +6,7 @@
   "floor": -20,
   "span": 12,
   "offset": 0,
+  "detect": 0,
   "f_lo": 20,
   "f_lo_slope": 2,
   "f_hi": 160,

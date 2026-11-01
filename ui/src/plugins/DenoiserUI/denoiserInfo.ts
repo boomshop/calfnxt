@@ -158,6 +158,38 @@ export const denoiserInfo = {
     ],
   }),
 
+  detect: infoDoc({
+    name: 'Detect',
+    lead: 'Chooses whether one hop or a short average of the level decides when a bin opens.',
+    meta: [
+      { label: 'DAW name', value: 'Detect' },
+      { label: 'Parameter ID', value: '18' },
+      { label: 'Stored value', value: '0…1. The buttons send Peak 0 and RMS 1.' },
+      { label: 'Default', value: '0 (Peak)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            ul: [
+              'Peak uses the level of this hop. A bin that only just clears the floor can open and shut from one hop to the next. That is the quick response, and the chart moves with it.',
+              'RMS follows about 40 ms of that level before Span and Offset run. Around the floor the cut sits stiller, and a short hit opens a little later. A tone that is already well above the floor barely changes.',
+            ],
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'The average is on the bin power, not on the gain. Learn still stores the raw hops, so the fingerprint does not depend on this switch. The 40 ms is fixed.',
+          },
+        ],
+      },
+    ],
+  }),
+
   amount: infoDoc({
     name: 'Amount',
     lead: 'Scales how deep the cut goes, from none to the full reduction the rest of the controls ask for.',

@@ -11,6 +11,12 @@ import {
 } from '../utils/bind_param';
 import { postToHost } from '../utils/bridge';
 
+/** 0 = this hop's bin power, 1 = ~40 ms power average before the gain law. */
+export const DENOISER_DETECT_ENTRIES = [
+  { label: 'Peak', value: 0 },
+  { label: 'RMS', value: 1 },
+];
+
 export const DENOISER_QUALITY_ENTRIES = [
   { label: 'Fast', value: 0 },
   { label: 'Normal', value: 1 },
@@ -61,6 +67,8 @@ export type IDenoiserHost = {
   span$: DynamicValue<number>;
   /** dB added to every noise-power bin before the gain law. */
   offset$: DynamicValue<number>;
+  /** 0 Peak (one hop) / 1 RMS (~40 ms power average). */
+  detect$: DynamicValue<number>;
   fLo$: DynamicValue<number>;
   /** 0 off / 1…4 = 12/24/36/48 dB/oct. */
   fLoSlope$: DynamicValue<number>;
@@ -302,6 +310,7 @@ export function createBoundDenoiserHost(): IDenoiserHost {
     floor$: bindNum('floor', -20),
     span$: bindNum('span', 12),
     offset$: bindNum('offset', 0),
+    detect$: bindNum('detect', 0),
     fLo$: bindNum('f_lo', 20),
     fLoSlope$: bindNum('f_lo_slope', 2),
     fHi$: bindNum('f_hi', 160),

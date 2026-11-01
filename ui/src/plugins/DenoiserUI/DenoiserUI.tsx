@@ -14,6 +14,7 @@ import {
 import { FREQUENCY_RANGE_MODE_ENTRIES } from '../../widgets/FrequencyRange/FrequencyRange';
 import { paramIds } from '../../generated/denoiserModel';
 import {
+  DENOISER_DETECT_ENTRIES,
   DENOISER_QUALITY_ENTRIES,
   DENOISER_SPECTRUM_ENTRIES,
   denoiserParamDefault,
@@ -180,6 +181,7 @@ export function DenoiserUI(props: DenoiserUIProps) {
   const quality = Math.round(useDynamicValueReadonly(host.quality$, 1));
   const spectrum = Math.round(useDynamicValueReadonly(host.spectrum$, 1));
   const profile = Math.round(useDynamicValueReadonly(host.profile$, 1));
+  const detect = Math.round(useDynamicValueReadonly(host.detect$, 0));
   const profiles = useDynamicValueReadonly(host.profiles$, [
     { i: 1, valid: false, db: [] },
     { i: 2, valid: false, db: [] },
@@ -309,25 +311,39 @@ export function DenoiserUI(props: DenoiserUIProps) {
 
       <div className="block process">
         <div className="title">Process</div>
-        <WithInfo title={denoiserInfo.profile} className="profile">
-          <Knob
-            label="Profile"
-            value$={host.profile$}
-            min={1}
-            max={3}
-            snap={1}
-            reset={denoiserParamDefault('profile')}
-            dots={PROFILE_DOTS}
-            labels={PROFILE_LABELS}
-            size="large"
-            {...{ 'value.format': (v: number) => `${Math.round(v)}` }}
-            {...edit.profile}
-            start={135}
-            angle={90}
-            basis={120}
-            reverse
-          />
-        </WithInfo>
+        <div className="col">
+          <WithInfo title={denoiserInfo.profile} className="profile">
+            <Knob
+              label="Profile"
+              value$={host.profile$}
+              min={1}
+              max={3}
+              snap={1}
+              reset={denoiserParamDefault('profile')}
+              dots={PROFILE_DOTS}
+              labels={PROFILE_LABELS}
+              size="large"
+              {...{ 'value.format': (v: number) => `${Math.round(v)}` }}
+              {...edit.profile}
+              start={135}
+              angle={90}
+              basis={120}
+              reverse
+            />
+          </WithInfo>
+          <WithInfo title={denoiserInfo.detect} className="detect">
+            <Buttons
+              layout="horizontal"
+              entries={[...DENOISER_DETECT_ENTRIES]}
+              value={detect}
+              onChange={(v) => {
+                host.beginEdit(paramIds.detect);
+                host.detect$.set(v as number);
+                host.endEdit(paramIds.detect);
+              }}
+            />
+          </WithInfo>
+        </div>
         <WithInfo title={denoiserInfo.amount}>
           <Knob
             label="Amount"

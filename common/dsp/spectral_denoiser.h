@@ -23,6 +23,8 @@
 // −6 dB point out to Span dB above the floor the law uses. Offset raises
 // that floor by a constant dB (Pn × 10^(Offset/10)) before the ratio, so
 // both the full-cut line and the −6 dB line sit higher together.
+// Detect Peak uses this hop's bin power. RMS follows that power with a
+// fixed ~40 ms average before the ratio.
 // Band limit is the chart's 24 dB/oct HP+LP magnitude. The cut in dB is
 // scaled by that drop: full at 0 dB, gone where the curve hits −96 dB.
 // Each edge is a slope plain 0…4 (off / 12 / 24 / 36 / 48 dB/oct).
@@ -65,6 +67,8 @@ public:
   static constexpr float kFloorDb = -120.f;
   static constexpr float kSpecCeilDb = 0.f;
   static constexpr float kEps = 1.0e-20f;
+  /** RMS detector time constant (seconds). Not a parameter. */
+  static constexpr double kRmsTauSec = 0.04;
 
   SpectralDenoiser()
   {
@@ -118,7 +122,8 @@ public:
 
   void setParams(float fLoHz, float fHiHz, float amount, float floorDb,
                  float blendMs, int loSlope = 2, int hiSlope = 2,
-                 float spanDb = 12.f, float offsetDb = 0.f)
+                 float spanDb = 12.f, float offsetDb = 0.f,
+                 bool rms = false)
   {
     if (fLoHz > fHiHz)
       std::swap(fLoHz, fHiHz);
@@ -143,6 +148,11 @@ public:
     // Constant lift of every noise-power bin. 0 dB leaves Pn untouched.
     offsetDb_ = std::clamp(offsetDb, 0.f, 24.f);
     offsetLin_ = std::pow(10.f, offsetDb_ * 0.1f);
+    // Entering RMS snaps the average to this hop so a zero state cannot
+    // hold the filter shut for a whole time constant.
+    if (rms && !rms_)
+      rmsWarm_ = false;
+    rms_ = rms;
     blendMs_ = blend;
     if (timeChanged)
       updateTimeCoeffs();
@@ -406,6 +416,7 @@ public:
     resumeSamples_ = 0;
     enterFade_ = 0;
     skipLatched_ = false;
+    rmsWarm_ = false;
     learning_ = false;
     learnHops_ = 0;
     learnAccum_ = 0.0;
@@ -812,6 +823,7 @@ private:
     reR_.assign(n, 0.f);
     imR_.assign(n, 0.f);
     px_.assign(half, 0.f);
+    pxDet_.assign(half, 0.f);
     pnActive_.assign(half, 0.f);
     pnFrom_.assign(half, 0.f);
     pnTo_.assign(half, 0.f);
@@ -1011,6 +1023,7 @@ private:
     const double hopsPerSec =
       sampleRate_ / static_cast<double>(std::max(1, hopSize_));
     emaSpec_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.1 * hopsPerSec)));
+    rmsA_ = static_cast<float>(1.0 - std::exp(-1.0 / (kRmsTauSec * hopsPerSec)));
     morphStep_ =
       static_cast<float>(1.0 / std::max(1.0, (blendMs_ * 0.001) * hopsPerSec));
   }
@@ -1109,6 +1122,25 @@ private:
     const float u = static_cast<float>((rng_ >> 8) & 0x00FFFFFFu)
                     * (1.f / 16777216.f);
     return u * static_cast<float>(2.0 * M_PI);
+  }
+
+  /** EMA of hop power. Peak leaves px_ untouched. */
+  void followDetectorPower()
+  {
+    const int n = fftSize_ / 2 + 1;
+    if (!rmsWarm_)
+    {
+      std::memcpy(pxDet_.data(), px_.data(),
+                  sizeof(float) * static_cast<size_t>(n));
+      rmsWarm_ = true;
+      return;
+    }
+    const float a = rmsA_;
+    for (int k = 0; k < n; ++k)
+    {
+      float& d = pxDet_[static_cast<size_t>(k)];
+      d += a * (px_[static_cast<size_t>(k)] - d);
+    }
   }
 
   void processHop()
@@ -1232,6 +1264,12 @@ private:
             || pnActive_[1] > kEps);
       // gamma = 1 keeps +3 dB over the raised floor at −6 dB.
       const float gamma = 3.f / spanDb_;
+      const float* det = px_.data();
+      if (rms_)
+      {
+        followDetectorPower();
+        det = pxDet_.data();
+      }
 
       for (int k = 0; k <= half; ++k)
       {
@@ -1239,7 +1277,7 @@ private:
         if (denoise)
         {
           const float pn = pnActive_[static_cast<size_t>(k)] * offsetLin_;
-          const float px = px_[static_cast<size_t>(k)];
+          const float px = det[static_cast<size_t>(k)];
           const float ratio = (px + kEps) / (pn + kEps);
           if (ratio > 1.f)
           {
@@ -1573,6 +1611,9 @@ private:
   float spanDb_ = 12.f;
   float offsetDb_ = 0.f;
   float offsetLin_ = 1.f;
+  bool rms_ = false;
+  bool rmsWarm_ = false;
+  float rmsA_ = 1.f;
   float floorLin_ = 0.1f; // dbToLin(-20)
   float blendMs_ = 250.f;
   float morphStep_ = 0.01f;
@@ -1600,8 +1641,8 @@ private:
 
   std::vector<float> inL_, inR_, olaL_, olaR_, dryL_, dryR_, outL_, outR_, window_;
   std::vector<float> reL_, imL_, reR_, imR_;
-  std::vector<float> px_, pnActive_, pnFrom_, pnTo_, gain_, bandW_, learnSum_,
-    scratchPn_;
+  std::vector<float> px_, pxDet_, pnActive_, pnFrom_, pnTo_, gain_, bandW_,
+    learnSum_, scratchPn_;
   std::vector<float> avgDb_, maxDb_, lDb_, rDb_, grDisp_, profDisp_;
   std::vector<float> slotProf_[kNumProfiles];
   bool slotShown_[kNumProfiles] {};

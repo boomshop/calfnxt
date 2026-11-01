@@ -1261,6 +1261,7 @@ function applyDenoiserDemo(
   setNum(host.floor$, params.floor);
   setNum(host.span$, params.span);
   setNum(host.offset$, params.offset);
+  setNum(host.detect$, params.detect);
   setNum(host.fLo$, params.f_lo);
   setNum(host.fLoSlope$, params.f_lo_slope);
   setNum(host.fHi$, params.f_hi);

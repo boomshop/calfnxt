@@ -78,6 +78,7 @@ private:
     bool mono = false;
     float spanDb = 12.f;
     float offsetDb = 0.f;
+    bool rms = false;
   };
 
   BlockState makeBlockState() const;

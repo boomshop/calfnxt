@@ -85,7 +85,7 @@
     align-items: center;
     gap: 0;
 
-    > .profile {
+    > .col > .profile {
       margin-right: -48px;
     }
 
@@ -94,6 +94,11 @@
       flex-direction: column;
       align-items: center;
       gap: var(--gap);
+    }
+
+    > .col > .detect {
+      display: flex;
+      justify-content: center;
     }
 
     > .info-block.quality {

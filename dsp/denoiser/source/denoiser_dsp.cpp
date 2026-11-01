@@ -193,6 +193,7 @@ DenoiserPlugin::BlockState DenoiserPlugin::makeBlockState() const
   s.mono = params_[kParamMono] >= 0.5f;
   s.spanDb = std::clamp(params_[kParamSpan], 3.f, 24.f);
   s.offsetDb = std::clamp(params_[kParamOffset], 0.f, 24.f);
+  s.rms = params_[kParamDetect] >= 0.5f;
   // Profile listen and Diff Listen are exclusive — profile listen wins.
   if (s.listen >= 1)
     s.diffListen = false;
@@ -203,7 +204,7 @@ void DenoiserPlugin::applyBlockState(const BlockState& s)
 {
   denoiser_.setFftSize(qualityToFft(s.quality));
   denoiser_.setParams(s.fLo, s.fHi, s.amount, s.floor, s.blendMs, s.loSlope,
-                      s.hiSlope, s.spanDb, s.offsetDb);
+                      s.hiSlope, s.spanDb, s.offsetDb, s.rms);
   denoiser_.setProfileTarget(s.profile - 1);
   denoiser_.setProfileListen(s.listen >= 1 ? s.listen - 1 : -1);
   updateLatency();
