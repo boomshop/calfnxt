@@ -1256,6 +1256,7 @@ function applyDenoiserDemo(
 ) {
   setBool(host.bypass$, params.bypass);
   setNum(host.profile$, params.profile);
+  setNum(host.profileMode$, params.profile_mode);
   setNum(host.blend$, params.blend);
   setNum(host.amount$, params.amount);
   setNum(host.floor$, params.floor);

@@ -1,6 +1,7 @@
 {
   "bypass": false,
   "profile": 1,
+  "profile_mode": 0,
   "blend": 250,
   "amount": 1,
   "floor": -20,

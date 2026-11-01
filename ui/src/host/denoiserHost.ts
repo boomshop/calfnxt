@@ -11,6 +11,12 @@ import {
 } from '../utils/bind_param';
 import { postToHost } from '../utils/bridge';
 
+/** 0 = snap to a slot, 1 = mix adjacent fingerprints. */
+export const DENOISER_PROFILE_MODE_ENTRIES = [
+  { label: 'Snap', value: 0 },
+  { label: 'Free', value: 1 },
+];
+
 /** 0 = this hop's bin power, 1 = ~40 ms power average before the gain law. */
 export const DENOISER_DETECT_ENTRIES = [
   { label: 'Peak', value: 0 },
@@ -60,6 +66,8 @@ export type IDenoiserHost = {
   meta: typeof pluginMeta;
   bypass$: DynamicValue<boolean>;
   profile$: DynamicValue<number>;
+  /** 0 Snap (whole slots) / 1 Free (adjacent mix). */
+  profileMode$: DynamicValue<number>;
   blend$: DynamicValue<number>;
   amount$: DynamicValue<number>;
   floor$: DynamicValue<number>;
@@ -307,6 +315,7 @@ export function createBoundDenoiserHost(): IDenoiserHost {
     meta: pluginMeta,
     bypass$: bindBool('bypass'),
     profile$,
+    profileMode$: bindNum('profile_mode', 0),
     blend$: bindNum('blend', 250),
     amount$: bindNum('amount', 1),
     floor$: bindNum('floor', -20),

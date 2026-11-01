@@ -2,6 +2,9 @@
 
 // Spectral noise reduction (Denoiser): STFT Wiener denoise with 3 learnable
 // noise-power profiles, pass-filter band mask, and profile morph on automation.
+// Profile position 0…2 mixes adjacent slots (1.5 is halfway between 1 and 2).
+// Snap mode is applied by the plugin before setProfilePos, so a parked
+// fraction is one mix into pnActive and then the same per-hop morph.
 //
 // Reconstruction: sqrt-Hann analysis/synthesis, hop = N/4, shift-OLA.
 // Latency = N (full FFT length; wet FIFO prefilled).
@@ -208,20 +211,20 @@ public:
       advanceQuiet(n);
   }
 
-  /** Select active profile 0…2. Morphs Pn over blendMs when the target changes. */
-  void setProfileTarget(int slot)
+  /**
+   * Active profile position, 0…2. Whole numbers pick one slot. A fraction
+   * mixes that slot with the next (1.5 → halfway between slots 2 and 3).
+   * An invalid side contributes silence. Blend slews pnActive onto the mix.
+   */
+  void setProfilePos(float pos)
   {
-    slot = std::clamp(slot, 0, kNumProfiles - 1);
-    if (slot == targetSlot_)
+    pos = std::clamp(pos, 0.f, static_cast<float>(kNumProfiles - 1));
+    if (std::fabs(pos - profilePos_) < 1.0e-4f)
       return;
-    // Snapshot current morph state as the new blend source.
-    const int half = fftSize_ / 2 + 1;
-    for (int k = 0; k < half; ++k)
-      pnFrom_[static_cast<size_t>(k)] = pnActive_[static_cast<size_t>(k)];
-    targetSlot_ = slot;
-    morphT_ = 0.f;
-    morphing_ = true;
-    copyProfileTo(pnTo_, slot);
+    profilePos_ = pos;
+    targetSlot_ = std::clamp(
+      static_cast<int>(std::lround(pos)), 0, kNumProfiles - 1);
+    startMorphToPos();
   }
 
   /**
@@ -284,14 +287,8 @@ public:
     p.valid = true;
     profilesDirty_.store(true, std::memory_order_relaxed);
     displayDirty_.store(true, std::memory_order_relaxed);
-    if (targetSlot_ == learnSlot_)
-    {
-      copyProfileTo(pnTo_, learnSlot_);
-      for (int k = 0; k <= half; ++k)
-        pnFrom_[static_cast<size_t>(k)] = pnActive_[static_cast<size_t>(k)];
-      morphT_ = 0.f;
-      morphing_ = true;
-    }
+    if (profileUsesSlot(learnSlot_))
+      startMorphToPos();
     learnHops_ = 0;
     learnAccum_ = 0.0;
     return true;
@@ -310,17 +307,10 @@ public:
     profiles_[slot].valid = false;
     profiles_[slot].fftSize = 0;
     std::fill(profiles_[slot].power.begin(), profiles_[slot].power.end(), 0.f);
-    if (targetSlot_ == slot)
+    if (profileUsesSlot(slot))
     {
-      // Snap — Clear should drop the fingerprint immediately (no Blend morph).
-      for (int k = 0; k < kMaxHalf; ++k)
-      {
-        pnTo_[static_cast<size_t>(k)] = 0.f;
-        pnActive_[static_cast<size_t>(k)] = 0.f;
-        pnFrom_[static_cast<size_t>(k)] = 0.f;
-      }
-      morphT_ = 1.f;
-      morphing_ = false;
+      // Snap — Clear drops that side immediately (no Blend morph).
+      snapMix();
     }
     if (listenSlot_ == slot)
       listenSlot_ = -1;
@@ -389,15 +379,8 @@ public:
     std::memcpy(p.power.data(), power, sizeof(float) * static_cast<size_t>(n));
     p.fftSize = fftSize;
     p.valid = true;
-    if (targetSlot_ == slot)
-    {
-      copyProfileTo(pnTo_, slot);
-      morphT_ = 1.f;
-      morphing_ = false;
-      const int half = fftSize_ / 2 + 1;
-      for (int k = 0; k < half; ++k)
-        pnActive_[static_cast<size_t>(k)] = pnTo_[static_cast<size_t>(k)];
-    }
+    if (profileUsesSlot(slot))
+      snapMix();
     profilesDirty_.store(true, std::memory_order_relaxed);
     displayDirty_.store(true, std::memory_order_relaxed);
     return true;
@@ -887,13 +870,8 @@ private:
       rebuildOctaveMap();
       updateTimeCoeffs();
       rebuildBandWeights();
-      // Remap morph buffers to the new FFT grid from the target profile.
-      copyProfileTo(pnTo_, targetSlot_);
-      copyProfileTo(pnFrom_, targetSlot_);
-      for (int k = 0; k < want / 2 + 1; ++k)
-        pnActive_[static_cast<size_t>(k)] = pnTo_[static_cast<size_t>(k)];
-      morphT_ = 1.f;
-      morphing_ = false;
+      // Remap the active mix onto the new FFT grid.
+      snapMix();
       reset();
       // Force IR mini refresh with power-rescaled dB for the new FFT.
       if (profiles_[0].valid || profiles_[1].valid || profiles_[2].valid)
@@ -1077,6 +1055,84 @@ private:
   }
 
   /** Resample a stored profile onto the current FFT grid into dst (half+1). */
+  /** Slot index under the current position, and the mix amount of the next slot. */
+  void profileSpan(int& slotA, int& slotB, float& towardB) const
+  {
+    const float pos = std::clamp(profilePos_, 0.f, 2.f);
+    slotA = static_cast<int>(std::floor(pos));
+    if (slotA >= 2)
+    {
+      slotA = 2;
+      slotB = 2;
+      towardB = 0.f;
+      return;
+    }
+    slotB = slotA + 1;
+    towardB = pos - static_cast<float>(slotA);
+  }
+
+  bool profileUsesSlot(int slot) const
+  {
+    int a = 0;
+    int b = 0;
+    float t = 0.f;
+    profileSpan(a, b, t);
+    if (slot == a)
+      return true;
+    return t > 1.0e-3f && slot == b;
+  }
+
+  bool mixHasFingerprint() const
+  {
+    int a = 0;
+    int b = 0;
+    float t = 0.f;
+    profileSpan(a, b, t);
+    if (profiles_[a].valid)
+      return true;
+    return t > 1.0e-3f && profiles_[b].valid;
+  }
+
+  /** Resampled mix of the two slots under profilePos_ into `dst`. */
+  void copyMixTo(float* dst)
+  {
+    int a = 0;
+    int b = 0;
+    float t = 0.f;
+    profileSpan(a, b, t);
+    const int half = fftSize_ / 2 + 1;
+    fillProfilePower(dst, a);
+    if (t <= 1.0e-4f)
+      return;
+    fillProfilePower(scratchPn_.data(), b);
+    const float u = 1.f - t;
+    for (int k = 0; k < half; ++k)
+      dst[k] = u * dst[k] + t * scratchPn_[static_cast<size_t>(k)];
+  }
+
+  void snapMix()
+  {
+    const int half = fftSize_ / 2 + 1;
+    copyMixTo(pnTo_.data());
+    for (int k = 0; k < half; ++k)
+    {
+      pnActive_[static_cast<size_t>(k)] = pnTo_[static_cast<size_t>(k)];
+      pnFrom_[static_cast<size_t>(k)] = pnTo_[static_cast<size_t>(k)];
+    }
+    morphT_ = 1.f;
+    morphing_ = false;
+  }
+
+  void startMorphToPos()
+  {
+    const int half = fftSize_ / 2 + 1;
+    for (int k = 0; k < half; ++k)
+      pnFrom_[static_cast<size_t>(k)] = pnActive_[static_cast<size_t>(k)];
+    copyMixTo(pnTo_.data());
+    morphT_ = 0.f;
+    morphing_ = true;
+  }
+
   void copyProfileTo(std::vector<float>& dst, int slot) const
   {
     const int half = fftSize_ / 2 + 1;
@@ -1352,7 +1408,7 @@ private:
     {
       const bool denoise =
         !bypassActive_ && amount_ > 1.0e-6f
-        && (profiles_[targetSlot_].valid || morphing_
+        && (mixHasFingerprint() || morphing_
             || pnActive_[1] > kEps);
       // gamma = 1 keeps +3 dB over the raised floor at −6 dB.
       const float gamma = 3.f / spanDb_;
@@ -1715,6 +1771,8 @@ private:
   int octCells_ = 0;
   float floorLin_ = 0.1f; // dbToLin(-20)
   float blendMs_ = 250.f;
+  /** 0…2. Fraction mixes slot floor(pos) with the next. */
+  float profilePos_ = 0.f;
   float morphStep_ = 0.01f;
   float morphT_ = 1.f;
   bool morphing_ = false;

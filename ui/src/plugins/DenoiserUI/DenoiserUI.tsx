@@ -15,6 +15,7 @@ import { FREQUENCY_RANGE_MODE_ENTRIES } from '../../widgets/FrequencyRange/Frequ
 import { paramIds } from '../../generated/denoiserModel';
 import {
   DENOISER_DETECT_ENTRIES,
+  DENOISER_PROFILE_MODE_ENTRIES,
   DENOISER_QUALITY_ENTRIES,
   DENOISER_SPECTRUM_ENTRIES,
   denoiserParamDefault,
@@ -111,13 +112,16 @@ function ProfileCard(props: {
   slot: number;
   data: DenoiserProfileSlot;
   active: boolean;
+  /** This slot is one side of a fractional Profile mix. */
+  mix: boolean;
   /** Current Quality plain, so Add/Learn follows the FFT grid. */
   quality: number;
   listen$: IDenoiserHost['listenSlot1$'];
   learn$: IDenoiserHost['learnSlot1$'];
   tilt: number;
 }) {
-  const { host, slot, data, active, quality, listen$, learn$, tilt } = props;
+  const { host, slot, data, active, mix, quality, listen$, learn$, tilt } =
+    props;
   // Add continues the average. A Quality change stores a different FFT
   // length, so the next capture replaces the fingerprint.
   const canAdd =
@@ -126,7 +130,7 @@ function ProfileCard(props: {
 
   return (
     <div
-      className={`block profile-card${active ? ' active' : ''}${data.valid ? ' valid' : ''}`}
+      className={`block profile-card${active ? ' active' : ''}${mix ? ' mix' : ''}${data.valid ? ' valid' : ''}`}
       onClick={() => host.selectProfile(slot)}
       role="button"
       tabIndex={0}
@@ -197,7 +201,8 @@ export function DenoiserUI(props: DenoiserUIProps) {
 
   const quality = Math.round(useDynamicValueReadonly(host.quality$, 1));
   const spectrum = Math.round(useDynamicValueReadonly(host.spectrum$, 1));
-  const profile = Math.round(useDynamicValueReadonly(host.profile$, 1));
+  const profile = useDynamicValueReadonly(host.profile$, 1);
+  const profileMode = Math.round(useDynamicValueReadonly(host.profileMode$, 0));
   const detect = Math.round(useDynamicValueReadonly(host.detect$, 0));
   const profiles = useDynamicValueReadonly(host.profiles$, [
     { i: 1, valid: false, db: [] },
@@ -257,7 +262,13 @@ export function DenoiserUI(props: DenoiserUIProps) {
             host={host}
             slot={slot}
             data={profiles[slot - 1] ?? { i: slot, valid: false, db: [] }}
-            active={profile === slot}
+            active={Math.abs(profile - slot) < 0.05}
+            mix={
+              profile - Math.floor(profile) > 0.05 &&
+              (slot === Math.floor(profile) ||
+                slot === Math.floor(profile) + 1) &&
+              Math.abs(profile - slot) >= 0.05
+            }
             quality={quality}
             listen$={host[LISTEN_SLOTS[slot - 1]!]}
             learn$={host[LEARN_SLOTS[slot - 1]!]}
@@ -329,18 +340,43 @@ export function DenoiserUI(props: DenoiserUIProps) {
       <div className="block process">
         <div className="title">Process</div>
         <div className="col">
+          <WithInfo title={denoiserInfo.profileMode} className="profile-mode">
+            <Buttons
+              layout="horizontal"
+              entries={[...DENOISER_PROFILE_MODE_ENTRIES]}
+              value={profileMode}
+              onChange={(v) => {
+                const mode = Math.round(v as number);
+                host.beginEdit(paramIds.profile_mode);
+                host.profileMode$.set(mode);
+                host.endEdit(paramIds.profile_mode);
+                if (mode === 0) {
+                  const snapped = Math.min(3, Math.max(1, Math.round(profile)));
+                  if (Math.abs(profile - snapped) > 1e-3) {
+                    host.beginEdit(paramIds.profile);
+                    host.profile$.set(snapped);
+                    host.endEdit(paramIds.profile);
+                  }
+                }
+              }}
+            />
+          </WithInfo>
           <WithInfo title={denoiserInfo.profile} className="profile">
             <Knob
+              key={profileMode}
               label="Profile"
               value$={host.profile$}
               min={1}
               max={3}
-              snap={1}
+              {...(profileMode === 0 ? { snap: 1 } : {})}
               reset={denoiserParamDefault('profile')}
               dots={PROFILE_DOTS}
               labels={PROFILE_LABELS}
               size="large"
-              {...{ 'value.format': (v: number) => `${Math.round(v)}` }}
+              {...{
+                'value.format': (v: number) =>
+                  profileMode === 0 ? `${Math.round(v)}` : v.toFixed(1),
+              }}
               {...edit.profile}
               start={135}
               angle={90}

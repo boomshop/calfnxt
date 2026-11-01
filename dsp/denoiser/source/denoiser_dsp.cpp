@@ -177,8 +177,10 @@ DenoiserPlugin::BlockState DenoiserPlugin::makeBlockState() const
   BlockState s;
   s.bypass = params_[kParamBypass] >= 0.5f;
   s.diffListen = params_[kParamDiffListen] >= 0.5f;
-  s.profile = static_cast<int>(
-    std::lround(std::clamp(params_[kParamProfile], 1.f, 3.f)));
+  s.profile = std::clamp(params_[kParamProfile], 1.f, 3.f);
+  s.profileSnap = params_[kParamProfileMode] < 0.5f;
+  if (s.profileSnap)
+    s.profile = std::clamp(std::round(s.profile), 1.f, 3.f);
   s.blendMs = std::clamp(params_[kParamBlend], 10.f, 5000.f);
   s.amount = std::clamp(params_[kParamAmount], 0.f, 1.f);
   s.floor = std::clamp(params_[kParamFloor], -60.f, 0.f);
@@ -206,7 +208,7 @@ void DenoiserPlugin::applyBlockState(const BlockState& s)
   denoiser_.setFftSize(qualityToFft(s.quality));
   denoiser_.setParams(s.fLo, s.fHi, s.amount, s.floor, s.blendMs, s.loSlope,
                       s.hiSlope, s.spanDb, s.offsetDb, s.rms, s.octave);
-  denoiser_.setProfileTarget(s.profile - 1);
+  denoiser_.setProfilePos(s.profile - 1.f);
   denoiser_.setProfileListen(s.listen >= 1 ? s.listen - 1 : -1);
   updateLatency();
 }

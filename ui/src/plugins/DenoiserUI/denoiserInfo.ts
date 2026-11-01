@@ -116,9 +116,33 @@ export const denoiserInfo = {
     ],
   }),
 
+  profileMode: infoDoc({
+    name: 'Profile Mode',
+    lead: 'Chooses whether Profile lands on a whole slot or can sit between two fingerprints.',
+    meta: [
+      { label: 'DAW name', value: 'Profile Mode' },
+      { label: 'Parameter ID', value: '20' },
+      { label: 'Stored value', value: '0…1. The buttons send Snap 0 and Free 1.' },
+      { label: 'Default', value: '0 (Snap)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            ul: [
+              'Snap lands Profile on 1, 2, or 3. Switching back to Snap from a value in between rounds to the nearest slot, and Blend glides the curve there.',
+              'Free lets Profile rest between slots. 1.5 is halfway from fingerprint 1 to 2. 2.3 is mostly 3, with some of 2 left in.',
+            ],
+          },
+        ],
+      },
+    ],
+  }),
+
   profile: infoDoc({
     name: 'Profile',
-    lead: 'Chooses which of the three learned noise fingerprints the filter follows.',
+    lead: 'Chooses which learned noise fingerprint the filter follows, or a mix of two neighbours.',
     meta: [
       { label: 'DAW name', value: 'Profile' },
       { label: 'Parameter ID', value: '3' },
@@ -130,7 +154,7 @@ export const denoiserInfo = {
         heading: 'How to use it',
         blocks: [
           {
-            p: 'Learn a quiet bed into a slot, then leave Profile on that slot. Switch slots when the noise itself changes, for example a different room or a different take. Blend is how long the change takes.',
+            p: 'Learn a quiet bed into a slot, then leave Profile on that slot. On Snap it sits on 1, 2, or 3. On Free a value between two numbers mixes those two fingerprints. An empty side of that mix adds nothing. Blend is how long the curve takes to arrive. A card click still jumps to that whole slot.',
           },
         ],
       },
@@ -151,7 +175,7 @@ export const denoiserInfo = {
         heading: 'What you hear',
         blocks: [
           {
-            p: 'Short can click when the two fingerprints differ a lot. Long eases the subtract so the tone does not pump as the target changes. The same time is used after a new Learn lands on the slot you are already using.',
+            p: 'Short can click when the two fingerprints differ a lot. Long eases the subtract so the tone does not pump as the target changes. The same time is used while Profile moves, including a stop between two slots, and after a new Learn lands on a slot that is part of the current mix.',
           },
         ],
       },

@@ -65,7 +65,8 @@ private:
   {
     bool bypass = false;
     bool diffListen = false;
-    int profile = 1; // 1…3
+    float profile = 1.f; // 1…3, fractions mix adjacent slots
+    bool profileSnap = true;
     float blendMs = 250.f;
     float amount = 1.f;
     float floor = -20.f;
