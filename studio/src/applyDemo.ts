@@ -54,6 +54,10 @@ export type VizFixture = {
   spectrum?: number[];
   /** Denoiser active/blended noise profile (same layout as spectrum). */
   profileSpectrum?: number[];
+  /** Learned slot fingerprints, viz ids denoiser_p1…p3. */
+  profile1?: number[];
+  profile2?: number[];
+  profile3?: number[];
   /** Pre-dynamics / pre-EQ spectrum (mbcomp / mblimiter / equalizer / filter). */
   spectrumIn?: number[];
   /** Post-dynamics / post-EQ spectrum (mbcomp / mblimiter / equalizer / filter). */
@@ -1255,12 +1259,15 @@ function applyDenoiserDemo(
   setNum(host.blend$, params.blend);
   setNum(host.amount$, params.amount);
   setNum(host.floor$, params.floor);
+  setNum(host.span$, params.span);
+  setNum(host.offset$, params.offset);
   setNum(host.fLo$, params.f_lo);
-  setBool(host.fLoOn$, params.f_lo_on);
+  setNum(host.fLoSlope$, params.f_lo_slope);
   setNum(host.fHi$, params.f_hi);
-  setBool(host.fHiOn$, params.f_hi_on);
+  setNum(host.fHiSlope$, params.f_hi_slope);
   setNum(host.quality$, params.quality);
   setNum(host.spectrum$, params.spectrum);
+  setBool(host.mono$, params.mono);
   setBool(host.diffListen$, params.diff_listen);
   setNum(host.listen$, params.listen);
   applySharedViz(viz);
@@ -1276,17 +1283,38 @@ function applyDenoiserDemo(
     host.profileSpectrum$.set(viz.profileSpectrum);
     pushViz('denoiser_prof', 'spectrum', viz.profileSpectrum);
   }
-  // Seed three mini-profile cards from the active profile curve (slot 1 filled).
-  const bins = Math.max(0, Math.round(viz.profileSpectrum?.[0] ?? 0));
-  const db =
-    bins > 0 && viz.profileSpectrum && viz.profileSpectrum.length >= 2 + bins
-      ? viz.profileSpectrum.slice(2, 2 + bins)
-      : [];
-  host.profiles$.set([
-    { i: 1, valid: db.length > 0, db },
-    { i: 2, valid: false, db: [] },
-    { i: 3, valid: false, db: [] },
-  ]);
+  const slotViz = [
+    viz.profile1 ?? viz.profileSpectrum,
+    viz.profile2,
+    viz.profile3,
+  ];
+  const slot$ = [host.profile1$, host.profile2$, host.profile3$];
+  const slotId = ['denoiser_p1', 'denoiser_p2', 'denoiser_p3'] as const;
+  host.profiles$.set(
+    slotViz.map((raw, index) => {
+      const curve = raw ?? [];
+      if (curve.length > 2) {
+        slot$[index]!.set(curve);
+        pushViz(slotId[index]!, 'spectrum', curve);
+      }
+      const bins = Math.max(0, Math.round(curve[0] ?? 0));
+      const db =
+        bins > 0 && curve.length >= 2 + bins ? curve.slice(2, 2 + bins) : [];
+      const t =
+        bins > 0 && curve.length >= 2 + 5 * bins
+          ? curve.slice(2 + 4 * bins, 2 + 5 * bins)
+          : undefined;
+      const valid = db.some((v) => v > -119);
+      return {
+        i: index + 1,
+        valid,
+        db: valid ? db : [],
+        t: valid && t && t.length === db.length ? t : undefined,
+        // Fixture quality is Normal (2048). A Quality change then flips Add → Learn.
+        fft: valid ? 2048 : undefined,
+      };
+    }),
+  );
 }
 
 export type DemoApplier = (

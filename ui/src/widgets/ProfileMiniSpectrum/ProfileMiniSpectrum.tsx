@@ -1,24 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { DynamicValue } from '@deutschesoft/awml';
 import { componentFromWidget } from '@deutschesoft/use-aux-widgets';
 import { Chart as AuxChart } from '@deutschesoft/aux-widgets/src/index.pure.js';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { addGraphClasses } from '../../styles/graphStyles';
-import { observeVizBins } from '../../utils/vizBins';
+import { DENOISER_DB_MAX, DENOISER_DB_MIN } from '../DenoiserChart/DenoiserChart';
 import {
-  SPECTRUM_DB_MAX,
-  SPECTRUM_DB_MIN,
   SPECTRUM_MAX_BINS,
-  SPECTRUM_MIN_BINS,
-  binToHz,
   buildFreqGridX,
-  catmullRomDensify,
+  readSeriesT,
+  seriesDots,
   spectrumScaleSlope,
-  tiltDb,
 } from '../SpectrumChart/SpectrumChart';
 import './ProfileMiniSpectrum.scss';
-
-/** vizcfg id — thumbnail width, separate from the main spectrum bin count. */
-const MINI_VIZ_ID = 'denoiser_mini';
 
 type AuxGraph = {
   set: (k: string, v: unknown) => void;
@@ -42,88 +36,60 @@ const ChartWidget = componentFromWidget(
     show_grid: true,
     show_labels: false,
     label: false,
-    range_x: { min: 0, max: 128 },
-    range_y: { min: SPECTRUM_DB_MIN, max: SPECTRUM_DB_MAX },
-    grid_x: buildFreqGridX(128),
+    range_x: { min: 0, max: 1 },
+    range_y: { min: DENOISER_DB_MIN, max: DENOISER_DB_MAX },
+    grid_x: buildFreqGridX(1),
   },
   'ProfileMiniSpectrumChart',
 );
 
-function clampDb(y: number): number {
-  return Math.min(SPECTRUM_DB_MAX, Math.max(SPECTRUM_DB_MIN, y));
-}
+const EMPTY: number[] = [];
 
-/**
- * Light 3-tap over the whole series.
- * Repeated FFT bins are flat runs; single HF bins spike. Two short passes
- * join both without the spectrum smoother's heavy low-end iron (that turned
- * the contour into a straight shelf and left the top end as needles).
- */
-function softenProfile(ys: number[]): number[] {
-  if (ys.length < 3) return ys;
-  let cur = ys.slice();
-  for (let pass = 0; pass < 2; ++pass) {
-    const next = cur.slice();
-    for (let i = 1; i < cur.length - 1; ++i) {
-      const avg = 0.25 * cur[i - 1]! + 0.5 * cur[i]! + 0.25 * cur[i + 1]!;
-      next[i] = cur[i]! * 0.35 + avg * 0.65;
-    }
-    cur = next;
-  }
-  return cur;
-}
-
-/**
- * One published log-bin → one vertex on a linear bin-index axis.
- * Densify only when a bin is wider than a pixel; a 1:1 Catmull-Rom rings
- * the HF spikes back into needles.
- */
+/** Spectrum snapshot → one filled curve. `t` is series 4 (no rms). */
 function profileDots(
-  db: ArrayLike<number>,
+  raw: ArrayLike<number>,
   cssWidth: number,
+  cssHeight: number,
   slope: number,
 ): { x: number; y: number }[] | null {
-  const n = db.length;
-  if (n < 2) return null;
-  const ys: number[] = [];
-  for (let i = 0; i < n; ++i) {
-    const f = binToHz(i, n);
-    const raw = db[i];
-    const dbv =
-      typeof raw === 'number' && Number.isFinite(raw) ? raw : SPECTRUM_DB_MIN;
-    ys.push(clampDb(tiltDb(dbv, f, slope)));
-  }
-  const width = cssWidth > 1 ? cssWidth : n;
-  const smoothed = softenProfile(ys);
-  const mid = smoothed.map((y, i) => ({ x: i + 0.5, y }));
-  const px = width / n;
-  const curved = px > 1.4 ? catmullRomDensify(mid, width, 'linear') : mid;
-  for (const p of curved) p.y = clampDb(p.y);
-  return curved;
+  if (raw.length < 2) return null;
+  const bins = Math.max(1, Math.min(SPECTRUM_MAX_BINS, Math.round(raw[0] ?? 0)));
+  if (raw.length < 2 + bins) return null;
+  const avg = new Float32Array(bins);
+  for (let i = 0; i < bins; ++i) avg[i] = raw[2 + i] ?? DENOISER_DB_MIN;
+  const span = DENOISER_DB_MAX - DENOISER_DB_MIN;
+  const pxPerY = cssHeight > 8 && span > 0 ? cssHeight / span : 0;
+  const dots = seriesDots(
+    avg,
+    readSeriesT(raw, bins, 4),
+    bins,
+    DENOISER_DB_MIN,
+    DENOISER_DB_MAX,
+    slope,
+    cssWidth,
+    pxPerY,
+  );
+  return dots.length >= 2 ? dots : null;
 }
 
 export type ProfileMiniSpectrumProps = {
-  /** Log-binned dB, 20 Hz…20 kHz, already sized to this chart. */
-  db: number[];
-  valid: boolean;
+  /** Spectrum snapshot from viz (`denoiser_p1` … `denoiser_p3`). */
+  data$: DynamicValue<number[]>;
   /** Header spectrum tilt: 0 linear / 1 −3 / 2 −4.5 dB/oct. */
   tilt: number;
 };
 
 export function ProfileMiniSpectrum(props: ProfileMiniSpectrumProps) {
-  const { db, valid, tilt } = props;
+  const { data$, tilt } = props;
   const slope = spectrumScaleSlope(tilt);
   const slopeRef = useRef(slope);
   slopeRef.current = slope;
-  const dbRef = useRef(db);
-  dbRef.current = db;
-  const validRef = useRef(valid);
-  validRef.current = valid;
+  const rawRef = useRef<number[]>(EMPTY);
 
   const chartRef = useRef<AuxChartInstance | null>(null);
   const graphRef = useRef<AuxGraph | null>(null);
   const widthRef = useRef(0);
-  const stopViz = useRef<(() => void) | null>(null);
+  const heightRef = useRef(0);
   const stopResize = useRef<(() => void) | null>(null);
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
 
@@ -138,21 +104,26 @@ export function ProfileMiniSpectrum(props: ProfileMiniSpectrumProps) {
     const chart = chartRef.current;
     const graph = graphRef.current;
     if (!chart || chart.isDestructed?.() || !graph) return;
-    const series =
-      validRef.current && dbRef.current.length >= 2 ? dbRef.current : null;
-    if (!series) {
-      graph.set('dots', null);
-      return;
-    }
-    const bins = series.length;
     const svgW = chart.svg?.clientWidth ?? chart.element?.clientWidth ?? 0;
+    const svgH = chart.svg?.clientHeight ?? chart.element?.clientHeight ?? 0;
     const width = svgW > 8 ? svgW : widthRef.current;
-    chart.set('range_x', { min: 0, max: bins });
-    chart.set('range_y', { min: SPECTRUM_DB_MIN, max: SPECTRUM_DB_MAX });
-    chart.set('grid_x', buildFreqGridX(bins));
-    graph.set('dots', profileDots(series, width, slopeRef.current));
+    const height = svgH > 8 ? svgH : heightRef.current;
+    chart.set('range_x', { min: 0, max: 1 });
+    chart.set('range_y', { min: DENOISER_DB_MIN, max: DENOISER_DB_MAX });
+    chart.set('grid_x', buildFreqGridX(1));
+    graph.set('dots', profileDots(rawRef.current, width, height, slopeRef.current));
     reassertRef.current();
   }, []);
+
+  useEffect(() => {
+    const unsub = data$.subscribe((raw: number[]) => {
+      rawRef.current = Array.isArray(raw) && raw.length ? raw : EMPTY;
+      paint();
+    }, true);
+    return () => {
+      unsub();
+    };
+  }, [data$, paint]);
 
   const widgetRef = useCallback(
     (inst: AuxChartInstance | null) => {
@@ -168,49 +139,38 @@ export function ProfileMiniSpectrum(props: ProfileMiniSpectrumProps) {
       chartRef.current = inst;
       graphRef.current = null;
       setChartSvg(null);
-      stopViz.current?.();
-      stopViz.current = null;
       stopResize.current?.();
       stopResize.current = null;
       if (!inst || inst.isDestructed?.()) return;
 
-      inst.set('range_x', { min: 0, max: 128 });
-      inst.set('range_y', { min: SPECTRUM_DB_MIN, max: SPECTRUM_DB_MAX });
-      inst.set('grid_x', buildFreqGridX(128));
+      inst.set('range_x', { min: 0, max: 1 });
+      inst.set('range_y', { min: DENOISER_DB_MIN, max: DENOISER_DB_MAX });
+      inst.set('grid_x', buildFreqGridX(1));
       const g = inst.addGraph({
         dots: null,
         type: 'L',
         mode: 'bottom',
         class: 'profile-mini',
       });
-      // Same fill as the upper spectrum: area under the curve, down to the floor.
-      addGraphClasses(
-        g.element,
-        'profile-mini',
-        'fill-gradient fill-full stroke-none',
-      );
+      addGraphClasses(g.element, 'profile-mini', 'fill-gradient fill-full stroke-none');
       graphRef.current = g;
       setChartSvg(inst.svg ?? null);
       const el = inst.element ?? inst.svg;
-      if (el) {
-        const w = el.getBoundingClientRect().width;
-        if (w > 8) widthRef.current = w;
-        stopViz.current = observeVizBins(
-          el,
-          MINI_VIZ_ID,
-          SPECTRUM_MIN_BINS,
-          SPECTRUM_MAX_BINS,
-        );
-        if (typeof ResizeObserver !== 'undefined') {
-          const ro = new ResizeObserver(() => {
-            const next = el.getBoundingClientRect().width;
-            if (!(next > 8) || Math.abs(next - widthRef.current) < 1) return;
-            widthRef.current = next;
-            paint();
-          });
-          ro.observe(el);
-          stopResize.current = () => ro.disconnect();
-        }
+      if (el && typeof ResizeObserver !== 'undefined') {
+        const box = el.getBoundingClientRect();
+        if (box.width > 8) widthRef.current = box.width;
+        if (box.height > 8) heightRef.current = box.height;
+        const ro = new ResizeObserver(() => {
+          const next = el.getBoundingClientRect();
+          const dw = next.width > 8 ? Math.abs(next.width - widthRef.current) : 0;
+          const dh = next.height > 8 ? Math.abs(next.height - heightRef.current) : 0;
+          if (dw < 1 && dh < 1) return;
+          if (next.width > 8) widthRef.current = next.width;
+          if (next.height > 8) heightRef.current = next.height;
+          paint();
+        });
+        ro.observe(el);
+        stopResize.current = () => ro.disconnect();
       }
       paint();
     },
@@ -219,11 +179,10 @@ export function ProfileMiniSpectrum(props: ProfileMiniSpectrumProps) {
 
   useEffect(() => {
     paint();
-  }, [paint, db, valid, slope]);
+  }, [paint, slope]);
 
   useEffect(
     () => () => {
-      stopViz.current?.();
       stopResize.current?.();
     },
     [],

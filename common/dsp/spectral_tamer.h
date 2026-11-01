@@ -29,7 +29,7 @@
 #include "dsp_math.h"
 #include "fft_r2.h"
 #include "gain_util.h"
-#include "spectrum_bins.h"
+#include "spectrum_display_map.h"
 
 #include <algorithm>
 #include <atomic>
@@ -483,8 +483,8 @@ public:
     const int n = bins_;
     if (n < 1 || pubAvg_.size() != static_cast<size_t>(n))
       return 0;
-    const int need = 2 + 4 * n;
-    if (maxOut < need)
+    const int need = 2 + 5 * n;
+    if (maxOut < need || static_cast<int>(pubT_.size()) < n)
       return 0;
     out[0] = static_cast<float>(n);
     out[1] = 0.f;
@@ -492,6 +492,7 @@ public:
     std::memcpy(out + 2 + n, pubMax_.data(), sizeof(float) * static_cast<size_t>(n));
     std::memcpy(out + 2 + 2 * n, pubL_.data(), sizeof(float) * static_cast<size_t>(n));
     std::memcpy(out + 2 + 3 * n, pubR_.data(), sizeof(float) * static_cast<size_t>(n));
+    std::memcpy(out + 2 + 4 * n, pubT_.data(), sizeof(float) * static_cast<size_t>(n));
     return need;
   }
 
@@ -509,8 +510,8 @@ public:
     const int n = bins_;
     if (n < 1 || pubScAvg_.size() != static_cast<size_t>(n))
       return 0;
-    const int need = 2 + 4 * n;
-    if (maxOut < need)
+    const int need = 2 + 5 * n;
+    if (maxOut < need || static_cast<int>(pubT_.size()) < n)
       return 0;
     out[0] = static_cast<float>(n);
     out[1] = 0.f;
@@ -521,6 +522,7 @@ public:
                 sizeof(float) * static_cast<size_t>(n));
     std::memcpy(out + 2 + 3 * n, pubScAvg_.data(),
                 sizeof(float) * static_cast<size_t>(n));
+    std::memcpy(out + 2 + 4 * n, pubT_.data(), sizeof(float) * static_cast<size_t>(n));
     return need;
   }
 
@@ -583,6 +585,7 @@ public:
     copyEq(pubR_, rDb_);
     copyEq(pubGr_, grDisp_);
     copyEq(pubScAvg_, scAvgDb_);
+    copyEq(pubT_, slotT_);
     pubScActive_ = scDetectActive_;
     pubLadderKeep_ = ladderKeep_;
     pubLadderN_ = 0;
@@ -684,65 +687,60 @@ private:
       reset();
     }
     const int wantBins = pendingBins_.load(std::memory_order_relaxed);
-    if (wantBins != bins_ || avgDb_.size() != static_cast<size_t>(bins_))
+    if (wantBins != displayWidth_ || avgDb_.size() != static_cast<size_t>(bins_))
       applyBins(wantBins);
   }
 
-  void applyBins(int bins)
+  void applyBins(int width)
   {
-    bins = std::clamp(bins, kMinBins, kMaxBins);
-    if (bins == bins_ && avgDb_.size() == static_cast<size_t>(bins_))
+    width = std::clamp(width, kMinBins, kMaxBins);
+    pendingBins_.store(width, std::memory_order_relaxed);
+    if (width == displayWidth_
+        && bins_ >= 2
+        && static_cast<int>(avgDb_.size()) == bins_
+        && static_cast<int>(slotT_.size()) == bins_)
       return;
-    bins_ = bins;
-    pendingBins_.store(bins_, std::memory_order_relaxed);
-    avgDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    maxDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    lDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    rDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    grDisp_.assign(static_cast<size_t>(bins_), 0.f);
-    scAvgDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      pubAvg_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubMax_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubL_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubR_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubGr_.assign(static_cast<size_t>(bins_), 0.f);
-      pubScAvg_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubScActive_ = false;
-    }
+    displayWidth_ = width;
     rebuildBinMap();
   }
 
   void rebuildBinMap()
   {
-    if (bins_ < 1 || fftSize_ < 4)
+    if (fftSize_ < 4)
       return;
-    binLo_.assign(static_cast<size_t>(bins_), 0);
-    binHi_.assign(static_cast<size_t>(bins_), 0);
-    binValid_.assign(static_cast<size_t>(bins_), 0);
-    const float nyquist = static_cast<float>(sampleRate_ * 0.5);
-    constexpr float fMin = 20.f;
-    constexpr float fMaxUi = 20000.f;
-    const int fftBins = fftSize_ / 2;
-    for (int i = 0; i < bins_; ++i)
+    std::vector<int> lo;
+    std::vector<int> hi;
+    std::vector<float> pos;
+    const int n = buildSpectrumDisplayMap(sampleRate_, fftSize_, displayWidth_,
+                                          lo, hi, pos);
+    if (n < 2)
+      return;
+    binLo_ = std::move(lo);
+    binHi_ = std::move(hi);
+    slotT_ = std::move(pos);
+    binValid_.assign(static_cast<size_t>(n), 1);
+    if (n != bins_ || static_cast<int>(avgDb_.size()) != n
+        || static_cast<int>(pubT_.size()) != n)
     {
-      const float t0 = static_cast<float>(i) / static_cast<float>(bins_);
-      const float t1 = static_cast<float>(i + 1) / static_cast<float>(bins_);
-      const float f0 = fMin * std::pow(fMaxUi / fMin, t0);
-      const float f1 = fMin * std::pow(fMaxUi / fMin, t1);
-      if (!(f0 < nyquist) || fftBins < 2)
+      bins_ = n;
+      const auto nn = static_cast<size_t>(n);
+      avgDb_.assign(nn, kFloorDb);
+      maxDb_.assign(nn, kFloorDb);
+      lDb_.assign(nn, kFloorDb);
+      rDb_.assign(nn, kFloorDb);
+      grDisp_.assign(nn, 0.f);
+      scAvgDb_.assign(nn, kFloorDb);
       {
-        binValid_[static_cast<size_t>(i)] = 0;
-        continue;
+        std::lock_guard<std::mutex> lock(mutex_);
+        pubAvg_.assign(nn, kFloorDb);
+        pubMax_.assign(nn, kFloorDb);
+        pubL_.assign(nn, kFloorDb);
+        pubR_.assign(nn, kFloorDb);
+        pubGr_.assign(nn, 0.f);
+        pubScAvg_.assign(nn, kFloorDb);
+        pubT_.assign(nn, 0.f);
+        pubScActive_ = false;
       }
-      int lo = static_cast<int>(f0 / nyquist * static_cast<float>(fftBins));
-      int hi = static_cast<int>(f1 / nyquist * static_cast<float>(fftBins));
-      lo = std::clamp(lo, 1, fftBins - 1);
-      hi = std::clamp(std::max(hi, lo + 1), lo + 1, fftBins);
-      binLo_[static_cast<size_t>(i)] = lo;
-      binHi_[static_cast<size_t>(i)] = hi;
-      binValid_[static_cast<size_t>(i)] = 1;
     }
     updateDetectFilter();
   }
@@ -1703,6 +1701,7 @@ private:
   int outRead_ = 0;
   int outWrite_ = 0;
   int bins_ = 0;
+  int displayWidth_ = 128;
   int kLo_ = 1;
   int kHi_ = 1;
   bool stftActive_ = false;
@@ -1740,7 +1739,7 @@ private:
   std::vector<float> scRe_, scIm_;
   std::vector<float> magDb_, detectDb_, filtDb_, envDb_, grDb_, grTarget_, scratch_;
   std::vector<float> avgDb_, maxDb_, lDb_, rDb_, grDisp_, scAvgDb_;
-  std::vector<float> pubAvg_, pubMax_, pubL_, pubR_, pubGr_, pubScAvg_;
+  std::vector<float> pubAvg_, pubMax_, pubL_, pubR_, pubGr_, pubScAvg_, pubT_;
   /** Live guides: interleaved (centerHz, halfWidthHz) × ladderN_. */
   std::vector<float> ladder_;
   std::vector<float> pubLadder_;
@@ -1748,6 +1747,7 @@ private:
   int pubLadderN_ = 0;
   float ladderKeep_ = 0.f;
   float pubLadderKeep_ = 0.f;
+  std::vector<float> slotT_;
   std::vector<int> binLo_, binHi_, binValid_;
   std::mutex mutex_;
 };

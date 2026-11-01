@@ -335,165 +335,213 @@ export type SpectrumPayload = {
   R: Float32Array;
   /** ~1 s power-mean body. Absent on older 4-series payloads. */
   rms: Float32Array | null;
+  /**
+   * Log fraction 0…1 of each slot center (20 Hz…20 kHz).
+   * Absent on older uniform log-bin payloads.
+   */
+  t: Float32Array | null;
 };
 
+/** Log fraction → Hz. Inverse of the DSP display-slot center. */
+export function tToHz(t: number): number {
+  const u = Math.min(1, Math.max(0, t));
+  return F_MIN * Math.pow(F_MAX / F_MIN, u);
+}
+
 export function parseSpectrumPayload(
-  v: number[] | null | undefined,
+  v: ArrayLike<number> | null | undefined,
 ): SpectrumPayload | null {
   if (!v || v.length < 2) return null;
   const bins = Math.max(1, Math.min(SPECTRUM_MAX_BINS, Math.round(v[0] ?? 0)));
   const need = 2 + 4 * bins;
   if (v.length < need) return null;
+  const at = (from: number, count: number) => {
+    const out = new Float32Array(count);
+    for (let i = 0; i < count; ++i) out[i] = v[from + i] ?? 0;
+    return out;
+  };
+  const hasRms = v.length >= 2 + 5 * bins;
+  const hasT = v.length >= 2 + 6 * bins;
   return {
     bins,
     hold: (v[1] ?? 0) >= 0.5,
-    avg: Float32Array.from(v.slice(2, 2 + bins)),
-    max: Float32Array.from(v.slice(2 + bins, 2 + 2 * bins)),
-    L: Float32Array.from(v.slice(2 + 2 * bins, 2 + 3 * bins)),
-    R: Float32Array.from(v.slice(2 + 3 * bins, 2 + 4 * bins)),
-    rms:
-      v.length >= 2 + 5 * bins
-        ? Float32Array.from(v.slice(2 + 4 * bins, 2 + 5 * bins))
-        : null,
+    avg: at(2, bins),
+    max: at(2 + bins, bins),
+    L: at(2 + 2 * bins, bins),
+    R: at(2 + 3 * bins, bins),
+    rms: hasRms ? at(2 + 4 * bins, bins) : null,
+    t: hasT ? at(2 + 5 * bins, bins) : null,
   };
 }
 
-/** Extra bin-units past [0, bins] so mode=bottom vertical closers are clipped. */
-const SERIES_EDGE_PAD = 1.25;
+/**
+ * Log fractions for a 4-series spectrum (avg, max, L, R, then t).
+ * Uniform centers when the DSP snapshot has no t tail.
+ */
+export function readSeriesT(
+  v: ArrayLike<number>,
+  bins: number,
+  series: number,
+): Float32Array | null {
+  if (v.length < 2 + (series + 1) * bins) return null;
+  const off = 2 + series * bins;
+  const t = new Float32Array(bins);
+  for (let i = 0; i < bins; ++i) t[i] = v[off + i] ?? (i + 0.5) / bins;
+  return t;
+}
+
+/** Share of a slot each flank may use. The middle stays on the measured level. */
+const FLANK_OF_BIN = 0.42;
 
 /**
- * Display-only soften of log-bin stairs.
- *
- * Chart X is linear in bin index (= log-Hz). A 3/5-tap pass mixes neighbours.
- * Passes nest from a wide light polish down into a heavy LF zone. Fractions are
- * true log-Hz cuts (0.22 ≈ 90 Hz — not 700 Hz); the old “22 %” nest never
- * reached the 100…800 Hz stairs.
- *
- * `hz` unused (API stable for call sites).
+ * Flank in pixel space. `d` runs across the span. Each end is a circular
+ * shoulder; the middle is a straight slant. A short rise is one cosine.
+ * The span is already the flank; this does not shorten it.
  */
-export function smoothSeriesY(
-  ys: number[],
-  _hz?: readonly number[],
-  pxPerBin = 1,
-): number[] {
-  if (ys.length < 3) return ys;
-  // ~1 DSP log-bin per CSS pixel → keep values as published.
-  if (!(pxPerBin > 1.05)) return ys;
+function flankPixels(d: number, span: number, y0: number, y1: number): number {
+  const dy = y1 - y0;
+  if (!(span > 0)) return y1;
+  const sign = dy >= 0 ? 1 : -1;
+  const radius = Math.min(span * 0.42, Math.abs(dy) * 0.48, span * 0.49);
+  if (radius < 1.2 || Math.abs(dy) < 2) return y0 + dy * (d / span);
+  if (Math.abs(dy) <= 2 * radius + 1) {
+    const u = d / span;
+    const s = (1 - Math.cos(Math.PI * u)) / 2;
+    return y0 + dy * s;
+  }
+  const straight = span - 2 * radius;
+  const yStraight = dy - 2 * sign * radius;
+  if (d <= radius) {
+    const u = d / radius;
+    return y0 + sign * radius * (1 - Math.sqrt(Math.max(0, 1 - u * u)));
+  }
+  if (d >= span - radius) {
+    const u = (span - d) / radius;
+    return y1 - sign * radius * (1 - Math.sqrt(Math.max(0, 1 - u * u)));
+  }
+  return y0 + sign * radius + yStraight * ((d - radius) / straight);
+}
 
+/**
+ * One pass. Each slot is a plateau as wide as its pixels. Both flanks take
+ * the same share of that width, whether the step is a hairline or a wall.
+ * A slot of about one pixel keeps a flank shorter than a pixel, so the raw
+ * contour stays. Levels are not averaged.
+ * `pxPerY` is chart pixels per data-y unit. `xAtT` maps a log fraction to
+ * the chart's x (fraction, or Hz).
+ */
+export function spectrumFlankDots(
+  ys: readonly number[],
+  tIn: ArrayLike<number> | null,
+  cssWidth: number,
+  xAtT: (t: number) => number,
+  pxPerY = 0,
+): { x: number; y: number }[] {
   const n = ys.length;
-  const logSpan = Math.log(F_MAX / F_MIN);
-  const fracAt = (hz: number) =>
-    Math.log(Math.min(F_MAX, Math.max(F_MIN, hz)) / F_MIN) / logSpan;
+  if (n < 1) return [];
+  const w = cssWidth > 8 ? cssWidth : Math.max(8, n);
+  const scale = pxPerY > 0 ? pxPerY : 1;
+  const tOf = (i: number) => {
+    const raw = tIn && i < tIn.length ? tIn[i] : undefined;
+    return typeof raw === 'number' && Number.isFinite(raw)
+      ? Math.min(1, Math.max(0, raw))
+      : (i + 0.5) / n;
+  };
+  const px = (i: number) => tOf(i) * w;
 
-  // Heavy zone through the visible bass stairs (~20…~1 kHz).
-  const lfEnd = Math.max(8, Math.round(n * fracAt(1000)));
-  // Light polish up into the lower highs (~6 kHz); leave HF needles alone.
-  const midEnd = Math.max(lfEnd + 4, Math.round(n * fracAt(6000)));
+  const edge = new Float64Array(n + 1);
+  edge[0] = 0;
+  for (let i = 1; i < n; ++i) {
+    const mid = 0.5 * (px(i - 1) + px(i));
+    edge[i] = Math.min(w, Math.max(edge[i - 1]!, mid));
+  }
+  edge[n] = Math.max(edge[n - 1]!, w);
 
-  let cur = ys.slice();
-
-  // --- A: break LF plateaus (needs many full-weight rounds + wider tap) ---
-  const lfPasses = Math.min(12, Math.max(5, Math.round(pxPerBin * 4)));
-  const lfW = Math.min(1, 0.82 + 0.12 * Math.min(1, pxPerBin - 1));
-  const lfFade = Math.max(6, Math.round(lfEnd * 0.18));
-  for (let p = 0; p < lfPasses; ++p) {
-    const next = cur.slice();
-    const wide = p >= 2;
-    for (let i = 1; i < n - 1; ++i) {
-      if (i >= lfEnd) continue;
-      let w = lfW;
-      if (i > lfEnd - lfFade) {
-        w *= 1 - (i - (lfEnd - lfFade)) / lfFade;
-      }
-      // Stronger toward DC.
-      const t = i / lfEnd;
-      w *= 1 - 0.35 * t * t;
-      if (!(w > 0.04)) continue;
-      let avg: number;
-      if (wide && i >= 2 && i < n - 2) {
-        avg =
-          (cur[i - 2]! +
-            4 * cur[i - 1]! +
-            6 * cur[i]! +
-            4 * cur[i + 1]! +
-            cur[i + 2]!) /
-          16;
-      } else {
-        avg = 0.25 * cur[i - 1]! + 0.5 * cur[i]! + 0.25 * cur[i + 1]!;
-      }
-      next[i] = cur[i]! * (1 - w) + avg * w;
+  const coreL = new Float64Array(n);
+  const coreR = new Float64Array(n);
+  for (let i = 0; i < n; ++i) {
+    const width = edge[i + 1]! - edge[i]!;
+    let flankL = i === 0 ? 0 : width * FLANK_OF_BIN;
+    let flankR = i === n - 1 ? 0 : width * FLANK_OF_BIN;
+    if (flankL + flankR > width * 0.9 && flankL + flankR > 0) {
+      const fit = (width * 0.9) / (flankL + flankR);
+      flankL *= fit;
+      flankR *= fit;
     }
-    cur = next;
+    coreL[i] = edge[i]! + flankL;
+    coreR[i] = edge[i + 1]! - flankR;
   }
 
-  // --- B: light mid polish (stairs between ~1…6 kHz) ---
-  const midPasses = Math.min(4, Math.max(1, Math.round(pxPerBin)));
-  const midW = Math.min(0.55, 0.28 + 0.12 * pxPerBin);
-  for (let p = 0; p < midPasses; ++p) {
-    const next = cur.slice();
-    for (let i = 1; i < n - 1; ++i) {
-      if (i >= midEnd) continue;
-      const t = i / midEnd;
-      const w = midW * (1 - t * t);
-      if (!(w > 0.04)) continue;
-      const avg = 0.25 * cur[i - 1]! + 0.5 * cur[i]! + 0.25 * cur[i + 1]!;
-      next[i] = cur[i]! * (1 - w) + avg * w;
+  const out: { x: number; y: number }[] = [];
+  const push = (pixel: number, dataY: number) => {
+    const x = xAtT(Math.min(1, Math.max(0, pixel / w)));
+    const prev = out[out.length - 1];
+    if (prev && Math.abs(prev.x - x) < 1e-5 && Math.abs(prev.y - dataY) < 1e-4)
+      return;
+    out.push({ x, y: dataY });
+  };
+
+  for (let i = 0; i < n; ++i) {
+    if (i > 0) {
+      const span = coreL[i]! - coreR[i - 1]!;
+      const y0 = ys[i - 1]! * scale;
+      const y1 = ys[i]! * scale;
+      const stepsN = Math.max(2, Math.round(Math.abs(span)));
+      if (span > 0.5) {
+        for (let k = 1; k <= stepsN; ++k) {
+          const d = (span * k) / stepsN;
+          push(coreR[i - 1]! + d, flankPixels(d, span, y0, y1) / scale);
+        }
+      }
     }
-    cur = next;
+    push(coreL[i]!, ys[i]!);
+    if (coreR[i]! > coreL[i]! + 0.5) push(coreR[i]!, ys[i]!);
   }
-
-  return cur;
+  return out;
 }
 
-/** CSS pixels per DSP log-bin (1 = pixel-accurate). */
-export function spectrumPxPerBin(cssWidth: number, bins: number): number {
-  const n = Math.max(1, bins);
-  const w = Math.max(1, cssWidth);
-  // Pre-layout stubs (chartWidthRef init 128 while bins already 512) yield
-  // px/bin ≪ 1 → smoothSeriesY + catmullRomDensify both no-op. Until the
-  // ResizeObserver measures, assume the design editor width (~1024 CSS px).
-  if (w * 1.15 < n) return 1024 / n;
-  return w / n;
-}
+/** Extra fraction past [0, 1] so mode=bottom vertical closers are clipped. */
+const SERIES_EDGE_PAD = 0.012;
 
 export function seriesDots(
   data: Float32Array,
+  slotT: Float32Array | null,
   bins: number,
   yMin = SPECTRUM_DB_MIN,
   yMax = SPECTRUM_DB_MAX,
   slope = 0,
-  pxPerBin = 1,
+  cssWidth = 0,
+  pxPerY = 0,
 ): { x: number; y: number }[] {
   if (bins < 1) return [];
   const ys: number[] = [];
-  const hz: number[] = [];
   for (let i = 0; i < bins; ++i) {
-    const f = binToHz(i, bins);
+    const f = slotT ? tToHz(slotT[i] ?? 0) : binToHz(i, bins);
     const raw = data[i] ?? SPECTRUM_DSP_FLOOR_DB;
     const y = tiltDb(raw, f, slope);
-    hz.push(f);
     ys.push(Math.min(yMax, Math.max(yMin, y)));
   }
-  const smoothed = smoothSeriesY(ys, hz, pxPerBin);
-  const first = smoothed[0]!;
-  const last = smoothed[bins - 1]!;
-  const mid: { x: number; y: number }[] = [];
-  for (let i = 0; i < bins; ++i) mid.push({ x: i + 0.5, y: smoothed[i]! });
-  // CR in bin-index space; density ≤ ~1 pt/CSS-px (see catmullRomDensify).
-  const curved = catmullRomDensify(mid, pxPerBin * bins, 'linear');
+  const curved = spectrumFlankDots(ys, slotT, cssWidth, (t) => t, pxPerY);
+  const first = curved[0]?.y ?? ys[0]!;
+  const last = curved[curved.length - 1]?.y ?? ys[ys.length - 1]!;
   return [
     { x: -SERIES_EDGE_PAD, y: first },
     ...curved,
-    { x: bins + SERIES_EDGE_PAD, y: last },
+    { x: 1 + SERIES_EDGE_PAD, y: last },
   ];
 }
 
 /** Midband mean (200 Hz…2 kHz) of tilted curve — corridor center. */
-function midbandMean(data: Float32Array, bins: number, slope: number): number {
+function midbandMean(
+  data: Float32Array,
+  slotT: Float32Array | null,
+  bins: number,
+  slope: number,
+): number {
   let sum = 0;
   let n = 0;
   for (let i = 0; i < bins; ++i) {
-    const f = binToHz(i, bins);
+    const f = slotT ? tToHz(slotT[i] ?? 0) : binToHz(i, bins);
     if (f < 200 || f > 2000) continue;
     sum += tiltDb(data[i] ?? SPECTRUM_DSP_FLOOR_DB, f, slope);
     n += 1;
@@ -673,8 +721,8 @@ export function SpectrumChart(props: SpectrumChartProps) {
   const monitorRef = useRef(monitor);
   monitorRef.current = monitor;
   const scaleRef = useRef(scale);
-  const binsRef = useRef(128);
   const chartWidthRef = useRef(0);
+  const chartHeightRef = useRef(0);
   const diffSmoothRef = useRef<Float32Array | null>(null);
   modeRef.current = mode;
   holdRef.current = hold;
@@ -685,8 +733,6 @@ export function SpectrumChart(props: SpectrumChartProps) {
 
   const [chartSvg, setChartSvg] = useState<SVGSVGElement | null>(null);
   const [gradTargets, setGradTargets] = useState<SVGElement[]>([]);
-  const [bins, setBins] = useState(128);
-  binsRef.current = bins;
   const corridorElRef = useRef<HTMLDivElement | null>(null);
   const isSpectralizer = Math.round(mode) === SPECTRUM_MODE.Spectralizer;
   const isStereo = Math.round(mode) === SPECTRUM_MODE.Stereo;
@@ -706,8 +752,10 @@ export function SpectrumChart(props: SpectrumChartProps) {
 
   const sendVizBins = useCallback(
     (el: Element) => {
-      const width = Math.round(el.getBoundingClientRect().width);
+      const box = el.getBoundingClientRect();
+      const width = Math.round(box.width);
       chartWidthRef.current = Math.max(1, width);
+      chartHeightRef.current = Math.max(1, Math.round(box.height));
       const next = Math.max(
         SPECTRUM_MIN_BINS,
         Math.min(SPECTRUM_MAX_BINS, width),
@@ -751,11 +799,27 @@ export function SpectrumChart(props: SpectrumChartProps) {
       const day = themeModeRef.current === 'day';
       const n = payload.bins;
       const y0 = (h - 1) * rowBytes;
+      const slotT = payload.t;
 
       for (let x = 0; x < w; ++x) {
-        const bin = Math.min(n - 1, Math.floor((x / w) * n));
+        const frac = x / w;
+        let bin = Math.min(n - 1, Math.floor(frac * n));
+        if (slotT && slotT.length === n) {
+          let lo = 0;
+          let hi = n - 1;
+          while (lo < hi) {
+            const mid = (lo + hi + 1) >> 1;
+            if ((slotT[mid] ?? 1) <= frac) lo = mid;
+            else hi = mid - 1;
+          }
+          bin = lo;
+        }
         const raw = payload.avg[bin] ?? SPECTRUM_DSP_FLOOR_DB;
-        const db = tiltDb(raw, binToHz(bin, n), slope);
+        const db = tiltDb(
+          raw,
+          slotT ? tToHz(slotT[bin] ?? 0) : binToHz(bin, n),
+          slope,
+        );
         const [r, g, b, a] = waterfallPixel(db, theme, day);
         const i = y0 + x * 4;
         img.data[i] = r;
@@ -805,12 +869,8 @@ export function SpectrumChart(props: SpectrumChartProps) {
       const chart = chartRef.current;
       if (!chart || chart.isDestructed?.()) return null;
 
-      if (payload.bins !== binsRef.current) {
-        binsRef.current = payload.bins;
-        setBins(payload.bins);
-        chart.set('range_x', { min: 0, max: payload.bins });
-        chart.set('grid_x', buildFreqGridX(payload.bins));
-      }
+      chart.set('range_x', { min: 0, max: 1 });
+      chart.set('grid_x', buildFreqGridX(1));
 
       const showHold = holdRef.current || payload.hold;
 
@@ -834,15 +894,21 @@ export function SpectrumChart(props: SpectrumChartProps) {
           'grid_y',
           buildDbGridY(SPECTRUM_DB_MIN, SPECTRUM_DB_MAX, DB_GRID, DB_LABEL),
         );
-        const px = spectrumPxPerBin(chartWidthRef.current, payload.bins);
+        const width = chartWidthRef.current;
+        const pxPerY =
+          chartHeightRef.current > 8
+            ? chartHeightRef.current / (SPECTRUM_DB_MAX - SPECTRUM_DB_MIN)
+            : 0;
         const dots = (data: Float32Array, s = slope) =>
           seriesDots(
             data,
+            payload.t,
             payload.bins,
             SPECTRUM_DB_MIN,
             SPECTRUM_DB_MAX,
             s,
-            px,
+            width,
+            pxPerY,
           );
         const show = (
           g: AuxGraph | undefined,
@@ -864,7 +930,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
         show(gRms, vis.rms, rmsDots);
         const band = corridorElRef.current;
         if (band && slope > 0) {
-          const center = midbandMean(rms, payload.bins, slope);
+          const center = midbandMean(rms, payload.t, payload.bins, slope);
           const st = corridorBandStyle(center, CORRIDOR_HALF_DB);
           band.hidden = false;
           band.style.top = st.top;
@@ -885,13 +951,25 @@ export function SpectrumChart(props: SpectrumChartProps) {
       g1?.set('dots', null);
       gHold?.set('dots', null);
 
-      const px = spectrumPxPerBin(chartWidthRef.current, payload.bins);
+      const width = chartWidthRef.current;
       const dots = (
         data: Float32Array,
         yMin = SPECTRUM_DB_MIN,
         yMax = SPECTRUM_DB_MAX,
         s = slope,
-      ) => seriesDots(data, payload.bins, yMin, yMax, s, px);
+      ) =>
+        seriesDots(
+          data,
+          payload.t,
+          payload.bins,
+          yMin,
+          yMax,
+          s,
+          width,
+          chartHeightRef.current > 8 && yMax > yMin
+            ? chartHeightRef.current / (yMax - yMin)
+            : 0,
+        );
 
       if (m === SPECTRUM_MODE.Average) {
         primary = dots(payload.avg);
@@ -929,7 +1007,7 @@ export function SpectrumChart(props: SpectrumChartProps) {
           m === SPECTRUM_MODE.Stereo)
       ) {
         const src = m === SPECTRUM_MODE.Max ? payload.max : payload.avg;
-        const center = midbandMean(src, payload.bins, slope);
+        const center = midbandMean(src, payload.t, payload.bins, slope);
         const st = corridorBandStyle(center, CORRIDOR_HALF_DB);
         band.hidden = false;
         band.style.top = st.top;
@@ -993,9 +1071,8 @@ export function SpectrumChart(props: SpectrumChartProps) {
       chartRef.current = chart;
       if (chart.isDestructed?.()) return;
 
-      const b = binsRef.current;
-      chart.set('range_x', { min: 0, max: b });
-      chart.set('grid_x', buildFreqGridX(b));
+      chart.set('range_x', { min: 0, max: 1 });
+      chart.set('grid_x', buildFreqGridX(1));
 
       // Idempotent: use-aux-widgets re-calls widgetRef when the callback
       // identity changes, without nulling the old ref — never double-add.
@@ -1101,9 +1178,8 @@ export function SpectrumChart(props: SpectrumChartProps) {
   /** Spectralizer: AUX Chart used only as frequency/dB grid overlay. */
   const gridAttach = useCallback((chart: AuxChartInstance) => {
     if (chart.isDestructed?.()) return;
-    const b = binsRef.current;
-    chart.set('range_x', { min: 0, max: b });
-    chart.set('grid_x', buildFreqGridX(b));
+    chart.set('range_x', { min: 0, max: 1 });
+    chart.set('grid_x', buildFreqGridX(1));
     chart.set('range_y', { min: SPECTRUM_DB_MIN, max: SPECTRUM_DB_MAX });
     chart.set(
       'grid_y',

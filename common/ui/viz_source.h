@@ -169,6 +169,24 @@ public:
   /** Stream id for output spectrum (nullptr = do not flush). */
   virtual const char* vizOutputSpectrumId() const { return nullptr; }
 
+  /**
+   * Further spectra, same payload as {@link takeSpectrum}.
+   * Index is 0 … count−1. Default: none.
+   */
+  virtual int vizExtraSpectrumCount() const { return 0; }
+  virtual const char* vizExtraSpectrumId(int index) const
+  {
+    (void)index;
+    return nullptr;
+  }
+  virtual int takeExtraSpectrum(int index, float* out, int maxOut)
+  {
+    (void)index;
+    (void)out;
+    (void)maxOut;
+    return 0;
+  }
+
   /** Optional UI→DSP viz sizing/config, e.g. visible chart bins/points. */
   virtual void configureVizBins(const char* id, int bins)
   {

@@ -25,10 +25,9 @@ import {
   SPECTRUM_DB_MIN,
   SPECTRUM_MAX_BINS,
   SPECTRUM_MIN_BINS,
-  binToHz,
-  catmullRomDensify,
-  smoothSeriesY,
-  spectrumPxPerBin,
+  readSeriesT,
+  spectrumFlankDots,
+  tToHz,
   tiltDb,
 } from '../SpectrumChart/SpectrumChart';
 import './TamerChart.scss';
@@ -87,11 +86,26 @@ function spectrumToGrY(db: number): number {
   );
 }
 
-function parseSpectrum(v: number[]): { bins: number; avg: Float32Array } {
+function parseSpectrum(v: number[]): {
+  bins: number;
+  avg: Float32Array;
+  t: Float32Array | null;
+} {
   const bins = Math.max(1, Math.min(SPECTRUM_MAX_BINS, Math.round(v[0] ?? 0)));
   const avg = new Float32Array(bins);
   for (let i = 0; i < bins; ++i) avg[i] = v[2 + i] ?? SPECTRUM_DB_MIN;
-  return { bins, avg };
+  return { bins, avg, t: readSeriesT(v, bins, 4) };
+}
+
+function flankHz(
+  ys: number[],
+  t: Float32Array | null,
+  width: number,
+  pxPerY: number,
+): { x: number; y: number }[] | null {
+  if (ys.length < 2) return null;
+  const dots = spectrumFlankDots(ys, t, width > 8 ? width : ys.length, tToHz, pxPerY);
+  return dots.length ? dots : null;
 }
 
 function parseGr(v: number[]): { bins: number; gr: Float32Array } {
@@ -242,8 +256,10 @@ export function TamerChart(props: TamerChartProps) {
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   const tiltRef = useRef(spectrumTilt);
   const binsRef = useRef(128);
-  /** 0 = not measured yet (spectrumPxPerBin falls back to design width). */
+  const slotTRef = useRef<Float32Array | null>(null);
+  /** 0 = not measured yet; flank drawing then uses the slot count as width. */
   const chartWidthRef = useRef(0);
+  const chartHeightRef = useRef(0);
   const spectrumLatest = useRef<number[]>(EMPTY);
   const scSpectrumLatest = useRef<number[]>(EMPTY);
   const scActiveLatest = useRef(false);
@@ -315,8 +331,10 @@ export function TamerChart(props: TamerChartProps) {
   reassertRef.current = reassert;
 
   const sendVizBins = useCallback((el: Element) => {
-    const width = Math.round(el.getBoundingClientRect().width);
+    const box = el.getBoundingClientRect();
+    const width = Math.round(box.width);
     chartWidthRef.current = Math.max(1, width);
+    chartHeightRef.current = Math.max(1, Math.round(box.height));
     const next = Math.max(SPECTRUM_MIN_BINS, Math.min(SPECTRUM_MAX_BINS, width));
     postToHost({ t: 'vizcfg', id: SPECTRUM_VIZ_ID, bins: next });
     postToHost({ t: 'vizcfg', id: TAMER_VIZ_ID, bins: next });
@@ -440,26 +458,22 @@ export function TamerChart(props: TamerChartProps) {
     (raw: number[]): { x: number; y: number }[] | null => {
       if (raw.length < 2) return null;
       const slope = spectrumSlope(tiltRef.current);
-      const { bins: sb, avg } = parseSpectrum(raw);
+      const { bins: sb, avg, t } = parseSpectrum(raw);
       binsRef.current = sb;
+      slotTRef.current = t;
       const ys: number[] = [];
-      const hz: number[] = [];
       for (let i = 0; i < sb; ++i) {
-        const f = binToHz(i, sb);
-        hz.push(f);
+        const f = tToHz(t ? (t[i] ?? 0) : (i + 0.5) / sb);
         ys.push(spectrumToGrY(tiltDb(avg[i] ?? SPECTRUM_DB_MIN, f, slope)));
       }
-      const smoothed = smoothSeriesY(
+      return flankHz(
         ys,
-        hz,
-        spectrumPxPerBin(chartWidthRef.current, sb),
+        t,
+        chartWidthRef.current,
+        chartHeightRef.current > 8
+          ? chartHeightRef.current / (TAMER_DB_MAX - TAMER_DB_MIN)
+          : 0,
       );
-      const pts: { x: number; y: number }[] = [];
-      for (let i = 0; i < smoothed.length; ++i)
-        pts.push({ x: hz[i]!, y: smoothed[i]! });
-      return pts.length
-        ? catmullRomDensify(pts, chartWidthRef.current, 'log')
-        : null;
     },
     [],
   );
@@ -474,13 +488,13 @@ export function TamerChart(props: TamerChartProps) {
     (specRaw: number[], grRaw: number[]): { x: number; y: number }[] | null => {
       if (specRaw.length < 2) return null;
       const slope = spectrumSlope(tiltRef.current);
-      const { bins: sb, avg } = parseSpectrum(specRaw);
+      const { bins: sb, avg, t } = parseSpectrum(specRaw);
+      slotTRef.current = t;
       const gr = grRaw.length >= 1 ? parseGr(grRaw).gr : null;
       const gb = gr ? gr.length : 0;
       const ys: number[] = [];
-      const hz: number[] = [];
       for (let i = 0; i < sb; ++i) {
-        const f = binToHz(i, sb);
+        const f = tToHz(t ? (t[i] ?? 0) : (i + 0.5) / sb);
         let g = 0;
         if (gr && gb > 0) {
           if (gb === sb) g = gr[i] ?? 0;
@@ -491,20 +505,16 @@ export function TamerChart(props: TamerChartProps) {
         }
         const inY = spectrumToGrY(tiltDb(avg[i] ?? SPECTRUM_DB_MIN, f, slope));
         const outY = Math.min(TAMER_DB_MAX, Math.max(TAMER_DB_MIN, inY + g));
-        hz.push(f);
         ys.push(outY);
       }
-      const smoothed = smoothSeriesY(
+      return flankHz(
         ys,
-        hz,
-        spectrumPxPerBin(chartWidthRef.current, sb),
+        t,
+        chartWidthRef.current,
+        chartHeightRef.current > 8
+          ? chartHeightRef.current / (TAMER_DB_MAX - TAMER_DB_MIN)
+          : 0,
       );
-      const pts: { x: number; y: number }[] = [];
-      for (let i = 0; i < smoothed.length; ++i)
-        pts.push({ x: hz[i]!, y: smoothed[i]! });
-      return pts.length
-        ? catmullRomDensify(pts, chartWidthRef.current, 'log')
-        : null;
     },
     [],
   );
@@ -514,23 +524,21 @@ export function TamerChart(props: TamerChartProps) {
       if (raw.length < 1) return null;
       const { bins: gb, gr } = parseGr(raw);
       binsRef.current = gb;
+      const t =
+        slotTRef.current && slotTRef.current.length === gb
+          ? slotTRef.current
+          : null;
       const ys: number[] = [];
-      const hz: number[] = [];
-      for (let i = 0; i < gb; ++i) {
-        hz.push(binToHz(i, gb));
+      for (let i = 0; i < gb; ++i)
         ys.push(Math.min(TAMER_DB_MAX, Math.max(TAMER_DB_MIN, gr[i] ?? 0)));
-      }
-      const smoothed = smoothSeriesY(
+      return flankHz(
         ys,
-        hz,
-        spectrumPxPerBin(chartWidthRef.current, gb),
+        t,
+        chartWidthRef.current,
+        chartHeightRef.current > 8
+          ? chartHeightRef.current / (TAMER_DB_MAX - TAMER_DB_MIN)
+          : 0,
       );
-      const pts: { x: number; y: number }[] = [];
-      for (let i = 0; i < smoothed.length; ++i)
-        pts.push({ x: hz[i]!, y: smoothed[i]! });
-      return pts.length
-        ? catmullRomDensify(pts, chartWidthRef.current, 'log')
-        : null;
     },
     [],
   );

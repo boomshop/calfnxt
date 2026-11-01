@@ -55,7 +55,6 @@ export function SpectrumDiffChart(props: { data$: DynamicValue<number[]> }) {
   const chartRef = useRef<AuxChartInstance | null>(null);
   const graphRef = useRef<AuxGraph | null>(null);
   const bindRef = useRef<Bindings | null>(null);
-  const binsRef = useRef(128);
   const [svg, setSvg] = useState<SVGSVGElement | null>(null);
   const [strokeEl, setStrokeEl] = useState<SVGElement | null>(null);
 
@@ -79,17 +78,16 @@ export function SpectrumDiffChart(props: { data$: DynamicValue<number[]> }) {
     if (!chart || chart.isDestructed?.() || !graph) return null;
     const payload = parseSpectrumPayload(raw);
     if (!payload) return null;
-    if (payload.bins !== binsRef.current) {
-      binsRef.current = payload.bins;
-      chart.set('range_x', { min: 0, max: payload.bins });
-      chart.set('grid_x', buildFreqGridX(payload.bins));
-    }
+    chart.set('range_x', { min: 0, max: 1 });
+    chart.set('grid_x', buildFreqGridX(1));
     const diff = new Float32Array(payload.bins);
     for (let i = 0; i < payload.bins; ++i)
       diff[i] = (payload.L[i] ?? -120) - (payload.R[i] ?? -120);
-    const width = chart.element?.getBoundingClientRect().width ?? payload.bins;
-    const px = width / Math.max(1, payload.bins);
-    return seriesDots(diff, payload.bins, -DB, DB, 0, px);
+    const box = chart.element?.getBoundingClientRect();
+    const width = box?.width ?? 0;
+    const pxPerY =
+      box && box.height > 8 ? box.height / (DB - -DB) : 0;
+    return seriesDots(diff, payload.t, payload.bins, -DB, DB, 0, width, pxPerY);
   }, []);
 
   const widgetRef = useCallback(

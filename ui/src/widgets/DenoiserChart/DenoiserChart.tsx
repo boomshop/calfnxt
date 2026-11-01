@@ -15,16 +15,14 @@ import { postToHost } from '../../utils/bridge';
 import { buildDbGridY } from '../../utils/chartGrid';
 import { useChartGradient } from '../../hooks/useChartGradient';
 import { addGraphClasses } from '../../styles/graphStyles';
-import { auxHighpass24, auxLowpass24 } from '../../dsp/eqFilters';
+import { toAuxEqType, type EqPassSlope } from '../../host/equalizerHost';
 import {
-  SPECTRUM_DB_MAX,
   SPECTRUM_DB_MIN,
   SPECTRUM_MAX_BINS,
   SPECTRUM_MIN_BINS,
-  binToHz,
-  catmullRomDensify,
-  smoothSeriesY,
-  spectrumPxPerBin,
+  readSeriesT,
+  spectrumFlankDots,
+  tToHz,
   tiltDb,
 } from '../SpectrumChart/SpectrumChart';
 import './DenoiserChart.scss';
@@ -54,13 +52,22 @@ const ChartWidget = componentFromWidget(AuxChart);
 
 const F_MIN = 20;
 const F_MAX = 20000;
-/** GR / Depth viz axis (same scale as TamerChart). */
-export const DENOISER_DB_MIN = -24;
+/** Spectrum and profile axis. Noise fingerprints sit below −60. */
+export const DENOISER_DB_MIN = -96;
 export const DENOISER_DB_MAX = 0;
 export const DENOISER_VIZ_ID = 'denoiser';
 export const DENOISER_PROF_VIZ_ID = 'denoiser_prof';
 const SPECTRUM_VIZ_ID = 'fft';
 const SEARCH_Q = 0.707;
+
+/** Plain 0…4 → chart slope. 0 is off (caller keeps the band inactive). */
+function slopeDbFromPlain(plain: number): EqPassSlope {
+  const s = Math.round(Math.max(0, Math.min(4, plain)));
+  if (s >= 4) return 48;
+  if (s >= 3) return 36;
+  if (s >= 2) return 24;
+  return 12;
+}
 
 const EMPTY: number[] = [];
 
@@ -76,17 +83,20 @@ function spectrumSlope(scale: number): number {
   return 0;
 }
 
-/** Map analyzer dBFS (−96…0) onto the GR axis (−24…0) as a background fill. */
-function spectrumToGrY(db: number): number {
-  const t = (db - SPECTRUM_DB_MIN) / (SPECTRUM_DB_MAX - SPECTRUM_DB_MIN);
-  return (
-    DENOISER_DB_MIN + Math.min(1, Math.max(0, t)) * (DENOISER_DB_MAX - DENOISER_DB_MIN)
-  );
+function denoiserPxPerY(height: number): number {
+  const span = DENOISER_DB_MAX - DENOISER_DB_MIN;
+  return height > 8 && span > 0 ? height / span : 0;
+}
+
+/** Spectrum sample in dBFS, clipped to the chart axis. */
+function spectrumToChartDb(db: number): number {
+  if (!Number.isFinite(db)) return DENOISER_DB_MIN;
+  return Math.min(DENOISER_DB_MAX, Math.max(DENOISER_DB_MIN, db));
 }
 
 /**
  * Same polyline as the main spectrum fill: Hz from the log-bin index, tilt,
- * −96…0 mapped onto the chart, then the shared smoother.
+ * clipped to the chart axis, then the shared flank.
  * When the series is denser than the CSS width (mini reuses the main chart's
  * bin count), keep one vertex per pixel so AUX does not stack bins.
  */
@@ -94,37 +104,38 @@ export function spectrumCurveDots(
   db: ArrayLike<number>,
   cssWidth: number,
   slope: number,
+  slotT?: Float32Array | null,
+  pxPerY = 0,
 ): { x: number; y: number }[] | null {
   const n = db.length;
   if (n < 2) return null;
-  const width = cssWidth > 1 ? cssWidth : 0;
-  const count = width > 1 ? Math.max(2, Math.min(n, Math.floor(width))) : n;
   const ys: number[] = [];
-  const hz: number[] = [];
-  for (let i = 0; i < count; ++i) {
-    const j =
-      count === n
-        ? i
-        : Math.min(n - 1, Math.round(((i + 0.5) * n) / count - 0.5));
-    const f = binToHz(j, n);
-    const raw = db[j];
+  for (let i = 0; i < n; ++i) {
+    const f = tToHz(slotT ? (slotT[i] ?? 0) : (i + 0.5) / n);
+    const raw = db[i];
     const dbv =
       typeof raw === 'number' && Number.isFinite(raw) ? raw : SPECTRUM_DB_MIN;
-    hz.push(f);
-    ys.push(spectrumToGrY(tiltDb(dbv, f, slope)));
+    ys.push(spectrumToChartDb(tiltDb(dbv, f, slope)));
   }
-  const smoothed = smoothSeriesY(ys, hz, spectrumPxPerBin(width, count));
-  const pts: { x: number; y: number }[] = [];
-  for (let i = 0; i < smoothed.length; ++i)
-    pts.push({ x: hz[i]!, y: smoothed[i]! });
-  return pts.length ? catmullRomDensify(pts, width > 1 ? width : count, 'log') : null;
+  const dots = spectrumFlankDots(
+    ys,
+    slotT ?? null,
+    cssWidth > 8 ? cssWidth : n,
+    tToHz,
+    pxPerY,
+  );
+  return dots.length ? dots : null;
 }
 
-function parseSpectrum(v: number[]): { bins: number; avg: Float32Array } {
+function parseSpectrum(v: number[]): {
+  bins: number;
+  avg: Float32Array;
+  t: Float32Array | null;
+} {
   const bins = Math.max(1, Math.min(SPECTRUM_MAX_BINS, Math.round(v[0] ?? 0)));
   const avg = new Float32Array(bins);
   for (let i = 0; i < bins; ++i) avg[i] = v[2 + i] ?? SPECTRUM_DB_MIN;
-  return { bins, avg };
+  return { bins, avg, t: readSeriesT(v, bins, 4) };
 }
 
 /** DSP layout [bins, grL×N, grR×N] — use L channel (linked → L==R). */
@@ -185,40 +196,55 @@ function buildFreqGridX() {
   return lines;
 }
 
-const DENOISER_DB_GRID = buildDbGridY(DENOISER_DB_MIN, DENOISER_DB_MAX, 6, 6, {
-  labelEvery: true,
-});
+const DENOISER_DB_GRID = buildDbGridY(
+  DENOISER_DB_MIN,
+  DENOISER_DB_MAX,
+  12,
+  24,
+  {
+    labelEvery: false,
+  },
+);
 
 export interface DenoiserChartProps {
   spectrum$: DynamicValue<number[]>;
-  /** Active / blended profile spectrum (thin stroke). */
+  /** Active / blended profile spectrum. Drawn as the raised floor. */
   profileSpectrum$: DynamicValue<number[]>;
+  /** dB added to the fingerprint before the gain law (0…24). */
+  offset$: DynamicValue<number>;
+  /** dB above the raised floor where gain is −6 dB (3…24). */
+  span$: DynamicValue<number>;
   gr$: DynamicValue<number[]>;
   /** 0 Linear / 1 −3 / 2 −4.5 */
   spectrumTilt: number;
   fLo$: DynamicValue<number>;
   fHi$: DynamicValue<number>;
-  fLoOn$: DynamicValue<boolean>;
-  fHiOn$: DynamicValue<boolean>;
+  /** 0 off / 1…4 = 12/24/36/48 dB/oct. */
+  fLoSlope$: DynamicValue<number>;
+  fHiSlope$: DynamicValue<number>;
   fLoEdit?: DenoiserChartEdit;
   fHiEdit?: DenoiserChartEdit;
   className?: string;
 }
 
 /**
- * Input spectrum fill + out (in+GR) + thick GR stroke + thin active profile.
- * Band edges as fixed 24 dB HP/LP EqBand handles.
+ * Input spectrum fill + out (in+GR) + thick GR stroke.
+ * Solid line: fingerprint + Offset (the floor the gain law uses).
+ * Soft line: that floor + Span, where the gain is −6 dB.
+ * Band edges as HP/LP EqBand handles. Slope 0 hides that handle.
  */
 export function DenoiserChart(props: DenoiserChartProps) {
   const {
     spectrum$,
     profileSpectrum$,
+    offset$,
+    span$,
     gr$,
     spectrumTilt,
     fLo$,
     fHi$,
-    fLoOn$,
-    fHiOn$,
+    fLoSlope$,
+    fHiSlope$,
     fLoEdit,
     fHiEdit,
     className,
@@ -230,10 +256,14 @@ export function DenoiserChart(props: DenoiserChartProps) {
   const resizeRoRef = useRef<ResizeObserver | null>(null);
   const tiltRef = useRef(spectrumTilt);
   const binsRef = useRef(128);
+  const slotTRef = useRef<Float32Array | null>(null);
   const chartWidthRef = useRef(0);
+  const chartHeightRef = useRef(0);
   const spectrumLatest = useRef<number[]>(EMPTY);
   const profileLatest = useRef<number[]>(EMPTY);
   const grLatest = useRef<number[]>(EMPTY);
+  const offsetRef = useRef(0);
+  const spanRef = useRef(12);
   tiltRef.current = spectrumTilt;
 
   const [chart, setChart] = useState<AuxChartInstance | null>(null);
@@ -241,6 +271,28 @@ export function DenoiserChart(props: DenoiserChartProps) {
 
   const loMax$ = useMemo(() => DynamicValue.fromConstant(F_MAX), []);
   const hiMin$ = useMemo(() => DynamicValue.fromConstant(F_MIN), []);
+  const loActive$ = useMemo(
+    () => DynamicValue.fromConstant((fLoSlope$.value ?? 2) >= 0.5),
+    [fLoSlope$],
+  );
+  const hiActive$ = useMemo(
+    () => DynamicValue.fromConstant((fHiSlope$.value ?? 2) >= 0.5),
+    [fHiSlope$],
+  );
+  const hpType$ = useMemo(
+    () =>
+      DynamicValue.fromConstant(
+        toAuxEqType('highpass', slopeDbFromPlain(fLoSlope$.value ?? 2)),
+      ),
+    [fLoSlope$],
+  );
+  const lpType$ = useMemo(
+    () =>
+      DynamicValue.fromConstant(
+        toAuxEqType('lowpass', slopeDbFromPlain(fHiSlope$.value ?? 2)),
+      ),
+    [fHiSlope$],
+  );
 
   useEffect(() => {
     const sync = () => {
@@ -258,6 +310,27 @@ export function DenoiserChart(props: DenoiserChartProps) {
     };
   }, [fLo$, fHi$, loMax$, hiMin$]);
 
+  useEffect(() => {
+    const syncLo = () => {
+      const plain = fLoSlope$.value ?? 2;
+      loActive$.set(plain >= 0.5);
+      hpType$.set(toAuxEqType('highpass', slopeDbFromPlain(plain)));
+    };
+    const syncHi = () => {
+      const plain = fHiSlope$.value ?? 2;
+      hiActive$.set(plain >= 0.5);
+      lpType$.set(toAuxEqType('lowpass', slopeDbFromPlain(plain)));
+    };
+    syncLo();
+    syncHi();
+    const u0 = fLoSlope$.subscribe(syncLo, false);
+    const u1 = fHiSlope$.subscribe(syncHi, false);
+    return () => {
+      u0();
+      u1();
+    };
+  }, [fLoSlope$, fHiSlope$, loActive$, hiActive$, hpType$, lpType$]);
+
   const reassert = useChartGradient({
     svg: chartSvg,
     enabled: true,
@@ -267,9 +340,14 @@ export function DenoiserChart(props: DenoiserChartProps) {
   reassertRef.current = reassert;
 
   const sendVizBins = useCallback((el: Element) => {
-    const width = Math.round(el.getBoundingClientRect().width);
+    const box = el.getBoundingClientRect();
+    const width = Math.round(box.width);
     chartWidthRef.current = Math.max(1, width);
-    const next = Math.max(SPECTRUM_MIN_BINS, Math.min(SPECTRUM_MAX_BINS, width));
+    chartHeightRef.current = Math.max(1, Math.round(box.height));
+    const next = Math.max(
+      SPECTRUM_MIN_BINS,
+      Math.min(SPECTRUM_MAX_BINS, width),
+    );
     postToHost({ t: 'vizcfg', id: SPECTRUM_VIZ_ID, bins: next });
     postToHost({ t: 'vizcfg', id: DENOISER_VIZ_ID, bins: next });
     postToHost({ t: 'vizcfg', id: DENOISER_PROF_VIZ_ID, bins: next });
@@ -279,7 +357,7 @@ export function DenoiserChart(props: DenoiserChartProps) {
     () => [
       {
         mode: 'block-left',
-        type: auxHighpass24,
+        type: toAuxEqType('highpass', slopeDbFromPlain(fLoSlope$.value ?? 2)),
         class: 'denoiser-band-lo',
         label: 'Low',
         format_label: (_l: string, x: number) => formatFreq(x),
@@ -298,7 +376,7 @@ export function DenoiserChart(props: DenoiserChartProps) {
       },
       {
         mode: 'block-right',
-        type: auxLowpass24,
+        type: toAuxEqType('lowpass', slopeDbFromPlain(fHiSlope$.value ?? 2)),
         class: 'denoiser-band-hi',
         label: 'High',
         format_label: (_l: string, x: number) => formatFreq(x),
@@ -324,15 +402,17 @@ export function DenoiserChart(props: DenoiserChartProps) {
       [
         { name: 'freq', backendValue: fLo$ },
         { name: 'x_max', backendValue: loMax$, readonly: true },
-        { name: 'active', backendValue: fLoOn$, readonly: true },
+        { name: 'active', backendValue: loActive$, readonly: true },
+        { name: 'type', backendValue: hpType$, readonly: true },
       ],
       [
         { name: 'freq', backendValue: fHi$ },
         { name: 'x_min', backendValue: hiMin$, readonly: true },
-        { name: 'active', backendValue: fHiOn$, readonly: true },
+        { name: 'active', backendValue: hiActive$, readonly: true },
+        { name: 'type', backendValue: lpType$, readonly: true },
       ],
     ],
-    [fLo$, fHi$, fLoOn$, fHiOn$, loMax$, hiMin$],
+    [fLo$, fHi$, loActive$, hiActive$, hpType$, lpType$, loMax$, hiMin$],
   );
 
   const handleEvents = useMemo(
@@ -375,7 +455,10 @@ export function DenoiserChart(props: DenoiserChartProps) {
     [handles],
   );
 
-  const eqGraphs = useWidgetsWithBindingsAndEvents(AuxEqualizerGraph, eqGraphOptions);
+  const eqGraphs = useWidgetsWithBindingsAndEvents(
+    AuxEqualizerGraph,
+    eqGraphOptions,
+  );
 
   useEffect(() => {
     for (const g of eqGraphs) {
@@ -384,12 +467,20 @@ export function DenoiserChart(props: DenoiserChartProps) {
   }, [eqGraphs, handles]);
 
   const buildSpecDots = useCallback(
-    (raw: number[]): { x: number; y: number }[] | null => {
+    (raw: number[], addDb = 0): { x: number; y: number }[] | null => {
       if (raw.length < 2) return null;
       const slope = spectrumSlope(tiltRef.current);
-      const { bins: sb, avg } = parseSpectrum(raw);
+      const { bins: sb, avg, t } = parseSpectrum(raw);
       binsRef.current = sb;
-      return spectrumCurveDots(avg, chartWidthRef.current, slope);
+      slotTRef.current = t;
+      const shifted = addDb !== 0 ? avg.map((v) => v + addDb) : avg;
+      return spectrumCurveDots(
+        shifted,
+        chartWidthRef.current,
+        slope,
+        t,
+        denoiserPxPerY(chartHeightRef.current),
+      );
     },
     [],
   );
@@ -398,13 +489,13 @@ export function DenoiserChart(props: DenoiserChartProps) {
     (specRaw: number[], grRaw: number[]): { x: number; y: number }[] | null => {
       if (specRaw.length < 2) return null;
       const slope = spectrumSlope(tiltRef.current);
-      const { bins: sb, avg } = parseSpectrum(specRaw);
+      const { bins: sb, avg, t } = parseSpectrum(specRaw);
+      slotTRef.current = t;
       const gr = grRaw.length >= 1 ? parseGr(grRaw).gr : null;
       const gb = gr ? gr.length : 0;
       const ys: number[] = [];
-      const hz: number[] = [];
       for (let i = 0; i < sb; ++i) {
-        const f = binToHz(i, sb);
+        const f = tToHz(t ? (t[i] ?? 0) : (i + 0.5) / sb);
         let g = 0;
         if (gr && gb > 0) {
           if (gb === sb) g = gr[i] ?? 0;
@@ -413,22 +504,18 @@ export function DenoiserChart(props: DenoiserChartProps) {
             g = gr[j] ?? 0;
           }
         }
-        const inY = spectrumToGrY(tiltDb(avg[i] ?? SPECTRUM_DB_MIN, f, slope));
-        const outY = Math.min(DENOISER_DB_MAX, Math.max(DENOISER_DB_MIN, inY + g));
-        hz.push(f);
-        ys.push(outY);
+        const inY = spectrumToChartDb(
+          tiltDb(avg[i] ?? SPECTRUM_DB_MIN, f, slope),
+        );
+        ys.push(Math.min(DENOISER_DB_MAX, Math.max(DENOISER_DB_MIN, inY + g)));
       }
-      const smoothed = smoothSeriesY(
+      return spectrumFlankDots(
         ys,
-        hz,
-        spectrumPxPerBin(chartWidthRef.current, sb),
+        t,
+        chartWidthRef.current > 8 ? chartWidthRef.current : sb,
+        tToHz,
+        denoiserPxPerY(chartHeightRef.current),
       );
-      const pts: { x: number; y: number }[] = [];
-      for (let i = 0; i < smoothed.length; ++i)
-        pts.push({ x: hz[i]!, y: smoothed[i]! });
-      return pts.length
-        ? catmullRomDensify(pts, chartWidthRef.current, 'log')
-        : null;
     },
     [],
   );
@@ -438,23 +525,23 @@ export function DenoiserChart(props: DenoiserChartProps) {
       if (raw.length < 1) return null;
       const { bins: gb, gr } = parseGr(raw);
       binsRef.current = gb;
+      const t =
+        slotTRef.current && slotTRef.current.length === gb
+          ? slotTRef.current
+          : null;
       const ys: number[] = [];
-      const hz: number[] = [];
-      for (let i = 0; i < gb; ++i) {
-        hz.push(binToHz(i, gb));
-        ys.push(Math.min(DENOISER_DB_MAX, Math.max(DENOISER_DB_MIN, gr[i] ?? 0)));
-      }
-      const smoothed = smoothSeriesY(
+      for (let i = 0; i < gb; ++i)
+        ys.push(
+          Math.min(DENOISER_DB_MAX, Math.max(DENOISER_DB_MIN, gr[i] ?? 0)),
+        );
+      const dots = spectrumFlankDots(
         ys,
-        hz,
-        spectrumPxPerBin(chartWidthRef.current, gb),
+        t,
+        chartWidthRef.current > 8 ? chartWidthRef.current : gb,
+        tToHz,
+        denoiserPxPerY(chartHeightRef.current),
       );
-      const pts: { x: number; y: number }[] = [];
-      for (let i = 0; i < smoothed.length; ++i)
-        pts.push({ x: hz[i]!, y: smoothed[i]! });
-      return pts.length
-        ? catmullRomDensify(pts, chartWidthRef.current, 'log')
-        : null;
+      return dots.length ? dots : null;
     },
     [],
   );
@@ -476,7 +563,8 @@ export function DenoiserChart(props: DenoiserChartProps) {
     const gOut = graphsRef.current[1];
     const gGr = graphsRef.current[2];
     const gProf = graphsRef.current[3];
-    if (!gIn || !gOut || !gGr || !gProf) return;
+    const gCut = graphsRef.current[4];
+    if (!gIn || !gOut || !gGr || !gProf || !gCut) return;
 
     bindingsRef.current = [
       bindAuxOptions(gIn, [
@@ -520,8 +608,11 @@ export function DenoiserChart(props: DenoiserChartProps) {
             const next =
               Array.isArray(raw) && raw.length ? (raw as number[]) : EMPTY;
             profileLatest.current = next;
+            const off = offsetRef.current;
+            gCut.set('dots', buildSpecDots(next, off + spanRef.current));
+            gCut.toFront?.();
             gProf.toFront?.();
-            return buildSpecDots(next);
+            return buildSpecDots(next, off);
           },
         },
       ]),
@@ -541,15 +632,47 @@ export function DenoiserChart(props: DenoiserChartProps) {
     const gOut = graphsRef.current[1];
     const gGr = graphsRef.current[2];
     const gProf = graphsRef.current[3];
-    if (!gIn || !gOut || !gGr || !gProf) return;
+    const gCut = graphsRef.current[4];
+    if (!gIn || !gOut || !gGr || !gProf || !gCut) return;
+    const off = offsetRef.current;
     gIn.set('dots', buildSpecDots(spectrumLatest.current));
     gOut.set('dots', buildOutDots(spectrumLatest.current, grLatest.current));
     gGr.set('dots', buildGrDots(grLatest.current));
-    gProf.set('dots', buildSpecDots(profileLatest.current));
+    gProf.set('dots', buildSpecDots(profileLatest.current, off));
+    gCut.set(
+      'dots',
+      buildSpecDots(profileLatest.current, off + spanRef.current),
+    );
     gGr.toFront?.();
+    gCut.toFront?.();
     gProf.toFront?.();
     reassertRef.current();
   }, [spectrumTilt, buildSpecDots, buildOutDots, buildGrDots]);
+
+  useEffect(() => {
+    const sync = () => {
+      offsetRef.current = Math.min(24, Math.max(0, offset$.value ?? 0));
+      spanRef.current = Math.min(24, Math.max(3, span$.value ?? 12));
+      const gProf = graphsRef.current[3];
+      const gCut = graphsRef.current[4];
+      if (!gProf || !gCut) return;
+      const off = offsetRef.current;
+      gProf.set('dots', buildSpecDots(profileLatest.current, off));
+      gCut.set(
+        'dots',
+        buildSpecDots(profileLatest.current, off + spanRef.current),
+      );
+      gCut.toFront?.();
+      gProf.toFront?.();
+    };
+    sync();
+    const u0 = offset$.subscribe(sync, false);
+    const u1 = span$.subscribe(sync, false);
+    return () => {
+      u0();
+      u1();
+    };
+  }, [offset$, span$, buildSpecDots]);
 
   const detach = useCallback(() => {
     resizeRoRef.current?.disconnect();
@@ -586,7 +709,7 @@ export function DenoiserChart(props: DenoiserChartProps) {
         addGraphClasses(
           gIn.element,
           'denoiser-in',
-          'fill-gradient fill-full stroke-none',
+          'fill-gradient fill-semi stroke-none',
         );
         const gOut = inst.addGraph({
           dots: null,
@@ -597,7 +720,7 @@ export function DenoiserChart(props: DenoiserChartProps) {
         addGraphClasses(
           gOut.element,
           'denoiser-out',
-          'fill-background fill-semi stroke-none',
+          'fill-gradient fill-full stroke-none',
         );
         const gGr = inst.addGraph({
           dots: null,
@@ -619,9 +742,20 @@ export function DenoiserChart(props: DenoiserChartProps) {
         addGraphClasses(
           gProf.element,
           'denoiser-prof',
-          'fill-none stroke-color stroke-thinner stroke-semi',
+          'fill-none stroke-color stroke-thinner stroke-full',
         );
-        graphsRef.current = [gIn, gOut, gGr, gProf];
+        const gCut = inst.addGraph({
+          dots: null,
+          type: 'L',
+          mode: 'line',
+          class: 'denoiser-cut',
+        });
+        addGraphClasses(
+          gCut.element,
+          'denoiser-cut',
+          'fill-none stroke-color stroke-thinner stroke-dotted',
+        );
+        graphsRef.current = [gIn, gOut, gGr, gProf, gCut];
       }
 
       setChartSvg(inst.svg ?? null);

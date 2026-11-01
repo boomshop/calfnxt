@@ -38,7 +38,7 @@ export type calfNXTMsg =
       /** Denoiser `profiles` reply bin count. */
       bins?: number;
       /** Denoiser learned profile snapshots. */
-      slots?: { i: number; valid: number; db?: number[] }[];
+      slots?: { i: number; valid: number; db?: number[]; t?: number[]; fft?: number }[];
     }
   /** Host→UI tips (e.g. Ardour GTK3 embed preference). */
   | { t: "host"; tip?: string; show?: number };

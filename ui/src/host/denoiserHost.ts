@@ -18,6 +18,20 @@ export const DENOISER_QUALITY_ENTRIES = [
   { label: 'Ultra', value: 3 },
 ];
 
+/** FFT length for a Quality plain (0…3). Matches `qualityToFft` in the DSP. */
+export function denoiserQualityFft(quality: number): number {
+  switch (Math.round(quality)) {
+    case 0:
+      return 1024;
+    case 2:
+      return 4096;
+    case 3:
+      return 8192;
+    default:
+      return 2048;
+  }
+}
+
 /** Display tilt (matches Analyzer / EQ / Tamer spectrum). */
 export const DENOISER_SPECTRUM_ENTRIES = [
   { label: 'Lin', value: 0 },
@@ -30,6 +44,10 @@ export type DenoiserProfileSlot = {
   i: number;
   valid: boolean;
   db: number[];
+  /** Log fraction 0…1 of each display-slot center. Absent on older payloads. */
+  t?: number[];
+  /** FFT length the fingerprint was learned at. Absent until the host reports it. */
+  fft?: number;
 };
 
 export type IDenoiserHost = {
@@ -39,13 +57,21 @@ export type IDenoiserHost = {
   blend$: DynamicValue<number>;
   amount$: DynamicValue<number>;
   floor$: DynamicValue<number>;
+  /** dB above the raised floor where gain is −6 dB. 3 = unstretched Wiener, 24 = wide. */
+  span$: DynamicValue<number>;
+  /** dB added to every noise-power bin before the gain law. */
+  offset$: DynamicValue<number>;
   fLo$: DynamicValue<number>;
-  fLoOn$: DynamicValue<boolean>;
+  /** 0 off / 1…4 = 12/24/36/48 dB/oct. */
+  fLoSlope$: DynamicValue<number>;
   fHi$: DynamicValue<number>;
-  fHiOn$: DynamicValue<boolean>;
+  /** 0 off / 1…4 = 12/24/36/48 dB/oct. */
+  fHiSlope$: DynamicValue<number>;
   quality$: DynamicValue<number>;
   spectrum$: DynamicValue<number>;
   diffListen$: DynamicValue<boolean>;
+  /** Header Mono: left input, both outputs, one FFT. */
+  mono$: DynamicValue<boolean>;
   /** 0 off / 1…3 profile listen. */
   listen$: DynamicValue<number>;
   /** Per-card listen toggles (exclusive with each other and Diff Listen). */
@@ -58,6 +84,10 @@ export type IDenoiserHost = {
   learnSlot3$: DynamicValue<boolean>;
   spectrumData$: DynamicValue<number[]>;
   profileSpectrum$: DynamicValue<number[]>;
+  /** Learned fingerprints, spectrum layout, viz ids denoiser_p1…p3. */
+  profile1$: DynamicValue<number[]>;
+  profile2$: DynamicValue<number[]>;
+  profile3$: DynamicValue<number[]>;
   grResponse$: DynamicValue<number[]>;
   /** Learned profile snapshots from host IR `profiles` messages. */
   profiles$: DynamicValue<DenoiserProfileSlot[]>;
@@ -182,11 +212,17 @@ function wireLearnToggles(
 export function createBoundDenoiserHost(): IDenoiserHost {
   const spectrumData$ = DynamicValue.fromConstant<number[]>([]);
   const profileSpectrum$ = DynamicValue.fromConstant<number[]>([]);
+  const profile1$ = DynamicValue.fromConstant<number[]>([]);
+  const profile2$ = DynamicValue.fromConstant<number[]>([]);
+  const profile3$ = DynamicValue.fromConstant<number[]>([]);
   const grResponse$ = DynamicValue.fromConstant<number[]>([]);
   const profiles$ = DynamicValue.fromConstant<DenoiserProfileSlot[]>(emptyProfiles());
 
   bindVizSpectrum(spectrumData$, 'fft');
   bindVizSpectrum(profileSpectrum$, 'denoiser_prof');
+  bindVizSpectrum(profile1$, 'denoiser_p1');
+  bindVizSpectrum(profile2$, 'denoiser_p2');
+  bindVizSpectrum(profile3$, 'denoiser_p3');
   bindVizResponse(grResponse$, 'denoiser');
 
   const listen$ = bindNum('listen', 0);
@@ -218,10 +254,16 @@ export function createBoundDenoiserHost(): IDenoiserHost {
       const db = Array.isArray(s.db)
         ? s.db.map((x) => (typeof x === 'number' && Number.isFinite(x) ? x : -120))
         : [];
+      const t = Array.isArray(s.t)
+        ? s.t.map((x) => (typeof x === 'number' && Number.isFinite(x) ? x : 0))
+        : undefined;
+      const fft = Number(s.fft);
       next[i - 1] = {
         i,
         valid: Number(s.valid) >= 0.5,
         db,
+        t: t && t.length === db.length ? t : undefined,
+        fft: Number.isFinite(fft) && fft > 0 ? Math.round(fft) : undefined,
       };
     }
     profiles$.set(next);
@@ -258,13 +300,16 @@ export function createBoundDenoiserHost(): IDenoiserHost {
     blend$: bindNum('blend', 250),
     amount$: bindNum('amount', 1),
     floor$: bindNum('floor', -20),
+    span$: bindNum('span', 12),
+    offset$: bindNum('offset', 0),
     fLo$: bindNum('f_lo', 20),
-    fLoOn$: bindBool('f_lo_on'),
+    fLoSlope$: bindNum('f_lo_slope', 2),
     fHi$: bindNum('f_hi', 160),
-    fHiOn$: bindBool('f_hi_on'),
+    fHiSlope$: bindNum('f_hi_slope', 2),
     quality$: bindNum('quality', 1),
     spectrum$: bindNum('spectrum', 1),
     diffListen$,
+    mono$: bindBool('mono'),
     listen$,
     listenSlot1$,
     listenSlot2$,
@@ -274,6 +319,9 @@ export function createBoundDenoiserHost(): IDenoiserHost {
     learnSlot3$,
     spectrumData$,
     profileSpectrum$,
+    profile1$,
+    profile2$,
+    profile3$,
     grResponse$,
     profiles$,
     beginEdit: postBegin,

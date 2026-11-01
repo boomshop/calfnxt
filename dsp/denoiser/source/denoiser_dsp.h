@@ -26,6 +26,9 @@ public:
   }
 
   Steinberg::tresult PLUGIN_API initialize(Steinberg::FUnknown* context) SMTG_OVERRIDE;
+  Steinberg::tresult PLUGIN_API setBusArrangements(
+      Steinberg::Vst::SpeakerArrangement* inputs, Steinberg::int32 numIns,
+      Steinberg::Vst::SpeakerArrangement* outputs, Steinberg::int32 numOuts) SMTG_OVERRIDE;
   Steinberg::tresult PLUGIN_API setActive(Steinberg::TBool state) SMTG_OVERRIDE;
   Steinberg::tresult PLUGIN_API setupProcessing(Steinberg::Vst::ProcessSetup& newSetup) SMTG_OVERRIDE;
   Steinberg::tresult PLUGIN_API process(Steinberg::Vst::ProcessData& data) SMTG_OVERRIDE;
@@ -40,6 +43,9 @@ public:
   const char* vizSpectrumId() const override { return "fft"; }
   int takeOutputSpectrum(float* out, int maxOut) override;
   const char* vizOutputSpectrumId() const override { return "denoiser_prof"; }
+  int vizExtraSpectrumCount() const override { return Dsp::SpectralDenoiser::kNumProfiles; }
+  const char* vizExtraSpectrumId(int index) const override;
+  int takeExtraSpectrum(int index, float* out, int maxOut) override;
   int takeFreqResponse(float* out, int maxOut) override;
   const char* vizFreqResponseId() const override { return "denoiser"; }
   void configureVizBins(const char* id, int bins) override;
@@ -65,10 +71,13 @@ private:
     float floor = -20.f;
     float fLo = 20.f;
     float fHi = 160.f;
-    bool fLoOn = true;
-    bool fHiOn = true;
+    int loSlope = 2;
+    int hiSlope = 2;
     int quality = 1;
     int listen = 0; // 0 = off, 1…3 = profile listen
+    bool mono = false;
+    float spanDb = 12.f;
+    float offsetDb = 0.f;
   };
 
   BlockState makeBlockState() const;

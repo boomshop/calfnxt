@@ -14,7 +14,7 @@
   ],
   "editor": {
     "width": 1024,
-    "height": 520
+    "height": 560
   },
   "buses": {
     "audio_inputs": [
@@ -98,13 +98,13 @@
       "precision": 1
     },
     {
-      "id": "f_lo_on",
-      "name": "Low On",
+      "id": "f_lo_slope",
+      "name": "Low Slope",
       "type": "float",
       "unit": "",
       "min": 0.0,
-      "max": 1.0,
-      "default": 1.0,
+      "max": 4.0,
+      "default": 2.0,
       "scale": "linear",
       "precision": 0
     },
@@ -120,13 +120,13 @@
       "precision": 1
     },
     {
-      "id": "f_hi_on",
-      "name": "High On",
+      "id": "f_hi_slope",
+      "name": "High Slope",
       "type": "float",
       "unit": "",
       "min": 0.0,
-      "max": 1.0,
-      "default": 1.0,
+      "max": 4.0,
+      "default": 2.0,
       "scale": "linear",
       "precision": 0
     },
@@ -173,6 +173,39 @@
       "default": 0.0,
       "scale": "linear",
       "precision": 0
+    },
+    {
+      "id": "mono",
+      "name": "Mono",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "span",
+      "name": "Span",
+      "type": "float",
+      "unit": "dB",
+      "min": 3.0,
+      "max": 24.0,
+      "default": 12.0,
+      "scale": "linear",
+      "precision": 1
+    },
+    {
+      "id": "offset",
+      "name": "Offset",
+      "type": "float",
+      "unit": "dB",
+      "min": 0.0,
+      "max": 24.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 1
     }
   ]
 }

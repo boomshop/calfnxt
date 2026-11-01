@@ -89,6 +89,8 @@ private:
   void pollParamsFromController();
   void flushViz();
   void flushVizLevels(const char* streamId, float* levels, int n);
+  /** Spectrum payload clamp (−120…12 after the header) and flush. `n < 0` clears. */
+  void flushSpectrumPayload(const char* streamId, float* spectrum, int n);
   void flushVizArray(const char* streamId, const char* kind, float* values, int n);
   void beginVizBatch();
   void endVizBatch();

@@ -268,6 +268,7 @@ export function MultibandChart(props: MultibandChartProps) {
   } | null>(null);
   const spectrumBindRef = useRef<Bindings | null>(null);
   const spectrumWidthRef = useRef(0);
+  const spectrumHeightRef = useRef(0);
   const spectrumResizeRoRef = useRef<ResizeObserver | null>(null);
   const bands = Math.max(2, Math.min(MB_MAX_BANDS, Math.round(bandCount)));
   const xoverCount = MB_MAX_BANDS - 1;
@@ -783,11 +784,17 @@ export function MultibandChart(props: MultibandChartProps) {
           const out = row[1] ?? [];
           const scalePlain = typeof row[2] === 'number' ? row[2] : 0;
           const axis = axisFor(scalePlain);
+          const span = axis.yMax - axis.yMin;
+          const pxPerY =
+            spectrumHeightRef.current > 8 && span > 0
+              ? spectrumHeightRef.current / span
+              : 0;
           const layers = spectrumOverlayLayers(
             inn,
             out,
             axis,
             spectrumWidthRef.current,
+            pxPerY,
           );
           mask.set('dots', layers.mask);
           edge.set('dots', layers.edge);
@@ -802,8 +809,10 @@ export function MultibandChart(props: MultibandChartProps) {
     spectrumResizeRoRef.current = null;
     if (el) {
       const sendBins = () => {
-        const width = Math.round(el.getBoundingClientRect().width);
+        const box = el.getBoundingClientRect();
+        const width = Math.round(box.width);
         spectrumWidthRef.current = Math.max(1, width);
+        spectrumHeightRef.current = Math.max(1, Math.round(box.height));
         const next = Math.max(
           SPECTRUM_MIN_BINS,
           Math.min(192, width),

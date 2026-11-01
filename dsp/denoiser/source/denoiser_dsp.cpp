@@ -95,6 +95,16 @@ tresult PLUGIN_API DenoiserPlugin::initialize(FUnknown* context)
   return kResultOk;
 }
 
+tresult PLUGIN_API DenoiserPlugin::setBusArrangements(SpeakerArrangement* inputs, int32 numIns,
+                                                      SpeakerArrangement* outputs, int32 numOuts)
+{
+  // Mono track: one FFT. Stereo stays the default arrangement.
+  if (numIns == 1 && numOuts == 1 && inputs && outputs &&
+      inputs[0] == SpeakerArr::kMono && outputs[0] == SpeakerArr::kMono)
+    return SingleComponentEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
+  return EffectBase::setBusArrangements(inputs, numIns, outputs, numOuts);
+}
+
 int DenoiserPlugin::qualityToFft(int quality)
 {
   switch (std::clamp(quality, 0, 3))
@@ -174,10 +184,15 @@ DenoiserPlugin::BlockState DenoiserPlugin::makeBlockState() const
   s.floor = std::clamp(params_[kParamFloor], -60.f, 0.f);
   s.fLo = std::clamp(params_[kParamFLo], 20.f, 20000.f);
   s.fHi = std::clamp(params_[kParamFHi], 20.f, 20000.f);
-  s.fLoOn = params_[kParamFLoOn] >= 0.5f;
-  s.fHiOn = params_[kParamFHiOn] >= 0.5f;
+  s.loSlope = static_cast<int>(
+    std::lround(std::clamp(params_[kParamFLoSlope], 0.f, 4.f)));
+  s.hiSlope = static_cast<int>(
+    std::lround(std::clamp(params_[kParamFHiSlope], 0.f, 4.f)));
   s.quality = static_cast<int>(std::lround(std::clamp(params_[kParamQuality], 0.f, 3.f)));
   s.listen = static_cast<int>(std::lround(std::clamp(params_[kParamListen], 0.f, 3.f)));
+  s.mono = params_[kParamMono] >= 0.5f;
+  s.spanDb = std::clamp(params_[kParamSpan], 3.f, 24.f);
+  s.offsetDb = std::clamp(params_[kParamOffset], 0.f, 24.f);
   // Profile listen and Diff Listen are exclusive — profile listen wins.
   if (s.listen >= 1)
     s.diffListen = false;
@@ -187,8 +202,8 @@ DenoiserPlugin::BlockState DenoiserPlugin::makeBlockState() const
 void DenoiserPlugin::applyBlockState(const BlockState& s)
 {
   denoiser_.setFftSize(qualityToFft(s.quality));
-  denoiser_.setParams(s.fLo, s.fHi, s.amount, s.floor, s.blendMs, s.fLoOn,
-                      s.fHiOn);
+  denoiser_.setParams(s.fLo, s.fHi, s.amount, s.floor, s.blendMs, s.loSlope,
+                      s.hiSlope, s.spanDb, s.offsetDb);
   denoiser_.setProfileTarget(s.profile - 1);
   denoiser_.setProfileListen(s.listen >= 1 ? s.listen - 1 : -1);
   updateLatency();
@@ -209,9 +224,16 @@ tresult PLUGIN_API DenoiserPlugin::process(ProcessData& data)
   if (denoiser_.takeProfilesDirty())
     pushProfilesUiJson();
 
+  denoiser_.setVizActive(vizConsumerActive());
+
   const bool hasHostAudio = io_.begin(data);
   if (!hasHostAudio)
+  {
+    if (data.numSamples > 0 && data.numInputs > 0 && data.inputs
+        && data.inputs[0].silenceFlags != 0)
+      denoiser_.drainSilence(data.numSamples);
     return kResultOk;
+  }
 
   const int32 nFrames = data.numSamples;
   if (nFrames <= 0)
@@ -258,7 +280,8 @@ tresult PLUGIN_API DenoiserPlugin::process(ProcessData& data)
   bool ran = false;
   if (is32)
   {
-    denoiser_.process(left32, right32, nFrames, state.bypass, state.diffListen);
+    denoiser_.process(left32, right32, nFrames, state.bypass, state.diffListen,
+                      state.mono);
     ran = true;
   }
   else if (left64 && scratch64_.capacity() > 0)
@@ -266,7 +289,7 @@ tresult PLUGIN_API DenoiserPlugin::process(ProcessData& data)
     ran = scratch64_.process(left64, right64, nFrames,
                              [&](float* left, float* right, int32 n) {
                                denoiser_.process(left, right, n, state.bypass,
-                                             state.diffListen);
+                                             state.diffListen, state.mono);
                              });
   }
 
@@ -292,6 +315,23 @@ int DenoiserPlugin::takeFreqResponse(float* out, int maxOut)
   return denoiser_.takeGrResponse(out, maxOut);
 }
 
+const char* DenoiserPlugin::vizExtraSpectrumId(int index) const
+{
+  static const char* kIds[Dsp::SpectralDenoiser::kNumProfiles] = {
+    "denoiser_p1",
+    "denoiser_p2",
+    "denoiser_p3",
+  };
+  if (index < 0 || index >= Dsp::SpectralDenoiser::kNumProfiles)
+    return nullptr;
+  return kIds[index];
+}
+
+int DenoiserPlugin::takeExtraSpectrum(int index, float* out, int maxOut)
+{
+  return denoiser_.takeProfileSlotSpectrum(index, out, maxOut);
+}
+
 void DenoiserPlugin::configureVizBins(const char* id, int bins)
 {
   if (!id)
@@ -308,32 +348,20 @@ void DenoiserPlugin::configureVizBins(const char* id, int bins)
 
 void DenoiserPlugin::pushProfilesUiJson()
 {
-  float db[Dsp::kMaxSpectrumBins];
-  const int bins = std::max(1, denoiser_.profileUiBinCount());
-  std::string msg = "{\"t\":\"ir\",\"cmd\":\"profiles\",\"bins\":";
-  msg += std::to_string(bins);
-  msg += ",\"slots\":[";
+  // Curves travel as spectrum viz (denoiser_p1…p3). This message is only
+  // which slots hold a fingerprint.
+  std::string msg = "{\"t\":\"ir\",\"cmd\":\"profiles\",\"slots\":[";
   for (int s = 0; s < Dsp::SpectralDenoiser::kNumProfiles; ++s)
   {
     if (s > 0)
       msg += ',';
-    const bool valid = denoiser_.profileValid(s);
-    const int n = denoiser_.fillSlotProfileDb(s, db, bins);
     msg += "{\"i\":";
     msg += std::to_string(s + 1);
     msg += ",\"valid\":";
-    msg += valid ? "1" : "0";
-    msg += ",\"db\":[";
-    for (int i = 0; i < n; ++i)
-    {
-      if (i > 0)
-        msg += ',';
-      char buf[32];
-      const float v = std::isfinite(db[i]) ? db[i] : Dsp::SpectralDenoiser::kFloorDb;
-      std::snprintf(buf, sizeof(buf), "%.2f", static_cast<double>(v));
-      msg += buf;
-    }
-    msg += "]}";
+    msg += denoiser_.profileValid(s) ? "1" : "0";
+    msg += ",\"fft\":";
+    msg += std::to_string(denoiser_.profileFftSize(s));
+    msg += '}';
   }
   msg += "]}";
   std::lock_guard<std::mutex> lock(uiMutex_);

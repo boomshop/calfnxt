@@ -7,15 +7,16 @@
 // UI thread: takeSpectrum() copies published snapshot.
 //
 // Viz payload layout (kind:"spectrum"):
-//   v[0] = bins N
+//   v[0] = slots N
 //   v[1] = hold (0/1)
-//   then avg[N], max[N], L[N], R[N], rms[N]  (dBFS, typically −120…0)
-// Total floats: 2 + 5*N
-// rms is a ~1 s power-mean of L+R (mono body). avg stays the fast mid.
+//   then avg[N], max[N], L[N], R[N], rms[N], t[N]
+// t is the log-fraction (0…1, 20 Hz…20 kHz) of each slot center.
+// Older snapshots omit t (2 + 5*N). rms is a ~1 s power-mean of L+R.
+// Total floats: 2 + 6*N
 
 #include "dsp_math.h"
 #include "fft_r2.h"
-#include "spectrum_bins.h"
+#include "spectrum_display_map.h"
 
 #include <algorithm>
 #include <atomic>
@@ -210,7 +211,7 @@ public:
   /**
    * Copy published spectrum into out[]. Returns float count, or 0 if none.
    * Returns −1 once after clearDisplay() so the UI can null the overlay.
-   * Layout: bins, hold, avg[N], max[N], L[N], R[N].
+   * Layout: slots, hold, avg[N], max[N], L[N], R[N], rms[N], t[N].
    */
   int takeSpectrum(float* out, int maxOut)
   {
@@ -222,15 +223,16 @@ public:
       return 0;
     std::lock_guard<std::mutex> lock(mutex_);
     const int n = bins_;
-    if (n < kMinBins
+    if (n < 2
         || static_cast<int>(pubAvg_.size()) < n
         || static_cast<int>(pubMax_.size()) < n
         || static_cast<int>(pubL_.size()) < n
         || static_cast<int>(pubR_.size()) < n
-        || static_cast<int>(pubRms_.size()) < n)
+        || static_cast<int>(pubRms_.size()) < n
+        || static_cast<int>(pubT_.size()) < n)
       return 0;
-    const int need = 2 + 5 * n;
-    if (maxOut < need || static_cast<int>(pubRms_.size()) < n)
+    const int need = 2 + 6 * n;
+    if (maxOut < need)
       return 0;
     out[0] = static_cast<float>(n);
     out[1] = hold_ ? 1.f : 0.f;
@@ -239,6 +241,7 @@ public:
     std::memcpy(out + 2 + 2 * n, pubL_.data(), static_cast<size_t>(n) * sizeof(float));
     std::memcpy(out + 2 + 3 * n, pubR_.data(), static_cast<size_t>(n) * sizeof(float));
     std::memcpy(out + 2 + 4 * n, pubRms_.data(), static_cast<size_t>(n) * sizeof(float));
+    std::memcpy(out + 2 + 5 * n, pubT_.data(), static_cast<size_t>(n) * sizeof(float));
     return need;
   }
 
@@ -299,70 +302,61 @@ private:
     rebuildBinMap();
   }
 
-  void applyBins(int bins)
+  void resizeSlots(int n)
   {
-    bins = std::clamp(bins, kMinBins, kMaxBins);
-    if (bins == bins_
-        && static_cast<int>(avgDb_.size()) == bins
-        && static_cast<int>(pubAvg_.size()) == bins
-        && static_cast<int>(binLo_.size()) == bins)
-      return;
-    bins_ = bins;
-    avgDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    maxDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    lDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    rDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    rmsDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    rmsPow_.assign(static_cast<size_t>(bins_), 0.f);
-    instantL_.assign(static_cast<size_t>(bins_), kFloorDb);
-    instantR_.assign(static_cast<size_t>(bins_), kFloorDb);
-    powL_.assign(static_cast<size_t>(bins_), 0.f);
-    powR_.assign(static_cast<size_t>(bins_), 0.f);
+    bins_ = n;
+    const auto nn = static_cast<size_t>(n);
+    avgDb_.assign(nn, kFloorDb);
+    maxDb_.assign(nn, kFloorDb);
+    lDb_.assign(nn, kFloorDb);
+    rDb_.assign(nn, kFloorDb);
+    rmsDb_.assign(nn, kFloorDb);
+    rmsPow_.assign(nn, 0.f);
+    instantL_.assign(nn, kFloorDb);
+    instantR_.assign(nn, kFloorDb);
+    powL_.assign(nn, 0.f);
+    powR_.assign(nn, 0.f);
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      pubAvg_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubMax_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubL_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubR_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubRms_.assign(static_cast<size_t>(bins_), kFloorDb);
+      pubAvg_.assign(nn, kFloorDb);
+      pubMax_.assign(nn, kFloorDb);
+      pubL_.assign(nn, kFloorDb);
+      pubR_.assign(nn, kFloorDb);
+      pubRms_.assign(nn, kFloorDb);
+      pubT_.assign(nn, 0.f);
     }
+  }
+
+  void applyBins(int width)
+  {
+    width = std::clamp(width, kMinBins, kMaxBins);
+    pendingBins_.store(width, std::memory_order_relaxed);
+    if (width == displayWidth_
+        && bins_ >= 2
+        && static_cast<int>(avgDb_.size()) == bins_
+        && static_cast<int>(binLo_.size()) == bins_
+        && static_cast<int>(slotT_.size()) == bins_)
+      return;
+    displayWidth_ = width;
     rebuildBinMap();
   }
 
   void rebuildBinMap()
   {
-    if (bins_ < 1)
+    std::vector<int> lo;
+    std::vector<int> hi;
+    std::vector<float> pos;
+    const int n = buildSpectrumDisplayMap(sampleRate_, fftSize_, displayWidth_,
+                                          lo, hi, pos);
+    if (n < 2)
       return;
-    binLo_.assign(static_cast<size_t>(bins_), 0);
-    binHi_.assign(static_cast<size_t>(bins_), 0);
-    binValid_.assign(static_cast<size_t>(bins_), 0);
-    const float nyquist = static_cast<float>(sampleRate_ * 0.5);
-    // Keep 20 Hz…20 kHz log map in sync with SpectrumChart (not Nyquist), so
-    // tilt / grid / DSP bins share the same abscissa. Bands above Nyquist stay invalid.
-    constexpr float fMin = 20.f;
-    constexpr float fMaxUi = 20000.f;
-    const int fftBins = fftSize_ / 2;
-    for (int i = 0; i < bins_; ++i)
-    {
-      const float t0 = static_cast<float>(i) / static_cast<float>(bins_);
-      const float t1 = static_cast<float>(i + 1) / static_cast<float>(bins_);
-      const float f0 = fMin * std::pow(fMaxUi / fMin, t0);
-      const float f1 = fMin * std::pow(fMaxUi / fMin, t1);
-      if (!(f0 < nyquist) || fftBins < 2)
-      {
-        binLo_[static_cast<size_t>(i)] = 0;
-        binHi_[static_cast<size_t>(i)] = 0;
-        binValid_[static_cast<size_t>(i)] = 0;
-        continue;
-      }
-      int lo = static_cast<int>(f0 / nyquist * static_cast<float>(fftBins));
-      int hi = static_cast<int>(f1 / nyquist * static_cast<float>(fftBins));
-      lo = std::clamp(lo, 1, fftBins - 1);
-      hi = std::clamp(std::max(hi, lo + 1), lo + 1, fftBins);
-      binLo_[static_cast<size_t>(i)] = lo;
-      binHi_[static_cast<size_t>(i)] = hi;
-      binValid_[static_cast<size_t>(i)] = 1;
-    }
+    binLo_ = std::move(lo);
+    binHi_ = std::move(hi);
+    slotT_ = std::move(pos);
+    binValid_.assign(static_cast<size_t>(n), 1);
+    if (n != bins_ || static_cast<int>(avgDb_.size()) != n
+        || static_cast<int>(pubT_.size()) != n)
+      resizeSlots(n);
   }
 
   static float magToDb(float mag, float norm)
@@ -431,7 +425,7 @@ private:
   void analyzeHop()
   {
     const int wantBins = pendingBins_.load(std::memory_order_relaxed);
-    if (wantBins != bins_)
+    if (wantBins != displayWidth_ || avgDb_.size() != static_cast<size_t>(bins_))
       applyBins(wantBins);
 
     analyzeChannelInstant(ringL_, instantL_, powL_);
@@ -488,7 +482,8 @@ private:
     // the audio thread against the in-process UI allocator.
     const size_t n = avgDb_.size();
     if (n == 0 || pubAvg_.size() != n || pubMax_.size() != n || pubL_.size() != n
-        || pubR_.size() != n || pubRms_.size() != n)
+        || pubR_.size() != n || pubRms_.size() != n || pubT_.size() != n
+        || slotT_.size() != n)
       return;
     const size_t bytes = n * sizeof(float);
     std::memcpy(pubAvg_.data(), avgDb_.data(), bytes);
@@ -496,6 +491,7 @@ private:
     std::memcpy(pubL_.data(), lDb_.data(), bytes);
     std::memcpy(pubR_.data(), rDb_.data(), bytes);
     std::memcpy(pubRms_.data(), rmsDb_.data(), bytes);
+    std::memcpy(pubT_.data(), slotT_.data(), bytes);
   }
 
   double sampleRate_ = 48000.0;
@@ -507,6 +503,7 @@ private:
   int fftSize_ = 0;
   int hopSize_ = 512;
   int bins_ = 0;
+  int displayWidth_ = 128;
   std::atomic<int> pendingBins_{128};
   std::atomic<int> pendingFftSize_{2048};
   int ringPos_ = 0;
@@ -517,6 +514,7 @@ private:
   std::vector<float> ringR_;
   std::vector<float> re_;
   std::vector<float> im_;
+  std::vector<float> slotT_;
   std::vector<int> binLo_;
   std::vector<int> binHi_;
   std::vector<uint8_t> binValid_;
@@ -537,6 +535,7 @@ private:
   std::vector<float> pubL_;
   std::vector<float> pubR_;
   std::vector<float> pubRms_;
+  std::vector<float> pubT_;
 
   bool emptyDisplay_ = false;
   std::atomic<bool> needClearFlush_{false};

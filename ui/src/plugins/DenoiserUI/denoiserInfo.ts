@@ -1,51 +1,461 @@
 /** Hover titles for Denoiser controls (musicians / producers). */
 
+import { infoDoc } from '../../widgets/WithInfo/infoDoc';
+
 export const denoiserInfo = {
-  bypass:
-    'Turns Denoiser off while keeping plugin latency so timing stays aligned with the rest of the chain. Use it to A/B whether the noise floor really dropped — or whether you also lost air, room, and low-level detail you still wanted.',
+  bypass: infoDoc({
+    name: 'Bypass',
+    lead: 'Lets the signal through without noise reduction, so you can compare the cleaned sound with the original.',
+    meta: [
+      { label: 'DAW name', value: 'Bypass' },
+      { label: 'Parameter ID', value: '2' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Turn it on and you hear the part without the filter. Turn it off and the reduction is back. Use that to decide whether the cut is removing the bed, or whether it is also taking air and detail you wanted to keep.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            ul: [
+              'The reported latency stays. What you hear is the input delayed by one FFT, the same delay the wet path uses.',
+              'While it is on, the header In and Out gains are unity.',
+              'A short fade leaves the filtered sound. Coming back fades onto the filter again while the overlap refills.',
+              'Diff Listen and profile Listen keep the filter running. Bypass does not replace those solos.',
+            ],
+          },
+        ],
+      },
+    ],
+  }),
 
-  diffListen:
-    'Solo what Denoiser removes (delayed dry minus wet). You want hiss, hum, fan, tape, and room floor — not the body of the vocal, bass, or instrument. If Diff Listen sounds like the dry track, back off Amount, raise Floor, or tighten Low/High so the subtract only hits the noise band. Exclusive with profile Listen: turning Diff Listen on clears a slot Listen, and vice versa.',
+  mono: infoDoc({
+    name: 'Mono',
+    lead: 'Runs the filter on the left input only and copies that result to both outputs.',
+    meta: [
+      { label: 'DAW name', value: 'Mono' },
+      { label: 'Parameter ID', value: '15' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Turn it on when the source is mono. The right input is ignored, so a silent right side cannot pull the spectrum down. Off keeps both sides, with one shared gain.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'On uses one analysis and one resynthesis. Off uses two. The host channel count is not the cue — pick this yourself.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  profile:
-    'Which of the three learned noise fingerprints is the active target (1 / 2 / 3). Blend morphs toward this slot over the Blend time. Capture a quiet bed into a slot with Learn, then park Profile on that slot for processing. Switch slots when the noise character changes (verse vs chorus, different room takes).',
+  diffListen: infoDoc({
+    name: 'Diff Listen',
+    lead: 'Solos what Denoiser is removing: the delayed input minus the filtered output.',
+    meta: [
+      { label: 'DAW name', value: 'Diff Listen' },
+      { label: 'Parameter ID', value: '13' },
+      { label: 'Stored value', value: '0…1. On at 0.5 and above. The toggle writes 0 or 1.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'You want hiss, hum, fan, tape, and room. You do not want the body of the voice, the bass, or the instrument. If the solo sounds like the dry take, the filter is eating the part.',
+          },
+        ],
+      },
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Solo, then ease Amount, raise Floor toward 0 dB, or narrow Low and High until the solo is mostly the bed. It is exclusive with a profile Listen: turning this on clears a slot Listen, and the other way around.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  blend:
-    'How long the active profile morphs when you change Profile or after a fresh Learn (10…5000 ms). Short = snappy slot changes — can click if the two fingerprints differ a lot. Long = smooth crossfade between noise shapes so the subtract eases in without pumping the tone. Start around a few hundred ms on vocals; go longer on beds that drift.',
+  spectrum: infoDoc({
+    name: 'Spectrum',
+    lead: 'Tilts the analyzer and the profile lines so a flat bed is easier to read. It does not change the sound.',
+    meta: [
+      { label: 'DAW name', value: 'Spectrum' },
+      { label: 'Parameter ID', value: '12' },
+      { label: 'Stored range', value: '0…2. The buttons send Linear 0, −3 dB/oct 1, −4.5 dB/oct 2.' },
+      { label: 'Default', value: '1 (−3 dB/oct)' },
+    ],
+    sections: [
+      {
+        heading: 'How to read it',
+        blocks: [
+          {
+            p: 'The tilt pivots at 1 kHz. Linear is raw level. −3 and −4.5 dB/oct lift the lows on screen the way a pink-ish view does, so midrange noise sits more level against the white reduction line.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  amount:
-    'How hard spectral subtraction pushes toward the noise profile (0…1). Full = maximum chase of the fingerprint inside Low…High. Lower = gentler cleanup that leaves more of the source’s own quiet detail. Push Amount only after Diff Listen shows mostly noise; if you hear consonants or note body in the solo, pull Amount back or raise Floor (toward 0 dB).',
+  profile: infoDoc({
+    name: 'Profile',
+    lead: 'Chooses which of the three learned noise fingerprints the filter follows.',
+    meta: [
+      { label: 'DAW name', value: 'Profile' },
+      { label: 'Parameter ID', value: '3' },
+      { label: 'Range', value: '1 … 3' },
+      { label: 'Default', value: '1' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Learn a quiet bed into a slot, then leave Profile on that slot. Switch slots when the noise itself changes, for example a different room or a different take. Blend is how long the change takes.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  floor:
-    'Minimum spectral gain in dB (−60…0). The subtract never digs below this floor — −20 dB ≈ leave at least 10% of the bin energy. Closer to 0 = gentler (more noise left, safer for vocals). Closer to −60 = allow deep cuts when Amount is high (tighter denoise, more risk of underwater artifacts). Raise Floor if Diff Listen starts chewing air or soft tails.',
+  blend: infoDoc({
+    name: 'Blend',
+    lead: 'Sets how long the filter takes to move from one noise fingerprint to another.',
+    meta: [
+      { label: 'DAW name', value: 'Blend' },
+      { label: 'Parameter ID', value: '4' },
+      { label: 'Range', value: '10 … 5000 ms' },
+      { label: 'Default', value: '250 ms' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Short can click when the two fingerprints differ a lot. Long eases the subtract so the tone does not pump as the target changes. The same time is used after a new Learn lands on the slot you are already using.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  fLo:
-    'Low edge of the processing window (left chart handle) — fixed 24 dB high-pass on what Denoiser is allowed to subtract. Raise Low to protect rumble, kick, and chest that should not be treated as noise. Lower it if the problem lives under the current edge (AC hum, traffic, tape rumble). Outside the window the subtract fades with the filter skirts. Turn Low off (Process toggle) to open the bottom of the band completely.',
+  amount: infoDoc({
+    name: 'Amount',
+    lead: 'Scales how deep the cut goes, from none to the full reduction the rest of the controls ask for.',
+    meta: [
+      { label: 'DAW name', value: 'Amount' },
+      { label: 'Parameter ID', value: '5' },
+      { label: 'Range', value: '0 … 1. The knob shows 0 … 100.' },
+      { label: 'Default', value: '1' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Full applies the whole cut inside Low and High. Lower leaves more of the quiet detail in the source. Zero is no reduction.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'The cut in dB is multiplied by Amount, and again by the Low/High wall. At full Amount, on the raised floor, the cut is Floor. The soft chart line is −6 dB before this scale, so below full Amount that spot is a milder cut.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  fLoOn:
-    'Engages the Low (high-pass) edge of the denoise window. On = chart Low handle and soft HP skirt limit how far down subtraction reaches. Off = no low wall — processing runs from DC up to High (or full-band if High is also off). Park it off when the noise is broadband and you do not need to protect the bottom; leave it on when you want a clear rumble/chest floor the subtract must not chew.',
+  floor: infoDoc({
+    name: 'Floor',
+    lead: 'Sets the deepest gain the filter is allowed to reach when a bin is at or under the noise floor.',
+    meta: [
+      { label: 'DAW name', value: 'Floor' },
+      { label: 'Parameter ID', value: '6' },
+      { label: 'Range', value: '−60 … 0 dB' },
+      { label: 'Default', value: '−20 dB' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Closer to 0 leaves more noise and is safer on a voice. Closer to −60 allows a deep cut when Amount is high, and is more likely to sound hollow when the filter is wrong. −20 dB leaves about a tenth of the bin.',
+          },
+        ],
+      },
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'If Diff Listen starts chewing air or the tail of a note, move Floor toward 0. The solid chart line is the level where this full cut begins. Span and Offset move that line. Floor does not.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  fHi:
-    'High edge of the processing window (right chart handle) — fixed 24 dB low-pass complementary to Low. Cap so air, hiss above the problem, or bright vocal detail outside the noise band is not chewed. On dialogue or sung voice, parking High around a few hundred Hz to low-kHz often catches bed noise without eating presence; open it when the noise is broadband hiss. Turn High off (Process toggle) to open the top of the band completely.',
+  span: infoDoc({
+    name: 'Span',
+    lead: 'Sets how far a bin must rise above the raised noise floor before the cut has opened to −6 dB.',
+    meta: [
+      { label: 'DAW name', value: 'Span' },
+      { label: 'Parameter ID', value: '16' },
+      { label: 'Range', value: '3 … 24 dB' },
+      { label: 'Default', value: '12 dB' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'On the solid line the cut is at Floor. One Span higher, the gain is −6 dB when Amount is full. At 3 dB that point sits just over the solid line, so a hit that barely clears the bed still comes through. At 24 dB the same −6 dB point is a full 24 dB above the solid line.',
+          },
+        ],
+      },
+      {
+        heading: 'How to read the chart',
+        blocks: [
+          {
+            p: 'The soft line is that −6 dB point. Span moves only the soft line. Offset moves both lines together. Use Span when the bed gets a little louder than the capture without changing shape, and you still want the filter to open once the part is clearly above it.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  fHiOn:
-    'Engages the High (low-pass) edge of the denoise window. On = chart High handle and soft LP skirt cap how far up subtraction reaches. Off = no high wall — processing runs from Low (or DC if Low is also off) up to Nyquist. Use Off for full-band hiss beds; leave On when you want presence/air above the problem left alone.',
+  offset: infoDoc({
+    name: 'Offset',
+    lead: 'Lifts the learned noise floor by the same amount in every bin before the filter decides what is noise.',
+    meta: [
+      { label: 'DAW name', value: 'Offset' },
+      { label: 'Parameter ID', value: '17' },
+      { label: 'Range', value: '0 … 24 dB' },
+      { label: 'Default', value: '0 dB' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Zero leaves the fingerprint where you captured it. Higher treats everything within that many dB of the fingerprint as noise, so the full Floor cut holds until the signal clears the lift. The stored fingerprint does not change, and the mini charts stay on the capture.',
+          },
+        ],
+      },
+      {
+        heading: 'How to read the chart',
+        blocks: [
+          {
+            p: 'The solid line is the fingerprint plus Offset. That is the floor the filter uses. The soft line stays Span dB above it. Both move when you turn Offset.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  quality:
-    'Analysis / process FFT size vs latency. Fast = 1k (snappy, coarser low end, least PDC). Normal = 2k (balanced default). Studio = 4k (finer low-mid fingerprint detail). Ultra = 8k (finest resolution; ~2× Studio latency and CPU — only when you need it and can afford the PDC). Same FFT for the chart and the subtract.',
+  fLo: infoDoc({
+    name: 'Low',
+    lead: 'Sets the low edge of the band the filter is allowed to cut. Below it, the reduction falls away.',
+    meta: [
+      { label: 'DAW name', value: 'Low' },
+      { label: 'Parameter ID', value: '7' },
+      { label: 'Range', value: '20 … 20000 Hz' },
+      { label: 'Default', value: '20 Hz' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Raise it to keep rumble, kick, and chest out of the subtract. Lower it when the problem is under the current edge, such as hum or tape rumble. The same edge is the left handle on the chart. Low Slope sets how fast the wall falls. Off on that slope leaves the bottom open.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  spectrum:
-    'Display tilt for the background analyzer and profile lines only (does not change the sound), pivoted at 1 kHz. Linear = raw dBFS. −3 / −4.5 dB/oct ≈ pink-balanced views so a flat bed reads more horizontal and midrange noise is easier to spot against the GR stroke.',
+  fLoSlope: infoDoc({
+    name: 'Low Slope',
+    lead: 'Sets how steeply the reduction returns to zero below the low edge.',
+    meta: [
+      { label: 'DAW name', value: 'Low Slope' },
+      { label: 'Parameter ID', value: '8' },
+      { label: 'Stored range', value: '0…4. Off 0, then 12, 24, 36, 48 dB/oct.' },
+      { label: 'Default', value: '2 (24 dB/oct)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Off leaves the lows in the subtract all the way down. A steeper slope reaches the full cut sooner above the handle and lets go sooner below it. The white reduction line follows that same wall back to 0 dB.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  learn:
-    'Hold Learn on while you feed a quiet noise bed into this slot — room tone, pre-roll, fan, tape hiss, not the performance. Denoiser averages the spectrum for as long as Learn stays on; turn it off to freeze the fingerprint. A second Learn on the same slot continues the average (adds more bed into the same footprint). Clear first if you want a fresh capture from scratch. Exclusive across slots: engaging Learn on another card finalizes this one first. After Learn, set Profile to this slot and check Diff Listen — the solo should be the bed, not consonants or notes.',
+  fHi: infoDoc({
+    name: 'High',
+    lead: 'Sets the high edge of the band the filter is allowed to cut. Above it, the reduction falls away.',
+    meta: [
+      { label: 'DAW name', value: 'High' },
+      { label: 'Parameter ID', value: '9' },
+      { label: 'Range', value: '20 … 20000 Hz' },
+      { label: 'Default', value: '160 Hz' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Cap it so air and brightness outside the noise band are left alone. Open it when the bed is broadband hiss. The same edge is the right handle on the chart. High Slope sets the fall. Off on that slope leaves the top open.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  listen:
-    'Solo this slot’s learned profile as the processing key (profile listen). Use it to check that the fingerprint looks and sounds like the noise you meant to capture — not the music. Exclusive with Diff Listen and with the other slots’ Listen: only one listen mode at a time. Turning Diff Listen on clears slot Listen.',
+  fHiSlope: infoDoc({
+    name: 'High Slope',
+    lead: 'Sets how steeply the reduction returns to zero above the high edge.',
+    meta: [
+      { label: 'DAW name', value: 'High Slope' },
+      { label: 'Parameter ID', value: '10' },
+      { label: 'Stored range', value: '0…4. Off 0, then 12, 24, 36, 48 dB/oct.' },
+      { label: 'Default', value: '2 (24 dB/oct)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Off leaves the top of the band in the subtract. A steeper slope keeps the full cut closer to the handle and returns to no cut sooner above it. The white reduction line follows that roll-off.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  clear:
-    'Wipe this profile slot’s learned noise fingerprint. Confirm (second click) before clearing if you still need it. The mini chart empties immediately; if this was the active Profile, subtraction drops that target right away. After clear, Learn a new bed or switch Profile to another valid slot — an empty active slot means no useful subtract target.',
+  quality: infoDoc({
+    name: 'Quality',
+    lead: 'Sets the FFT length, which is both the frequency detail and the latency.',
+    meta: [
+      { label: 'DAW name', value: 'Quality' },
+      { label: 'Parameter ID', value: '11' },
+      {
+        label: 'Stored range',
+        value: '0…3. Fast 0 (1024), Normal 1 (2048), Studio 2 (4096), Ultra 3 (8192).',
+      },
+      { label: 'Default', value: '1 (Normal, 2048)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'Fast is snappier and coarser in the low end, and it costs the least delay. Ultra splits the lows most finely and costs the most delay and CPU. The latency is one FFT: 1024, 2048, 4096, or 8192 samples.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'A fingerprint learned at another size keeps working. It is resampled onto the new grid. The next Learn on that slot starts fresh and, when you release it, replaces the fingerprint. The chart and the filter use the same FFT.',
+          },
+        ],
+      },
+    ],
+  }),
 
-  selectCard:
-    'Click the card (or use the Profile knob) to make this slot the active target. Highlighted = Profile matches this slot. The mini chart is that slot’s learned noise fingerprint (averaged spectrum from Learn) — not the live input analyzer. Empty cards stay flat until you Learn; Clear wipes the fingerprint from the mini and from processing if this was the active Profile.',
+  learn: infoDoc({
+    name: 'Learn',
+    lead: 'Averages the incoming spectrum into this slot for as long as the button stays on.',
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Feed a quiet bed: room, pre-roll, fan, tape, not the performance. Turn it off to freeze the fingerprint. While Quality stays put, a second pass on the same slot continues that average and the button reads Add. Change Quality and the next capture starts fresh: the button reads Learn again, and releasing it replaces the fingerprint.',
+          },
+          {
+            p: 'The previous curve keeps working until that new capture is stored. Clear first if you want a fresh capture without changing Quality. Only one slot learns at a time.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  listen: infoDoc({
+    name: 'Listen',
+    lead: 'Solos this slot’s learned noise as the sound you hear, so you can check the fingerprint.',
+    meta: [
+      { label: 'DAW name', value: 'Listen' },
+      { label: 'Parameter ID', value: '14' },
+      { label: 'Stored range', value: '0…3. Off is 0. The three cards send slots 1, 2, and 3.' },
+      { label: 'Default', value: '0 (off)' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: 'You should hear the bed you meant to capture, not the music. It is exclusive with Diff Listen and with the other slots: only one listen is on at a time.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  clear: infoDoc({
+    name: 'Clear',
+    lead: 'Wipes this slot’s learned noise fingerprint.',
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Confirm on the second click. The mini chart empties at once. If this was the active Profile, the subtract loses that target. Learn a new bed, or switch Profile to another slot that still has one.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  selectCard: infoDoc({
+    name: 'Profile card',
+    lead: 'Makes this slot the fingerprint the filter follows, and shows what was learned into it.',
+    sections: [
+      {
+        heading: 'How to read it',
+        blocks: [
+          {
+            p: 'Highlighted means Profile matches this card. The mini chart is the stored fingerprint, not the live input. An empty card stays flat until you Learn. The same choice is the Profile knob.',
+          },
+        ],
+      },
+    ],
+  }),
 } as const;

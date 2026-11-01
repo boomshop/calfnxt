@@ -191,6 +191,7 @@ export function EQChart(props: EQChartProps) {
   const yRangeRef = useRef(yRange);
   const spectrumLastPairRef = useRef<[number[], number[]] | null>(null);
   const spectrumWidthRef = useRef(0);
+  const spectrumHeightRef = useRef(0);
   const spectrumResizeRoRef = useRef<ResizeObserver | null>(null);
   spectrumModeRef.current = spectrumMode;
   yRangeRef.current = yRange;
@@ -692,6 +693,14 @@ export function EQChart(props: EQChartProps) {
     if (!outer || !mask || !edge) return;
 
     const paintPair = (inn: number[], out: number[], modePlain: number) => {
+      const box = (eq.element ?? eq.svg)?.getBoundingClientRect();
+      if (box && box.height > 8) {
+        spectrumHeightRef.current = Math.round(box.height);
+        spectrumWidthRef.current = Math.max(
+          spectrumWidthRef.current,
+          Math.round(box.width),
+        );
+      }
       const yr = yRangeRef.current;
       const axis = {
         fMin: EQ_FREQ_MIN,
@@ -701,9 +710,14 @@ export function EQChart(props: EQChartProps) {
         slopeDbPerOct: spectrumSlope(modePlain),
       };
       const w = spectrumWidthRef.current;
-      mask.set('dots', spectrumOverlayDiffDots(inn, out, 'min', axis, w));
-      edge.set('dots', spectrumOverlayContourDots(out, axis, w));
-      return spectrumOverlayDiffDots(inn, out, 'max', axis, w);
+      const span = yr.max - yr.min;
+      const pxPerY =
+        spectrumHeightRef.current > 8 && span > 0
+          ? spectrumHeightRef.current / span
+          : 0;
+      mask.set('dots', spectrumOverlayDiffDots(inn, out, 'min', axis, w, pxPerY));
+      edge.set('dots', spectrumOverlayContourDots(out, axis, w, pxPerY));
+      return spectrumOverlayDiffDots(inn, out, 'max', axis, w, pxPerY);
     };
 
     const bindings = bindAuxOptions(outer, [
@@ -738,8 +752,10 @@ export function EQChart(props: EQChartProps) {
     spectrumResizeRoRef.current = null;
     if (el) {
       const sendBins = () => {
-        const width = Math.round(el.getBoundingClientRect().width);
+        const box = el.getBoundingClientRect();
+        const width = Math.round(box.width);
         spectrumWidthRef.current = Math.max(1, width);
+        spectrumHeightRef.current = Math.max(1, Math.round(box.height));
         const next = Math.max(
           SPECTRUM_MIN_BINS,
           Math.min(SPECTRUM_MAX_BINS, width),
@@ -786,10 +802,15 @@ export function EQChart(props: EQChartProps) {
       slopeDbPerOct: spectrumSlope(spectrumModeRef.current),
     };
     const w = spectrumWidthRef.current;
+    const span = yr.max - yr.min;
+    const pxPerY =
+      spectrumHeightRef.current > 8 && span > 0
+        ? spectrumHeightRef.current / span
+        : 0;
     const [inn, out] = pair;
-    mask.set('dots', spectrumOverlayDiffDots(inn, out, 'min', axis, w));
-    edge.set('dots', spectrumOverlayContourDots(out, axis, w));
-    outer.set('dots', spectrumOverlayDiffDots(inn, out, 'max', axis, w));
+    mask.set('dots', spectrumOverlayDiffDots(inn, out, 'min', axis, w, pxPerY));
+    edge.set('dots', spectrumOverlayContourDots(out, axis, w, pxPerY));
+    outer.set('dots', spectrumOverlayDiffDots(inn, out, 'max', axis, w, pxPerY));
   }, [spectrumOn, yRange.min, yRange.max]);
 
   // Detach spectrum graphs on unmount / mini switch.

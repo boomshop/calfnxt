@@ -52,7 +52,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 | **DeEsser**              | `calfNXTDeesser.vst3`    | Sibilance / rumble dynamics                  |
 | **Transients**           | `calfNXTTransients.vst3` | Attack / sustain envelope shaper             |
 | **Tamer**                | `calfNXTTamer.vst3`      | Spectral resonance suppressor (STFT)         |
-| **Denoiser**                 | `calfNXTDenoiser.vst3`       | Spectral noise fingerprint / subtract (STFT) |
+| **Denoiser**             | `calfNXTDenoiser.vst3`   | Spectral noise fingerprint / subtract (STFT) |
 
 ### EQ & filter
 

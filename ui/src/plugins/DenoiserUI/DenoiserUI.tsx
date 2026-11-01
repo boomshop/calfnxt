@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
 import { Header } from '../../components';
 import {
@@ -6,14 +7,17 @@ import {
   DenoiserChart,
   Knob,
   ProfileMiniSpectrum,
+  Select,
   Toggle,
   WithInfo,
 } from '../../widgets';
+import { FREQUENCY_RANGE_MODE_ENTRIES } from '../../widgets/FrequencyRange/FrequencyRange';
 import { paramIds } from '../../generated/denoiserModel';
 import {
   DENOISER_QUALITY_ENTRIES,
   DENOISER_SPECTRUM_ENTRIES,
   denoiserParamDefault,
+  denoiserQualityFft,
   type DenoiserProfileSlot,
   type IDenoiserHost,
 } from '../../host/denoiserHost';
@@ -60,19 +64,48 @@ const FLOOR_LABELS = [
   { pos: 0, label: '0' },
 ];
 
+const OFFSET_DOTS = [0, 6, 12, 18, 24];
+const OFFSET_LABELS = OFFSET_DOTS.map((n) => ({ pos: n, label: String(n) }));
+
+const SPAN_DOTS = [3, 6, 12, 18, 24];
+const SPAN_LABELS = [
+  { pos: 3, label: '3' },
+  { pos: 6, label: '6' },
+  { pos: 12, label: '12' },
+  { pos: 18, label: '18' },
+  { pos: 24, label: '24' },
+];
+
+const HP_LP_DOTS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+const HP_LP_LABELS = [
+  { pos: 20, label: '20' },
+  { pos: 100, label: '100' },
+  { pos: 1000, label: '1k' },
+  { pos: 10000, label: '10k' },
+  { pos: 20000, label: '20k' },
+];
+
 const LISTEN_SLOTS = ['listenSlot1$', 'listenSlot2$', 'listenSlot3$'] as const;
 const LEARN_SLOTS = ['learnSlot1$', 'learnSlot2$', 'learnSlot3$'] as const;
+const PROFILE_SERIES = ['profile1$', 'profile2$', 'profile3$'] as const;
 
 function ProfileCard(props: {
   host: IDenoiserHost;
   slot: number;
   data: DenoiserProfileSlot;
   active: boolean;
+  /** Current Quality plain, so Add/Learn follows the FFT grid. */
+  quality: number;
   listen$: IDenoiserHost['listenSlot1$'];
   learn$: IDenoiserHost['learnSlot1$'];
   tilt: number;
 }) {
-  const { host, slot, data, active, listen$, learn$, tilt } = props;
+  const { host, slot, data, active, quality, listen$, learn$, tilt } = props;
+  // Add continues the average. A Quality change stores a different FFT
+  // length, so the next capture replaces the fingerprint.
+  const canAdd =
+    data.valid &&
+    (data.fft == null || data.fft === denoiserQualityFft(quality));
 
   return (
     <div
@@ -92,16 +125,23 @@ function ProfileCard(props: {
           className="ProfileMiniSpectrum"
           onClick={(e) => e.stopPropagation()}>
           <WithInfo title={denoiserInfo.listen}>
-            <Toggle state$={listen$} icon="headphones" className="listen warn" />
+            <Toggle
+              state$={listen$}
+              icon="headphones"
+              className="listen warn"
+            />
           </WithInfo>
-          <ProfileMiniSpectrum db={data.db} valid={data.valid} tilt={tilt} />
+          <ProfileMiniSpectrum
+            data$={host[PROFILE_SERIES[slot - 1]!]}
+            tilt={tilt}
+          />
         </div>
       </WithInfo>
       <div className="card-actions" onClick={(e) => e.stopPropagation()}>
         <WithInfo title={denoiserInfo.learn}>
           <Toggle
             state$={learn$}
-            label={data.valid ? 'Add' : 'Learn'}
+            label={canAdd ? 'Add' : 'Learn'}
             className="warn"
           />
         </WithInfo>
@@ -109,6 +149,7 @@ function ProfileCard(props: {
           <ConfirmButton
             label="Clear"
             label_confirm="Sure?"
+            icon_confirm={false}
             onConfirmed={() => host.clearProfile(slot)}
           />
         </WithInfo>
@@ -119,10 +160,22 @@ function ProfileCard(props: {
 
 export function DenoiserUI(props: DenoiserUIProps) {
   const { host } = props;
-  const edit = (id: number) => ({
-    beginEdit: () => host.beginEdit(id),
-    endEdit: () => host.endEdit(id),
-  });
+  const edit = useMemo(() => {
+    const gesture = (id: number) => ({
+      beginEdit: () => host.beginEdit(id),
+      endEdit: () => host.endEdit(id),
+    });
+    return {
+      f_lo: gesture(paramIds.f_lo),
+      f_hi: gesture(paramIds.f_hi),
+      profile: gesture(paramIds.profile),
+      amount: gesture(paramIds.amount),
+      span: gesture(paramIds.span),
+      floor: gesture(paramIds.floor),
+      offset: gesture(paramIds.offset),
+      blend: gesture(paramIds.blend),
+    };
+  }, [host]);
 
   const quality = Math.round(useDynamicValueReadonly(host.quality$, 1));
   const spectrum = Math.round(useDynamicValueReadonly(host.spectrum$, 1));
@@ -136,6 +189,9 @@ export function DenoiserUI(props: DenoiserUIProps) {
   return (
     <div className="DenoiserUI PluginUI">
       <Header title="Denoiser">
+        <WithInfo title={denoiserInfo.mono}>
+          <Toggle state$={host.mono$} icon="stereo" icon_active="mono" />
+        </WithInfo>
         <WithInfo title={denoiserInfo.bypass}>
           <Toggle state$={host.bypass$} icon="bypass" className="bypass" />
         </WithInfo>
@@ -163,14 +219,16 @@ export function DenoiserUI(props: DenoiserUIProps) {
       <DenoiserChart
         spectrum$={host.spectrumData$}
         profileSpectrum$={host.profileSpectrum$}
+        offset$={host.offset$}
+        span$={host.span$}
         gr$={host.grResponse$}
         spectrumTilt={spectrum}
         fLo$={host.fLo$}
         fHi$={host.fHi$}
-        fLoOn$={host.fLoOn$}
-        fHiOn$={host.fHiOn$}
-        fLoEdit={edit(paramIds.f_lo)}
-        fHiEdit={edit(paramIds.f_hi)}
+        fLoSlope$={host.fLoSlope$}
+        fHiSlope$={host.fHiSlope$}
+        fLoEdit={edit.f_lo}
+        fHiEdit={edit.f_hi}
       />
 
       <div className="profiles">
@@ -181,6 +239,7 @@ export function DenoiserUI(props: DenoiserUIProps) {
             slot={slot}
             data={profiles[slot - 1] ?? { i: slot, valid: false, db: [] }}
             active={profile === slot}
+            quality={quality}
             listen$={host[LISTEN_SLOTS[slot - 1]!]}
             learn$={host[LEARN_SLOTS[slot - 1]!]}
             tilt={spectrum}
@@ -188,9 +247,69 @@ export function DenoiserUI(props: DenoiserUIProps) {
         ))}
       </div>
 
+      <div className="filter block">
+        <div className="title">Filter</div>
+        <WithInfo title={denoiserInfo.fLoSlope} className="slope">
+          <Select
+            value$={host.fLoSlope$}
+            entries={FREQUENCY_RANGE_MODE_ENTRIES}
+          />
+        </WithInfo>
+        <WithInfo title={denoiserInfo.fLo}>
+          <Knob
+            label="HP Hz"
+            value$={host.fLo$}
+            min={20}
+            max={20000}
+            reset={denoiserParamDefault('f_lo')}
+            scale="frequency"
+            dots={HP_LP_DOTS}
+            labels={HP_LP_LABELS}
+            size="small"
+            {...edit.f_lo}
+          />
+        </WithInfo>
+        <WithInfo title={denoiserInfo.fHi}>
+          <Knob
+            label="LP Hz"
+            value$={host.fHi$}
+            min={20}
+            max={20000}
+            reset={denoiserParamDefault('f_hi')}
+            scale="frequency"
+            dots={HP_LP_DOTS}
+            labels={HP_LP_LABELS}
+            size="small"
+            {...edit.f_hi}
+          />
+        </WithInfo>
+        <WithInfo title={denoiserInfo.fHiSlope} className="slope">
+          <Select
+            value$={host.fHiSlope$}
+            entries={FREQUENCY_RANGE_MODE_ENTRIES}
+          />
+        </WithInfo>
+      </div>
+
+      <div className="quality block">
+        <div className="title">Quality</div>
+        <WithInfo title={denoiserInfo.quality} className="info-block quality">
+          <Buttons
+            layout="horizontal"
+            entries={[...DENOISER_QUALITY_ENTRIES]}
+            value={quality}
+            onChange={(v) => {
+              host.beginEdit(paramIds.quality);
+              host.quality$.set(v as number);
+              host.endEdit(paramIds.quality);
+            }}
+          />
+        </WithInfo>
+      </div>
+
       <div className="block process">
         <div className="title">Process</div>
-        <WithInfo title={denoiserInfo.profile}>
+        <WithInfo title={denoiserInfo.profile} className="profile">
           <Knob
             label="Profile"
             value$={host.profile$}
@@ -202,9 +321,10 @@ export function DenoiserUI(props: DenoiserUIProps) {
             labels={PROFILE_LABELS}
             size="large"
             {...{ 'value.format': (v: number) => `${Math.round(v)}` }}
-            {...edit(paramIds.profile)}
+            {...edit.profile}
             start={135}
             angle={90}
+            basis={120}
             reverse
           />
         </WithInfo>
@@ -221,31 +341,26 @@ export function DenoiserUI(props: DenoiserUIProps) {
             {...{
               'value.format': (v: number) => `${Math.round(v * 100)}`,
             }}
-            {...edit(paramIds.amount)}
+            {...edit.amount}
           />
         </WithInfo>
         <div className="col">
-          <WithInfo title={denoiserInfo.blend}>
+          <WithInfo title={denoiserInfo.span}>
             <Knob
-              label="Blend"
-              value$={host.blend$}
-              min={10}
-              max={5000}
-              reset={denoiserParamDefault('blend')}
-              scale="log2"
-              log_factor={4}
-              dots={BLEND_DOTS}
-              labels={BLEND_LABELS}
+              label="Span"
+              value$={host.span$}
+              min={3}
+              max={24}
+              reset={denoiserParamDefault('span')}
+              dots={SPAN_DOTS}
+              labels={SPAN_LABELS}
               size="medium"
-              {...{ 'value.format': (v: number) => `${Math.round(v)}` }}
-              {...edit(paramIds.blend)}
+              {...{
+                'value.format': (v: number) => `${v.toFixed(1)}`,
+              }}
+              {...edit.span}
             />
           </WithInfo>
-          <WithInfo title={denoiserInfo.fLoOn}>
-            <Toggle state$={host.fLoOn$} label="Limit Low" />
-          </WithInfo>
-        </div>
-        <div className="col">
           <WithInfo title={denoiserInfo.floor}>
             <Knob
               label="Floor"
@@ -259,25 +374,44 @@ export function DenoiserUI(props: DenoiserUIProps) {
               {...{
                 'value.format': (v: number) => `${v.toFixed(1)}`,
               }}
-              {...edit(paramIds.floor)}
+              {...edit.floor}
             />
           </WithInfo>
-          <WithInfo title={denoiserInfo.fHiOn}>
-            <Toggle state$={host.fHiOn$} label="Limit High" />
+        </div>
+        <div className="col">
+          <WithInfo title={denoiserInfo.offset}>
+            <Knob
+              label="Offset"
+              value$={host.offset$}
+              min={0}
+              max={24}
+              reset={denoiserParamDefault('offset')}
+              dots={OFFSET_DOTS}
+              labels={OFFSET_LABELS}
+              size="medium"
+              {...{
+                'value.format': (v: number) => `${v.toFixed(1)}`,
+              }}
+              {...edit.offset}
+            />
+          </WithInfo>
+          <WithInfo title={denoiserInfo.blend}>
+            <Knob
+              label="Blend"
+              value$={host.blend$}
+              min={10}
+              max={5000}
+              reset={denoiserParamDefault('blend')}
+              scale="log2"
+              log_factor={4}
+              dots={BLEND_DOTS}
+              labels={BLEND_LABELS}
+              size="medium"
+              {...{ 'value.format': (v: number) => `${Math.round(v)}` }}
+              {...edit.blend}
+            />
           </WithInfo>
         </div>
-        <WithInfo title={denoiserInfo.quality} className="info-block quality">
-          <Buttons
-            layout="horizontal"
-            entries={[...DENOISER_QUALITY_ENTRIES]}
-            value={quality}
-            onChange={(v) => {
-              host.beginEdit(paramIds.quality);
-              host.quality$.set(v as number);
-              host.endEdit(paramIds.quality);
-            }}
-          />
-        </WithInfo>
       </div>
     </div>
   );

@@ -1343,6 +1343,29 @@ void WebEditor::endVizBatch()
   vizBatchCount_ = 0;
 }
 
+void WebEditor::flushSpectrumPayload(const char* streamId, float* spectrum, int n)
+{
+  if (!streamId || !spectrum)
+    return;
+  if (n < 0)
+  {
+    flushVizArray(streamId, "spectrum", spectrum, 0);
+    return;
+  }
+  if (n < 2)
+    return;
+  spectrum[0] = std::clamp(spectrum[0], 1.f, float(Dsp::kMaxSpectrumBins));
+  spectrum[1] = spectrum[1] >= 0.5f ? 1.f : 0.f;
+  for (int i = 2; i < n; ++i)
+  {
+    float v = spectrum[i];
+    if (!std::isfinite(v))
+      v = -120.f;
+    spectrum[i] = std::clamp(v, -120.f, 12.f);
+  }
+  flushVizArray(streamId, "spectrum", spectrum, n);
+}
+
 void WebEditor::flushVizArray(const char* streamId, const char* kind, float* values, int n)
 {
   if (sock_ < 0 || !streamId || !kind || n < 0)
@@ -1590,46 +1613,32 @@ void WebEditor::flushViz()
 
   if (const char* spectrumId = vizSource_->vizSpectrumId())
   {
-    // Layout: bins, hold, avg[N], max[N], L[N], R[N], optional rms[N]
-    constexpr int kMaxSpectrum = 2 + 5 * Dsp::kMaxSpectrumBins;
+    // Layout: bins, hold, avg[N], max[N], L[N], R[N], optional rms[N], optional t[N]
+    constexpr int kMaxSpectrum = 2 + 6 * Dsp::kMaxSpectrumBins;
     float spectrum[kMaxSpectrum];
-    const int nSpec = vizSource_->takeSpectrum(spectrum, kMaxSpectrum);
-    if (nSpec < 0)
-      flushVizArray(spectrumId, "spectrum", spectrum, 0);
-    else if (nSpec >= 2)
-    {
-      spectrum[0] = std::clamp(spectrum[0], 1.f, float(Dsp::kMaxSpectrumBins));
-      spectrum[1] = spectrum[1] >= 0.5f ? 1.f : 0.f;
-      for (int i = 2; i < nSpec; ++i)
-      {
-        float v = spectrum[i];
-        if (!std::isfinite(v))
-          v = -120.f;
-        spectrum[i] = std::clamp(v, -120.f, 12.f);
-      }
-      flushVizArray(spectrumId, "spectrum", spectrum, nSpec);
-    }
+    flushSpectrumPayload(spectrumId, spectrum,
+                         vizSource_->takeSpectrum(spectrum, kMaxSpectrum));
   }
 
   if (const char* spectrumOutId = vizSource_->vizOutputSpectrumId())
   {
-    constexpr int kMaxSpectrum = 2 + 5 * Dsp::kMaxSpectrumBins;
+    constexpr int kMaxSpectrum = 2 + 6 * Dsp::kMaxSpectrumBins;
     float spectrum[kMaxSpectrum];
-    const int nSpec = vizSource_->takeOutputSpectrum(spectrum, kMaxSpectrum);
-    if (nSpec < 0)
-      flushVizArray(spectrumOutId, "spectrum", spectrum, 0);
-    else if (nSpec >= 2)
+    flushSpectrumPayload(spectrumOutId, spectrum,
+                         vizSource_->takeOutputSpectrum(spectrum, kMaxSpectrum));
+  }
+
+  {
+    constexpr int kMaxSpectrum = 2 + 6 * Dsp::kMaxSpectrumBins;
+    const int nExtra = vizSource_->vizExtraSpectrumCount();
+    for (int i = 0; i < nExtra; ++i)
     {
-      spectrum[0] = std::clamp(spectrum[0], 1.f, float(Dsp::kMaxSpectrumBins));
-      spectrum[1] = spectrum[1] >= 0.5f ? 1.f : 0.f;
-      for (int i = 2; i < nSpec; ++i)
-      {
-        float v = spectrum[i];
-        if (!std::isfinite(v))
-          v = -120.f;
-        spectrum[i] = std::clamp(v, -120.f, 12.f);
-      }
-      flushVizArray(spectrumOutId, "spectrum", spectrum, nSpec);
+      const char* id = vizSource_->vizExtraSpectrumId(i);
+      if (!id)
+        continue;
+      float spectrum[kMaxSpectrum];
+      flushSpectrumPayload(id, spectrum,
+                           vizSource_->takeExtraSpectrum(i, spectrum, kMaxSpectrum));
     }
   }
 

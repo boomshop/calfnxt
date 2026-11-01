@@ -1,30 +1,41 @@
 #pragma once
 
 // Spectral noise reduction (Denoiser): STFT Wiener denoise with 3 learnable
-// noise-power profiles, soft band mask, and profile morph on automation.
+// noise-power profiles, pass-filter band mask, and profile morph on automation.
 //
 // Reconstruction: sqrt-Hann analysis/synthesis, hop = N/4, shift-OLA.
 // Latency = N (full FFT length; wet FIFO prefilled).
 // Buffers preallocated to kMaxFft (no RT heap).
 //
 // Learn: average mid |X|^2 while Learn is engaged; finalize on stop.
-//         Re-Learn on a valid slot continues the average (dazulernen);
-//         Clear first for a fresh fingerprint.
+// Mono (header toggle, or no right buffer): left input only, one analysis
+// FFT and one IFFT, same result on both outputs. Stereo stays linked —
+// one gain, two transforms. The toggle is manual; the host channel count
+// is not trusted to mean the source is mono.
+//         Re-Learn on a valid slot continues the average (dazulernen)
+//         only when that fingerprint's FFT size still matches;
+//         a Quality change makes the next capture start fresh.
+//         Clear first for a fresh fingerprint at the same size.
 // Profile listen: random-phase noise from that slot's Pn (latency-matched).
 // Diff listen: delayed dry − wet.
 //
-// Wiener: xi = max(Px−Pn,0)/(Pn+eps); G = xi/(1+xi); G = max(G, floorLin);
-//         G = 1 − amount · bandW · (1−G). Soft band from fLo…fHi
-//         (each edge optional via fLoOn / fHiOn).
+// Gain: Wiener on a stretched excess, then max(G, floor). Span moves the
+// −6 dB point out to Span dB above the floor the law uses. Offset raises
+// that floor by a constant dB (Pn × 10^(Offset/10)) before the ratio, so
+// both the full-cut line and the −6 dB line sit higher together.
+// Band limit is the chart's 24 dB/oct HP+LP magnitude. The cut in dB is
+// scaled by that drop: full at 0 dB, gone where the curve hits −96 dB.
+// Each edge is a slope plain 0…4 (off / 12 / 24 / 36 / 48 dB/oct).
 // Floor is stored as min gain in dB (−60…0); applied as linear 10^(dB/20).
 //
 // Viz: SpectrumTap layout + GR response [N, L×N, R×N] + active-profile
 // spectrum (same layout, avg = profile dB).
 
+#include "biquad.h"
 #include "dsp_math.h"
 #include "fft_r2.h"
 #include "gain_util.h"
-#include "spectrum_bins.h"
+#include "spectrum_display_map.h"
 
 #include <algorithm>
 #include <atomic>
@@ -49,6 +60,8 @@ public:
   static constexpr int kMaxBins = kMaxSpectrumBins;
   static constexpr int kMinBins = kMinSpectrumBins;
   static constexpr int kNumProfiles = 3;
+  /** Chart axis floor (`DENOISER_DB_MIN`). Band mask is 0 where the filters hit it. */
+  static constexpr float kBandChartDb = -96.f;
   static constexpr float kFloorDb = -120.f;
   static constexpr float kSpecCeilDb = 0.f;
   static constexpr float kEps = 1.0e-20f;
@@ -67,6 +80,8 @@ public:
   void setSampleRate(double sr)
   {
     sampleRate_ = sr > 0.0 ? sr : 44100.0;
+    fadeLen_ = std::clamp(static_cast<int>(sampleRate_ * 0.005), 32, 512);
+    bandDirty_ = true;
     rebuildBinMap();
     updateTimeCoeffs();
   }
@@ -95,30 +110,85 @@ public:
   }
 
   /**
-   * Log-bin count for the profile thumbnails only.
-   * The main spectrum keeps `configureBins`. Applied on the audio thread.
+   * Thumbnails share the main spectrum's display slots.
+   * A second map sized to the card width turned the same profile into a
+   * handful of steps. The noise law does not read this.
    */
-  void configureProfileUiBins(int bins)
-  {
-    bins = std::clamp(bins, kMinBins, kMaxBins);
-    pendingProfileUiBins_.store(bins, std::memory_order_relaxed);
-  }
+  void configureProfileUiBins(int /*bins*/) {}
 
   void setParams(float fLoHz, float fHiHz, float amount, float floorDb,
-                 float blendMs, bool fLoOn = true, bool fHiOn = true)
+                 float blendMs, int loSlope = 2, int hiSlope = 2,
+                 float spanDb = 12.f, float offsetDb = 0.f)
   {
     if (fLoHz > fHiHz)
       std::swap(fLoHz, fHiHz);
-    fLoHz_ = std::clamp(fLoHz, 20.f, 20000.f);
-    fHiHz_ = std::clamp(fHiHz, 20.f, 20000.f);
-    fLoOn_ = fLoOn;
-    fHiOn_ = fHiOn;
+    const float loHz = std::clamp(fLoHz, 20.f, 20000.f);
+    const float hiHz = std::clamp(fHiHz, 20.f, 20000.f);
+    // 0 off, 1…4 = that many RBJ stages (12 dB/oct each).
+    const int loS = std::clamp(loSlope, 0, 4);
+    const int hiS = std::clamp(hiSlope, 0, 4);
+    const float blend = std::clamp(blendMs, 10.f, 5000.f);
+    const bool bandChanged = bandDirty_ || loHz != fLoHz_ || hiHz != fHiHz_
+                             || loS != loSlope_ || hiS != hiSlope_;
+    const bool timeChanged = blend != blendMs_;
+    fLoHz_ = loHz;
+    fHiHz_ = hiHz;
+    loSlope_ = loS;
+    hiSlope_ = hiS;
     amount_ = std::clamp(amount, 0.f, 1.f);
     floorDb_ = std::clamp(floorDb, -60.f, 0.f);
     floorLin_ = dbToLin(floorDb_);
-    blendMs_ = std::clamp(blendMs, 10.f, 5000.f);
-    updateTimeCoeffs();
-    rebuildBandWeights();
+    // 3 dB = unstretched Wiener (+3 dB over the raised floor → −6 dB gain).
+    spanDb_ = std::clamp(spanDb, 3.f, 24.f);
+    // Constant lift of every noise-power bin. 0 dB leaves Pn untouched.
+    offsetDb_ = std::clamp(offsetDb, 0.f, 24.f);
+    offsetLin_ = std::pow(10.f, offsetDb_ * 0.1f);
+    blendMs_ = blend;
+    if (timeChanged)
+      updateTimeCoeffs();
+    if (bandChanged)
+    {
+      rebuildBandWeights();
+      bandDirty_ = false;
+    }
+  }
+
+  /** Editor open. Profile curves refresh once; the live spectrum follows hops. */
+  void setVizActive(bool on)
+  {
+    if (on && !vizActive_)
+      displayDirty_.store(true, std::memory_order_relaxed);
+    vizActive_ = on;
+  }
+
+  /**
+   * Host silenceFlags: buffers are not written. Flush the overlap once,
+   * then only advance the delay rings.
+   */
+  void drainSilence(int n)
+  {
+    if (n <= 0)
+      return;
+    maybeRefreshProfiles();
+    const bool idle = skipLatched_ && !learning_ && !morphing_
+                      && listenSlot_ < 0 && quietRun_ >= fftSize_ * 2;
+    if (idle)
+    {
+      advanceQuiet(n);
+      return;
+    }
+    float zeros[64];
+    std::fill(zeros, zeros + 64, 0.f);
+    while (n > 0)
+    {
+      const int chunk = std::min(n, 64);
+      process(zeros, mono_ ? nullptr : zeros, chunk, bypassActive_, false, mono_);
+      n -= chunk;
+      if (skipLatched_ && !learning_ && !morphing_ && listenSlot_ < 0)
+        break;
+    }
+    if (n > 0)
+      advanceQuiet(n);
   }
 
   /** Select active profile 0…2. Morphs Pn over blendMs when the target changes. */
@@ -196,6 +266,7 @@ public:
     p.fftSize = n;
     p.valid = true;
     profilesDirty_.store(true, std::memory_order_relaxed);
+    displayDirty_.store(true, std::memory_order_relaxed);
     if (targetSlot_ == learnSlot_)
     {
       copyProfileTo(pnTo_, learnSlot_);
@@ -237,6 +308,7 @@ public:
     if (listenSlot_ == slot)
       listenSlot_ = -1;
     profilesDirty_.store(true, std::memory_order_relaxed);
+    displayDirty_.store(true, std::memory_order_relaxed);
   }
 
   /** Profile listen: slot 0…2, or −1 to disable. Exclusive with Diff Listen. */
@@ -255,6 +327,14 @@ public:
     if (slot < 0 || slot >= kNumProfiles)
       return false;
     return profiles_[slot].valid;
+  }
+
+  /** FFT length the fingerprint was learned at, or 0 if the slot is empty. */
+  int profileFftSize(int slot) const
+  {
+    if (!profileValid(slot))
+      return 0;
+    return profiles_[slot].fftSize;
   }
 
   /**
@@ -302,6 +382,7 @@ public:
         pnActive_[static_cast<size_t>(k)] = pnTo_[static_cast<size_t>(k)];
     }
     profilesDirty_.store(true, std::memory_order_relaxed);
+    displayDirty_.store(true, std::memory_order_relaxed);
     return true;
   }
 
@@ -321,6 +402,10 @@ public:
     dryWrite_ = 0;
     outRead_ = 0;
     outWrite_ = 0;
+    quietRun_ = 0;
+    resumeSamples_ = 0;
+    enterFade_ = 0;
+    skipLatched_ = false;
     learning_ = false;
     learnHops_ = 0;
     learnAccum_ = 0.0;
@@ -342,14 +427,23 @@ public:
   /**
    * Process in-place stereo. Diff Listen: delayed dry − wet.
    * Profile Listen (set separately) wins over Diff when a valid slot is set.
+   *
+   * Bypass and a long digital silence keep the latency delay and skip hops.
+   * Coming back runs hops again and fades from that delay onto the new wet
+   * path, so the overlap-add can refill before it is all the listener hears.
    */
-  void process(float* left, float* right, int n, bool bypass, bool diffListen)
+  void process(float* left, float* right, int n, bool bypass, bool diffListen,
+               bool mono)
   {
     if (!left || n <= 0)
       return;
     applyPendingSizes();
+    maybeRefreshProfiles();
 
     bypassActive_ = bypass;
+    // Manual Mono uses the left input even when the host still offers a
+    // right buffer. A missing right buffer is mono either way.
+    mono_ = mono || (right == nullptr);
     const bool profListen =
       listenSlot_ >= 0 && listenSlot_ < kNumProfiles
       && profiles_[listenSlot_].valid;
@@ -362,63 +456,133 @@ public:
     const int dryMask = dryMask_;
     const int outMask = outMask_;
     const int lat = static_cast<int>(latencySamples());
+    const int quietHold = nFft * 2;
+    const int resumeLen = nFft * 2;
 
     for (int i = 0; i < n; ++i)
     {
       float inL = left[i];
-      float inR = nChR ? right[i] : inL;
+      float inR = 0.f;
+      if (!mono_)
+        inR = nChR ? right[i] : inL;
       sanitizeDenormal(inL);
       sanitizeDenormal(inR);
 
+      const float inAbs = std::max(std::fabs(inL), std::fabs(inR));
+      if (inAbs < 1.0e-7f)
+        quietRun_ = std::min(quietRun_ + 1, quietHold + nFft);
+      else
+        quietRun_ = 0;
+
       dryL_[static_cast<size_t>(dryWrite_)] = inL;
-      dryR_[static_cast<size_t>(dryWrite_)] = inR;
+      if (!mono_)
+        dryR_[static_cast<size_t>(dryWrite_)] = inR;
       const int dryRead = (dryWrite_ - lat) & dryMask;
       const float dryOutL = dryL_[static_cast<size_t>(dryRead)];
       const float dryOutR = dryR_[static_cast<size_t>(dryRead)];
       dryWrite_ = (dryWrite_ + 1) & dryMask;
 
       inL_[static_cast<size_t>(writePos_)] = inL;
-      inR_[static_cast<size_t>(writePos_)] = inR;
+      if (!mono_)
+        inR_[static_cast<size_t>(writePos_)] = inR;
       writePos_ = (writePos_ + 1) % nFft;
 
+      if (profListen || diffListen || learning_ || morphing_)
+        resumeSamples_ = 0;
+
+      const bool skipHop =
+        !profListen && !diffListen && !learning_ && !morphing_
+        && resumeSamples_ <= 0
+        && (bypass || quietRun_ >= quietHold);
+
+      if (skipHop)
+      {
+        if (!skipLatched_)
+        {
+          skipLatched_ = true;
+          enterFade_ = fadeLen_;
+        }
+      }
+      else if (skipLatched_)
+      {
+        skipLatched_ = false;
+        enterFade_ = 0;
+        if (filled_ >= nFft)
+          resumeSamples_ = resumeLen;
+      }
+
+      bool fireHop = false;
       if (filled_ < nFft)
       {
         ++filled_;
         if (filled_ == nFft)
-          processHop();
+          fireHop = true;
       }
       else if (++hopCount_ >= hop)
       {
         hopCount_ = 0;
+        fireHop = true;
+      }
+      // The input ring still fills while hops are skipped, so resume
+      // does not wait out another full FFT of silence.
+      if (fireHop && !skipHop)
         processHop();
-      }
 
-      float wetL = 0.f;
-      float wetR = 0.f;
-      if (outRead_ != outWrite_)
+      float outL = dryOutL;
+      float outR = dryOutR;
+      if (skipHop)
       {
-        wetL = outL_[static_cast<size_t>(outRead_)];
-        wetR = outR_[static_cast<size_t>(outRead_)];
-        outL_[static_cast<size_t>(outRead_)] = 0.f;
-        outR_[static_cast<size_t>(outRead_)] = 0.f;
+        // Keep the latency gap: replace the oldest queued wet sample with dry.
+        const float droppedL = outL_[static_cast<size_t>(outRead_)];
+        const float droppedR = outR_[static_cast<size_t>(outRead_)];
+        outL_[static_cast<size_t>(outWrite_)] = dryOutL;
+        outR_[static_cast<size_t>(outWrite_)] =
+          mono_ ? dryOutL : dryOutR;
+        outWrite_ = (outWrite_ + 1) & outMask;
         outRead_ = (outRead_ + 1) & outMask;
-      }
-
-      float outL = 0.f;
-      float outR = 0.f;
-      if (diffListen)
-      {
-        outL = dryOutL - wetL;
-        outR = dryOutR - wetR;
+        if (enterFade_ > 0)
+        {
+          const float t =
+            1.f - static_cast<float>(enterFade_) / static_cast<float>(std::max(1, fadeLen_));
+          outL = droppedL * (1.f - t) + dryOutL * t;
+          outR = droppedR * (1.f - t) + dryOutR * t;
+          --enterFade_;
+        }
       }
       else
       {
-        outL = wetL;
-        outR = wetR;
+        float wetL = 0.f;
+        float wetR = 0.f;
+        if (outRead_ != outWrite_)
+        {
+          wetL = outL_[static_cast<size_t>(outRead_)];
+          wetR = outR_[static_cast<size_t>(outRead_)];
+          outL_[static_cast<size_t>(outRead_)] = 0.f;
+          outR_[static_cast<size_t>(outRead_)] = 0.f;
+          outRead_ = (outRead_ + 1) & outMask;
+        }
+        if (resumeSamples_ > 0)
+        {
+          const float t = 1.f
+            - static_cast<float>(resumeSamples_) / static_cast<float>(resumeLen);
+          outL = dryOutL * (1.f - t) + wetL * t;
+          outR = dryOutR * (1.f - t) + wetR * t;
+          --resumeSamples_;
+        }
+        else if (diffListen)
+        {
+          outL = dryOutL - wetL;
+          outR = dryOutR - wetR;
+        }
+        else
+        {
+          outL = wetL;
+          outR = wetR;
+        }
       }
       left[i] = outL;
       if (nChR)
-        right[i] = outR;
+        right[i] = mono_ ? outL : outR;
     }
   }
 
@@ -431,8 +595,8 @@ public:
     const int n = bins_;
     if (n < 1 || pubAvg_.size() != static_cast<size_t>(n))
       return 0;
-    const int need = 2 + 4 * n;
-    if (maxOut < need)
+    const int need = 2 + 5 * n;
+    if (maxOut < need || static_cast<int>(pubT_.size()) < n)
       return 0;
     out[0] = static_cast<float>(n);
     out[1] = 0.f;
@@ -440,6 +604,7 @@ public:
     std::memcpy(out + 2 + n, pubMax_.data(), sizeof(float) * static_cast<size_t>(n));
     std::memcpy(out + 2 + 2 * n, pubL_.data(), sizeof(float) * static_cast<size_t>(n));
     std::memcpy(out + 2 + 3 * n, pubR_.data(), sizeof(float) * static_cast<size_t>(n));
+    std::memcpy(out + 2 + 4 * n, pubT_.data(), sizeof(float) * static_cast<size_t>(n));
     return need;
   }
 
@@ -473,8 +638,8 @@ public:
     const int n = bins_;
     if (n < 1 || pubProf_.size() != static_cast<size_t>(n))
       return 0;
-    const int need = 2 + 4 * n;
-    if (maxOut < need)
+    const int need = 2 + 5 * n;
+    if (maxOut < need || static_cast<int>(pubT_.size()) < n)
       return 0;
     out[0] = static_cast<float>(n);
     out[1] = 0.f;
@@ -484,24 +649,55 @@ public:
                 sizeof(float) * static_cast<size_t>(n));
     std::memcpy(out + 2 + 3 * n, pubProf_.data(),
                 sizeof(float) * static_cast<size_t>(n));
+    std::memcpy(out + 2 + 4 * n, pubT_.data(), sizeof(float) * static_cast<size_t>(n));
     return need;
   }
 
   /**
-   * Log-binned dB curve for one stored profile (UI mini charts / IR JSON).
-   * Uses mean power per log bin (not peak) so wide HF bins don't turn the
-   * FFT noise floor into a ceiling of spikes.
+   * One learned fingerprint as a spectrum snapshot (same layout as
+   * takeActiveProfileSpectrum). Slot is 0…2. Returns 0 when that slot has
+   * no fingerprint and is not currently learning.
+   */
+  int takeProfileSlotSpectrum(int slot, float* out, int maxOut)
+  {
+    if (!out || maxOut < 2 || slot < 0 || slot >= kNumProfiles)
+      return 0;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!pubSlotShown_[slot])
+      return -1;
+    const int n = bins_;
+    if (n < 1 || pubSlotProf_[slot].size() != static_cast<size_t>(n))
+      return 0;
+    const int need = 2 + 5 * n;
+    if (maxOut < need || static_cast<int>(pubT_.size()) < n)
+      return 0;
+    out[0] = static_cast<float>(n);
+    out[1] = 0.f;
+    std::memcpy(out + 2, pubSlotProf_[slot].data(), sizeof(float) * static_cast<size_t>(n));
+    std::memcpy(out + 2 + n, pubSlotProf_[slot].data(),
+                sizeof(float) * static_cast<size_t>(n));
+    std::memcpy(out + 2 + 2 * n, pubSlotProf_[slot].data(),
+                sizeof(float) * static_cast<size_t>(n));
+    std::memcpy(out + 2 + 3 * n, pubSlotProf_[slot].data(),
+                sizeof(float) * static_cast<size_t>(n));
+    std::memcpy(out + 2 + 4 * n, pubT_.data(), sizeof(float) * static_cast<size_t>(n));
+    return need;
+  }
+
+  /**
+   * Display-slot dB curve for one stored profile (UI mini charts / IR JSON).
+   * Same slots as the main profile overlay. Mean power per slot (not peak)
+   * so a wide HF group does not turn the FFT noise floor into a ceiling of
+   * spikes. Slot centers are `copyProfileUiT`.
    */
   int fillSlotProfileDb(int slot, float* outDb, int maxBins) const
   {
     if (!outDb || maxBins < 1 || slot < 0 || slot >= kNumProfiles)
       return 0;
-    const bool uiMap = profileUiBins_ >= kMinBins
-                       && static_cast<int>(profileUiLo_.size()) == profileUiBins_;
-    const int nBins = uiMap ? profileUiBins_ : bins_;
-    const std::vector<int>& binLo = uiMap ? profileUiLo_ : binLo_;
-    const std::vector<int>& binHi = uiMap ? profileUiHi_ : binHi_;
-    const std::vector<int>& binValid = uiMap ? profileUiValid_ : binValid_;
+    const int nBins = bins_;
+    const std::vector<int>& binLo = binLo_;
+    const std::vector<int>& binHi = binHi_;
+    const std::vector<int>& binValid = binValid_;
     const int n = std::min(nBins, maxBins);
     if (n < 1)
       return 0;
@@ -538,10 +734,22 @@ public:
 
   int vizBins() const { return bins_; }
 
-  /** Bin count of the profile-thumbnail series (falls back to the main map). */
+  /** Bin count of the profile-thumbnail series (the main display map). */
   int profileUiBinCount() const
   {
-    return profileUiBins_ >= kMinBins ? profileUiBins_ : bins_;
+    return bins_;
+  }
+
+  /** Log-fraction centers for the thumbnail slots. Same `t` as the overlay. */
+  int copyProfileUiT(float* out, int maxBins) const
+  {
+    if (!out || maxBins < 1)
+      return 0;
+    const int n = std::min(bins_, maxBins);
+    if (n < 1 || static_cast<int>(slotT_.size()) < n)
+      return 0;
+    std::memcpy(out, slotT_.data(), sizeof(float) * static_cast<size_t>(n));
+    return n;
   }
 
   /** True once after learn/clear/setProfileRaw until consumed. */
@@ -567,6 +775,19 @@ public:
     copyEq(pubR_, rDb_);
     copyEq(pubGr_, grDisp_);
     copyEq(pubProf_, profDisp_);
+    copyEq(pubT_, slotT_);
+    for (int s = 0; s < kNumProfiles; ++s)
+    {
+      pubSlotShown_[s] = slotShown_[s];
+      auto& dst = pubSlotProf_[s];
+      const auto& src = slotProf_[s];
+      if (src.empty())
+        continue;
+      if (dst.size() != src.size())
+        dst = src;
+      else
+        std::memcpy(dst.data(), src.data(), src.size() * sizeof(float));
+    }
   }
 
 private:
@@ -653,57 +874,103 @@ private:
       // Force IR mini refresh with power-rescaled dB for the new FFT.
       if (profiles_[0].valid || profiles_[1].valid || profiles_[2].valid)
         profilesDirty_.store(true, std::memory_order_relaxed);
+    displayDirty_.store(true, std::memory_order_relaxed);
     }
     const int wantBins = pendingBins_.load(std::memory_order_relaxed);
-    if (wantBins != bins_ || avgDb_.size() != static_cast<size_t>(bins_))
+    if (wantBins != displayWidth_ || avgDb_.size() != static_cast<size_t>(bins_))
       applyBins(wantBins);
     const int wantUi = pendingProfileUiBins_.load(std::memory_order_relaxed);
-    if (wantUi >= kMinBins && wantUi != profileUiBins_)
+    if (wantUi >= kMinBins && wantUi != profileUiWidth_)
       applyProfileUiBins(wantUi);
   }
 
-  void applyBins(int bins)
+  void applyBins(int width)
   {
-    bins = std::clamp(bins, kMinBins, kMaxBins);
-    if (bins == bins_ && avgDb_.size() == static_cast<size_t>(bins_))
+    width = std::clamp(width, kMinBins, kMaxBins);
+    pendingBins_.store(width, std::memory_order_relaxed);
+    if (width == displayWidth_
+        && bins_ >= 2
+        && static_cast<int>(avgDb_.size()) == bins_
+        && static_cast<int>(slotT_.size()) == bins_)
       return;
-    bins_ = bins;
-    pendingBins_.store(bins_, std::memory_order_relaxed);
-    avgDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    maxDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    lDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    rDb_.assign(static_cast<size_t>(bins_), kFloorDb);
-    grDisp_.assign(static_cast<size_t>(bins_), 0.f);
-    profDisp_.assign(static_cast<size_t>(bins_), kFloorDb);
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      pubAvg_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubMax_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubL_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubR_.assign(static_cast<size_t>(bins_), kFloorDb);
-      pubGr_.assign(static_cast<size_t>(bins_), 0.f);
-      pubProf_.assign(static_cast<size_t>(bins_), kFloorDb);
-    }
+    displayWidth_ = width;
     rebuildBinMap();
   }
 
-  void applyProfileUiBins(int bins)
+  void applyProfileUiBins(int width)
   {
-    bins = std::clamp(bins, kMinBins, kMaxBins);
-    if (bins == profileUiBins_
-        && static_cast<int>(profileUiLo_.size()) == profileUiBins_)
+    width = std::clamp(width, kMinBins, kMaxBins);
+    pendingProfileUiBins_.store(width, std::memory_order_relaxed);
+    if (width == profileUiWidth_
+        && profileUiBins_ >= 2
+        && static_cast<int>(profileUiT_.size()) == profileUiBins_)
       return;
-    profileUiBins_ = bins;
-    pendingProfileUiBins_.store(bins, std::memory_order_relaxed);
-    buildLogBinMap(profileUiBins_, profileUiLo_, profileUiHi_, profileUiValid_);
+    profileUiWidth_ = width;
+    rebuildProfileUiMap();
     profilesDirty_.store(true, std::memory_order_relaxed);
+    displayDirty_.store(true, std::memory_order_relaxed);
+  }
+
+  void rebuildProfileUiMap()
+  {
+    if (profileUiWidth_ < kMinBins || fftSize_ < 4)
+      return;
+    std::vector<int> lo;
+    std::vector<int> hi;
+    std::vector<float> pos;
+    const int n = buildSpectrumDisplayMap(sampleRate_, fftSize_, profileUiWidth_,
+                                          lo, hi, pos);
+    if (n < 2)
+      return;
+    profileUiLo_ = std::move(lo);
+    profileUiHi_ = std::move(hi);
+    profileUiT_ = std::move(pos);
+    profileUiBins_ = n;
+    profileUiValid_.assign(static_cast<size_t>(n), 1);
   }
 
   void rebuildBinMap()
   {
-    buildLogBinMap(bins_, binLo_, binHi_, binValid_);
-    if (profileUiBins_ >= kMinBins)
-      buildLogBinMap(profileUiBins_, profileUiLo_, profileUiHi_, profileUiValid_);
+    if (fftSize_ >= 4)
+    {
+      std::vector<int> lo;
+      std::vector<int> hi;
+      std::vector<float> pos;
+      const int n = buildSpectrumDisplayMap(sampleRate_, fftSize_, displayWidth_,
+                                            lo, hi, pos);
+      if (n >= 2)
+      {
+        binLo_ = std::move(lo);
+        binHi_ = std::move(hi);
+        slotT_ = std::move(pos);
+        binValid_.assign(static_cast<size_t>(n), 1);
+        if (n != bins_ || static_cast<int>(avgDb_.size()) != n
+            || static_cast<int>(pubT_.size()) != n)
+        {
+          bins_ = n;
+          const auto nn = static_cast<size_t>(n);
+          avgDb_.assign(nn, kFloorDb);
+          maxDb_.assign(nn, kFloorDb);
+          lDb_.assign(nn, kFloorDb);
+          rDb_.assign(nn, kFloorDb);
+          grDisp_.assign(nn, 0.f);
+          profDisp_.assign(nn, kFloorDb);
+          {
+            std::lock_guard<std::mutex> lock(mutex_);
+            pubAvg_.assign(nn, kFloorDb);
+            pubMax_.assign(nn, kFloorDb);
+            pubL_.assign(nn, kFloorDb);
+            pubR_.assign(nn, kFloorDb);
+            pubGr_.assign(nn, 0.f);
+            pubProf_.assign(nn, kFloorDb);
+            pubT_.assign(nn, 0.f);
+          }
+        }
+        if (profiles_[0].valid || profiles_[1].valid || profiles_[2].valid)
+          profilesDirty_.store(true, std::memory_order_relaxed);
+    displayDirty_.store(true, std::memory_order_relaxed);
+      }
+    }
   }
 
   /** Log partitions of the FFT, 20 Hz…20 kHz. `bins` is the UI pixel budget. */
@@ -748,44 +1015,39 @@ private:
       static_cast<float>(1.0 / std::max(1.0, (blendMs_ * 0.001) * hopsPerSec));
   }
 
+  /**
+   * Band mask from the same HP/LP cascade the chart draws (Q = 0.707,
+   * one RBJ stage per 12 dB/oct). 1 in the passband, 0 where the summed
+   * magnitude hits the chart floor. Slope 0 adds nothing.
+   */
   void rebuildBandWeights()
   {
-    if (fftSize_ < 4)
+    if (fftSize_ < 4 || !(sampleRate_ > 0.0))
       return;
     const int half = fftSize_ / 2;
     const float nyquist = static_cast<float>(sampleRate_ * 0.5);
-    // Disabled edge = full open (HP off → DC, LP off → Nyquist).
-    float lo = fLoOn_ ? fLoHz_ : 0.f;
-    float hi = fHiOn_ ? fHiHz_ : nyquist;
-    if (lo > hi)
-      std::swap(lo, hi);
-    // Soft skirts ~½ octave outside the pass band (skipped when edge is open).
-    const float fadeLo = fLoOn_ ? std::max(10.f, lo / 1.41421356f) : 0.f;
-    const float fadeHi =
-      fHiOn_ ? std::min(nyquist, hi * 1.41421356f) : nyquist;
+    const float sr = static_cast<float>(sampleRate_);
+    BiquadCoeffs hp;
+    BiquadCoeffs lp;
+    if (loSlope_ > 0)
+      hp.setHpRbj(fLoHz_, 0.707f, sr, 1.f);
+    if (hiSlope_ > 0)
+      lp.setLpRbj(fHiHz_, 0.707f, sr, 1.f);
+
+    const float span = -kBandChartDb;
     for (int k = 0; k <= half; ++k)
     {
-      const float f =
+      const float hz =
         (static_cast<float>(k) / static_cast<float>(half)) * nyquist;
-      float w = 0.f;
-      if (f >= fadeLo && f <= fadeHi)
-      {
-        if (f >= lo && f <= hi)
-          w = 1.f;
-        else if (fLoOn_ && f < lo)
-        {
-          const float t = (f - fadeLo) / std::max(1.0e-6f, lo - fadeLo);
-          w = 0.5f - 0.5f * std::cos(static_cast<float>(M_PI) * std::clamp(t, 0.f, 1.f));
-        }
-        else if (fHiOn_ && f > hi)
-        {
-          const float t = (fadeHi - f) / std::max(1.0e-6f, fadeHi - hi);
-          w = 0.5f - 0.5f * std::cos(static_cast<float>(M_PI) * std::clamp(t, 0.f, 1.f));
-        }
-        else
-          w = 1.f;
-      }
-      bandW_[static_cast<size_t>(k)] = w;
+      float db = 0.f;
+      if (loSlope_ > 0)
+        db += static_cast<float>(loSlope_) * hp.responseDb(hz, sr);
+      if (hiSlope_ > 0)
+        db += static_cast<float>(hiSlope_) * lp.responseDb(hz, sr);
+      if (!std::isfinite(db))
+        db = -240.f;
+      const float mask = std::clamp((db - kBandChartDb) / span, 0.f, 1.f);
+      bandW_[static_cast<size_t>(k)] = mask;
     }
   }
 
@@ -857,29 +1119,36 @@ private:
     const float norm = 2.f / static_cast<float>(n);
 
     const int start = writePos_;
+    const bool mono = mono_;
     for (int i = 0; i < n; ++i)
     {
       const int idx = (start + i) % n;
       const float w = window_[static_cast<size_t>(i)];
       reL_[static_cast<size_t>(i)] = inL_[static_cast<size_t>(idx)] * w;
       imL_[static_cast<size_t>(i)] = 0.f;
-      reR_[static_cast<size_t>(i)] = inR_[static_cast<size_t>(idx)] * w;
-      imR_[static_cast<size_t>(i)] = 0.f;
+      if (!mono)
+      {
+        reR_[static_cast<size_t>(i)] = inR_[static_cast<size_t>(idx)] * w;
+        imR_[static_cast<size_t>(i)] = 0.f;
+      }
     }
 
     fftRadix2(reL_.data(), imL_.data(), n);
-    fftRadix2(reR_.data(), imR_.data(), n);
+    if (!mono)
+      fftRadix2(reR_.data(), imR_.data(), n);
 
     for (int k = 0; k <= half; ++k)
     {
       const float mL = fftBinMag(reL_.data(), imL_.data(), k);
-      const float mR = fftBinMag(reR_.data(), imR_.data(), k);
-      // Mid power for learn / Wiener (linked stereo).
-      const float mid = 0.5f * (mL + mR);
-      px_[static_cast<size_t>(k)] = mid * mid;
+      // Mono: |X|^2 of the one channel. Stereo: linked mid power.
+      float mag = mL;
+      if (!mono)
+        mag = 0.5f * (mL + fftBinMag(reR_.data(), imR_.data(), k));
+      px_[static_cast<size_t>(k)] = mag * mag;
     }
 
-    updateDisplaySpectrum(norm);
+    if (vizActive_)
+      updateDisplaySpectrum(norm);
 
     if (learning_)
     {
@@ -890,6 +1159,8 @@ private:
       // Finalize only via stopLearn() — Learn stays engaged until the UI releases.
     }
 
+    // Captured before the blend can finish on this hop.
+    const bool showProfile = morphing_;
     // Morph active Pn toward the target profile.
     if (morphing_)
     {
@@ -905,8 +1176,6 @@ private:
         morphing_ = false;
     }
 
-    updateDisplayProfile(norm);
-
     const bool profListen =
       listenSlot_ >= 0 && listenSlot_ < kNumProfiles
       && profiles_[listenSlot_].valid;
@@ -917,8 +1186,11 @@ private:
       copyProfileTo(scratchPn_, listenSlot_);
       reL_[0] = std::sqrt(std::max(0.f, scratchPn_[0]));
       imL_[0] = 0.f;
-      reR_[0] = reL_[0];
-      imR_[0] = 0.f;
+      if (!mono)
+      {
+        reR_[0] = reL_[0];
+        imR_[0] = 0.f;
+      }
       for (int k = 1; k < half; ++k)
       {
         const float mag =
@@ -928,21 +1200,27 @@ private:
         const float s = std::sin(ph);
         reL_[static_cast<size_t>(k)] = mag * c;
         imL_[static_cast<size_t>(k)] = mag * s;
-        reR_[static_cast<size_t>(k)] = mag * c;
-        imR_[static_cast<size_t>(k)] = mag * s;
         const int mk = n - k;
         reL_[static_cast<size_t>(mk)] = mag * c;
         imL_[static_cast<size_t>(mk)] = -mag * s;
-        reR_[static_cast<size_t>(mk)] = mag * c;
-        imR_[static_cast<size_t>(mk)] = -mag * s;
+        if (!mono)
+        {
+          reR_[static_cast<size_t>(k)] = mag * c;
+          imR_[static_cast<size_t>(k)] = mag * s;
+          reR_[static_cast<size_t>(mk)] = mag * c;
+          imR_[static_cast<size_t>(mk)] = -mag * s;
+        }
       }
       {
         const float mag =
           std::sqrt(std::max(0.f, scratchPn_[static_cast<size_t>(half)]));
         reL_[static_cast<size_t>(half)] = mag;
         imL_[static_cast<size_t>(half)] = 0.f;
-        reR_[static_cast<size_t>(half)] = mag;
-        imR_[static_cast<size_t>(half)] = 0.f;
+        if (!mono)
+        {
+          reR_[static_cast<size_t>(half)] = mag;
+          imR_[static_cast<size_t>(half)] = 0.f;
+        }
       }
       std::fill(gain_.begin(), gain_.begin() + half + 1, 0.f);
     }
@@ -952,80 +1230,154 @@ private:
         !bypassActive_ && amount_ > 1.0e-6f
         && (profiles_[targetSlot_].valid || morphing_
             || pnActive_[1] > kEps);
+      // gamma = 1 keeps +3 dB over the raised floor at −6 dB.
+      const float gamma = 3.f / spanDb_;
 
       for (int k = 0; k <= half; ++k)
       {
         float g = 1.f;
         if (denoise)
         {
-          const float pn = pnActive_[static_cast<size_t>(k)];
+          const float pn = pnActive_[static_cast<size_t>(k)] * offsetLin_;
           const float px = px_[static_cast<size_t>(k)];
-          const float xi = std::max(px - pn, 0.f) / (pn + kEps);
-          g = xi / (1.f + xi);
+          const float ratio = (px + kEps) / (pn + kEps);
+          if (ratio > 1.f)
+          {
+            g = 1.f - std::pow(ratio, -gamma);
+            if (g < 0.f)
+              g = 0.f;
+          }
+          else
+            g = 0.f;
           g = std::max(g, floorLin_);
-          const float bw = bandW_[static_cast<size_t>(k)];
-          g = 1.f - amount_ * bw * (1.f - g);
+          // Scale the cut in dB by the pass-filter mask, so GR rises toward
+          // 0 dB along the same roll-off the chart draws downward.
+          float grDb = (g > 1.0e-12f) ? std::min(0.f, linToDb(g)) : -240.f;
+          grDb *= amount_ * bandW_[static_cast<size_t>(k)];
+          g = dbToLin(grDb);
         }
         gain_[static_cast<size_t>(k)] = std::clamp(g, 0.f, 1.f);
       }
 
-      // Apply linked gain; keep Hermitian.
+      // Apply linked gain; keep Hermitian. Mono skips the right spectrum.
       {
         const float g0 = gain_[0];
         reL_[0] *= g0;
-        reR_[0] *= g0;
+        if (!mono)
+          reR_[0] *= g0;
       }
       for (int k = 1; k < half; ++k)
       {
         const float gLin = gain_[static_cast<size_t>(k)];
         reL_[static_cast<size_t>(k)] *= gLin;
         imL_[static_cast<size_t>(k)] *= gLin;
-        reR_[static_cast<size_t>(k)] *= gLin;
-        imR_[static_cast<size_t>(k)] *= gLin;
         const int mk = n - k;
         reL_[static_cast<size_t>(mk)] *= gLin;
         imL_[static_cast<size_t>(mk)] *= gLin;
-        reR_[static_cast<size_t>(mk)] *= gLin;
-        imR_[static_cast<size_t>(mk)] *= gLin;
+        if (!mono)
+        {
+          reR_[static_cast<size_t>(k)] *= gLin;
+          imR_[static_cast<size_t>(k)] *= gLin;
+          reR_[static_cast<size_t>(mk)] *= gLin;
+          imR_[static_cast<size_t>(mk)] *= gLin;
+        }
       }
       {
         const float gN = gain_[static_cast<size_t>(half)];
         reL_[static_cast<size_t>(half)] *= gN;
-        reR_[static_cast<size_t>(half)] *= gN;
+        if (!mono)
+          reR_[static_cast<size_t>(half)] *= gN;
       }
     }
 
     ifftRadix2(reL_.data(), imL_.data(), n);
-    ifftRadix2(reR_.data(), imR_.data(), n);
+    if (!mono)
+      ifftRadix2(reR_.data(), imR_.data(), n);
 
     for (int i = 0; i < n; ++i)
     {
       const float w = window_[static_cast<size_t>(i)];
       olaL_[static_cast<size_t>(i)] += reL_[static_cast<size_t>(i)] * w;
-      olaR_[static_cast<size_t>(i)] += reR_[static_cast<size_t>(i)] * w;
+      if (!mono)
+        olaR_[static_cast<size_t>(i)] += reR_[static_cast<size_t>(i)] * w;
     }
 
     const int outMask = outMask_;
     for (int i = 0; i < hop; ++i)
     {
       float oL = olaL_[static_cast<size_t>(i)] * colaNorm_;
-      float oR = olaR_[static_cast<size_t>(i)] * colaNorm_;
       sanitizeDenormal(oL);
-      sanitizeDenormal(oR);
       outL_[static_cast<size_t>(outWrite_)] = oL;
-      outR_[static_cast<size_t>(outWrite_)] = oR;
+      if (!mono)
+      {
+        float oR = olaR_[static_cast<size_t>(i)] * colaNorm_;
+        sanitizeDenormal(oR);
+        outR_[static_cast<size_t>(outWrite_)] = oR;
+      }
       outWrite_ = (outWrite_ + 1) & outMask;
     }
 
     const int keep = n - hop;
     std::memmove(olaL_.data(), olaL_.data() + hop,
                  sizeof(float) * static_cast<size_t>(keep));
-    std::memmove(olaR_.data(), olaR_.data() + hop,
-                 sizeof(float) * static_cast<size_t>(keep));
     std::fill(olaL_.begin() + keep, olaL_.begin() + n, 0.f);
-    std::fill(olaR_.begin() + keep, olaR_.begin() + n, 0.f);
+    if (!mono)
+    {
+      std::memmove(olaR_.data(), olaR_.data() + hop,
+                   sizeof(float) * static_cast<size_t>(keep));
+      std::fill(olaR_.begin() + keep, olaR_.begin() + n, 0.f);
+    }
 
-    updateDisplayGr();
+    if (vizActive_)
+    {
+      const bool refresh = displayDirty_.load(std::memory_order_relaxed);
+      if (refresh || showProfile || learning_)
+      {
+        if (refresh || showProfile)
+          updateDisplayProfile(norm);
+        if (refresh || learning_)
+          updateProfileSlotSpectra(norm, refresh);
+        if (!morphing_ && !learning_)
+          displayDirty_.store(false, std::memory_order_relaxed);
+      }
+      updateDisplayGr();
+    }
+  }
+
+  void maybeRefreshProfiles()
+  {
+    if (!vizActive_ || learning_ || morphing_)
+      return;
+    if (!displayDirty_.load(std::memory_order_relaxed))
+      return;
+    const float norm = 2.f / static_cast<float>(std::max(4, fftSize_));
+    updateDisplayProfile(norm);
+    updateProfileSlotSpectra(norm, true);
+    displayDirty_.store(false, std::memory_order_relaxed);
+  }
+
+  /** Keep delay rings moving through a stretch of silence without a hop. */
+  void advanceQuiet(int n)
+  {
+    const int nFft = std::max(4, fftSize_);
+    const int dryMask = dryMask_;
+    const bool mono = mono_;
+    for (int i = 0; i < n; ++i)
+    {
+      dryL_[static_cast<size_t>(dryWrite_)] = 0.f;
+      if (!mono)
+        dryR_[static_cast<size_t>(dryWrite_)] = 0.f;
+      dryWrite_ = (dryWrite_ + 1) & dryMask;
+      inL_[static_cast<size_t>(writePos_)] = 0.f;
+      if (!mono)
+        inR_[static_cast<size_t>(writePos_)] = 0.f;
+      writePos_ = (writePos_ + 1) % nFft;
+      outL_[static_cast<size_t>(outWrite_)] = 0.f;
+      outR_[static_cast<size_t>(outWrite_)] = 0.f;
+      outWrite_ = (outWrite_ + 1) & outMask_;
+      outRead_ = (outRead_ + 1) & outMask_;
+    }
+    quietRun_ = std::min(quietRun_ + n, nFft * 4);
   }
 
   void updateDisplaySpectrum(float norm)
@@ -1046,13 +1398,17 @@ private:
       float peakL = 0.f;
       float peakR = 0.f;
       for (int k = lo; k < hi; ++k)
-      {
         peakL = std::max(peakL, fftBinMag(reL_.data(), imL_.data(), k));
-        peakR = std::max(peakR, fftBinMag(reR_.data(), imR_.data(), k));
+      if (!mono_)
+      {
+        for (int k = lo; k < hi; ++k)
+          peakR = std::max(peakR, fftBinMag(reR_.data(), imR_.data(), k));
       }
       const float dL = magToDb(peakL, norm);
-      const float dR = magToDb(peakR, norm);
-      const float dA = 0.5f * (dL + dR);
+      // Mono has one spectrum. Averaging it with a silent right channel
+      // would sit halfway to the −120 dB floor.
+      const float dR = mono_ ? dL : magToDb(peakR, norm);
+      const float dA = mono_ ? dL : 0.5f * (dL + dR);
       lDb_[static_cast<size_t>(i)] += alpha * (dL - lDb_[static_cast<size_t>(i)]);
       rDb_[static_cast<size_t>(i)] += alpha * (dR - rDb_[static_cast<size_t>(i)]);
       avgDb_[static_cast<size_t>(i)] += alpha * (dA - avgDb_[static_cast<size_t>(i)]);
@@ -1082,6 +1438,76 @@ private:
       const float mean = count > 0 ? static_cast<float>(sum / count) : 0.f;
       // |X| = sqrt(mean power); same amplitude norm as spectrum.
       profDisp_[static_cast<size_t>(i)] = magToDb(std::sqrt(mean), norm);
+    }
+  }
+
+  /** Stored fingerprints onto the same display slots as the live spectrum. */
+  void updateProfileSlotSpectra(float norm, bool refreshStored)
+  {
+    const int n = bins_;
+    if (n < 2)
+      return;
+    const int half = fftSize_ / 2;
+    for (int s = 0; s < kNumProfiles; ++s)
+    {
+      const bool learningThis = learning_ && learnSlot_ == s && learnHops_ > 0;
+      if (!learningThis && !refreshStored && slotShown_[s])
+        continue;
+
+      auto& dst = slotProf_[s];
+      if (static_cast<int>(dst.size()) != n)
+        dst.assign(static_cast<size_t>(n), kFloorDb);
+      if (!learningThis && !profiles_[s].valid)
+      {
+        slotShown_[s] = false;
+        std::fill(dst.begin(), dst.end(), kFloorDb);
+        continue;
+      }
+      slotShown_[s] = true;
+
+      if (learningThis)
+      {
+        const float inv = 1.f / static_cast<float>(learnHops_);
+        std::fill(scratchPn_.begin(), scratchPn_.begin() + half + 1, 0.f);
+        for (int k = 0; k <= half; ++k)
+          scratchPn_[static_cast<size_t>(k)] =
+            learnSum_[static_cast<size_t>(k)] * inv;
+        reducePowerToSlots(scratchPn_.data(), dst.data(), n, norm);
+      }
+      else
+      {
+        // Stored fingerprint only. The blend lives in pnActive_ / the overlay.
+        fillProfilePower(scratchPn_.data(), s);
+        reducePowerToSlots(scratchPn_.data(), dst.data(), n, norm);
+      }
+    }
+  }
+
+  void reducePowerToSlots(const float* power, float* dst, int n, float norm) const
+  {
+    const int limit = fftSize_ / 2 + 1;
+    for (int i = 0; i < n; ++i)
+    {
+      if (!binValid_[static_cast<size_t>(i)])
+      {
+        dst[i] = kFloorDb;
+        continue;
+      }
+      int lo = binLo_[static_cast<size_t>(i)];
+      int hi = binHi_[static_cast<size_t>(i)];
+      if (lo < 0)
+        lo = 0;
+      if (hi > limit)
+        hi = limit;
+      double sum = 0.0;
+      int count = 0;
+      for (int k = lo; k < hi; ++k)
+      {
+        sum += static_cast<double>(std::max(0.f, power[k]));
+        ++count;
+      }
+      const float mean = count > 0 ? static_cast<float>(sum / count) : 0.f;
+      dst[i] = magToDb(std::sqrt(mean), norm);
     }
   }
 
@@ -1125,15 +1551,28 @@ private:
   int outRead_ = 0;
   int outWrite_ = 0;
   int bins_ = 0;
+  int displayWidth_ = 128;
   int profileUiBins_ = 0;
+  int profileUiWidth_ = 0;
   bool bypassActive_ = false;
+  bool mono_ = false;
+  bool vizActive_ = false;
+  bool bandDirty_ = true;
+  bool skipLatched_ = false;
+  int quietRun_ = 0;
+  int resumeSamples_ = 0;
+  int enterFade_ = 0;
+  int fadeLen_ = 128;
 
   float fLoHz_ = 20.f;
   float fHiHz_ = 160.f;
-  bool fLoOn_ = true;
-  bool fHiOn_ = true;
+  int loSlope_ = 2;
+  int hiSlope_ = 2;
   float amount_ = 1.f;
   float floorDb_ = -20.f;
+  float spanDb_ = 12.f;
+  float offsetDb_ = 0.f;
+  float offsetLin_ = 1.f;
   float floorLin_ = 0.1f; // dbToLin(-20)
   float blendMs_ = 250.f;
   float morphStep_ = 0.01f;
@@ -1155,6 +1594,7 @@ private:
   std::atomic<int> pendingBins_ {128};
   std::atomic<int> pendingProfileUiBins_ {0};
   std::atomic<bool> profilesDirty_ {false};
+  std::atomic<bool> displayDirty_ {true};
 
   Profile profiles_[kNumProfiles];
 
@@ -1163,9 +1603,15 @@ private:
   std::vector<float> px_, pnActive_, pnFrom_, pnTo_, gain_, bandW_, learnSum_,
     scratchPn_;
   std::vector<float> avgDb_, maxDb_, lDb_, rDb_, grDisp_, profDisp_;
-  std::vector<float> pubAvg_, pubMax_, pubL_, pubR_, pubGr_, pubProf_;
+  std::vector<float> slotProf_[kNumProfiles];
+  bool slotShown_[kNumProfiles] {};
+  std::vector<float> pubAvg_, pubMax_, pubL_, pubR_, pubGr_, pubProf_, pubT_;
+  std::vector<float> pubSlotProf_[kNumProfiles];
+  bool pubSlotShown_[kNumProfiles] {};
+  std::vector<float> slotT_;
   std::vector<int> binLo_, binHi_, binValid_;
   std::vector<int> profileUiLo_, profileUiHi_, profileUiValid_;
+  std::vector<float> profileUiT_;
   std::mutex mutex_;
 };
 
