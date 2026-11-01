@@ -96,7 +96,8 @@
       gap: var(--gap);
     }
 
-    > .col > .detect {
+    > .col > .detect,
+    > .col > .octave {
       display: flex;
       justify-content: center;
     }

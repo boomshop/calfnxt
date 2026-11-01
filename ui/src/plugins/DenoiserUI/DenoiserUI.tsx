@@ -68,6 +68,22 @@ const FLOOR_LABELS = [
 const OFFSET_DOTS = [0, 6, 12, 18, 24];
 const OFFSET_LABELS = OFFSET_DOTS.map((n) => ({ pos: n, label: String(n) }));
 
+const OCTAVE_FRACTIONS = [
+  { pos: 0, label: '0' },
+  { pos: 1 / 8, label: '1/8' },
+  { pos: 1 / 4, label: '1/4' },
+  { pos: 1 / 3, label: '1/3' },
+  { pos: 1 / 2, label: '1/2' },
+  { pos: 1, label: '1' },
+];
+
+function formatOctave(v: number): string {
+  for (const f of OCTAVE_FRACTIONS) {
+    if (Math.abs(v - f.pos) < 0.008) return f.label;
+  }
+  return v.toFixed(2);
+}
+
 const SPAN_DOTS = [3, 6, 12, 18, 24];
 const SPAN_LABELS = [
   { pos: 3, label: '3' },
@@ -174,6 +190,7 @@ export function DenoiserUI(props: DenoiserUIProps) {
       span: gesture(paramIds.span),
       floor: gesture(paramIds.floor),
       offset: gesture(paramIds.offset),
+      octave: gesture(paramIds.octave),
       blend: gesture(paramIds.blend),
     };
   }, [host]);
@@ -344,22 +361,40 @@ export function DenoiserUI(props: DenoiserUIProps) {
             />
           </WithInfo>
         </div>
-        <WithInfo title={denoiserInfo.amount}>
-          <Knob
-            label="Amount"
-            value$={host.amount$}
-            min={0}
-            max={1}
-            reset={denoiserParamDefault('amount')}
-            dots={UNIT_DOTS}
-            labels={UNIT_LABELS}
-            size="large"
-            {...{
-              'value.format': (v: number) => `${Math.round(v * 100)}`,
-            }}
-            {...edit.amount}
-          />
-        </WithInfo>
+        <div className="col">
+          <WithInfo title={denoiserInfo.amount}>
+            <Knob
+              label="Amount"
+              value$={host.amount$}
+              min={0}
+              max={1}
+              reset={denoiserParamDefault('amount')}
+              dots={UNIT_DOTS}
+              labels={UNIT_LABELS}
+              size="large"
+              {...{
+                'value.format': (v: number) => `${Math.round(v * 100)}`,
+              }}
+              {...edit.amount}
+            />
+          </WithInfo>
+          <WithInfo title={denoiserInfo.octave} className="octave">
+            <Knob
+              label="Octave"
+              value$={host.octave$}
+              min={0}
+              max={1}
+              reset={denoiserParamDefault('octave')}
+              scale="log2"
+              log_factor={3}
+              dots={OCTAVE_FRACTIONS.map((f) => f.pos)}
+              labels={OCTAVE_FRACTIONS}
+              size="small"
+              {...{ 'value.format': formatOctave }}
+              {...edit.octave}
+            />
+          </WithInfo>
+        </div>
         <div className="col">
           <WithInfo title={denoiserInfo.span}>
             <Knob

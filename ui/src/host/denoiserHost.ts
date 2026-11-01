@@ -69,6 +69,8 @@ export type IDenoiserHost = {
   offset$: DynamicValue<number>;
   /** 0 Peak (one hop) / 1 RMS (~40 ms power average). */
   detect$: DynamicValue<number>;
+  /** Opening window in octaves, 0…1. Hann max, zero at the edges. */
+  octave$: DynamicValue<number>;
   fLo$: DynamicValue<number>;
   /** 0 off / 1…4 = 12/24/36/48 dB/oct. */
   fLoSlope$: DynamicValue<number>;
@@ -311,6 +313,7 @@ export function createBoundDenoiserHost(): IDenoiserHost {
     span$: bindNum('span', 12),
     offset$: bindNum('offset', 0),
     detect$: bindNum('detect', 0),
+    octave$: bindNum('octave', 0),
     fLo$: bindNum('f_lo', 20),
     fLoSlope$: bindNum('f_lo_slope', 2),
     fHi$: bindNum('f_hi', 160),

@@ -219,6 +219,39 @@ export const denoiserInfo = {
     ],
   }),
 
+  octave: infoDoc({
+    name: 'Octave',
+    lead: 'Lets a loud bin open its neighbours, so a tone keeps its width instead of only the centre bin.',
+    meta: [
+      { label: 'DAW name', value: 'Octave' },
+      { label: 'Parameter ID', value: '19' },
+      { label: 'Range', value: '0 … 1 octave. The knob travel is logarithmic, so values near 1 take little of the turn.' },
+      { label: 'Default', value: '0' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Zero is the bin on its own. A small fraction, around 1/8 to 1/4, brings the shoulders of a note along. Toward 1/2 and 1 the window gets wide: one strong partial can open the noise between it and the next.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            ul: [
+              'The shape is a raised cosine on the octave axis. In the middle the neighbour counts fully. At the octave you set, the weight is zero.',
+              'A neighbour can only raise the level the filter sees. It cannot pull a loud bin down.',
+              'Gain reduction on the chart follows that wider opening. The solid line stays the fingerprint.',
+            ],
+          },
+        ],
+      },
+    ],
+  }),
+
   floor: infoDoc({
     name: 'Floor',
     lead: 'Sets the deepest gain the filter is allowed to reach when a bin is at or under the noise floor.',

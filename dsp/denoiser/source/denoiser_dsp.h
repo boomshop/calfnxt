@@ -79,6 +79,7 @@ private:
     float spanDb = 12.f;
     float offsetDb = 0.f;
     bool rms = false;
+    float octave = 0.f;
   };
 
   BlockState makeBlockState() const;

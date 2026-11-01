@@ -24,7 +24,9 @@
 // that floor by a constant dB (Pn × 10^(Offset/10)) before the ratio, so
 // both the full-cut line and the −6 dB line sit higher together.
 // Detect Peak uses this hop's bin power. RMS follows that power with a
-// fixed ~40 ms average before the ratio.
+// fixed ~40 ms average before the ratio. Octave (0…1) is a raised-cosine
+// max on the octave axis: a neighbour counts as power × weight, the bin
+// itself stays at full weight, and the weight is 0 at ± the knob value.
 // Band limit is the chart's 24 dB/oct HP+LP magnitude. The cut in dB is
 // scaled by that drop: full at 0 dB, gone where the curve hits −96 dB.
 // Each edge is a slope plain 0…4 (off / 12 / 24 / 36 / 48 dB/oct).
@@ -67,6 +69,10 @@ public:
   static constexpr float kFloorDb = -120.f;
   static constexpr float kSpecCeilDb = 0.f;
   static constexpr float kEps = 1.0e-20f;
+  /** Log-frequency cells per octave for the opening window. */
+  static constexpr int kOctCellsPerOct = 32;
+  /** log2(4096) * 32 + a few. Preallocated so the audio thread never grows it. */
+  static constexpr int kOctCellCap = 400;
   /** RMS detector time constant (seconds). Not a parameter. */
   static constexpr double kRmsTauSec = 0.04;
 
@@ -123,7 +129,7 @@ public:
   void setParams(float fLoHz, float fHiHz, float amount, float floorDb,
                  float blendMs, int loSlope = 2, int hiSlope = 2,
                  float spanDb = 12.f, float offsetDb = 0.f,
-                 bool rms = false)
+                 bool rms = false, float octave = 0.f)
   {
     if (fLoHz > fHiHz)
       std::swap(fLoHz, fHiHz);
@@ -153,6 +159,7 @@ public:
     if (rms && !rms_)
       rmsWarm_ = false;
     rms_ = rms;
+    octave_ = std::clamp(octave, 0.f, 1.f);
     blendMs_ = blend;
     if (timeChanged)
       updateTimeCoeffs();
@@ -824,6 +831,10 @@ private:
     imR_.assign(n, 0.f);
     px_.assign(half, 0.f);
     pxDet_.assign(half, 0.f);
+    pxOpen_.assign(half, 0.f);
+    binCell_.assign(half, -1);
+    cellPx_.assign(static_cast<size_t>(kOctCellCap), 0.f);
+    cellOpen_.assign(static_cast<size_t>(kOctCellCap), 0.f);
     pnActive_.assign(half, 0.f);
     pnFrom_.assign(half, 0.f);
     pnTo_.assign(half, 0.f);
@@ -873,6 +884,7 @@ private:
       hopSize_ = want / 4;
       rebuildWindow(want);
       rebuildBinMap();
+      rebuildOctaveMap();
       updateTimeCoeffs();
       rebuildBandWeights();
       // Remap morph buffers to the new FFT grid from the target profile.
@@ -1124,6 +1136,28 @@ private:
     return u * static_cast<float>(2.0 * M_PI);
   }
 
+  /** Bin index → octave cell. Distance between bins k and j is |log2(j/k)|. */
+  void rebuildOctaveMap()
+  {
+    const int half = fftSize_ / 2;
+    octCells_ = 0;
+    if (half < 2)
+      return;
+    const float cells = static_cast<float>(kOctCellsPerOct);
+    octCells_ = static_cast<int>(
+                  std::ceil(std::log2(static_cast<float>(half)) * cells))
+                + 1;
+    if (octCells_ > kOctCellCap)
+      octCells_ = kOctCellCap;
+    binCell_[0] = -1;
+    for (int k = 1; k <= half; ++k)
+    {
+      const int c = static_cast<int>(
+        std::lround(std::log2(static_cast<float>(k)) * cells));
+      binCell_[static_cast<size_t>(k)] = std::clamp(c, 0, octCells_ - 1);
+    }
+  }
+
   /** EMA of hop power. Peak leaves px_ untouched. */
   void followDetectorPower()
   {
@@ -1140,6 +1174,64 @@ private:
     {
       float& d = pxDet_[static_cast<size_t>(k)];
       d += a * (px_[static_cast<size_t>(k)] - d);
+    }
+  }
+
+  /**
+   * Raised-cosine max on the octave axis. Weight is 1 on the bin's own
+   * cell and 0 at ±octave_. A neighbour can only raise the detector.
+   */
+  void widenOpening(const float* src)
+  {
+    const int half = fftSize_ / 2;
+    const int n = half + 1;
+    const float width = octave_;
+    if (!(width > 1.0e-4f) || octCells_ < 2)
+    {
+      std::memcpy(pxOpen_.data(), src, sizeof(float) * static_cast<size_t>(n));
+      return;
+    }
+    std::fill(cellPx_.begin(), cellPx_.begin() + octCells_, 0.f);
+    for (int k = 1; k <= half; ++k)
+    {
+      const int c = binCell_[static_cast<size_t>(k)];
+      if (c < 0 || c >= octCells_)
+        continue;
+      float& cell = cellPx_[static_cast<size_t>(c)];
+      const float p = src[k];
+      if (p > cell)
+        cell = p;
+    }
+    const float cells = static_cast<float>(kOctCellsPerOct);
+    const int rad = std::max(
+      1, static_cast<int>(std::ceil(width * cells)));
+    for (int c = 0; c < octCells_; ++c)
+    {
+      float best = cellPx_[static_cast<size_t>(c)];
+      for (int d = 1; d <= rad; ++d)
+      {
+        const float oct = static_cast<float>(d) / cells;
+        if (oct >= width)
+          break;
+        const float w =
+          0.5f * (1.f + std::cos(static_cast<float>(M_PI) * oct / width));
+        if (w <= 0.f)
+          continue;
+        if (c - d >= 0)
+          best = std::max(best, cellPx_[static_cast<size_t>(c - d)] * w);
+        if (c + d < octCells_)
+          best = std::max(best, cellPx_[static_cast<size_t>(c + d)] * w);
+      }
+      cellOpen_[static_cast<size_t>(c)] = best;
+    }
+    pxOpen_[0] = src[0];
+    for (int k = 1; k <= half; ++k)
+    {
+      const int c = binCell_[static_cast<size_t>(k)];
+      float p = src[k];
+      if (c >= 0 && c < octCells_)
+        p = std::max(p, cellOpen_[static_cast<size_t>(c)]);
+      pxOpen_[static_cast<size_t>(k)] = p;
     }
   }
 
@@ -1269,6 +1361,11 @@ private:
       {
         followDetectorPower();
         det = pxDet_.data();
+      }
+      if (octave_ > 1.0e-4f)
+      {
+        widenOpening(det);
+        det = pxOpen_.data();
       }
 
       for (int k = 0; k <= half; ++k)
@@ -1614,6 +1711,8 @@ private:
   bool rms_ = false;
   bool rmsWarm_ = false;
   float rmsA_ = 1.f;
+  float octave_ = 0.f;
+  int octCells_ = 0;
   float floorLin_ = 0.1f; // dbToLin(-20)
   float blendMs_ = 250.f;
   float morphStep_ = 0.01f;
@@ -1641,8 +1740,10 @@ private:
 
   std::vector<float> inL_, inR_, olaL_, olaR_, dryL_, dryR_, outL_, outR_, window_;
   std::vector<float> reL_, imL_, reR_, imR_;
-  std::vector<float> px_, pxDet_, pnActive_, pnFrom_, pnTo_, gain_, bandW_,
-    learnSum_, scratchPn_;
+  std::vector<float> px_, pxDet_, pxOpen_, pnActive_, pnFrom_, pnTo_, gain_,
+    bandW_, learnSum_, scratchPn_;
+  std::vector<float> cellPx_, cellOpen_;
+  std::vector<int> binCell_;
   std::vector<float> avgDb_, maxDb_, lDb_, rDb_, grDisp_, profDisp_;
   std::vector<float> slotProf_[kNumProfiles];
   bool slotShown_[kNumProfiles] {};
