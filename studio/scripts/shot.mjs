@@ -8,6 +8,9 @@
  *   npm run shot -- reverb
  *   npm run shot -- night calfnxt
  *   npm run shot -- reverb mode=day accent=lime
+ *   npm run shot -- part=spectrum
+ *     Ring modulator top chart only, 2048px wide,
+ *     → website/images/header/<mode>-<accent>.jpg
  */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -44,9 +47,11 @@ const ROOT = path.resolve(STUDIO, '..');
 const OUT_DIR = path.resolve(
   process.env.CALFNXT_STUDIO_OUT || path.join(ROOT, 'website/images'),
 );
-const PORT = 5174;
+const PORT = Number(process.env.CALFNXT_STUDIO_PORT || 5174);
 const BASE = `http://127.0.0.1:${PORT}`;
 const TARGET_WIDTH = 1560;
+/** Bitmap width of the ring-modulator chart used as the site header. */
+const HEADER_WIDTH = 2048;
 
 const ALL = [
   'compressor',
@@ -86,6 +91,8 @@ function parseArgs(argv) {
   const ids = new Set();
   const modes = new Set();
   const accents = new Set();
+  let part = 'frame';
+  let width = 0;
   for (let i = 0; i < argv.length; ++i) {
     const a = argv[i];
     if (a.startsWith('plugin=')) {
@@ -114,6 +121,26 @@ function parseArgs(argv) {
       if (next) modes.add(next.trim());
       continue;
     }
+    if (a === 'part=spectrum' || a === '--part=spectrum') {
+      part = 'spectrum';
+      continue;
+    }
+    if (a.startsWith('part=')) {
+      part = a.slice('part='.length).trim();
+      continue;
+    }
+    if (a.startsWith('--part=')) {
+      part = a.slice('--part='.length).trim();
+      continue;
+    }
+    if (a.startsWith('width=')) {
+      width = Number(a.slice('width='.length));
+      continue;
+    }
+    if (a.startsWith('--width=')) {
+      width = Number(a.slice('--width='.length));
+      continue;
+    }
     if (a.startsWith('accent=')) {
       accents.add(a.slice('accent='.length).trim());
       continue;
@@ -140,7 +167,7 @@ function parseArgs(argv) {
       continue;
     }
     console.error(
-      `unknown argument "${a}". plugins: ${ALL.join(', ')}; modes: ${MODES.join(', ')}; accents: ${ACCENTS.join(', ')}`,
+      `unknown argument "${a}". plugins: ${ALL.join(', ')}; modes: ${MODES.join(', ')}; accents: ${ACCENTS.join(', ')}; part=frame|spectrum`,
     );
     process.exit(1);
   }
@@ -164,6 +191,14 @@ function parseArgs(argv) {
       process.exit(1);
     }
   }
+  if (part !== 'frame' && part !== 'spectrum') {
+    console.error(`unknown part "${part}". known: frame, spectrum`);
+    process.exit(1);
+  }
+  if (width && !(width >= 64 && width <= 8192)) {
+    console.error(`width must be 64…8192, got ${width}`);
+    process.exit(1);
+  }
   const themes = [];
   for (const mode of modes.size ? [...modes] : MODES) {
     for (const accent of accents.size ? [...accents] : ACCENTS) {
@@ -171,8 +206,11 @@ function parseArgs(argv) {
     }
   }
   return {
-    plugins: ids.size === 0 ? ALL.slice() : [...ids],
+    plugins:
+      ids.size === 0 ? (part === 'spectrum' ? ['ringmod'] : ALL.slice()) : [...ids],
     themes,
+    part,
+    width: width || (part === 'spectrum' ? HEADER_WIDTH : TARGET_WIDTH),
   };
 }
 
@@ -256,9 +294,26 @@ async function applyStudioTheme(page, mode, accent) {
   await wait(280);
 }
 
-async function shotPlugin(browser, id, themes) {
+async function openPluginPage(browser, id, themes, dpr, frame) {
   const first = themes[0];
   const url = `${BASE}/?mode=${first.mode}&accent=${first.accent}#${id}`;
+  const page = await browser.newPage({
+    viewport: {
+      width: Math.ceil(frame.width) + 4,
+      height: Math.ceil(frame.height) + 4,
+    },
+    deviceScaleFactor: dpr,
+  });
+  await prepStudioPage(page);
+  await page.goto(url, { waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-studio-frame][data-ready="1"]', {
+    timeout: 45000,
+  });
+  return page;
+}
+
+async function probePlugin(browser, id, mode, accent) {
+  const url = `${BASE}/?mode=${mode}&accent=${accent}#${id}`;
   const probe = await browser.newPage({
     viewport: { width: 1400, height: 1000 },
     deviceScaleFactor: 1,
@@ -268,23 +323,18 @@ async function shotPlugin(browser, id, themes) {
   await probe.waitForSelector('[data-studio-frame][data-ready="1"]', {
     timeout: 45000,
   });
-  const box = await probe.locator('[data-studio-frame]').boundingBox();
+  const frame = await probe.locator('[data-studio-frame]').boundingBox();
+  const spectrum = await probe.locator('[data-shot="spectrum"]').boundingBox();
   await probe.close();
-  if (!box) throw new Error(`no frame for ${id}`);
+  if (!frame) throw new Error(`no frame for ${id}`);
+  return { frame, spectrum };
+}
 
-  const dpr = Math.min(3, Math.max(1, TARGET_WIDTH / box.width));
-  const page = await browser.newPage({
-    viewport: {
-      width: Math.ceil(box.width) + 4,
-      height: Math.ceil(box.height) + 4,
-    },
-    deviceScaleFactor: dpr,
-  });
-  await prepStudioPage(page);
-  await page.goto(url, { waitUntil: 'networkidle' });
-  await page.waitForSelector('[data-studio-frame][data-ready="1"]', {
-    timeout: 45000,
-  });
+async function shotPlugin(browser, id, themes, targetWidth) {
+  const first = themes[0];
+  const { frame: box } = await probePlugin(browser, id, first.mode, first.accent);
+  const dpr = Math.min(3, Math.max(1, targetWidth / box.width));
+  const page = await openPluginPage(browser, id, themes, dpr, box);
 
   for (const { mode, accent } of themes) {
     await applyStudioTheme(page, mode, accent);
@@ -303,32 +353,73 @@ async function shotPlugin(browser, id, themes) {
   await page.close();
 }
 
+/** Ring-modulator top chart, one JPEG per theme, for the site header. */
+async function shotSpectrum(browser, themes, targetWidth) {
+  const id = 'ringmod';
+  const first = themes[0];
+  const { frame, spectrum } = await probePlugin(
+    browser,
+    id,
+    first.mode,
+    first.accent,
+  );
+  if (!spectrum) throw new Error('ring modulator has no [data-shot="spectrum"]');
+  const dpr = Math.min(4, Math.max(1, targetWidth / spectrum.width));
+  const page = await openPluginPage(browser, id, themes, dpr, frame);
+  const dir = path.join(OUT_DIR, 'header');
+  fs.mkdirSync(dir, { recursive: true });
+  for (const { mode, accent } of themes) {
+    await applyStudioTheme(page, mode, accent);
+    const out = path.join(dir, `${mode}-${accent}.jpg`);
+    await page.locator('[data-shot="spectrum"]').screenshot({
+      path: out,
+      type: 'jpeg',
+      quality: 90,
+    });
+    const box = await page.locator('[data-shot="spectrum"]').boundingBox();
+    const w = box ? Math.round(box.width * dpr) : 0;
+    const h = box ? Math.round(box.height * dpr) : 0;
+    console.log(`    wrote header/${mode}-${accent}.jpg  (${w}×${h})`);
+  }
+  await page.close();
+}
+
 async function main() {
   useInstalledPlaywrightBrowsers();
   ensureGenerated();
-  const { plugins, themes } = parseArgs(process.argv.slice(2));
+  const { plugins, themes, part, width } = parseArgs(process.argv.slice(2));
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
   console.log(
-    `==> ${plugins.length} plugin(s) × ${themes.length} theme(s)`,
+    part === 'spectrum'
+      ? `==> ring modulator chart × ${themes.length} theme(s) @ ${width}px → images/header/`
+      : `==> ${plugins.length} plugin(s) × ${themes.length} theme(s)`,
   );
 
   console.log('==> vite build');
   await runNpm(['run', 'build']);
 
-  console.log('==> vite preview');
-  const preview = spawn('npm', ['run', 'preview'], {
-    cwd: STUDIO,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  console.log(`==> vite preview :${PORT}`);
+  const preview = spawn(
+    'npx',
+    ['vite', 'preview', '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'],
+    {
+      cwd: STUDIO,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
 
   try {
     await waitForServer(`${BASE}/`);
     const browser = await chromium.launch({ headless: true });
     try {
-      for (const id of plugins) {
-        console.log(`==> ${id}`);
-        await shotPlugin(browser, id, themes);
+      if (part === 'spectrum') {
+        await shotSpectrum(browser, themes, width);
+      } else {
+        for (const id of plugins) {
+          console.log(`==> ${id}`);
+          await shotPlugin(browser, id, themes, width);
+        }
       }
     } finally {
       await browser.close();

@@ -148,7 +148,7 @@ export function RingmodUI(props: RingmodUIProps) {
         </WithInfo>
       </Header>
 
-      <div className="spectrum">
+      <div className="spectrum" data-shot="spectrum">
         <EQChart
           bands={host.carrierBands}
           interactive

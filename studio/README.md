@@ -68,6 +68,13 @@ npm run shot -- equalizer
 ```
 
 Output width targets ~1560 CSS×deviceScaleFactor (matches current website assets).
+The ring-modulator top chart, used as the site header, is a separate capture:
+
+```bash
+CALFNXT_STUDIO_PORT=5175 npm run shot -- part=spectrum
+# website/images/header/<mode>-<accent>.jpg at 2048px wide, all ten themes
+# one pair: npm run shot -- part=spectrum night calfnxt
+```
 Frames are design-size (`*.plugin.json` editor WxH) without DevShell chrome.
 **WithInfo tip bubbles default off** for captures (`showWidgetInfo$` / localStorage);
 the Header info toggle still works in the interactive Studio preview.
