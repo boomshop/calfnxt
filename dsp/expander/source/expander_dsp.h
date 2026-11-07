@@ -1,6 +1,7 @@
 #pragma once
 
 #include "effect_base.h"
+#include "host_transport.h"
 #include "seq_lock.h"
 #include "channel_mode.h"
 #include "expander.h"
@@ -29,6 +30,9 @@ public:
   }
 
   Steinberg::tresult PLUGIN_API initialize(Steinberg::FUnknown* context) SMTG_OVERRIDE;
+  Steinberg::tresult PLUGIN_API setBusArrangements(
+      Steinberg::Vst::SpeakerArrangement* inputs, Steinberg::int32 numIns,
+      Steinberg::Vst::SpeakerArrangement* outputs, Steinberg::int32 numOuts) SMTG_OVERRIDE;
   Steinberg::tresult PLUGIN_API setActive(Steinberg::TBool state) SMTG_OVERRIDE;
   Steinberg::tresult PLUGIN_API setupProcessing(Steinberg::Vst::ProcessSetup& newSetup) SMTG_OVERRIDE;
   Steinberg::tresult PLUGIN_API process(Steinberg::Vst::ProcessData& data) SMTG_OVERRIDE;
@@ -105,6 +109,13 @@ private:
       }
       return env;
     }
+
+    bool isSettled() const { return holdLeft <= 0 && env <= 1.0e-4f; }
+    void snapOff()
+    {
+      env = 0.f;
+      holdLeft = 0;
+    }
   };
 
   struct BlockState
@@ -128,6 +139,7 @@ private:
   void resetProcessing();
   void histFeedSample(float triggerLin, float grLin, float outPeakLin,
                       float threshLin);
+  void histAdvanceConstant(int nSamples, const float seed[kHistChannels]);
   void publishHistSnapshot();
   void publishDynamicsPoint();
 
@@ -165,6 +177,11 @@ private:
   int histSnapshotSampleCount_ = 0;
   int histSnapshotSamplesPerSlot_ = 1;
   int histVisibleSlots_ = 160;
+  Dsp::HistoryPacer histPacer_;
+  /** Samples of history this process() call may still scroll. */
+  int histAllow_ = 0;
+  /** History records only while the editor is open and the transport is playing. */
+  bool recordHist_ = false;
   /** 1 = fully active, 0 = fully bypassed (soft crossfade). */
   float bypassSmooth_ = 1.f;
 };

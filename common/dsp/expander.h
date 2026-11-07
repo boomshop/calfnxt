@@ -43,6 +43,56 @@ public:
   }
 
   /**
+   * Silence equilibrium: unity passthrough, or closed on the range floor
+   * with the detector at rest. A closed gate is NOT isIdle() — that only
+   * means "GR back at 1", which an expander never reaches while it is
+   * doing its job. Treating closed as busy kept the per-sample path (and
+   * denormal logs) running for the whole gap.
+   */
+  bool silenceSettled() const
+  {
+    if (passthrough_ || isIdle())
+      return true;
+    return !open_ && holdSamplesLeft_ <= 0 && linSlope_ < 1.0e-6f
+      && rmsSq_ < 1.0e-12f;
+  }
+
+  /** Drop denormal detector state. A closed gate stays on the range floor. */
+  void parkSilence()
+  {
+    linSlope_ = 0.f;
+    rmsSq_ = 0.f;
+    if (passthrough_)
+    {
+      open_ = true;
+      holdSamplesLeft_ = 0;
+      lastGr_ = 1.f;
+      return;
+    }
+    if (!open_ && holdSamplesLeft_ <= 0)
+      lastGr_ = rangeLin_;
+  }
+
+  /**
+   * Pathological host block (stop flush / multi-second silence in one
+   * callback): close immediately instead of iterating every sample.
+   */
+  void snapSilence()
+  {
+    linSlope_ = 0.f;
+    rmsSq_ = 0.f;
+    holdSamplesLeft_ = 0;
+    if (passthrough_)
+    {
+      open_ = true;
+      lastGr_ = 1.f;
+      return;
+    }
+    open_ = false;
+    lastGr_ = rangeLin_;
+  }
+
+  /**
    * thresholdDb = open threshold; releaseThresholdDb ≤ threshold (hysteresis).
    * rangeDb = max GR floor (≤ 0), e.g. −90…0.
    * kneeDb = soft width for open knee and range soft-landing.
@@ -174,6 +224,8 @@ public:
     float gain = 1.f;
     if (linSlope_ > 0.f)
       gain = outputGain(linSlope_);
+    else if (!passthrough_ && !open_)
+      gain = rangeLin_; // digital zero must not pop a closed gate back open
     sanitize(gain);
     lastGr_ = gain;
     return gain;

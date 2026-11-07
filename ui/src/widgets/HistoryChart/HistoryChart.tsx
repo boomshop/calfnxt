@@ -523,7 +523,10 @@ function historyChannelDots(
   const phaseShift = phase * slotMs;
   const pts: HistDot[] = [];
   for (let i = 0; i < slots; ++i) {
-    const age = i === slots - 1 ? 0 : slotMs * (slots - 1 - i) + phaseShift;
+    // Phase rides on every slot, including the newest. Pinning the head at
+    // age 0 stretches the last segment until the slot rolls, then the whole
+    // trace snaps by one slot — the only motion on a flat silence line.
+    const age = slotMs * (slots - 1 - i) + phaseShift;
     let y: number;
     if (floorY != null) {
       y = floorY;
@@ -543,6 +546,12 @@ function historyChannelDots(
       y = transform(lin);
     }
     pts.push({ x: age, y });
+  }
+  // Hold the current value at "now" so the trace still meets the right edge
+  // while the newest slot glides left with the phase.
+  if (phaseShift > 0 && pts.length > 0) {
+    const head = pts[pts.length - 1];
+    if (head) pts.push({ x: 0, y: head.y });
   }
   return pts;
 }
@@ -590,7 +599,7 @@ function historyCutTipsDots(
   const upper: HistDot[] = [];
   const lower: HistDot[] = [];
   for (let i = 0; i < slots; ++i) {
-    const age = i === slots - 1 ? 0 : slotMs * (slots - 1 - i) + phaseShift;
+    const age = slotMs * (slots - 1 - i) + phaseShift;
     if (floorY != null) {
       upper.push({ x: age, y: floorY });
       lower.push({ x: age, y: floorY });
@@ -619,6 +628,12 @@ function historyCutTipsDots(
     if (yLo > yHi) yLo = yHi;
     upper.push({ x: age, y: yHi });
     lower.push({ x: age, y: yLo });
+  }
+  if (phaseShift > 0 && upper.length > 0 && lower.length > 0) {
+    const hi = upper[upper.length - 1];
+    const lo = lower[lower.length - 1];
+    if (hi) upper.push({ x: 0, y: hi.y });
+    if (lo) lower.push({ x: 0, y: lo.y });
   }
   return upper.concat(lower.reverse());
 }

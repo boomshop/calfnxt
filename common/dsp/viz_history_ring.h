@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 
 namespace calfNXT {
@@ -70,6 +71,57 @@ public:
     sampleCount_ = 0;
     for (int c = 0; c < Channels; ++c)
       buf_[pos_ + c] = seedNext[c];
+  }
+
+  /**
+   * Advance `nSamples` of a constant value in O(slots), not O(samples).
+   * `agg(slot, seed)` updates the current partial slot once (max/min).
+   * Slots fully covered by the burst are overwritten with `seed`.
+   * Matches endSample() when the same seed is fed one sample at a time.
+   */
+  template <typename Agg>
+  void advanceConstant(int nSamples, const float seed[Channels], Agg&& agg) noexcept
+  {
+    if (nSamples <= 0)
+      return;
+    const int sps = std::max(1, samplesPerSlot_);
+    if (sampleCount_ >= sps || sampleCount_ < 0)
+      sampleCount_ = 0;
+
+    agg(slot(), seed);
+
+    const int room = sps - sampleCount_;
+    if (nSamples < room)
+    {
+      sampleCount_ += nSamples;
+      return;
+    }
+
+    const std::int64_t rest = static_cast<std::int64_t>(nSamples) - room;
+    const std::int64_t extraFull = rest / sps;
+    const int rem = static_cast<int>(rest % sps);
+    const std::int64_t advances = 1 + extraFull;
+
+    if (advances >= kMaxSlots)
+    {
+      for (int i = 0; i < kMaxSlots; ++i)
+      {
+        float* s = buf_ + i * Channels;
+        for (int c = 0; c < Channels; ++c)
+          s[c] = seed[c];
+      }
+      pos_ = 0;
+      sampleCount_ = rem;
+      return;
+    }
+
+    for (std::int64_t a = 0; a < advances; ++a)
+    {
+      pos_ = (pos_ + Channels) % kBufSize;
+      for (int c = 0; c < Channels; ++c)
+        buf_[pos_ + c] = seed[c];
+    }
+    sampleCount_ = rem;
   }
 
   void publish() noexcept

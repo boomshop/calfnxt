@@ -2,6 +2,7 @@
 
 #include "delay_line.h"
 #include "effect_base.h"
+#include "host_transport.h"
 #include "gr_meter.h"
 #include "io_stage.h"
 #include "lookahead_limiter.h"
@@ -70,6 +71,7 @@ private:
   int effectiveOversampling() const;
   Dsp::LimitCurve curveFromPlain(float v) const;
   void histFeedSample(float outPeakLin, float grLin, float limitLin);
+  void histAdvanceSilence(int nSamples, float limitLin);
   void publishHistSnapshot();
   static float applyColor(float x, float amount);
 
@@ -104,6 +106,10 @@ private:
   std::atomic<float> ascLed_ {0.f};
 
   Dsp::VizHistoryRing<kHistChannels> hist_;
+  Dsp::HistoryPacer histPacer_;
+  int histAllow_ = 0;
+  /** History records only while the editor is open and the transport is playing. */
+  bool recordHist_ = false;
 };
 
 } // namespace Limiter

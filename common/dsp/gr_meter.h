@@ -4,6 +4,9 @@
 // Mbcomp, Mblimiter).
 // Audio thread: process() stores the current GR.
 // UI thread: takeDb() returns ≤0 dB and clears the slot.
+// peekDb() returns the same value without clearing — use it when process()
+// can be slower than the viz poll (silence). Clearing there blinks the meter
+// to 0 between callbacks.
 // No falling ballistics — the meter follows the real GR.
 
 #include <atomic>
@@ -45,6 +48,12 @@ public:
   float takeDb()
   {
     return -holdAmt_.exchange(0.f, std::memory_order_acq_rel);
+  }
+
+  /** ≤0 dB for viz; leaves the value for the next poll. */
+  float peekDb() const
+  {
+    return -holdAmt_.load(std::memory_order_relaxed);
   }
 
 private:

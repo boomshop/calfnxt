@@ -3,6 +3,7 @@
 #include "base/source/fstreamer.h"
 #include "dsp_math.h"
 #include "gain_util.h"
+#include "host_transport.h"
 
 #include <algorithm>
 #include <cmath>
@@ -146,8 +147,7 @@ void LimiterPlugin::resetProcessing()
   bypassXfadeLen_ = 0;
   ascLed_.store(0.f, std::memory_order_relaxed);
 
-  hist_.reset();
-
+  // History stays across transport stop/start (see compressor).
   applyParams(true);
   updateLatency(false);
 }
@@ -215,8 +215,9 @@ void LimiterPlugin::applyParams(bool force)
 
 void LimiterPlugin::histFeedSample(float outPeakLin, float grLin, float limitLin)
 {
-  if (!vizConsumerActive())
+  if (!recordHist_ || histAllow_ <= 0)
     return;
+  --histAllow_;
   float* s = hist_.slot();
   s[0] = std::max(s[0], outPeakLin);
   if (hist_.sampleCount() == 0)
@@ -230,9 +231,27 @@ void LimiterPlugin::histFeedSample(float outPeakLin, float grLin, float limitLin
 
 void LimiterPlugin::publishHistSnapshot()
 {
-  if (!vizConsumerActive())
+  if (!recordHist_)
     return;
   hist_.publish();
+}
+
+void LimiterPlugin::histAdvanceSilence(int nSamples, float limitLin)
+{
+  if (!recordHist_ || nSamples <= 0 || histAllow_ <= 0)
+    return;
+  if (nSamples > histAllow_)
+    nSamples = histAllow_;
+  histAllow_ -= nSamples;
+  const float seed[kHistChannels] = {0.f, 1.f, limitLin};
+  hist_.advanceConstant(nSamples, seed, [&](float* s, const float* v) {
+    s[0] = std::max(s[0], v[0]);
+    if (hist_.sampleCount() == 0)
+      s[1] = v[1];
+    else
+      s[1] = std::min(s[1], v[1]);
+    s[2] = v[2];
+  });
 }
 
 tresult PLUGIN_API LimiterPlugin::setActive(TBool state)
@@ -255,8 +274,12 @@ tresult PLUGIN_API LimiterPlugin::setupProcessing(ProcessSetup& newSetup)
   tresult result = EffectBase::setupProcessing(newSetup);
   if (result != kResultOk)
     return result;
-  sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  const double sr = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  const bool srChanged = sr > sampleRate_ + 0.5 || sr < sampleRate_ - 0.5;
+  sampleRate_ = sr;
   resetProcessing();
+  if (srChanged)
+    hist_.reset();
   return kResultOk;
 }
 
@@ -293,6 +316,8 @@ void LimiterPlugin::configureVizBins(const char* id, int bins)
 tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
 {
   syncParamPlains(data, params_, kParamCount);
+  recordHist_ = vizConsumerActive() && Dsp::hostTransportPlaying(data);
+  histAllow_ = recordHist_ ? histPacer_.allow(data.numSamples, sampleRate_) : 0;
 
   const bool bypass = params_[kParamBypass] >= 0.5f;
   applyParams(false);
@@ -316,9 +341,10 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
     {
       bypassOld_ = bypass;
       grMeter_.forceZero();
-      const int32 n = data.numSamples;
-      for (int32 i = 0; i < n; ++i)
-        histFeedSample(0.f, 1.f, displayLimit);
+      histAdvanceSilence(data.numSamples, displayLimit);
+      publishHistSnapshot();
+      Dsp::finishSettledSilence(data, Dsp::hostTransportPlaying(data), false);
+      return kResultOk;
     }
     publishHistSnapshot();
     return kResultOk;
@@ -340,13 +366,11 @@ tresult PLUGIN_API LimiterPlugin::process(ProcessData& data)
     resamplerR_.sanitize();
     cleanResamplerL_.sanitize();
     cleanResamplerR_.sanitize();
-    {
-      const int32 n = data.numSamples;
-      for (int32 i = 0; i < n; ++i)
-        histFeedSample(0.f, 1.f, displayLimit);
-    }
+    histAdvanceSilence(data.numSamples, displayLimit);
     publishHistSnapshot();
-    io_.end(data);
+    // begin() already wrote the quiet program. While playing, leave the
+    // silence flag clear so the host stays on the audio clock.
+    Dsp::finishSettledSilence(data, Dsp::hostTransportPlaying(data), true);
     return kResultOk;
   }
 

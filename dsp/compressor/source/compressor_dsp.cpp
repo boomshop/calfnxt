@@ -3,7 +3,9 @@
 #include "base/source/fstreamer.h"
 #include "channel_mode.h"
 #include "detector_routing.h"
+#include "fp_flush.h"
 #include "gain_util.h"
+#include "host_transport.h"
 
 #include <algorithm>
 #include <cmath>
@@ -52,7 +54,9 @@ void CompressorPlugin::resetProcessing()
   pointInDb_.store(-96.f, std::memory_order_relaxed);
   pointOutDb_.store(-96.f, std::memory_order_relaxed);
 
-  hist_.reset();
+  // History stays across transport stop/start. Reaper deactivates the
+  // processor on stop and setActive(true) lands here; wiping the ring
+  // would blank the chart. A sample-rate change clears it below.
   bypassSmooth_ = 1.f;
 }
 
@@ -65,8 +69,12 @@ tresult PLUGIN_API CompressorPlugin::setActive(TBool state)
 
 tresult PLUGIN_API CompressorPlugin::setupProcessing(ProcessSetup& newSetup)
 {
-  sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  const double sr = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  const bool srChanged = sr > sampleRate_ + 0.5 || sr < sampleRate_ - 0.5;
+  sampleRate_ = sr;
   resetProcessing();
+  if (srChanged)
+    hist_.reset();
   return EffectBase::setupProcessing(newSetup);
 }
 
@@ -88,8 +96,9 @@ CompressorPlugin::BlockState CompressorPlugin::makeBlockState() const
 void CompressorPlugin::histFeedSample(float triggerLin, float grLin,
                                       float outPeakLin, float threshLin)
 {
-  if (!vizConsumerActive())
+  if (!recordHist_ || histAllow_ <= 0)
     return;
+  --histAllow_;
   float* s = hist_.slot();
   s[0] = std::max(triggerLin, s[0]);
   // Most reduction within the slot (smallest linear GR).
@@ -103,9 +112,29 @@ void CompressorPlugin::histFeedSample(float triggerLin, float grLin,
   hist_.endSample(seed);
 }
 
+void CompressorPlugin::histAdvanceConstant(int nSamples, float triggerLin, float grLin,
+                                           float outPeakLin, float threshLin)
+{
+  if (!recordHist_ || nSamples <= 0 || histAllow_ <= 0)
+    return;
+  if (nSamples > histAllow_)
+    nSamples = histAllow_;
+  histAllow_ -= nSamples;
+  const float seed[kHistChannels] = {triggerLin, grLin, outPeakLin, threshLin};
+  hist_.advanceConstant(nSamples, seed, [](float* s, const float* v) {
+    s[0] = std::max(v[0], s[0]);
+    if (s[1] <= 0.f)
+      s[1] = v[1];
+    else
+      s[1] = std::min(v[1], s[1]);
+    s[2] = std::max(v[2], s[2]);
+    s[3] = v[3];
+  });
+}
+
 void CompressorPlugin::publishHistSnapshot()
 {
-  if (!vizConsumerActive())
+  if (!recordHist_)
     return;
   hist_.publish();
 }
@@ -277,7 +306,11 @@ void CompressorPlugin::configureVizBins(const char* id, int bins)
 
 tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
 {
+  Dsp::ScopedFlushDenormals flushDenormals;
   syncParamPlains(data, params_, kParamCount);
+  // Stop flushes and silent-region bursts must not fast-forward the chart.
+  recordHist_ = vizConsumerActive() && Dsp::hostTransportPlaying(data);
+  histAllow_ = recordHist_ ? histPacer_.allow(data.numSamples, sampleRate_) : 0;
 
   const auto mode = Dsp::detectorModeFromPlain(params_[kParamMode]);
   const auto link = Dsp::stereoLinkFromPlain(params_[kParamLink]);
@@ -329,47 +362,90 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
 
   const bool hasHostAudio = io_.begin(data);
   const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
+  // Sidechain bus "active" only means the host enabled it. Silence on that
+  // bus must not keep the per-sample path (and a cleared silence flag) alive.
+  const bool scHot = scBusActive && !Dsp::audioBusIsQuiet(data, 1);
+  // Main Listen of a silent program is silence. Only a hot external key emits.
+  const bool listenEmit = state.listen && !state.bypass && scHot;
 
-  // Idle only when main (and ext SC if used) is quiet AND GR envelopes settled.
-  // External sidechain can still move GR on a silent main — keep processing then.
-  // Host still clocks audio: advance history with silence so the chart keeps scrolling.
-  // Dynamics point drops to the floor (not the last hit).
-  if (quietIn && gr_.isIdle() && !scBusActive)
+  // Main silence has no audio tail (dry × GR == 0), including while the
+  // envelope is still releasing. While playing, the output silence flag is
+  // cleared so Reaper keeps the audio-rate clock; a held flag delivers the
+  // gap as a burst and the history leaps. Stop marks the output silent.
+  // A hot sidechain or Listen still runs below — Listen can emit audio.
+  if (quietIn && !scHot && !listenEmit)
   {
-    grMeter_.forceZero();
+    const int32 n = data.numSamples;
+    const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);
+    sc_.reset();
     pointInDbPlain_ = -96.f;
     pointOutDbPlain_ = -96.f;
+    if (!gr_.isIdle())
     {
-      const int32 n = data.numSamples;
-      const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);
-      for (int32 i = 0; i < n; ++i)
-        histFeedSample(0.f, 1.f, 0.f, threshLin);
+      // One multi-second callback must not walk every sample. Past this,
+      // the release has had long enough; snap to unity.
+      constexpr int32 kMaxSilenceIter = 65536;
+      if (n > kMaxSilenceIter)
+        gr_.reset();
+      else
+      {
+        for (int32 i = 0; i < n; ++i)
+        {
+          const float gr = gr_.processDetector(0.f, 0.f);
+          histFeedSample(0.f, gr, 0.f, threshLin);
+        }
+      }
+      grMeter_.process(gr_.lastGainReduction());
+    }
+    else
+    {
+      grMeter_.forceZero();
+      histAdvanceConstant(n, 0.f, 1.f, 0.f, threshLin);
     }
     publishHistSnapshot();
     publishDynamicsPoint();
-    if (hasHostAudio)
-      io_.end(data);
+    Dsp::finishSettledSilence(data, Dsp::hostTransportPlaying(data), hasHostAudio);
     return kResultOk;
   }
 
   const int32 nFrames = data.numSamples;
 
-  // Host silenceFlags: outs not filled — keep draining GR (and SC).
+  // Host silenceFlags: outs are not filled. Only Listen of a hot sidechain
+  // emits audio; otherwise keep the silence flag and move the detector.
   if (!hasHostAudio)
   {
-    data.outputs[0].silenceFlags = 0;
+    const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);
+    const bool emit = listenEmit;
+    if (emit)
+      data.outputs[0].silenceFlags = 0;
     auto drain = [&](auto** out, int32 nCh) {
-      const bool canWrite = out && (nCh <= 0 || out[0]) && (nCh <= 1 || out[1]);
+      const bool canWrite = emit && out && (nCh <= 0 || out[0]) && (nCh <= 1 || out[1]);
       for (int32 i = 0; i < nFrames; ++i)
       {
         float L = 0.f;
         float R = 0.f;
         const auto [scL, scR] = sidechainAt(i, L, R);
-        processSample(state, L, R, scL, scR);
-        if (canWrite && nCh > 0)
-          out[0][i] = L;
-        if (canWrite && nCh > 1)
-          out[1][i] = R;
+        if (emit)
+        {
+          processSample(state, L, R, scL, scR);
+          if (canWrite && nCh > 0)
+            out[0][i] = L;
+          if (canWrite && nCh > 1)
+            out[1][i] = R;
+        }
+        else
+        {
+          float detL = 0.f;
+          float detR = 0.f;
+          Dsp::processDetectorStereo(sc_, state.channel, state.link, scL, scR, detL, detR);
+          const float gr = gr_.processDetector(detL, detR);
+          const float detPeak = std::max(std::fabs(detL), std::fabs(detR));
+          grMeter_.process(gr);
+          histFeedSample(detPeak, gr, 0.f, threshLin);
+          const float inDb = Dsp::linToDbSafe(gr_.lastDetectorLin());
+          pointInDbPlain_ = inDb;
+          pointOutDbPlain_ = inDb + Dsp::linToDbSafe(gr_.lastCurveGain()) + state.makeupDb;
+        }
       }
     };
     if (data.symbolicSampleSize == kSample32)
@@ -378,8 +454,11 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
       drain(data.outputs[0].channelBuffers64, data.outputs[0].numChannels);
     publishHistSnapshot();
     publishDynamicsPoint();
-    if (data.outputs[0].channelBuffers32 || data.outputs[0].channelBuffers64)
+    sc_.sanitize();
+    if (emit && (data.outputs[0].channelBuffers32 || data.outputs[0].channelBuffers64))
       io_.end(data);
+    else
+      Dsp::finishSettledSilence(data, Dsp::hostTransportPlaying(data), false);
     return kResultOk;
   }
 
@@ -421,6 +500,11 @@ tresult PLUGIN_API CompressorPlugin::process(ProcessData& data)
   publishDynamicsPoint();
   sc_.sanitize();
   io_.end(data);
+  // Quiet main with a hot sidechain still writes digital silence unless Listen
+  // is soloing that key. While playing, leave the flag clear so the host
+  // stays on the audio clock. Stop marks the buffer silent.
+  if (quietIn && !listenEmit && !Dsp::hostTransportPlaying(data))
+    Dsp::markOutputSilent(data);
   return kResultOk;
 }
 

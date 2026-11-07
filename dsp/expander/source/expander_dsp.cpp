@@ -3,10 +3,14 @@
 #include "base/source/fstreamer.h"
 #include "channel_mode.h"
 #include "detector_routing.h"
+#include "fp_flush.h"
 #include "gain_util.h"
+#include "host_transport.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <utility>
 
@@ -37,6 +41,66 @@ float relativeInhibitDesire(float invLin, float mainLin, float threshDb)
 }
 
 
+
+float busPeak(const ProcessData& data, int32 bus)
+{
+  if (!data.inputs || bus < 0 || bus >= data.numInputs)
+    return -1.f;
+  const auto& in = data.inputs[bus];
+  float peak = 0.f;
+  const int32 n = data.numSamples;
+  if (data.symbolicSampleSize == kSample32)
+  {
+    if (!in.channelBuffers32)
+      return -1.f;
+    for (int32 c = 0; c < in.numChannels; ++c)
+    {
+      const float* p = in.channelBuffers32[c];
+      if (!p)
+        continue;
+      for (int32 i = 0; i < n; ++i)
+        peak = std::max(peak, std::fabs(p[i]));
+    }
+    return peak;
+  }
+  if (!in.channelBuffers64)
+    return -1.f;
+  for (int32 c = 0; c < in.numChannels; ++c)
+  {
+    const double* p = in.channelBuffers64[c];
+    if (!p)
+      continue;
+    for (int32 i = 0; i < n; ++i)
+      peak = std::max(peak, static_cast<float>(std::fabs(p[i])));
+  }
+  return peak;
+}
+
+void logBusProbe(const bool active[4], const ProcessData& data, float inv1, float inv2)
+{
+  static int left = 24;
+  if (left <= 0 || data.numSamples <= 0)
+    return;
+  const float p2 = busPeak(data, 2);
+  const float p3 = busPeak(data, 3);
+  if (!(p2 > 0.001f || p3 > 0.001f))
+    return;
+  --left;
+  FILE* f = std::fopen("/tmp/calfnxt-exp-bus.log", "a");
+  if (!f)
+    return;
+  std::fprintf(f, "HIT nIn=%d inv=%.2f/%.2f\n", data.numInputs, inv1, inv2);
+  const int32 nBus = data.inputs ? data.numInputs : 0;
+  for (int32 b = 0; b < nBus && b < 8; ++b)
+  {
+    const auto& in = data.inputs[b];
+    const int on = b < 4 && active[b] ? 1 : 0;
+    std::fprintf(f, "  bus%d ch=%d flags=%u active=%d peak=%.6g\n", b, in.numChannels,
+                 static_cast<unsigned>(in.silenceFlags), on,
+                 static_cast<double>(b == 2 ? p2 : b == 3 ? p3 : busPeak(data, b)));
+  }
+  std::fclose(f);
+}
 
 std::pair<float, float> busAt(ProcessData& data, int32 bus, int32 i, float fallbackL,
                               float fallbackR)
@@ -83,6 +147,30 @@ tresult PLUGIN_API ExpanderPlugin::initialize(FUnknown* context)
   return kResultOk;
 }
 
+tresult PLUGIN_API ExpanderPlugin::setBusArrangements(SpeakerArrangement* inputs, int32 numIns,
+                                                      SpeakerArrangement* outputs, int32 numOuts)
+{
+  // Main + Sidechain + Inhibit 1 + Inhibit 2. EffectBase only accepts the first
+  // aux (numIns == 2). REAPER then never arms the inhibit buses: the pin connector
+  // still shows them, but process() is not given those inputs.
+  // While setBusArrangements returns true, REAPER also widens every bus up to the
+  // track channel count and dumps sends onto the main bus. Stop at stereo.
+  if (!inputs || !outputs || numOuts != 1 || numIns < 1 || numIns > 4)
+    return kResultFalse;
+  if (SpeakerArr::getChannelCount(outputs[0]) != 2)
+    return kResultFalse;
+  const int32 mainCh = SpeakerArr::getChannelCount(inputs[0]);
+  if (mainCh != 1 && mainCh != 2)
+    return kResultFalse;
+  for (int32 i = 1; i < numIns; ++i)
+  {
+    const int32 ch = SpeakerArr::getChannelCount(inputs[i]);
+    if (ch > 2)
+      return kResultFalse;
+  }
+  return SingleComponentEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
+}
+
 void ExpanderPlugin::resetProcessing()
 {
   gx_.setSampleRate(static_cast<float>(sampleRate_));
@@ -105,17 +193,8 @@ void ExpanderPlugin::resetProcessing()
   pointInDb_.store(-96.f, std::memory_order_relaxed);
   pointOutDb_.store(-96.f, std::memory_order_relaxed);
 
-  std::memset(histBuf_, 0, sizeof(histBuf_));
-  histPos_ = 0;
-  histSampleCount_ = 0;
-  histSamplesPerSlot_ = 1;
-  histVisibleSlots_ = 160;
-  histLock_.beginWrite();
-  std::memset(histSnapshot_, 0, sizeof(histSnapshot_));
-  histSnapshotPos_ = 0;
-  histSnapshotSampleCount_ = 0;
-  histSnapshotSamplesPerSlot_ = 1;
-  histLock_.endWrite();
+  // History stays across transport stop/start (see compressor). A sample-rate
+  // change clears it in setupProcessing.
   bypassSmooth_ = 1.f;
 }
 
@@ -128,8 +207,23 @@ tresult PLUGIN_API ExpanderPlugin::setActive(TBool state)
 
 tresult PLUGIN_API ExpanderPlugin::setupProcessing(ProcessSetup& newSetup)
 {
-  sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  const double sr = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  const bool srChanged = sr > sampleRate_ + 0.5 || sr < sampleRate_ - 0.5;
+  sampleRate_ = sr;
   resetProcessing();
+  if (srChanged)
+  {
+    std::memset(histBuf_, 0, sizeof(histBuf_));
+    histPos_ = 0;
+    histSampleCount_ = 0;
+    histSamplesPerSlot_ = 1;
+    histLock_.beginWrite();
+    std::memset(histSnapshot_, 0, sizeof(histSnapshot_));
+    histSnapshotPos_ = 0;
+    histSnapshotSampleCount_ = 0;
+    histSnapshotSamplesPerSlot_ = 1;
+    histLock_.endWrite();
+  }
   return EffectBase::setupProcessing(newSetup);
 }
 
@@ -164,8 +258,9 @@ ExpanderPlugin::BlockState ExpanderPlugin::makeBlockState() const
 void ExpanderPlugin::histFeedSample(float triggerLin, float grLin,
                                     float outPeakLin, float threshLin)
 {
-  if (!vizConsumerActive())
+  if (!recordHist_ || histAllow_ <= 0)
     return;
+  --histAllow_;
   const int pos = histPos_;
   histBuf_[pos + 0] = std::max(triggerLin, histBuf_[pos + 0]);
   if (histBuf_[pos + 1] <= 0.f)
@@ -195,9 +290,69 @@ void ExpanderPlugin::histFeedSample(float triggerLin, float grLin,
   }
 }
 
+void ExpanderPlugin::histAdvanceConstant(int nSamples, const float seed[kHistChannels])
+{
+  if (!recordHist_ || nSamples <= 0 || histAllow_ <= 0)
+    return;
+  if (nSamples > histAllow_)
+    nSamples = histAllow_;
+  histAllow_ -= nSamples;
+  const int sps = std::max(1, histSamplesPerSlot_);
+  if (histSampleCount_ >= sps || histSampleCount_ < 0)
+    histSampleCount_ = 0;
+
+  auto aggAt = [&](int pos) {
+    histBuf_[pos + 0] = std::max(seed[0], histBuf_[pos + 0]);
+    if (histBuf_[pos + 1] <= 0.f)
+      histBuf_[pos + 1] = seed[1];
+    else
+      histBuf_[pos + 1] = std::min(seed[1], histBuf_[pos + 1]);
+    histBuf_[pos + 2] = std::max(seed[2], histBuf_[pos + 2]);
+    histBuf_[pos + 3] = seed[3];
+    histBuf_[pos + 4] = std::max(seed[4], histBuf_[pos + 4]);
+    histBuf_[pos + 5] = std::max(seed[5], histBuf_[pos + 5]);
+    histBuf_[pos + 6] = std::max(seed[6], histBuf_[pos + 6]);
+    histBuf_[pos + 7] = std::max(seed[7], histBuf_[pos + 7]);
+  };
+  aggAt(histPos_);
+
+  const int room = sps - histSampleCount_;
+  if (nSamples < room)
+  {
+    histSampleCount_ += nSamples;
+    return;
+  }
+
+  const std::int64_t rest = static_cast<std::int64_t>(nSamples) - room;
+  const std::int64_t extraFull = rest / sps;
+  const int rem = static_cast<int>(rest % sps);
+  const std::int64_t advances = 1 + extraFull;
+
+  auto writeSeed = [&](int pos) {
+    for (int c = 0; c < kHistChannels; ++c)
+      histBuf_[pos + c] = seed[c];
+  };
+
+  if (advances >= kHistSlots)
+  {
+    for (int i = 0; i < kHistSlots; ++i)
+      writeSeed(i * kHistChannels);
+    histPos_ = 0;
+    histSampleCount_ = rem;
+    return;
+  }
+
+  for (std::int64_t a = 0; a < advances; ++a)
+  {
+    histPos_ = (histPos_ + kHistChannels) % kHistBufSize;
+    writeSeed(histPos_);
+  }
+  histSampleCount_ = rem;
+}
+
 void ExpanderPlugin::publishHistSnapshot()
 {
-  if (!vizConsumerActive())
+  if (!recordHist_)
     return;
   histLock_.beginWrite();
   std::memcpy(histSnapshot_, histBuf_, sizeof(histBuf_));
@@ -392,7 +547,9 @@ int ExpanderPlugin::takeGainReductionDb(float* out, int maxOut)
 {
   if (!out || maxOut < 1)
     return 0;
-  out[0] = grMeter_.takeDb();
+  // peek: takeDb() would zero the slot. A closed gate holds its floor between
+  // viz polls; clearing it blinks the meter back to 0.
+  out[0] = grMeter_.peekDb();
   return 1;
 }
 
@@ -482,7 +639,16 @@ void ExpanderPlugin::configureVizBins(const char* id, int bins)
 
 tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
 {
+  Dsp::ScopedFlushDenormals flushDenormals;
   syncParamPlains(data, params_, kParamCount);
+  {
+    const bool active[4] = {
+      isAudioInputActive(0), isAudioInputActive(1), isAudioInputActive(2),
+      isAudioInputActive(3)};
+    logBusProbe(active, data, params_[kParamInv1Active], params_[kParamInv2Active]);
+  }
+  recordHist_ = vizConsumerActive() && Dsp::hostTransportPlaying(data);
+  histAllow_ = recordHist_ ? histPacer_.allow(data.numSamples, sampleRate_) : 0;
 
   const auto mode = Dsp::detectorModeFromPlain(params_[kParamMode]);
   const auto link = Dsp::stereoLinkFromPlain(params_[kParamLink]);
@@ -564,31 +730,15 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
 
   const bool hasHostAudio = io_.begin(data);
   const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
-
-  // Idle only when main is quiet, expansion settled, and no key/inhibit work.
-  if (quietIn && gx_.isIdle() && !scBusActive && !anyInvWork)
-  {
-    grMeter_.forceZero();
-    invAmount_[0] = 0.f;
-    invAmount_[1] = 0.f;
-    invPeakLin_[0] = 0.f;
-    invPeakLin_[1] = 0.f;
-    invPeakHold_[0] = 0.f;
-    invPeakHold_[1] = 0.f;
-    detPeakHold_ = 0.f;
-    pointInDbPlain_ = -96.f;
-    pointOutDbPlain_ = -96.f;
-    {
-      const int32 n = data.numSamples;
-      for (int32 i = 0; i < n; ++i)
-        histFeedSample(0.f, 1.f, 0.f, Dsp::dbToLin(params_[kParamThreshold]));
-    }
-    publishHistSnapshot();
-    publishDynamicsPoint();
-    if (hasHostAudio)
-      io_.end(data);
-    return kResultOk;
-  }
+  const bool scHot = scBusActive && !Dsp::audioBusIsQuiet(data, 1);
+  const bool invHot = (inv1WantBus && !Dsp::audioBusIsQuiet(data, 2))
+    || (inv2WantBus && !Dsp::audioBusIsQuiet(data, 3));
+  // Listen emits only when the key it solos is actually present. A listen
+  // switch left on over digital silence must not clear the host silence flag.
+  const bool listenEmit = !state.bypass && (
+    (state.listen && scHot)
+    || (state.invListen[0] && inv1WantBus && !Dsp::audioBusIsQuiet(data, 2))
+    || (state.invListen[1] && inv2WantBus && !Dsp::audioBusIsQuiet(data, 3)));
 
   const int32 nFrames = data.numSamples;
 
@@ -599,8 +749,118 @@ tresult PLUGIN_API ExpanderPlugin::process(ProcessData& data)
     processSample(state, L, R, scL, scR, i1L, i1R, i2L, i2R);
   };
 
+  // Silent main has no audio tail (dry × GR == 0). A closed gate is not
+  // idle (isIdle() only means GR == 1), so this path parks the envelope
+  // instead of walking every sample. While playing the silence flag is
+  // cleared so the host stays on the audio clock; stop marks it silent.
+  if (quietIn && !listenEmit)
+  {
+    const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);
+    const float sr = static_cast<float>(sampleRate_);
+    pointInDbPlain_ = -96.f;
+    pointOutDbPlain_ = -96.f;
+    detPeakHold_ = 0.f;
+
+    auto invEnvelopeSettled = [&]() {
+      if (!anyInvWork)
+        return true;
+      for (int k = 0; k < kInhibitCount; ++k)
+      {
+        if ((state.invActive[k] || state.invListen[k]) && !invEnv_[k].isSettled())
+          return false;
+      }
+      return true;
+    };
+
+    if (!scHot && !invHot && gx_.silenceSettled() && invEnvelopeSettled())
+    {
+      gx_.parkSilence();
+      sc_.reset();
+      for (int k = 0; k < kInhibitCount; ++k)
+      {
+        invSc_[k].reset();
+        invEnv_[k].snapOff();
+        invAmount_[k] = 0.f;
+        invPeakLin_[k] = 0.f;
+        invPeakHold_[k] = 0.f;
+      }
+      const float gr = gx_.lastGainReduction();
+      if (gr >= 0.9999f)
+        grMeter_.forceZero();
+      else
+        grMeter_.process(gr);
+      const float seed[kHistChannels] = {
+        0.f, gr, 0.f, threshLin, 0.f, 0.f, 0.f, 0.f};
+      histAdvanceConstant(nFrames, seed);
+    }
+    else if (!scHot && !invHot)
+    {
+      sc_.reset();
+      for (int k = 0; k < kInhibitCount; ++k)
+        invSc_[k].reset();
+      constexpr int32 kMaxSilenceIter = 65536;
+      const int32 nRun = nFrames > kMaxSilenceIter ? kMaxSilenceIter : nFrames;
+      for (int32 i = 0; i < nRun; ++i)
+      {
+        const float gr = gx_.processDetector(0.f, 0.f);
+        for (int k = 0; k < kInhibitCount; ++k)
+        {
+          if (!state.invActive[k])
+          {
+            invEnv_[k].snapOff();
+            invAmount_[k] = 0.f;
+          }
+          else
+          {
+            invAmount_[k] = invEnv_[k].processDesire(
+              0.f, state.invHoldMs[k], state.invReleaseMs[k], sr);
+          }
+          invPeakLin_[k] = 0.f;
+        }
+        histFeedSample(0.f, gr, 0.f, threshLin);
+      }
+      if (nFrames > kMaxSilenceIter)
+      {
+        gx_.snapSilence();
+        for (int k = 0; k < kInhibitCount; ++k)
+        {
+          invEnv_[k].snapOff();
+          invAmount_[k] = 0.f;
+        }
+      }
+      grMeter_.process(gx_.lastGainReduction());
+    }
+    else
+    {
+      // Hot key, silent main, not listening: detector only, output stays silent.
+      for (int32 i = 0; i < nFrames; ++i)
+      {
+        float L = 0.f;
+        float R = 0.f;
+        runFrame(i, L, R);
+      }
+      sc_.sanitize();
+      for (int k = 0; k < kInhibitCount; ++k)
+        invSc_[k].sanitize();
+      if (invPeakHold_[0] > 0.001f || invPeakHold_[1] > 0.001f)
+      {
+        if (FILE* f = std::fopen("/tmp/calfnxt-exp-bus.log", "a"))
+        {
+          std::fprintf(f, "HOLD %.6g %.6g\n", invPeakHold_[0], invPeakHold_[1]);
+          std::fclose(f);
+        }
+      }
+    }
+
+    publishHistSnapshot();
+    publishDynamicsPoint();
+    Dsp::finishSettledSilence(data, Dsp::hostTransportPlaying(data), hasHostAudio);
+    return kResultOk;
+  }
+
   if (!hasHostAudio)
   {
+    // listenEmit on a host-silent main: write the key and drop the silence flag.
     data.outputs[0].silenceFlags = 0;
     auto drain = [&](auto** out, int32 nCh) {
       const bool canWrite = out && (nCh <= 0 || out[0]) && (nCh <= 1 || out[1]);

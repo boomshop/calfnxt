@@ -4,6 +4,7 @@
 #include "channel_mode.h"
 #include "dsp_math.h"
 #include "gain_util.h"
+#include "host_transport.h"
 
 #include <algorithm>
 #include <cmath>
@@ -52,7 +53,7 @@ void DeesserPlugin::resetProcessing()
   splitR_.reset();
   grMeter_.reset(static_cast<float>(sampleRate_));
 
-  hist_.reset();
+  // History stays across transport stop/start (see compressor).
   bypassSmooth_ = 1.f;
 }
 
@@ -65,8 +66,12 @@ tresult PLUGIN_API DeesserPlugin::setActive(TBool state)
 
 tresult PLUGIN_API DeesserPlugin::setupProcessing(ProcessSetup& newSetup)
 {
-  sampleRate_ = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  const double sr = newSetup.sampleRate > 0.0 ? newSetup.sampleRate : 44100.0;
+  const bool srChanged = sr > sampleRate_ + 0.5 || sr < sampleRate_ - 0.5;
+  sampleRate_ = sr;
   resetProcessing();
+  if (srChanged)
+    hist_.reset();
   return EffectBase::setupProcessing(newSetup);
 }
 
@@ -86,8 +91,9 @@ void DeesserPlugin::histFeedSample(float triggerLin, float grLin,
                                    float outPeakLin, float threshLin,
                                    float prePeakLin)
 {
-  if (!vizConsumerActive())
+  if (!recordHist_ || histAllow_ <= 0)
     return;
+  --histAllow_;
   float* s = hist_.slot();
   s[0] = std::max(triggerLin, s[0]);
   // Most reduction within the slot (smallest linear GR).
@@ -105,7 +111,7 @@ void DeesserPlugin::histFeedSample(float triggerLin, float grLin,
 
 void DeesserPlugin::publishHistSnapshot()
 {
-  if (!vizConsumerActive())
+  if (!recordHist_)
     return;
   hist_.publish();
 }
@@ -342,6 +348,8 @@ void DeesserPlugin::configureVizBins(const char* id, int bins)
 tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
 {
   syncParamPlains(data, params_, kParamCount);
+  recordHist_ = vizConsumerActive() && Dsp::hostTransportPlaying(data);
+  histAllow_ = recordHist_ ? histPacer_.allow(data.numSamples, sampleRate_) : 0;
 
   const float laxity = std::clamp(params_[kParamLaxity], 1.f, 100.f);
   const float attackMs = laxity;
@@ -388,20 +396,31 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
   const bool hasHostAudio = io_.begin(data);
   const bool quietIn = !hasHostAudio || io_.inputWasQuiet();
 
-  // Idle only when input is quiet AND de-esser GR is settled.
-  // Advance history with silence (incl. silenceFlags) so the chart keeps scrolling.
+  // Settled silence has no audio tail. While playing, keep the audio-rate
+  // clock (a held silence flag arrives as a burst and the history leaps).
+  // Stop marks the output silent.
   if (quietIn && gr_.isIdle())
   {
     grMeter_.forceZero();
+    if (recordHist_ && histAllow_ > 0)
     {
-      const int32 n = data.numSamples;
+      const int nScroll = data.numSamples < histAllow_ ? data.numSamples : histAllow_;
+      histAllow_ -= nScroll;
       const float threshLin = Dsp::dbToLin(params_[kParamThreshold]);
-      for (int32 i = 0; i < n; ++i)
-        histFeedSample(0.f, 1.f, 0.f, threshLin, 0.f);
+      const float seed[kHistChannels] = {0.f, 1.f, 0.f, threshLin, 0.f};
+      hist_.advanceConstant(nScroll, seed, [](float* s, const float* v) {
+        s[0] = std::max(v[0], s[0]);
+        if (s[1] <= 0.f)
+          s[1] = v[1];
+        else
+          s[1] = std::min(v[1], s[1]);
+        s[2] = std::max(v[2], s[2]);
+        s[3] = v[3];
+        s[4] = std::max(v[4], s[4]);
+      });
     }
     publishHistSnapshot();
-    if (hasHostAudio)
-      io_.end(data);
+    Dsp::finishSettledSilence(data, Dsp::hostTransportPlaying(data), hasHostAudio);
     return kResultOk;
   }
 
@@ -409,7 +428,10 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
 
   if (!hasHostAudio)
   {
-    data.outputs[0].silenceFlags = 0;
+    // Split/GR tail may still be audible. If this block is already quiet,
+    // keep the silence flag — clearing it makes Reaper flush process() in a
+    // burst on stop and the history jumps.
+    float peak = 0.f;
     auto drain = [&](auto** out, int32 nCh) {
       const bool canWrite = out && (nCh <= 0 || out[0]) && (nCh <= 1 || out[1]);
       for (int32 i = 0; i < nFrames; ++i)
@@ -417,6 +439,7 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
         float L = 0.f;
         float R = 0.f;
         processSample(state, L, R);
+        peak = std::max(peak, std::max(std::fabs(L), std::fabs(R)));
         if (canWrite && nCh > 0)
           out[0][i] = L;
         if (canWrite && nCh > 1)
@@ -428,8 +451,15 @@ tresult PLUGIN_API DeesserPlugin::process(ProcessData& data)
     else
       drain(data.outputs[0].channelBuffers64, data.outputs[0].numChannels);
     publishHistSnapshot();
-    if (data.outputs[0].channelBuffers32 || data.outputs[0].channelBuffers64)
+    const bool wrote =
+      data.outputs && data.numOutputs > 0
+      && (data.outputs[0].channelBuffers32 || data.outputs[0].channelBuffers64);
+    if (wrote && peak >= Dsp::IoStage::kQuietPeak)
       io_.end(data);
+    else if (Dsp::hostTransportPlaying(data))
+      Dsp::finishSettledSilence(data, true, wrote);
+    else
+      Dsp::markOutputSilent(data);
     return kResultOk;
   }
 

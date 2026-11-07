@@ -1,6 +1,7 @@
 #pragma once
 
 #include "effect_base.h"
+#include "host_transport.h"
 #include "io_stage.h"
 #include "channel_mode.h"
 #include "compressor.h"
@@ -74,6 +75,8 @@ private:
   void resetProcessing();
   void histFeedSample(float triggerLin, float grLin, float outPeakLin,
                       float threshLin);
+  void histAdvanceConstant(int nSamples, float triggerLin, float grLin,
+                           float outPeakLin, float threshLin);
   void publishHistSnapshot();
   void publishDynamicsPoint();
 
@@ -91,6 +94,11 @@ private:
   std::atomic<float> pointOutDb_ {-96.f};
 
   Dsp::VizHistoryRing<kHistChannels> hist_;
+  Dsp::HistoryPacer histPacer_;
+  /** Samples of history this process() call may still scroll. */
+  int histAllow_ = 0;
+  /** History records only while the editor is open and the transport is playing. */
+  bool recordHist_ = false;
   /** 1 = fully active, 0 = fully bypassed (soft crossfade). */
   float bypassSmooth_ = 1.f;
 };
