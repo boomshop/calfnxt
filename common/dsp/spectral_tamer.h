@@ -143,6 +143,8 @@ public:
     std::fill(outR_.begin(), outR_.end(), 0.f);
     std::fill(grDb_.begin(), grDb_.end(), 0.f);
     std::fill(envDb_.begin(), envDb_.end(), kFloorDb);
+    if (!tipHold_.empty())
+      std::fill(tipHold_.begin(), tipHold_.end(), 0.f);
     writePos_ = 0;
     hopCount_ = 0;
     filled_ = 0;
@@ -635,6 +637,7 @@ private:
     envDb_.assign(half, kFloorDb);
     grDb_.assign(half, 0.f);
     grTarget_.assign(half, 0.f);
+    tipHold_.assign(half, 0.f);
     scratch_.assign(half, 0.f);
     ladder_.assign(static_cast<size_t>(2 * kMaxLadderRungs), 0.f);
     pubLadder_.assign(static_cast<size_t>(2 * kMaxLadderRungs), 0.f);
@@ -981,6 +984,19 @@ private:
     ladderN_ = 0;
     ladderKeep_ = 0.f;
 
+    // Tip-hold decays every hop (even with Depth=0 / Bypass) so memory fades.
+    {
+      constexpr float kTipDecay = 0.55f;
+      if (static_cast<int>(tipHold_.size()) < half + 1)
+        tipHold_.assign(static_cast<size_t>(half) + 1, 0.f);
+      for (int k = 0; k <= half; ++k)
+      {
+        float& h = tipHold_[static_cast<size_t>(k)];
+        h *= kTipDecay;
+        sanitizeDenormal(h);
+      }
+    }
+
     // Harmonics protects a tone ladder on the *same* detector signal. With
     // external SC that would soft-keep the key's series on the main — skip it.
     const float harmSave = harmonics_;
@@ -1092,6 +1108,8 @@ private:
         }
         R = std::min(R, half / 3);
 
+        // Peer penalty is soft: dense cymbal/hat partials sit near each other, so
+        // a raw max-peer veto forced Threshold≈0 / huge Depth before anything moved.
         float peer = -240.f;
         const int lo = std::max(1, k - R);
         const int hi = std::min(half - 1, k + R);
@@ -1103,7 +1121,8 @@ private:
             detectDb_[static_cast<size_t>(j)] - envDb_[static_cast<size_t>(j)];
           peer = std::max(peer, rj);
         }
-        const float excess = res - peer - thresh;
+        constexpr float kPeerWeight = 0.4f;
+        const float excess = res - kPeerWeight * peer - thresh;
         if (excess <= 0.f)
           continue;
 
@@ -1112,6 +1131,37 @@ private:
 
         const float amt = depth * (1.f - std::exp(-excess / softEff));
         grTarget_[static_cast<size_t>(k)] = -std::min(depth, amt);
+      }
+
+      // Tip hold: stable partials ramp to full Depth; one-hop FFT speckle stays weak
+      // (hopping notches → musical-noise chirp on broadband HF). Decay ran above.
+      {
+        constexpr float kTipBoost = 0.55f;
+        constexpr float kTipSide = 0.5f;
+        for (int k = kLo_; k <= kHi_; ++k)
+        {
+          if (!(grTarget_[static_cast<size_t>(k)] < -1.0e-3f))
+            continue;
+          float& h = tipHold_[static_cast<size_t>(k)];
+          h = std::min(1.f, h + kTipBoost);
+          if (k > 0)
+          {
+            float& hs = tipHold_[static_cast<size_t>(k - 1)];
+            hs = std::min(1.f, hs + kTipBoost * kTipSide);
+          }
+          if (k < half)
+          {
+            float& hs = tipHold_[static_cast<size_t>(k + 1)];
+            hs = std::min(1.f, hs + kTipBoost * kTipSide);
+          }
+        }
+        for (int k = 0; k <= half; ++k)
+        {
+          float& g = grTarget_[static_cast<size_t>(k)];
+          if (!(g < 0.f))
+            continue;
+          g *= tipHold_[static_cast<size_t>(k)];
+        }
       }
 
       // Peak list must be sorted by Hz for the low→high F0 walk.
@@ -1737,7 +1787,8 @@ private:
   std::vector<float> scIn_, scDry_;
   std::vector<float> reL_, imL_, reR_, imR_;
   std::vector<float> scRe_, scIm_;
-  std::vector<float> magDb_, detectDb_, filtDb_, envDb_, grDb_, grTarget_, scratch_;
+  std::vector<float> magDb_, detectDb_, filtDb_, envDb_, grDb_, grTarget_, tipHold_,
+    scratch_;
   std::vector<float> avgDb_, maxDb_, lDb_, rDb_, grDisp_, scAvgDb_;
   std::vector<float> pubAvg_, pubMax_, pubL_, pubR_, pubGr_, pubScAvg_, pubT_;
   /** Live guides: interleaved (centerHz, halfWidthHz) × ladderN_. */

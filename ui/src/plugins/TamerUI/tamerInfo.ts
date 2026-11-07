@@ -62,7 +62,7 @@ export const tamerInfo = {
         heading: 'What you hear',
         blocks: [
           {
-            p: 'Once a tip clears Threshold, the cut eases toward this ceiling. The first bit over the threshold does not jump straight to the full depth. Past about 12 dB the climb gets steeper, so the same excess reaches the ceiling sooner. Diff Listen should be the ring, not the body of the note.',
+            p: 'Once a tip clears Threshold, the cut eases toward this ceiling. The first bit over the threshold does not jump straight to the full depth. Past about 12 dB the climb gets steeper, so the same excess reaches the ceiling sooner. Tips that only appear for a single analysis hop stay soft — stable whistles (hat partials, rings) build up and take the full depth. Diff Listen should be the ring, not the body of the note.',
           },
         ],
       },
@@ -102,7 +102,7 @@ export const tamerInfo = {
         heading: 'What you hear',
         blocks: [
           {
-            p: 'Higher waits for a clearer whistle. Lower starts sooner and is more willing to chew a formant. The same margin decides when one peak in a harmonic ladder is loud enough to still be cut.',
+            p: 'Higher waits for a clearer whistle. Lower starts sooner and is more willing to chew a formant. Neighbours only soft-penalise a tip, so dense cymbal partials can still fire without slamming this to zero. The same margin decides when one peak in a harmonic ladder is loud enough to still be cut.',
           },
         ],
       },
