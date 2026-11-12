@@ -324,7 +324,11 @@ async function probePlugin(browser, id, mode, accent) {
     timeout: 45000,
   });
   const frame = await probe.locator('[data-studio-frame]').boundingBox();
-  const spectrum = await probe.locator('[data-shot="spectrum"]').boundingBox();
+  // Header capture only. Other plugins have no spectrum element; boundingBox
+  // would wait out the timeout and fail the whole plugin shot.
+  const spectrumLoc = probe.locator('[data-shot="spectrum"]');
+  const spectrum =
+    (await spectrumLoc.count()) > 0 ? await spectrumLoc.boundingBox() : null;
   await probe.close();
   if (!frame) throw new Error(`no frame for ${id}`);
   return { frame, spectrum };
