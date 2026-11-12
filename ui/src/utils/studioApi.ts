@@ -33,7 +33,8 @@ export type PluginId =
   | 'impulse'
   | 'tamer'
   | 'aligner'
-  | 'denoiser';
+  | 'denoiser'
+  | 'elliptic';
 
 const PLUGIN_IDS: PluginId[] = [
   'equalizer',
@@ -64,6 +65,7 @@ const PLUGIN_IDS: PluginId[] = [
   'tamer',
   'aligner',
   'denoiser',
+  'elliptic',
 ];
 
 export function isPluginId(id: string): id is PluginId {
@@ -244,6 +246,12 @@ export {
   createBoundDenoiserHost,
   type IDenoiserHost,
 } from '../host/denoiserHost';
+
+export { EllipticUI } from '../plugins/EllipticUI/EllipticUI';
+export {
+  createBoundEllipticHost,
+  type IEllipticHost,
+} from '../host/ellipticHost';
 
 export { createHeaderIo, type IHeaderIo } from '../host/headerMeters';
 

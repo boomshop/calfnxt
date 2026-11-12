@@ -24,7 +24,7 @@ system WebKit); the **host `environ` is never mutated**. Opt out with
 `CALFNXT_KEEP_HOST_LDPATH`. Each bundle ships `Contents/<arch>/calfnxt-web-host`
 next to the `.so`. User-facing contract: `README.md` → Clarifications.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Impulse** (`#impulse`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`), **Tuner** (`#tuner`), **Octaver** (`#octaver`), **Bender** (`#bender`), **Tamer** (`#tamer`), **Aligner** (`#aligner`), **Denoiser** (`#denoiser`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Impulse** (`#impulse`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`), **Tuner** (`#tuner`), **Octaver** (`#octaver`), **Bender** (`#bender`), **Tamer** (`#tamer`), **Aligner** (`#aligner`), **Denoiser** (`#denoiser`), **Elliptic** (`#elliptic`).
 Suite focus is this set — no near-term new plugins unless explicitly requested.
 
 ---
@@ -85,8 +85,9 @@ dsp/impulse/   impulse.plugin.json + DSP + codegen
 dsp/tamer/     tamer.plugin.json + DSP + codegen
 dsp/aligner/   aligner.plugin.json + DSP + codegen
 dsp/denoiser/  denoiser.plugin.json + DSP + codegen
+dsp/elliptic/  elliptic.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
-ui/            React SPA (Vite), hash router #equalizer / … / #denoiser
+ui/            React SPA (Vite), hash router #equalizer / … / #elliptic
 external/vst3sdk/
 ```
 
@@ -402,6 +403,7 @@ Ideas only if explicitly revived — do not start these unprompted:
 | Tamer DSP                   | `dsp/tamer/source/*_dsp.*`, `common/dsp/spectral_tamer.h`; UI `ui/src/plugins/TamerUI/*`, `host/tamerHost.ts`, `widgets/TamerChart/*`                                                                 |
 | Aligner DSP                 | `dsp/aligner/source/*_dsp.*`; UI `ui/src/plugins/AlignerUI/*`, `host/alignerHost.ts` — one 8-ch main → stereo + stereo Reference aux (display only; Ardour-friendly 1 main+1 aux); manual delay/phase; Master Trim vs mix                                                                 |
 | Denoiser DSP                | `dsp/denoiser/source/*_dsp.*`, `common/dsp/spectral_denoiser.h`; UI `ui/src/plugins/DenoiserUI/*`, `host/denoiserHost.ts`, `widgets/DenoiserChart/*`                                                                     |
+| Elliptic DSP                | `dsp/elliptic/source/*_dsp.*`, `elliptic_crossover.h`; UI `ui/src/plugins/EllipticUI/*`, `host/ellipticHost.ts`                                                                                                          |
 | Param bind                  | `ui/src/utils/bridge.ts`, `ui/src/utils/bind_param.ts`, `host/*Host.ts`                                                                                                                              |
 | Header I/O                  | `ui/src/components/Header/*`, `host/headerMeters.ts`                                                                                                                                                |
 | Meters                      | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*`                                                                                                                                                       |

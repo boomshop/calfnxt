@@ -82,6 +82,7 @@ const ALL = [
   'tamer',
   'aligner',
   'denoiser',
+  'elliptic',
 ];
 
 const MODES = ['night', 'day'];

@@ -92,6 +92,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 | ------------ | ---------------------- | ------------------------------------------------- |
 | **Analyzer** | `calfNXTAnalyzer.vst3` | Spectrum, difference, waterfall, loudness, goniometer (passthrough) |
 | **Stereo**   | `calfNXTStereo.vst3`   | Width / M/S imaging                               |
+| **Elliptic** | `calfNXTElliptic.vst3` | Bass mono below a Linkwitz–Riley split            |
 | **Split**    | `calfNXTSplit.vst3`    | Mono in → stereo out                              |
 | **Aligner**  | `calfNXTAligner.vst3`  | 8-in → stereo mic align + Reference aux (delay / phase / pan) |
 
@@ -261,7 +262,7 @@ re-embedded (the install script does that). Plugin ids for the script / Vite:
 `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay`
 `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter`
 `ringmod` `pulsator` `crusher` `phaser` `flanger` `chorus` `split` `tuner`
-`octaver` `bender` `impulse` `tamer` `aligner` `denoiser`.
+`octaver` `bender` `impulse` `tamer` `aligner` `denoiser` `elliptic`.
 
 Codegen is part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++
 params + `ui/src/generated/`).

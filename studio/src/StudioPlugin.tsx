@@ -28,6 +28,7 @@ import {
   TamerUI,
   AlignerUI,
   DenoiserUI,
+  EllipticUI,
   createBoundCompressorHost,
   createBoundExpanderHost,
   createBoundDeesserHost,
@@ -56,6 +57,7 @@ import {
   createBoundTamerHost,
   createBoundAlignerHost,
   createBoundDenoiserHost,
+  createBoundEllipticHost,
   showWidgetInfo$,
   type PluginId,
 } from '@calfnxt/ui';
@@ -155,6 +157,10 @@ const fixtureLoaders: Record<PluginId, () => Promise<FixtureBundle>> = {
     params: (await import('../fixtures/denoiser/params.json')).default,
     viz: (await import('../fixtures/denoiser/viz.json')).default,
   }),
+  elliptic: async () => ({
+    params: (await import('../fixtures/elliptic/params.json')).default,
+    viz: (await import('../fixtures/elliptic/viz.json')).default,
+  }),
   limiter: async () => ({
     params: (await import('../fixtures/limiter/params.json')).default,
     viz: (await import('../fixtures/limiter/viz.json')).default,
@@ -233,6 +239,8 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
         return createBoundAlignerHost();
       case 'denoiser':
         return createBoundDenoiserHost();
+      case 'elliptic':
+        return createBoundEllipticHost();
       case 'limiter':
         return createBoundLimiterHost();
       case 'mbcomp':
@@ -361,6 +369,10 @@ export function StudioPlugin({ pluginId, onReady }: StudioPluginProps) {
     case 'denoiser':
       return (
         <DenoiserUI host={host as ReturnType<typeof createBoundDenoiserHost>} />
+      );
+    case 'elliptic':
+      return (
+        <EllipticUI host={host as ReturnType<typeof createBoundEllipticHost>} />
       );
     case 'limiter':
       return <LimiterUI host={host as ReturnType<typeof createBoundLimiterHost>} />;

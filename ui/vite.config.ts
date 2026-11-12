@@ -46,6 +46,7 @@ const knownPlugins = [
   "tamer",
   "aligner",
   "denoiser",
+  "elliptic",
 ] as const;
 
 export default defineConfig(({ command }) => {

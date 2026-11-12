@@ -28,6 +28,7 @@ import type {
   ITamerHost,
   IAlignerHost,
   IDenoiserHost,
+  IEllipticHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -1326,6 +1327,23 @@ export type DemoApplier = (
   viz: VizFixture,
 ) => void | (() => void);
 
+export function applyEllipticDemo(
+  host: IEllipticHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setNum(host.freq$, params.freq);
+  setNum(host.slope$, params.slope);
+  setNum(host.amount$, params.amount);
+  setBool(host.listen$, params.listen);
+  applySharedViz(viz);
+  if (typeof viz.corr === 'number')
+    host.corr$.set(viz.corr);
+  if (viz.gonio)
+    host.gonio$.set(viz.gonio);
+}
+
 export const demoAppliers: Record<PluginId, DemoApplier> = {
   compressor: applyCompressorDemo as DemoApplier,
   expander: applyExpanderDemo as DemoApplier,
@@ -1355,4 +1373,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   tamer: applyTamerDemo as DemoApplier,
   aligner: applyAlignerDemo as DemoApplier,
   denoiser: applyDenoiserDemo as DemoApplier,
+  elliptic: applyEllipticDemo as DemoApplier,
 };
