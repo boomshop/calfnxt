@@ -1,0 +1,33 @@
+.EllipticUI {
+  align-items: stretch;
+  gap: var(--gap);
+
+  > .controls {
+    flex: 1 1 auto;
+    justify-content: center;
+    align-items: center;
+    gap: 28px;
+
+    > .slope {
+      align-self: center;
+      display: flex;
+      min-width: 96px;
+    }
+  }
+
+  > .field {
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+
+    > .WithInfo:has(> .GonioMeter) {
+      width: 200px;
+      height: 200px;
+    }
+    > .WithInfo:has(> .CorrelationMeter) {
+      width: 200px;
+    }
+  }
+}

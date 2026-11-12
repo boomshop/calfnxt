@@ -29,6 +29,7 @@ export type PluginId =
   | "tamer"
   | "aligner"
   | "denoiser"
+  | "elliptic"
   | "phones";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
@@ -63,6 +64,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   tamer: () => import("./TamerUI/BoundTamerUI"),
   aligner: () => import("./AlignerUI/BoundAlignerUI"),
   denoiser: () => import("./DenoiserUI/BoundDenoiserUI"),
+  elliptic: () => import("./EllipticUI/BoundEllipticUI"),
   phones: () => import("./PhonesUI/BoundPhonesUI"),
 };
 

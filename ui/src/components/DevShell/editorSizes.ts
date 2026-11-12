@@ -27,6 +27,7 @@ import { pluginMeta as impulseMeta } from "../../generated/impulseModel";
 import { pluginMeta as tamerMeta } from "../../generated/tamerModel";
 import { pluginMeta as alignerMeta } from "../../generated/alignerModel";
 import { pluginMeta as denoiserMeta } from "../../generated/denoiserModel";
+import { pluginMeta as ellipticMeta } from "../../generated/ellipticModel";
 import { pluginMeta as phonesMeta } from "../../generated/phonesModel";
 
 /** Editor pixel size from `*.plugin.json` (matches VST3 WebView). */
@@ -59,5 +60,6 @@ export const editorSizes: Record<PluginId, { width: number; height: number }> = 
   tamer: tamerMeta.editor,
   aligner: alignerMeta.editor,
   denoiser: denoiserMeta.editor,
+  elliptic: ellipticMeta.editor,
   phones: phonesMeta.editor,
 };

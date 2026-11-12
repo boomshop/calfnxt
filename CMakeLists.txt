@@ -8,7 +8,7 @@ set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
 set(SMTG_CREATE_PLUGIN_LINK OFF CACHE BOOL "" FORCE)
 
 project(calfnxt
-  VERSION 2.16.0
+  VERSION 2.17.0
   DESCRIPTION "calfNXT — VST3 + Web UI"
   LANGUAGES C CXX
 )
@@ -74,6 +74,7 @@ add_subdirectory(dsp/impulse)
 add_subdirectory(dsp/tamer)
 add_subdirectory(dsp/aligner)
 add_subdirectory(dsp/denoiser)
+add_subdirectory(dsp/elliptic)
 add_subdirectory(dsp/phones)
 add_subdirectory(tools/offline)
 
@@ -107,7 +108,7 @@ add_custom_target(calfnxt-web-host-bundles
 )
 
 # UI build needs generated models from every plugin descriptor
-add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen expander_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen limiter_codegen mblimiter_codegen harmonics_codegen analyzer_codegen filter_codegen ringmod_codegen pulsator_codegen crusher_codegen phaser_codegen flanger_codegen chorus_codegen split_codegen tuner_codegen octaver_codegen bender_codegen impulse_codegen tamer_codegen aligner_codegen denoiser_codegen phones_codegen)
+add_dependencies(calfnxt_web_ui equalizer_codegen stereo_codegen transients_codegen compressor_codegen expander_codegen deesser_codegen delay_codegen reverb_codegen mbcomp_codegen limiter_codegen mblimiter_codegen harmonics_codegen analyzer_codegen filter_codegen ringmod_codegen pulsator_codegen crusher_codegen phaser_codegen flanger_codegen chorus_codegen split_codegen tuner_codegen octaver_codegen bender_codegen impulse_codegen tamer_codegen aligner_codegen denoiser_codegen elliptic_codegen phones_codegen)
 
 # Meta-target: all plugins + embedded UI packs (add new plugins here).
 add_custom_target(calfnxt-plugins
@@ -168,6 +169,8 @@ add_custom_target(calfnxt-plugins
     calfnxt-aligner-resources
     calfnxt-denoiser
     calfnxt-denoiser-resources
+    calfnxt-elliptic
+    calfnxt-elliptic-resources
     calfnxt-phones
     calfnxt-phones-resources
     calfnxt-web-host

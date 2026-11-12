@@ -46,6 +46,7 @@ const knownPlugins = [
   "tamer",
   "aligner",
   "denoiser",
+  "elliptic",
   "phones",
 ] as const;
 
