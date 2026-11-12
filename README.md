@@ -261,7 +261,7 @@ re-embedded (the install script does that). Plugin ids for the script / Vite:
 `equalizer` `stereo` `transients` `compressor` `expander` `deesser` `delay`
 `reverb` `mbcomp` `limiter` `mblimiter` `harmonics` `analyzer` `filter`
 `ringmod` `pulsator` `crusher` `phaser` `flanger` `chorus` `split` `tuner`
-`octaver` `bender` `impulse` `tamer` `aligner` `denoiser`.
+`octaver` `bender` `impulse` `tamer` `aligner` `denoiser` `phones`.
 
 Codegen is part of the CMake plugin targets (`dsp/<id>/<id>.plugin.json` → C++
 params + `ui/src/generated/`).

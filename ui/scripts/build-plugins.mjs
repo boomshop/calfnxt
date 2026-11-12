@@ -48,6 +48,7 @@ const ALL_PLUGINS = [
   'tamer',
   'aligner',
   'denoiser',
+  'phones',
 ];
 
 const rawArgs = process.argv.slice(2);

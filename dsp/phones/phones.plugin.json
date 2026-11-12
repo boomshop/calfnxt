@@ -1,0 +1,112 @@
+{
+  "id": "phones",
+  "name": "calfNXT Phones",
+  "vendor": "calfNXT",
+  "vendor_url": "https://calfnxt.org",
+  "vendor_email": "mailto:schmidt@boomshop.net",
+  "version": "2.16.0",
+  "category": "Fx|Spatial",
+  "vst3_uid": [
+    "0xC4A1F01C",
+    "0x50484F4E",
+    "0xCA1F001C",
+    "0xB0000001"
+  ],
+  "editor": {
+    "width": 1024,
+    "height": 640
+  },
+  "buses": {
+    "audio_inputs": [
+      {
+        "name": "Stereo In",
+        "channels": 2
+      }
+    ],
+    "audio_outputs": [
+      {
+        "name": "Stereo Out",
+        "channels": 2
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "id": "bypass",
+      "name": "Bypass",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    },
+    {
+      "id": "amount",
+      "name": "Amount",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 1.0,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "angle",
+      "name": "Angle",
+      "type": "float",
+      "unit": "°",
+      "min": 20.0,
+      "max": 45.0,
+      "default": 30.0,
+      "scale": "linear",
+      "precision": 1
+    },
+    {
+      "id": "distance",
+      "name": "Distance",
+      "type": "float",
+      "unit": "m",
+      "min": 0.5,
+      "max": 4.0,
+      "default": 1.2,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "room",
+      "name": "Room",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.5,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "live",
+      "name": "Live",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 2
+    },
+    {
+      "id": "mono",
+      "name": "Mono",
+      "type": "float",
+      "unit": "",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0,
+      "scale": "linear",
+      "precision": 0
+    }
+  ]
+}

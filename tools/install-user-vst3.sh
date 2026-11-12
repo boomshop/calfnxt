@@ -52,6 +52,7 @@ declare -A PLUGIN_TARGET=(
   [tamer]=calfnxt-tamer
   [aligner]=calfnxt-aligner
   [denoiser]=calfnxt-denoiser
+  [phones]=calfnxt-phones
 )
 declare -A PLUGIN_VST3=(
   [equalizer]=calfNXTEqualizer
@@ -82,6 +83,7 @@ declare -A PLUGIN_VST3=(
   [tamer]=calfNXTTamer
   [aligner]=calfNXTAligner
   [denoiser]=calfNXTDenoiser
+  [phones]=calfNXTPhones
 )
 
 usage() {

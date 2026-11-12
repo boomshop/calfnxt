@@ -24,7 +24,7 @@ system WebKit); the **host `environ` is never mutated**. Opt out with
 `CALFNXT_KEEP_HOST_LDPATH`. Each bundle ships `Contents/<arch>/calfnxt-web-host`
 next to the `.so`. User-facing contract: `README.md` → Clarifications.
 
-Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Impulse** (`#impulse`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`), **Tuner** (`#tuner`), **Octaver** (`#octaver`), **Bender** (`#bender`), **Tamer** (`#tamer`), **Aligner** (`#aligner`), **Denoiser** (`#denoiser`).
+Plugins today: **Equalizer** (`#equalizer`), **Stereo** (`#stereo`), **Transients** (`#transients`), **Compressor** (`#compressor`), **Expander** (`#expander`), **DeEsser** (`#deesser`), **Delay** (`#delay`), **Reverb** (`#reverb`), **Impulse** (`#impulse`), **Multiband Compressor** (`#mbcomp`), **Limiter** (`#limiter`), **Multiband Limiter** (`#mblimiter`), **Harmonics** (`#harmonics`), **Analyzer** (`#analyzer`), **Filter** (`#filter`), **Ring Modulator** (`#ringmod`), **Pulsator** (`#pulsator`), **Crusher** (`#crusher`), **Phaser** (`#phaser`), **Flanger** (`#flanger`), **Chorus** (`#chorus`), **Split** (`#split`), **Tuner** (`#tuner`), **Octaver** (`#octaver`), **Bender** (`#bender`), **Tamer** (`#tamer`), **Aligner** (`#aligner`), **Denoiser** (`#denoiser`), **Phones** (`#phones`).
 Suite focus is this set — no near-term new plugins unless explicitly requested.
 
 ---
@@ -85,8 +85,9 @@ dsp/impulse/   impulse.plugin.json + DSP + codegen
 dsp/tamer/     tamer.plugin.json + DSP + codegen
 dsp/aligner/   aligner.plugin.json + DSP + codegen
 dsp/denoiser/  denoiser.plugin.json + DSP + codegen
+dsp/phones/    phones.plugin.json + DSP + codegen
 tools/codegen/ generate_plugin.py → C++ params + TS models
-ui/            React SPA (Vite), hash router #equalizer / … / #denoiser
+ui/            React SPA (Vite), hash router #equalizer / … / #phones
 external/vst3sdk/
 ```
 
@@ -355,6 +356,10 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
 ---
 
+### Phones
+
+Headphone monitor crossfeed, not a printed mix effect. Amount 0 is the raw headphone feed, 1 is the speaker triangle (complementary low-band crossfeed, ITD from the half-angle). Angle ±20°…±45° (default ±30°) sets the far-ear delay and the one-pole shadow. Distance 0.5…4 m places the speakers and grows the shoebox around them; it barely changes the ear-to-ear delay. Room is reflection gain only (0 = dry triangle). Live opens the wall gaps and the decay from 0.25 s to 0.45 s. Mono sums `(L+R)/2` before the triangle. The plan view uses the same gaps as `phones_engine`. Flatness check: `tools/phones_flatness_test.cpp`.
+
 ## Shelved (not a roadmap)
 
 Ideas only if explicitly revived — do not start these unprompted:
@@ -402,6 +407,7 @@ Ideas only if explicitly revived — do not start these unprompted:
 | Tamer DSP                   | `dsp/tamer/source/*_dsp.*`, `common/dsp/spectral_tamer.h`; UI `ui/src/plugins/TamerUI/*`, `host/tamerHost.ts`, `widgets/TamerChart/*`                                                                 |
 | Aligner DSP                 | `dsp/aligner/source/*_dsp.*`; UI `ui/src/plugins/AlignerUI/*`, `host/alignerHost.ts` — one 8-ch main → stereo + stereo Reference aux (display only; Ardour-friendly 1 main+1 aux); manual delay/phase; Master Trim vs mix                                                                 |
 | Denoiser DSP                | `dsp/denoiser/source/*_dsp.*`, `common/dsp/spectral_denoiser.h`; UI `ui/src/plugins/DenoiserUI/*`, `host/denoiserHost.ts`, `widgets/DenoiserChart/*`                                                                     |
+| Phones                      | `dsp/phones/source/*`, UI `ui/src/plugins/PhonesUI/*`, `host/phonesHost.ts`                                                                                                                                              |
 | Param bind                  | `ui/src/utils/bridge.ts`, `ui/src/utils/bind_param.ts`, `host/*Host.ts`                                                                                                                              |
 | Header I/O                  | `ui/src/components/Header/*`, `host/headerMeters.ts`                                                                                                                                                |
 | Meters                      | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*`                                                                                                                                                       |

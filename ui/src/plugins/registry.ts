@@ -28,7 +28,8 @@ export type PluginId =
   | "impulse"
   | "tamer"
   | "aligner"
-  | "denoiser";
+  | "denoiser"
+  | "phones";
 
 type PluginLoader = () => Promise<{ default: ComponentType }>;
 
@@ -62,6 +63,7 @@ export const pluginApps: Record<PluginId, PluginLoader> = {
   tamer: () => import("./TamerUI/BoundTamerUI"),
   aligner: () => import("./AlignerUI/BoundAlignerUI"),
   denoiser: () => import("./DenoiserUI/BoundDenoiserUI"),
+  phones: () => import("./PhonesUI/BoundPhonesUI"),
 };
 
 export function isPluginId(id: string): id is PluginId {
