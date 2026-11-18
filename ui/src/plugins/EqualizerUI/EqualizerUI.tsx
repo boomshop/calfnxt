@@ -21,6 +21,9 @@ import {
   EQ_FILTER_TYPE_ENTRIES,
   EQ_FREQ_MAX,
   EQ_FREQ_MIN,
+  EQ_CHART_RANGE_DEFAULT,
+  EQ_CHART_RANGE_MAX,
+  EQ_CHART_RANGE_MIN,
   EQ_GAIN_MAX,
   EQ_GAIN_MIN,
   EQ_PASS_SLOPE_ENTRIES,
@@ -115,6 +118,15 @@ const EQ_DYN_RATIO_LABELS = EQ_DYN_RATIO_DOTS.map((n) => ({
   pos: n,
   label: String(n),
 }));
+
+const EQ_RANGE_DOTS = [12, 18, 24, 30, 36];
+const EQ_RANGE_LABELS = [
+  { pos: 12, label: '12' },
+  { pos: 24, label: '24' },
+  { pos: 36, label: '36' },
+];
+/** Handle limits stay at the gain range so the chart zoom does not rewrite bands. */
+const EQ_HANDLE_Y = { min: EQ_GAIN_MIN, max: EQ_GAIN_MAX };
 
 export interface EqualizerUIProps {
   host: IEqualizerHost;
@@ -411,6 +423,14 @@ export function EqualizerUI(props: EqualizerUIProps) {
   const bands = host.bands;
   const spectrumMode = useDynamicValueReadonly(host.spectrum$, 0);
   const mono = useDynamicValueReadonly(host.mono$, false);
+  const chartRange = useDynamicValueReadonly(
+    host.range$,
+    EQ_CHART_RANGE_DEFAULT,
+  );
+  const chartYRange = useMemo(
+    () => ({ min: -chartRange, max: chartRange }),
+    [chartRange],
+  );
   const [selectedBandId, setSelectedBandId] = useState(
     () =>
       bands[Math.round(host.selectedBandIndex$.value)]?.id ??
@@ -479,10 +499,31 @@ export function EqualizerUI(props: EqualizerUIProps) {
           size="normal"
           selectedBandId={selectedBandId}
           onSelectBand={selectBand}
+          yRange={chartYRange}
+          handleYRange={EQ_HANDLE_Y}
+          clipY={false}
           spectrumIn$={host.spectrumIn$}
           spectrumOut$={host.spectrumOut$}
           spectrumMode={Math.round(spectrumMode)}
         />
+        <WithInfo title={equalizerInfo.range} className="chart-range">
+          <Knob
+            value$={host.range$}
+            min={EQ_CHART_RANGE_MIN}
+            max={EQ_CHART_RANGE_MAX}
+            reset={EQ_CHART_RANGE_DEFAULT}
+            snap={6}
+            size="small"
+            label="Range"
+            beginEdit={() => host.beginEdit(paramIds.range)}
+            endEdit={() => host.endEdit(paramIds.range)}
+            dots={EQ_RANGE_DOTS}
+            labels={EQ_RANGE_LABELS}
+            {...{
+              'value.format': (v: number) => `±${Math.round(v)}`,
+            }}
+          />
+        </WithInfo>
       </WithInfo>
 
       {selectedBand ? (

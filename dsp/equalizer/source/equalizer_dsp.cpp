@@ -13,7 +13,8 @@ using namespace Steinberg::Vst;
 
 namespace {
 constexpr uint32 kStateMagic = 0x434e5845u; // 'CNXE'
-constexpr uint32 kStateVersion = 6;              // + per-band channel
+constexpr uint32 kStateVersion = 7;              // + chart range
+constexpr uint32 kStateVersionChannel = 6;       // + per-band channel
 constexpr uint32 kStateVersionDynMode = 5;       // + per-band dyn_mode
 constexpr uint32 kStateVersionMono = 4;          // + mono (trailing)
 constexpr uint32 kStateVersionSpectrum = 3;      // + spectrum
@@ -378,11 +379,24 @@ tresult PLUGIN_API EqualizerPlugin::setState(IBStream* state)
     return kResultFalse;
 
   float plains[kParamCount] {};
+  // Older chunks have no Range. ±24 dB is the chart default.
+  plains[kParamRange] = 24.f;
   if (version == kStateVersion)
   {
     if (count != kParamCount)
       return kResultFalse;
     for (int i = 0; i < count; ++i)
+    {
+      if (!streamer.readFloat(plains[i]))
+        return kResultFalse;
+    }
+  }
+  else if (version == kStateVersionChannel)
+  {
+    const int32 oldCount = static_cast<int32>(kParamRange);
+    if (count != oldCount)
+      return kResultFalse;
+    for (int i = 0; i < oldCount; ++i)
     {
       if (!streamer.readFloat(plains[i]))
         return kResultFalse;

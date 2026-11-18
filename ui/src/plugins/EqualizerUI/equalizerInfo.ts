@@ -7,7 +7,7 @@ import { infoDoc } from '../../widgets/WithInfo/infoDoc';
  * Active, Type, Slope, Freq, Gain, Q, Dyn, Dyn Attack, Dyn Release,
  * Dyn Thresh, Dyn Ratio, Dyn Listen, Dyn Mode, Channel.
  * Band N is 3 + (N−1)×14 + offset.
- * Spectrum is 227. Mono is 228.
+ * Spectrum is 227. Mono is 228. Range is 229.
  */
 
 const bandId = (offset: number) =>
@@ -74,6 +74,7 @@ export const equalizerInfo = {
               'A handle is that band’s frequency and, where the type has one, its gain. Dragging it writes Freq and Gain.',
               'The curve you drag is the gain you set. A dynamic band also draws the gain the detector is applying right now.',
               'The fill is the input and the output of the EQ. Spectrum chooses the tilt. Off draws neither.',
+              'Range, in the top-right, sets how many decibels the chart shows above and below zero.',
             ],
           },
         ],
@@ -83,6 +84,27 @@ export const equalizerInfo = {
         blocks: [
           {
             p: 'Click a band to open its controls. A band that is off still has a place on the chart. It does not change the sound until Active is on.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  range: infoDoc({
+    name: 'Range',
+    lead: 'Sets how many decibels the curve chart shows above and below zero.',
+    meta: [
+      { label: 'DAW name', value: 'Range' },
+      { label: 'Parameter ID', value: '229' },
+      { label: 'Range', value: '12…36 dB, in steps of 6' },
+      { label: 'Default', value: '24 (±24 dB)' },
+    ],
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'A smaller span makes a modest cut or boost easier to see and to drag. 12 fills the chart with ±12 dB. 36 shows the full gain of a band. A band set past the span stays at that gain. The chart clips the drawing at the edge.',
           },
         ],
       },

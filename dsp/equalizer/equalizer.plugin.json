@@ -242,6 +242,17 @@
       "default": 0.0,
       "scale": "linear",
       "precision": 0
+    },
+    {
+      "id": "range",
+      "name": "Range",
+      "type": "float",
+      "unit": "dB",
+      "min": 12.0,
+      "max": 36.0,
+      "default": 24.0,
+      "scale": "linear",
+      "precision": 0
     }
   ]
 }

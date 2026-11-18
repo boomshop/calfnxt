@@ -166,6 +166,10 @@ export const EQ_FREQ_MIN = 20;
 export const EQ_FREQ_MAX = 20000;
 export const EQ_GAIN_MIN = -36;
 export const EQ_GAIN_MAX = 36;
+/** Visible half-range of the main curve chart (± this many dB). */
+export const EQ_CHART_RANGE_MIN = 12;
+export const EQ_CHART_RANGE_MAX = 36;
+export const EQ_CHART_RANGE_DEFAULT = 24;
 export const EQ_Q_MIN = 0.1;
 
 /**
@@ -580,6 +584,8 @@ export interface IEqualizerHost {
   mono$: DynamicValue<boolean>;
   /** 0 Off / 1 Linear / 2 −3 dB/oct / 3 −4.5 dB/oct */
   spectrum$: DynamicValue<number>;
+  /** Chart Y half-range in dB (12…36, step 6). UI only; not in the audio path. */
+  range$: DynamicValue<number>;
   /** Pre-EQ spectrum (fft_in). */
   spectrumIn$: DynamicValue<number[]>;
   /** Post-EQ spectrum (fft_out). */
@@ -614,6 +620,12 @@ export function createBoundEqualizerHost(): IEqualizerHost {
   const spectrum$ = DynamicValue.fromConstant(0);
   const unbindSpectrum = bindParamToHost(spectrum$, paramIds.spectrum);
 
+  const range$ = DynamicValue.fromConstant(EQ_CHART_RANGE_DEFAULT);
+  const unbindRange = bindParamToHost(range$, paramIds.range, (v) => {
+    const snapped = Math.round(v / 6) * 6;
+    return Math.min(EQ_CHART_RANGE_MAX, Math.max(EQ_CHART_RANGE_MIN, snapped));
+  });
+
   const spectrumIn$ = DynamicValue.fromConstant<number[]>([]);
   const spectrumOut$ = DynamicValue.fromConstant<number[]>([]);
   const unbindSpectrumIn = bindVizSpectrum(spectrumIn$, 'fft_in');
@@ -628,6 +640,7 @@ export function createBoundEqualizerHost(): IEqualizerHost {
     spectrum$,
     spectrumIn$,
     spectrumOut$,
+    range$,
     selectedBandIndex$,
     bands,
     beginBypassEdit: () => postBegin(paramIds.bypass),
@@ -638,6 +651,7 @@ export function createBoundEqualizerHost(): IEqualizerHost {
       unbindBypass();
       unbindMono();
       unbindSpectrum();
+      unbindRange();
       unbindSpectrumIn();
       unbindSpectrumOut();
       disposeBands();

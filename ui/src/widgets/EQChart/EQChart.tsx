@@ -69,6 +69,16 @@ export interface EQChartProps {
   bands: IEqualizerBand[];
   yRange?: { min: number; max: number };
   /**
+   * Drag limits for handles. Defaults to `yRange`. Pass the gain limits when
+   * `yRange` is only the visible window, so a zoom does not rewrite gains.
+   */
+  handleYRange?: { min: number; max: number };
+  /**
+   * When false, values outside `yRange` stay put and the SVG clips them.
+   * Default true matches charts whose axis is the parameter range.
+   */
+  clipY?: boolean;
+  /**
    * Q axis for scroll-wheel on handles. Pin min===max (e.g. FrequencyRange
    * Butterworth Q) to disable Q gestures — they have no DSP effect there.
    */
@@ -147,6 +157,8 @@ export function EQChart(props: EQChartProps) {
   const {
     bands: bandModels,
     yRange = { min: EQ_GAIN_MIN, max: EQ_GAIN_MAX },
+    handleYRange,
+    clipY = true,
     zRange = { min: EQ_Q_MIN, max: EQ_Q_MAX, step: 0.1 },
     dbGrid = 6,
     size = 'normal',
@@ -166,6 +178,12 @@ export function EQChart(props: EQChartProps) {
     bandEdit,
   } = props;
   const qLocked = zRange.min === zRange.max;
+  const handleYMin = handleYRange?.min ?? yRange.min;
+  const handleYMax = handleYRange?.max ?? yRange.max;
+  const rangeYOptions = useMemo(
+    () => ({ min: yRange.min, max: yRange.max, clip: clipY }),
+    [clipY, yRange.max, yRange.min],
+  );
 
   const [eqWidget, setEqWidget] = useState<unknown>(null);
   const isMini = size === 'mini';
@@ -201,6 +219,7 @@ export function EQChart(props: EQChartProps) {
     range_y: { options: { basis: number } };
     baseline: { element: SVGElement };
     set: (key: string, value: unknown) => void;
+    triggerResize: () => void;
   } | null;
 
   const getEqHeight = useCallback(
@@ -222,9 +241,11 @@ export function EQChart(props: EQChartProps) {
     if (!eq) return;
     // Minis need this too — a fixed ±36 dB range on ~30 px collapses wide
     // low-Q bells to a flat line and makes the 0 dB edge look like a false peak.
-    eq.set('range_y', { min: yRange.min, max: yRange.max });
+    eq.set('range_y', rangeYOptions);
+    // EqualizerGraph redraws from resize(), not from range_y min/max.
+    eq.triggerResize();
     if (!isMini) eq.set('db_grid', dbGrid);
-  }, [dbGrid, eq, isMini, yRange.max, yRange.min]);
+  }, [dbGrid, eq, isMini, rangeYOptions]);
 
   useEffect(() => {
     if (!eq) return;
@@ -269,12 +290,12 @@ export function EQChart(props: EQChartProps) {
           // Live markers: zero grab size — vertical line still fills y_min…y_max.
           min_size: band.handleReadonly ? 0 : isMini ? 4 : 24,
           max_size: band.handleReadonly ? 0 : isMini ? 10 : 64,
-          y_min: yRange.min,
-          y_max: yRange.max,
+          y_min: handleYMin,
+          y_max: handleYMax,
           show_axis: false,
         };
       }),
-    [bandModels, isMini, showLabels, yRange.max, yRange.min],
+    [bandModels, handleYMax, handleYMin, isMini, showLabels],
   );
 
   const ghostOptions = useMemo(
@@ -286,12 +307,12 @@ export function EQChart(props: EQChartProps) {
             format_label: false as const,
             show_handle: false,
             class: `eq-ghost eq-band-${i}`,
-            y_min: yRange.min,
-            y_max: yRange.max,
+            y_min: handleYMin,
+            y_max: handleYMax,
             show_axis: false,
           }))
         : [],
-    [bandModels, drawResponse, yRange.max, yRange.min],
+    [bandModels, drawResponse, handleYMax, handleYMin],
   );
 
   const alwaysOn$ = useMemo(() => DynamicValue.fromConstant(true), []);
@@ -914,7 +935,7 @@ export function EQChart(props: EQChartProps) {
       className={cls}
       show_grid={!isMini}
       show_handles={isMini || interactive}
-      range_y={yRange}
+      range_y={rangeYOptions}
       range_z={zRange}
       db_grid={dbGrid}
     />
