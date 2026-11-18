@@ -95,6 +95,7 @@ shares **In/Out gain + peak meters** in the header (not repeated below).
 | **Elliptic** | `calfNXTElliptic.vst3` | Bass mono below a Linkwitz–Riley split            |
 | **Split**    | `calfNXTSplit.vst3`    | Mono in → stereo out                              |
 | **Aligner**  | `calfNXTAligner.vst3`  | 8-in → stereo mic align + Reference aux (delay / phase / pan) |
+| **Phones**   | `calfNXTPhones.vst3`   | Headphone monitor: a speaker triangle with a small room |
 
 ### Pitch
 
