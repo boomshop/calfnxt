@@ -1,0 +1,82 @@
+.PhonesPlan {
+  position: relative;
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-height: 0;
+  min-width: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  color: var(--color);
+  background: var(--background);
+
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 12px solid var(--background);
+  }
+
+  .room {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-opacity: 0.2;
+  }
+
+  .axis {
+    fill: none;
+    stroke: var(--color-warn);
+    stroke-width: 1;
+    stroke-dasharray: 3 4;
+  }
+
+  .gap {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1;
+    opacity: 0.4;
+  }
+
+  .base {
+    fill: none;
+    stroke: var(--color-warn);
+    stroke-width: 1;
+    stroke-dasharray: 3 4;
+  }
+
+  .leg,
+  .arc {
+    fill: none;
+    stroke: var(--color-warn);
+    stroke-width: 1.5;
+  }
+
+  .refl {
+    fill: none;
+    stroke: var(--color-accent);
+    stroke-width: 1;
+    stroke-dasharray: 4 3;
+  }
+
+  text {
+    fill: currentColor;
+    font-size: var(--plan-font, 44px);
+    font-family: inherit;
+  }
+
+  image.speaker,
+  image.head {
+    pointer-events: all;
+  }
+
+  image.speaker {
+    cursor: ew-resize;
+    touch-action: none;
+  }
+
+  image.head {
+    cursor: ns-resize;
+    touch-action: none;
+  }
+}

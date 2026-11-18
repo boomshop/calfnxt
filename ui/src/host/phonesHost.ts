@@ -11,6 +11,7 @@ export type IPhonesHost = {
   distance$: DynamicValue<number>;
   room$: DynamicValue<number>;
   live$: DynamicValue<number>;
+  scatter$: DynamicValue<number>;
   beginEdit: (id: number) => void;
   endEdit: (id: number) => void;
 };
@@ -45,7 +46,8 @@ export function createBoundPhonesHost(): IPhonesHost {
     angle$: bindNum('angle', 30),
     distance$: bindNum('distance', 1.2),
     room$: bindNum('room', 0.5),
-    live$: bindNum('live', 0),
+    live$: bindNum('live', 0.25),
+    scatter$: bindNum('scatter', 0.4),
     beginEdit: (id) => postBegin(id),
     endEdit: (id) => postEnd(id),
   };

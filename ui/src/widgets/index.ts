@@ -24,6 +24,7 @@ export * from "./ProfileMiniSpectrum";
 export * from "./ModulationChart";
 export * from "./ChorusChart";
 export * from "./ImpulseChart";
+export * from "./PhonesPlan";
 export * from "./Toggle";
 export * from "./State";
 export * from "./PulsatorChart";

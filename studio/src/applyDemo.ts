@@ -29,6 +29,7 @@ import type {
   IAlignerHost,
   IDenoiserHost,
   IEllipticHost,
+  IPhonesHost,
   PluginId,
 } from '@calfnxt/ui';
 
@@ -1344,6 +1345,22 @@ export function applyEllipticDemo(
     host.gonio$.set(viz.gonio);
 }
 
+export function applyPhonesDemo(
+  host: IPhonesHost,
+  params: Record<string, unknown>,
+  viz: VizFixture,
+) {
+  setBool(host.bypass$, params.bypass);
+  setBool(host.mono$, params.mono);
+  setNum(host.amount$, params.amount);
+  setNum(host.angle$, params.angle);
+  setNum(host.distance$, params.distance);
+  setNum(host.room$, params.room);
+  setNum(host.live$, params.live);
+  setNum(host.scatter$, params.scatter);
+  applySharedViz(viz);
+}
+
 export const demoAppliers: Record<PluginId, DemoApplier> = {
   compressor: applyCompressorDemo as DemoApplier,
   expander: applyExpanderDemo as DemoApplier,
@@ -1374,4 +1391,5 @@ export const demoAppliers: Record<PluginId, DemoApplier> = {
   aligner: applyAlignerDemo as DemoApplier,
   denoiser: applyDenoiserDemo as DemoApplier,
   elliptic: applyEllipticDemo as DemoApplier,
+  phones: applyPhonesDemo as DemoApplier,
 };

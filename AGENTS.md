@@ -359,7 +359,7 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
 ### Phones
 
-Headphone monitor crossfeed, not a printed mix effect. Amount 0 is the raw headphone feed, 1 is the speaker triangle (complementary low-band crossfeed, ITD from the half-angle). Angle ±20°…±45° (default ±30°) sets the far-ear delay and the one-pole shadow. Distance 0.5…4 m places the speakers and grows the shoebox around them; it barely changes the ear-to-ear delay. Room is reflection gain only (0 = dry triangle). Live opens the wall gaps and the decay from 0.25 s to 0.45 s. Mono sums `(L+R)/2` before the triangle. The plan view uses the same gaps as `phones_engine`. Flatness check: `tools/phones_flatness_test.cpp`.
+Headphone monitor. Calculated stereo triangle: complementary low-band crossfeed (Amount 0 is the raw feed, 1 is the triangle), ITD from the half-angle, and an excess-path image cloud plus a small late tank. Angle ±20°…±45° (default ±30°) sets the far-ear delay and the one-pole shadow. Distance 0.5…4 m places the speakers. Room is reflection gain only. Live opens the wall gaps and the decay from 0.25 s to 0.45 s. Scatter stirs the walls without growing the tail. Mono is smoothed inside the model. No reported latency. Flatness check: `tools/phones_flatness_test.cpp`. Plan widget: `ui/src/widgets/PhonesPlan`.
 
 ## Shelved (not a roadmap)
 
@@ -409,7 +409,7 @@ Ideas only if explicitly revived — do not start these unprompted:
 | Aligner DSP                 | `dsp/aligner/source/*_dsp.*`; UI `ui/src/plugins/AlignerUI/*`, `host/alignerHost.ts` — one 8-ch main → stereo + stereo Reference aux (display only; Ardour-friendly 1 main+1 aux); manual delay/phase; Master Trim vs mix                                                                 |
 | Denoiser DSP                | `dsp/denoiser/source/*_dsp.*`, `common/dsp/spectral_denoiser.h`; UI `ui/src/plugins/DenoiserUI/*`, `host/denoiserHost.ts`, `widgets/DenoiserChart/*`                                                                     |
 | Elliptic DSP                | `dsp/elliptic/source/*_dsp.*`, `elliptic_crossover.h`; UI `ui/src/plugins/EllipticUI/*`, `host/ellipticHost.ts`                                                                                                          |
-| Phones                      | `dsp/phones/source/*`, UI `ui/src/plugins/PhonesUI/*`, `host/phonesHost.ts`                                                                                                                                              |
+| Phones                      | `dsp/phones/source/*`, UI `ui/src/plugins/PhonesUI/*`, `host/phonesHost.ts`, `widgets/PhonesPlan/*`                                                                                                                      |
 | Param bind                  | `ui/src/utils/bridge.ts`, `ui/src/utils/bind_param.ts`, `host/*Host.ts`                                                                                                                              |
 | Header I/O                  | `ui/src/components/Header/*`, `host/headerMeters.ts`                                                                                                                                                |
 | Meters                      | `ui/src/widgets/MultiMeter/*`, `LevelMeter/*`                                                                                                                                                       |

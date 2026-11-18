@@ -30,6 +30,16 @@ declare module '@deutschesoft/aux-widgets/src/widgets/icon.js' {
   export const Icon: new (...args: unknown[]) => unknown;
 }
 
+declare module '@deutschesoft/aux-widgets/src/modules/dragcapture.js' {
+  export const DragCapture: new (
+    parent: unknown,
+    options?: Record<string, unknown>,
+  ) => {
+    destroy: () => void;
+    on: (event: string, cb: (...args: unknown[]) => unknown) => void;
+  };
+}
+
 declare module '@deutschesoft/aux-widgets/src/modules/dragvalue.js' {
   export const DragValue: new (
     parent: unknown,

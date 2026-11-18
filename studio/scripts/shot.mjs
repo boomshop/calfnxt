@@ -83,6 +83,7 @@ const ALL = [
   'aligner',
   'denoiser',
   'elliptic',
+  'phones',
 ];
 
 const MODES = ['night', 'day'];

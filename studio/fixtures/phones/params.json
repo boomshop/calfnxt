@@ -1,0 +1,10 @@
+{
+  "bypass": false,
+  "mono": false,
+  "amount": 1,
+  "angle": 30,
+  "distance": 1.2,
+  "room": 0.5,
+  "live": 0.25,
+  "scatter": 0.4
+}

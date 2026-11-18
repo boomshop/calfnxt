@@ -464,6 +464,7 @@ textarea::selection {
   transition:
     color var(--transition),
     background var(--transition);
+  gap: 4px;
 
   &:hover {
     background: var(--background-least);

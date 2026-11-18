@@ -49,12 +49,14 @@ private:
     float distance = 1.2f;
     float room = 0.5f;
     float live = 0.f;
+    float scatter = 0.4f;
   };
 
   BlockState makeBlockState() const;
   void resetProcessing();
 
   float params_[kParamCount] {};
+
   Dsp::IoStage io_;
   PhonesEngine engine_;
   double sampleRate_ = 44100.0;

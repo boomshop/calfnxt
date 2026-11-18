@@ -1,7 +1,6 @@
 #include "phones_dsp.h"
 
 #include "base/source/fstreamer.h"
-#include "dsp_math.h"
 
 #include <algorithm>
 
@@ -43,6 +42,7 @@ PhonesPlugin::BlockState PhonesPlugin::makeBlockState() const
   s.distance = std::clamp(params_[kParamDistance], 0.5f, 4.f);
   s.room = std::clamp(params_[kParamRoom], 0.f, 1.f);
   s.live = std::clamp(params_[kParamLive], 0.f, 1.f);
+  s.scatter = std::clamp(params_[kParamScatter], 0.f, 1.f);
   return s;
 }
 
@@ -51,7 +51,7 @@ void PhonesPlugin::resetProcessing()
   const float sr = static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0);
   const BlockState s = makeBlockState();
   engine_.setSampleRate(sr);
-  engine_.reset(s.amount, s.angle, s.distance, s.room, s.live, s.mono ? 1.f : 0.f);
+  engine_.reset(s.amount, s.angle, s.distance, s.room, s.live, s.scatter, s.mono ? 1.f : 0.f);
   bypassed_ = s.bypass;
 }
 
@@ -84,7 +84,7 @@ tresult PLUGIN_API PhonesPlugin::process(ProcessData& data)
   if (state.bypass != bypassed_)
   {
     engine_.setSampleRate(static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0));
-    engine_.reset(state.amount, state.angle, state.distance, state.room, state.live, state.mono ? 1.f : 0.f);
+    engine_.reset(state.amount, state.angle, state.distance, state.room, state.live, state.scatter, state.mono ? 1.f : 0.f);
     bypassed_ = state.bypass;
   }
 
@@ -93,37 +93,46 @@ tresult PLUGIN_API PhonesPlugin::process(ProcessData& data)
 
   if (!state.bypass)
   {
-    engine_.setTargets(state.amount, state.angle, state.distance, state.room, state.live, state.mono ? 1.f : 0.f);
+    engine_.setTargets(state.amount, state.angle, state.distance, state.room, state.live, state.scatter, state.mono ? 1.f : 0.f);
 
     const int32 nFrames = data.numSamples;
     const int32 nCh = data.outputs[0].numChannels;
-
-    auto run = [&](auto** out, bool zeros) {
+    auto run32 = [&](float** out, bool zeros) {
       for (int32 i = 0; i < nFrames; ++i)
       {
-        float L = zeros || nCh <= 0 ? 0.f : static_cast<float>(out[0][i]);
-        float R = zeros || nCh <= 1 ? L : static_cast<float>(out[1][i]);
-        if (zeros)
-          R = 0.f;
+        const float inL = zeros || !out || nCh <= 0 ? 0.f : out[0][i];
+        const float inR = zeros || !out || nCh <= 1 ? inL : out[1][i];
         float oL = 0.f;
         float oR = 0.f;
-        engine_.process(L, R, oL, oR);
+        engine_.process(inL, inR, oL, oR);
+        if (!out)
+          continue;
         if (nCh > 0)
           out[0][i] = oL;
         if (nCh > 1)
           out[1][i] = oR;
       }
     };
-
+    auto run64 = [&](double** out, bool zeros) {
+      for (int32 i = 0; i < nFrames; ++i)
+      {
+        const float inL = zeros || !out || nCh <= 0 ? 0.f : static_cast<float>(out[0][i]);
+        const float inR = zeros || !out || nCh <= 1 ? inL : static_cast<float>(out[1][i]);
+        float oL = 0.f;
+        float oR = 0.f;
+        engine_.process(inL, inR, oL, oR);
+        if (!out)
+          continue;
+        if (nCh > 0)
+          out[0][i] = static_cast<double>(oL);
+        if (nCh > 1)
+          out[1][i] = static_cast<double>(oR);
+      }
+    };
     if (data.symbolicSampleSize == kSample32)
-    {
-      if (data.outputs[0].channelBuffers32)
-        run(data.outputs[0].channelBuffers32, !hasHostAudio);
-    }
-    else if (data.outputs[0].channelBuffers64)
-    {
-      run(data.outputs[0].channelBuffers64, !hasHostAudio);
-    }
+      run32(data.outputs[0].channelBuffers32, !hasHostAudio || !data.outputs[0].channelBuffers32);
+    else
+      run64(data.outputs[0].channelBuffers64, !hasHostAudio || !data.outputs[0].channelBuffers64);
     engine_.sanitizeBlock();
   }
 
@@ -144,8 +153,14 @@ tresult PLUGIN_API PhonesPlugin::setState(IBStream* state)
     return kResultFalse;
   if (!streamer.readInt32u(version) || version < 1 || version > kStateVersion)
     return kResultFalse;
-  if (!streamer.readInt32(count) || count <= 0 || count > kParamCount)
+  // Older sessions append a Place value this build no longer stores.
+  if (!streamer.readInt32(count) || count <= 0)
     return kResultFalse;
+  const int stored = count;
+  if (stored > kParamCount + 8)
+    return kResultFalse;
+  if (count > kParamCount)
+    count = kParamCount;
 
   float plains[kParamCount];
   for (int i = 0; i < kParamCount; ++i)
@@ -158,6 +173,12 @@ tresult PLUGIN_API PhonesPlugin::setState(IBStream* state)
   for (int i = 0; i < count; ++i)
   {
     if (!streamer.readFloat(plains[i]))
+      return kResultFalse;
+  }
+  for (int i = count; i < stored; ++i)
+  {
+    float ignored = 0.f;
+    if (!streamer.readFloat(ignored))
       return kResultFalse;
   }
   for (int i = 0; i < kParamCount; ++i)

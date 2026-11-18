@@ -38,7 +38,7 @@ export const phonesInfo = {
         heading: 'What you hear',
         blocks: [
           {
-            p: 'Left and right are averaged, then that sum goes through Amount, the room, and the rest. A centred signal stays at the same level. Sides drop. The fade in and out is a few tens of milliseconds.',
+            p: 'Left and right are averaged, then that sum goes through the triangle. A centred signal stays at the same level. Sides drop.',
           },
         ],
       },
@@ -59,7 +59,7 @@ export const phonesInfo = {
         heading: 'What you hear',
         blocks: [
           {
-            p: '0 is the headphone as it is: each ear hears only its own channel. 1 is the full triangle at the current Angle and Distance, including the room. In between, the centre starts to leave the head while the edges are still partly in the ears.',
+            p: '0 is the headphone as it is. 1 is the triangle at the current Angle and Distance, including the room.',
           },
         ],
       },
@@ -117,7 +117,7 @@ export const phonesInfo = {
         heading: 'What you hear',
         blocks: [
           {
-            p: 'Closer is drier, because the walls stay further behind the direct sound. Further away, the same walls arrive sooner after the speakers and sit louder against them. The angle, and with it the delay between your ears, stays put.',
+            p: 'Closer is drier: the speakers stay loud and the room sits further behind them. Further away, the same walls become a larger part of what you hear. The delay between your ears barely moves. That still belongs to Angle.',
           },
         ],
       },
@@ -146,7 +146,7 @@ export const phonesInfo = {
         heading: 'What you hear',
         blocks: [
           {
-            p: '0 is the dry triangle: crossfeed only. Higher brings in the first wall bounces and a short tail. The dashed lines in the drawing are the side-wall bounces, and they fade with this knob.',
+            p: '0 is the dry triangle: crossfeed only. Higher brings in the wall cloud and a short tail. The dashed lines in the drawing are the side-wall bounces, and they fade with this knob.',
           },
         ],
       },
@@ -163,19 +163,19 @@ export const phonesInfo = {
 
   live: infoDoc({
     name: 'Live',
-    lead: 'Opens the room from a tight control room toward a small living room.',
+    lead: 'Opens the gaps between you, the speakers, and the walls.',
     meta: [
       { label: 'DAW name', value: 'Live' },
       { label: 'Parameter ID', value: '7' },
       { label: 'Range', value: '0…1' },
-      { label: 'Default', value: '0 (control room)' },
+      { label: 'Default', value: '0.25' },
     ],
     sections: [
       {
         heading: 'What you hear',
         blocks: [
           {
-            p: '0 keeps the walls close around the triangle and the decay near 0.25 s. 1 pushes the walls out and lengthens the decay to about 0.45 s. It does not become a hall. You only hear the change while Room is up; the drawing moves either way.',
+            p: '0 keeps the walls close around the triangle and the decay near 0.25 s. 1 pushes the walls out and lengthens the decay to about 0.45 s. It does not furnish the room and it does not become a hall. You only hear the change while Room is up; the drawing moves either way.',
           },
         ],
       },
@@ -190,6 +190,35 @@ export const phonesInfo = {
     ],
   }),
 
+  scatter: infoDoc({
+    name: 'Scatter',
+    lead: 'Breaks the bare rectangle into something more like a furnished room.',
+    meta: [
+      { label: 'DAW name', value: 'Scatter' },
+      { label: 'Parameter ID', value: '9' },
+      { label: 'Range', value: '0…1' },
+      { label: 'Default', value: '0.40' },
+    ],
+    sections: [
+      {
+        heading: 'What you hear',
+        blocks: [
+          {
+            p: '0 is the even room: the same walls, a bit of fill so it is not a bare box. Higher stirs the walls and adds a few more late bounces. It stays this room. It does not open into a hall.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'Live still sets how far the walls are, and how long the tail rings. Scatter only stirs that: a few centimetres of wall offset, a denser image cloud, and a slightly darker tail. The tail length does not grow with Scatter. The drawing shows the offset walls.',
+          },
+        ],
+      },
+    ],
+  }),
+
   plan: infoDoc({
     name: 'Plan',
     lead: 'Top view of the triangle and the room the sound is using.',
@@ -198,7 +227,15 @@ export const phonesInfo = {
         heading: 'How to read it',
         blocks: [
           {
-            p: 'You are the dot at the bottom, looking up the dashed centre line. The two marks are the speakers. The arc is Angle, the label on the line to the right speaker is Distance. The frame is the room. Live is the air between the speakers and the walls, and the decay time in the corner. The dashed curves are the side-wall bounces, drawn only as loud as Room.',
+            p: 'You are the head at the bottom, looking up the dashed centre line. The two cabinets are the speakers, turned toward you. The arc is Angle, the label on the line to the right speaker is Distance. Above the line that joins the cabinets, just right of the centre line, is how far apart the speakers stand. The frame is the room. Live is the air between the speakers and the walls, and the decay time in the corner.',
+          },
+        ],
+      },
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Drag a cabinet sideways to set Angle. Drag the head up or down to set Distance. The knobs follow the drawing.',
           },
         ],
       },
@@ -206,7 +243,7 @@ export const phonesInfo = {
         heading: 'In detail',
         blocks: [
           {
-            p: 'Amount, Mono, and Bypass do not move the drawing. They do not change a position. The figure is always the layout of Angle, Distance, and Live.',
+            p: 'Amount, Mono, Room, and Bypass do not move the drawing. Scatter nudges the walls a little. The figure is otherwise the layout of Angle, Distance, and Live. The speaker spacing is the width of that triangle.',
           },
         ],
       },
