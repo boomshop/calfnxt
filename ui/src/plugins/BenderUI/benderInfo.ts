@@ -57,7 +57,15 @@ export const benderInfo = {
         heading: 'What you hear',
         blocks: [
           {
-            p: 'Up raises the pitch. Down drops it. This is a delay-line shift, so chords go through and the formants ride with the pitch. Near unison the shifter parks on one tap, so Mix does not comb. Snap decides whether this knob is free or locked to a grid.',
+            p: 'Up raises the pitch. Down drops it. Chords go through and the formants ride with the pitch, so a big upward throw still sounds like a sped-up voice. The level stays put while you hold a note. Near unison it parks on the dry delay, so Mix does not comb. Snap decides whether this knob is free or locked to a grid.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'Each partial is shifted as one peak. Partials that would land above Nyquist on the way up are left out, so they do not fold back. The dry tap is not part of that.',
           },
         ],
       },
@@ -87,7 +95,7 @@ export const benderInfo = {
 
   quality: infoDoc({
     name: 'Quality',
-    lead: 'Sets the grain length, and with it the latency.',
+    lead: 'Sets how long a slice the pitch shift listens to, and how finely it overlaps those slices.',
     meta: [
       { label: 'DAW name', value: 'Quality' },
       { label: 'Parameter ID', value: '5' },
@@ -99,7 +107,7 @@ export const benderInfo = {
         heading: 'What you hear',
         blocks: [
           {
-            p: 'The grains are 16, 32, 64, and 128 ms. The reported latency is about half of that. Fast is snappy and grainier. Studio is the cleanest sustain and the latest in the host. Changing it can make the host re-compensate.',
+            p: 'Fast and Normal share a window of about 85 ms at 48 kHz. Smooth and Studio use about 170 ms. The window is also the latency, and it never drops below 4096 samples: a shorter slice cannot tell the harmonics of a low note apart, and the shift turns into a metallic smear at every pitch. Normal overlaps that window twice as often as Fast. Studio overlaps twice as often as Smooth. More overlap costs CPU and takes the edge off attacks. The window stops growing at 8192 samples, so at high sample rates the steps get closer together. Changing it can make the host re-compensate.',
           },
         ],
       },
@@ -120,7 +128,7 @@ export const benderInfo = {
         heading: 'What you hear',
         blocks: [
           {
-            p: '100 % is only the throw. Lower values keep the original beside the interval. Because the dry copy is delayed with the wet one, unison does not comb. Away from unison the two delays are not the same length, so a mid mix can chorus a little.',
+            p: '100 % is only the throw. Lower values keep the original beside the interval. Because the dry copy is delayed with the wet one, unison does not comb. Away from unison the two pitches are not the same, so a mid mix can chorus a little. On a large upward throw the shifted side simply lacks whatever would have sat above the top of the range.',
           },
         ],
       },
@@ -162,7 +170,7 @@ export const benderInfo = {
         heading: 'What you hear',
         blocks: [
           {
-            p: '0 puts the corner at 900 Hz. 100 % puts it at 18 kHz. The dry side of Mix is not filtered. Darken the throw when a big upward shift gets fizzy.',
+            p: '0 puts the corner at 900 Hz. 100 % puts it at 18 kHz. The dry side of Mix is not filtered. This sits after the throw and darkens only the shifted path.',
           },
         ],
       },

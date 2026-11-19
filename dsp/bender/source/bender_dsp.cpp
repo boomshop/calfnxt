@@ -16,8 +16,13 @@ namespace {
 constexpr uint32 kStateMagic = 0x434e5842u; // 'CNXB'
 constexpr uint32 kStateVersion = 2; // + mono (trailing)
 
-// Grain length → latency ≈ half of this (Fast ~8 ms at 48 kHz).
-constexpr float kGrainMs[4] = {16.f, 32.f, 64.f, 128.f};
+// Quality window in ms, then overlap. Fast and Normal used to be 16 and 32 ms
+// (FFT 512 / 1024). Those windows cannot separate a low note's harmonics, so
+// every pitch smeared. Both now share a ~96 ms window (FFT 4096 at 48 kHz);
+// Smooth and Studio use ~186 ms (FFT 8192). Overlap is the extra CPU: 8, 16,
+// 16, 32. The FFT is capped at BenderShifter::kFftMax.
+constexpr float kWindowMs[4] = {96.f, 96.f, 186.f, 186.f};
+constexpr int kOverlap[4] = {8, 16, 16, 32};
 
 // Match JS Math.round / AUX LinearSnap: ties toward +infinity (not std::round).
 float snapPitchPlain(float pitch, float snapPlain)
@@ -54,8 +59,8 @@ int BenderPlugin::grainSamples(int quality) const
 {
   const int q = std::clamp(quality, 0, 3);
   const float sr = static_cast<float>(sampleRate_ > 0.0 ? sampleRate_ : 44100.0);
-  const int n = static_cast<int>(sr * kGrainMs[q] * 0.001f + 0.5f);
-  return std::clamp(n, 128, Dsp::BenderShifter::kSize / 2 - 16);
+  const int n = static_cast<int>(sr * kWindowMs[q] * 0.001f + 0.5f);
+  return std::clamp(n, Dsp::BenderShifter::kFftMin, Dsp::BenderShifter::kFftMax);
 }
 
 void BenderPlugin::applyQuality(int quality)
@@ -64,7 +69,7 @@ void BenderPlugin::applyQuality(int quality)
   if (q == quality_)
     return;
   quality_ = q;
-  shifter_.setGrain(grainSamples(q));
+  shifter_.setGrain(grainSamples(q), kOverlap[q]);
   shifter_.reset();
 }
 

@@ -325,11 +325,15 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
 
 ### Bender
 
-- Delay-line pitch pedal (no YIN/PSOLA). Linked stereo dual-head read + raised-cosine
-  crossfade; ±24 st; Mix is latency-matched dry+wet (unison parks on a single tap).
+- Phase-vocoder pitch pedal (no YIN/PSOLA). Fixed ratio, formants ride with the
+  pitch. Quality is window plus overlap: Fast/Normal ~96 ms (FFT 4096, overlap
+  8/16), Smooth/Studio ~186 ms (FFT 8192, overlap 16/32). FFT never under 4096
+  and never over 8192; PDC equals that FFT. Peaks keep their lobe, phase-locked;
+  upward bins above Nyquist are dropped. ±24 st; Mix is latency-matched dry+wet
+  (unison parks on the dry delay).
 - UI: huge Pitch knob; Free/ST/WT set snap (0/1/2). DSP quantizes Pitch to that
   grid (semitone / whole-tone) and writes the Parameter so host→UI echo matches.
-  Quality Fast/Normal/Smooth/Studio → grain 16/32/64/128 ms (PDC ≈ half).
+  Quality Fast/Normal/Smooth/Studio selects the window and overlap above.
 - Extra: Mix (harmony), Glide (slew), Tone (wet LP). Formant stay-put is *not* the
   point — chipmunk/monster is the vintage sound.
 
