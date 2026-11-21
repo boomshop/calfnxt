@@ -416,6 +416,7 @@ const char* mimeForPath(const char* fullPath)
   return "text/html";
 }
 
+/** post() forwards only the fields listed below. A new cmd (ir, eqfile) must be copied or the host never sees it. */
 std::string bridgeScriptSource(bool withDumpButton)
 {
   static const char bridge[] =
@@ -455,6 +456,10 @@ std::string bridgeScriptSource(bool withDumpButton)
     "if(src.t==='ir'){"
     "if(src.cmd!=null)o.cmd=String(src.cmd);"
     "if(src.path!=null)o.path=String(src.path);"
+    "if(src.slot!=null)o.slot=src.slot|0;"
+    "}"
+    "if(src.t==='eqfile'){"
+    "if(src.cmd!=null)o.cmd=String(src.cmd);"
     "}"
     "if(src.t==='midi'){"
     "if(src.cmd!=null)o.cmd=String(src.cmd);"

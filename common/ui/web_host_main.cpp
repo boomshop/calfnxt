@@ -1469,82 +1469,8 @@ bool createWebUi()
   g_signal_connect(ucm, "script-message-received::calfnxt", G_CALLBACK(onScriptMessage), nullptr);
   webkit_user_content_manager_register_script_message_handler(ucm, "calfnxt");
 
-  static const char bridge[] =
-    "window.__calfnxtHostQ=window.__calfnxtHostQ||[];"
-    "window.__calfnxtUiVisible=true;"
-    "window.__calfnxtVizDump=window.__calfnxtVizDump||{};"
-    "window.__calfnxtDumpViz=function(){"
-    "var bag=window.__calfnxtVizDump||{};"
-    "var out={};"
-    "for(var k in bag){if(!Object.prototype.hasOwnProperty.call(bag,k))continue;"
-    "var v=bag[k];out[k]=v&&typeof v.slice==='function'?Array.prototype.slice.call(v):v;}"
-    "var json=JSON.stringify(out,null,2);"
-    "try{window.webkit.messageHandlers.calfnxt.postMessage('DUMPVIZ\\n'+json);}catch(e){}"
-    "console.log(json);return json;};"
-    "window.__calfnxtOnHost=window.__calfnxtOnHost||function(m){"
-    "if(m&&m.t==='viz'&&m.id!=null&&Array.isArray(m.v))"
-    "window.__calfnxtVizDump[String(m.id)+':'+String(m.kind)]=m.v;"
-    "window.__calfnxtHostQ.push(m);};"
-    "window.calfnxtNative={post:function(m){"
-    "var src=typeof m==='string'?JSON.parse(m):m;"
-    "var o={t:src.t};"
-    "if(src.id!=null&&src.t!=='vizcfg')o.id=src.id|0;"
-    "if(src.t==='set'&&typeof src.v==='number'){o.q=Math.round(src.v*1e6);o.d=1e6;}"
-    "if(src.t==='viewport'){"
-    "if(src.w!=null)o.w=src.w|0;if(src.h!=null)o.h=src.h|0;"
-    "}"
-    "if(src.t==='_diag'){"
-    "if(src.msg!=null)o.msg=String(src.msg);"
-    "if(src.w!=null)o.w=src.w|0;if(src.h!=null)o.h=src.h|0;"
-    "}"
-    "if(src.t==='vizcfg'){"
-    "if(src.id!=null)o.id=String(src.id);if(src.bins!=null)o.bins=src.bins|0;"
-    "}"
-    "if(src.t==='vizhz'){"
-    "if(src.hz!=null)o.hz=src.hz|0;"
-    "}"
-    "if(src.t==='ir'){"
-    "if(src.cmd!=null)o.cmd=String(src.cmd);"
-    "if(src.path!=null)o.path=String(src.path);"
-    "if(src.slot!=null)o.slot=src.slot|0;"
-    "}"
-    "if(src.t==='midi'){"
-    "if(src.cmd!=null)o.cmd=String(src.cmd);"
-    "}"
-    "if(src.t==='meter'){"
-    "if(src.cmd!=null)o.cmd=String(src.cmd);"
-    "}"
-    "window.webkit.messageHandlers.calfnxt.postMessage(JSON.stringify(o));}};"
-    ;
-
-  std::string bridgeSrc = bridge;
-  if (envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR"))
-  {
-    bridgeSrc +=
-      "(function(){"
-      "function mount(){"
-      "if(document.getElementById('calfnxt-dump-viz'))return;"
-      "var b=document.createElement('button');"
-      "b.id='calfnxt-dump-viz';"
-      "b.type='button';"
-      "b.textContent='Dump viz';"
-      "b.title='Write /tmp/calfnxt-viz-dump.json';"
-      "b.style.cssText='position:fixed;top:4px;right:4px;z-index:2147483647;"
-      "font:12px/1.2 sans-serif;padding:6px 10px;cursor:pointer;"
-      "background:#222;color:#fff;border:1px solid #666;border-radius:3px;';"
-      "b.addEventListener('click',function(ev){"
-      "ev.preventDefault();ev.stopPropagation();"
-      "if(typeof window.__calfnxtDumpViz==='function')window.__calfnxtDumpViz();"
-      "b.textContent='Dumped';"
-      "setTimeout(function(){b.textContent='Dump viz';},1200);"
-      "});"
-      "document.documentElement.appendChild(b);"
-      "}"
-      "if(document.readyState==='loading')"
-      "document.addEventListener('DOMContentLoaded',mount);"
-      "else mount();"
-      "})();";
-  }
+  const bool webDebug = envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR");
+  const std::string bridgeSrc = W::bridgeScriptSource(webDebug);
 
   auto* script = webkit_user_script_new(bridgeSrc.c_str(), WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
                                         WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, nullptr, nullptr);
@@ -1580,7 +1506,6 @@ bool createWebUi()
   webkit_settings_set_enable_webrtc(settings, FALSE);
   webkit_settings_set_enable_webaudio(settings, FALSE);
   webkit_settings_set_enable_html5_local_storage(settings, TRUE);
-  const bool webDebug = envFlag("CALFNXT_WEB_DEBUG") || envFlag("CALFNXT_WEB_INSPECTOR");
   webkit_settings_set_enable_developer_extras(settings, webDebug ? TRUE : FALSE);
   if (webDebug)
     webkit_settings_set_enable_write_console_messages_to_stdout(settings, TRUE);
