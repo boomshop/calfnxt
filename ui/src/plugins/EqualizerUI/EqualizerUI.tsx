@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   EQChart,
+  Button,
   Buttons,
   Knob,
   Select,
@@ -24,6 +25,7 @@ import {
   EQ_CHART_RANGE_DEFAULT,
   EQ_CHART_RANGE_MAX,
   EQ_CHART_RANGE_MIN,
+  type IEqualizerHost,
   EQ_GAIN_MAX,
   EQ_GAIN_MIN,
   EQ_PASS_SLOPE_ENTRIES,
@@ -38,7 +40,6 @@ import {
   miniBandYRange,
   type EqFilterType,
   type IEqualizerBand,
-  type IEqualizerHost,
 } from '../../host/equalizerHost';
 import {
   paramIds,
@@ -49,7 +50,15 @@ import '../PluginUI.scss';
 import './EqualizerUI.scss';
 import { Header } from '../../components';
 import { useDynamicValueReadonly } from '@deutschesoft/use-aux-widgets';
+import { onEqFile } from '../../utils/bind_param';
+import { postToHost } from '../../utils/bridge';
 import { equalizerInfo } from './equalizerInfo';
+import {
+  importRewBase64,
+  importRewFile,
+  type RewBand,
+  type RewImport,
+} from './rewImport';
 
 /** Ring ticks / labels for EQ control knobs (Circular `labels` / `dots`). */
 const EQ_FREQ_DOTS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
@@ -127,6 +136,50 @@ const EQ_RANGE_LABELS = [
 ];
 /** Handle limits stay at the gain range so the chart zoom does not rewrite bands. */
 const EQ_HANDLE_Y = { min: EQ_GAIN_MIN, max: EQ_GAIN_MAX };
+
+function applyRewBands(host: IEqualizerHost, specs: RewBand[]) {
+  let peakGain = 0;
+  for (const spec of specs) {
+    if (spec.type === 'lowpass' || spec.type === 'highpass') continue;
+    peakGain = Math.max(peakGain, Math.abs(spec.gain));
+  }
+  host.bands.forEach((band, i) => {
+    const spec = specs[i];
+    const id = (offset: number) => bandParamId(i, offset);
+    const edit = (param: number, write: () => void) => {
+      host.beginEdit(param);
+      write();
+      host.endEdit(param);
+    };
+    // Dyn off first so the static curve follows the imported gain.
+    edit(id(EQ_BAND_OFFSET.dyn), () => band.dyn$.set(false));
+    edit(id(EQ_BAND_OFFSET.dyn_listen), () => band.listen$.set(false));
+    if (!spec) {
+      edit(id(EQ_BAND_OFFSET.active), () => band.active$.set(false));
+      return;
+    }
+    // Type is set before gain/Q/slope. A type change restores remembered
+    // siblings, and the writes below replace them with the file.
+    edit(id(EQ_BAND_OFFSET.type), () => band.type$.set(spec.type));
+    edit(id(EQ_BAND_OFFSET.slope), () => band.slope$.set(spec.slope));
+    edit(id(EQ_BAND_OFFSET.freq), () => band.frequency$.set(spec.freq));
+    edit(id(EQ_BAND_OFFSET.gain), () => band.gain$.set(spec.gain));
+    edit(id(EQ_BAND_OFFSET.q), () => band.q$.set(spec.q));
+    edit(id(EQ_BAND_OFFSET.channel), () => band.channel$.set(0));
+    edit(id(EQ_BAND_OFFSET.active), () => band.active$.set(true));
+  });
+  if (peakGain > host.range$.value) {
+    const next = Math.min(
+      EQ_CHART_RANGE_MAX,
+      Math.max(EQ_CHART_RANGE_MIN, Math.ceil(peakGain / 6) * 6),
+    );
+    if (next > host.range$.value) {
+      host.beginEdit(paramIds.range);
+      host.range$.set(next);
+      host.endEdit(paramIds.range);
+    }
+  }
+}
 
 export interface EqualizerUIProps {
   host: IEqualizerHost;
@@ -470,6 +523,37 @@ export function EqualizerUI(props: EqualizerUIProps) {
     [bands, host.selectedBandIndex$],
   );
 
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [loadNote, setLoadNote] = useState('');
+  const applyImport = useCallback(
+    (result: RewImport) => {
+      setLoadNote(result.summary);
+      if (!result.ok) return;
+      applyRewBands(host, result.bands);
+      const first = bands[0];
+      if (first) selectBand(first.id);
+    },
+    [bands, host, selectBand],
+  );
+
+  useEffect(() => {
+    return onEqFile((msg) => {
+      if (msg.cmd === 'error') {
+        setLoadNote(msg.msg || 'Could not read that file.');
+        return;
+      }
+      if (msg.cmd === 'text' && msg.b64) applyImport(importRewBase64(msg.b64));
+    });
+  }, [applyImport]);
+
+  const onLoad = () => {
+    if (window.calfnxtNative) {
+      postToHost({ t: 'eqfile', cmd: 'browse' });
+      return;
+    }
+    fileRef.current?.click();
+  };
+
   return (
     <div className="EqualizerUI PluginUI">
       <Header title="Equalizer">
@@ -488,6 +572,23 @@ export function EqualizerUI(props: EqualizerUIProps) {
               host.beginEdit(paramIds.spectrum);
               host.spectrum$.set(v as number);
               host.endEdit(paramIds.spectrum);
+            }}
+          />
+        </WithInfo>
+        <WithInfo title={equalizerInfo.load}>
+          <Button icon="load" label={false} onClick={onLoad} />
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".txt,text/plain"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (!file) return;
+              void file.arrayBuffer().then((buf) => {
+                applyImport(importRewFile(new Uint8Array(buf)));
+              });
             }}
           />
         </WithInfo>
@@ -524,6 +625,7 @@ export function EqualizerUI(props: EqualizerUIProps) {
             }}
           />
         </WithInfo>
+        {loadNote ? <p className="eq-load-note">{loadNote}</p> : null}
       </WithInfo>
 
       {selectedBand ? (

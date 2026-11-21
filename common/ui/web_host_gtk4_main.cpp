@@ -420,6 +420,39 @@ void onFolderSelected(GObject* source, GAsyncResult* result, gpointer)
   g_free(path);
 }
 
+void onEqFileSelected(GObject* source, GAsyncResult* result, gpointer)
+{
+  GError* error = nullptr;
+  GFile* file = gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source), result, &error);
+  if (error)
+  {
+    if (!g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED)
+        && !g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+      W::hostLog("[calfnxt-web-host-gtk4] eq file dialog: %s\n", error->message);
+    g_error_free(error);
+    return;
+  }
+  if (!file)
+    return;
+  char* path = g_file_get_path(file);
+  g_object_unref(file);
+  if (!path || !path[0])
+  {
+    g_free(path);
+    return;
+  }
+  std::string json = "{\"t\":\"_eqfile\",\"path\":\"";
+  for (const char* p = path; *p; ++p)
+  {
+    if (*p == '\\' || *p == '"')
+      json.push_back('\\');
+    json.push_back(*p);
+  }
+  json += "\"}";
+  sendLine(json.c_str());
+  g_free(path);
+}
+
 void handlePluginLine(const std::string& line)
 {
   if (line.empty())
@@ -443,6 +476,30 @@ void handlePluginLine(const std::string& line)
     gtk_file_dialog_set_title(d, "IR Library");
     gtk_file_dialog_select_folder(d, g.window ? GTK_WINDOW(g.window) : nullptr, nullptr,
                                   onFolderSelected, nullptr);
+    g_object_unref(d);
+    return;
+  }
+  if (W::jsonHasType(line.c_str(), "_eqfile"))
+  {
+    GtkFileDialog* d = gtk_file_dialog_new();
+    gtk_file_dialog_set_title(d, "REW filters");
+    GtkFileFilter* txt = gtk_file_filter_new();
+    gtk_file_filter_set_name(txt, "REW filter text");
+    gtk_file_filter_add_pattern(txt, "*.txt");
+    gtk_file_filter_add_pattern(txt, "*.TXT");
+    GtkFileFilter* all = gtk_file_filter_new();
+    gtk_file_filter_set_name(all, "All files");
+    gtk_file_filter_add_pattern(all, "*");
+    GListStore* filters = g_list_store_new(GTK_TYPE_FILE_FILTER);
+    g_list_store_append(filters, txt);
+    g_list_store_append(filters, all);
+    gtk_file_dialog_set_filters(d, G_LIST_MODEL(filters));
+    gtk_file_dialog_set_default_filter(d, txt);
+    g_object_unref(txt);
+    g_object_unref(all);
+    g_object_unref(filters);
+    gtk_file_dialog_open(d, g.window ? GTK_WINDOW(g.window) : nullptr, nullptr, onEqFileSelected,
+                         nullptr);
     g_object_unref(d);
     return;
   }

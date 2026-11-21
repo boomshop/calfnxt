@@ -500,4 +500,32 @@ export const equalizerInfo = {
       },
     ],
   }),
+
+  load: infoDoc({
+    name: 'Load',
+    lead: 'Reads a Room EQ Wizard filter list and sets the bands from it.',
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'In REW, open the EQ window and choose Export filter settings as text. Load that file here. Each enabled filter becomes a band, in the same order, up to sixteen. The bands after that list turn off. The formatted text export works when it has a header with type and frequency.',
+          },
+        ],
+      },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            ul: [
+              'Peaking (PK or PA) becomes a parametric band. Low shelf and high shelf stay shelves. Low pass and high pass stay those types. A written slope of 12, 24, 36, or 48 dB/oct is kept. Otherwise the slope is 12 dB/oct, and a higher slope repeats that Q on each 12 dB stage.',
+              'A 6 dB/oct shelf becomes a shelf at Q 0.7. Notch and allpass are left out. This EQ has no band for them.',
+              'Q is used when the line has one. A bandwidth in octaves, or in 1/60 octave (BW/60), is turned into Q. Frequency, gain, and Q stop at the limits of these knobs.',
+              'Loaded bands are stereo. Dynamic EQ turns off on every band. In, Out, Mono, and Spectrum stay as they are. A REW .req file is not text. Export the filter settings as text.',
+            ],
+          },
+        ],
+      },
+    ],
+  }),
 } as const;

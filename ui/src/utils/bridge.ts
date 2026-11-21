@@ -41,7 +41,13 @@ export type calfNXTMsg =
       slots?: { i: number; valid: number; db?: number[]; t?: number[]; fft?: number }[];
     }
   /** Host→UI tips (e.g. Ardour GTK3 embed preference). */
-  | { t: "host"; tip?: string; show?: number };
+  | { t: "host"; tip?: string; show?: number }
+  /**
+   * Equalizer REW text import.
+   * UI→host `cmd:"browse"` opens the file dialog.
+   * Host→UI `cmd:"text"` carries the file as base64, or `cmd:"error"` a message.
+   */
+  | { t: "eqfile"; cmd: string; b64?: string; msg?: string };
 
 /** Plain float from a host→UI param message (`v`, or legacy q/d). */
 export function plainFromMsg(msg: { v?: number; q?: number; d?: number }): number | undefined {

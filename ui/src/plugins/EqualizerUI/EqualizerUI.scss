@@ -38,6 +38,19 @@
       width: auto;
       height: auto;
     }
+
+    > .eq-load-note {
+      position: absolute;
+      z-index: 5;
+      left: 8px;
+      bottom: 4px;
+      margin: 0;
+      max-width: 70%;
+      font-size: var(--font-size-tiny);
+      line-height: 1.3;
+      color: var(--color);
+      pointer-events: none;
+    }
   }
 
   > .EQChart,

@@ -33,6 +33,7 @@ const vizCtrlApplies = new Map<string, VizLevelsApply>();
 const vizLfoApplies = new Map<string, VizLevelsApply>();
 const vizWaveApplies = new Map<string, VizLevelsApply>();
 const irApplies = new Set<(msg: Extract<calfNXTMsg, { t: "ir" }>) => void>();
+const eqFileApplies = new Set<(msg: Extract<calfNXTMsg, { t: "eqfile" }>) => void>();
 const channelCountApplies = new Set<ChannelCountApply>();
 const ioChannelCountsApplies = new Set<IoChannelCountsApply>();
 let hostWired = false;
@@ -131,6 +132,8 @@ function dispatchHost(msg: calfNXTMsg): void {
     vizWaveApplies.get(msg.id)?.(msg.v);
   if (msg.t === "ir")
     irApplies.forEach((apply) => apply(msg));
+  if (msg.t === "eqfile")
+    eqFileApplies.forEach((apply) => apply(msg));
   if (msg.t === "host" && msg.tip === "ardour-gui")
     setArdourGuiTipFromHost(msg.show === 1);
 }
@@ -673,6 +676,17 @@ export function bindVizWave(dv: DynamicValue<number[]>, id: string): () => void 
   });
   return () => {
     vizWaveApplies.delete(id);
+  };
+}
+
+/** Equalizer: REW text file chosen in the host dialog, or an error from that dialog. */
+export function onEqFile(
+  apply: (msg: Extract<calfNXTMsg, { t: "eqfile" }>) => void,
+): () => void {
+  ensureHostWire();
+  eqFileApplies.add(apply);
+  return () => {
+    eqFileApplies.delete(apply);
   };
 }
 

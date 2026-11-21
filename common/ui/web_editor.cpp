@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <X11/Xlib.h>
 
 #include <dlfcn.h>
@@ -370,6 +371,77 @@ void logMsg(const char* fmt, ...)
   std::fflush(stderr);
 }
 
+std::string base64Encode(const std::string& in)
+{
+  static const char kTbl[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string out;
+  out.reserve(((in.size() + 2) / 3) * 4);
+  size_t i = 0;
+  while (i + 2 < in.size())
+  {
+    const unsigned n = (static_cast<unsigned char>(in[i]) << 16)
+                     | (static_cast<unsigned char>(in[i + 1]) << 8)
+                     | static_cast<unsigned char>(in[i + 2]);
+    out.push_back(kTbl[(n >> 18) & 63]);
+    out.push_back(kTbl[(n >> 12) & 63]);
+    out.push_back(kTbl[(n >> 6) & 63]);
+    out.push_back(kTbl[n & 63]);
+    i += 3;
+  }
+  if (i < in.size())
+  {
+    unsigned n = static_cast<unsigned char>(in[i]) << 16;
+    out.push_back(kTbl[(n >> 18) & 63]);
+    if (i + 1 < in.size())
+    {
+      n |= static_cast<unsigned char>(in[i + 1]) << 8;
+      out.push_back(kTbl[(n >> 12) & 63]);
+      out.push_back(kTbl[(n >> 6) & 63]);
+      out.push_back('=');
+    }
+    else
+    {
+      out.push_back(kTbl[(n >> 12) & 63]);
+      out.push_back('=');
+      out.push_back('=');
+    }
+  }
+  return out;
+}
+
+std::string eqFileErrorJs(const std::string& msg)
+{
+  std::string js = "(function(){var m={t:\"eqfile\",cmd:\"error\",msg:";
+  jsonEscapeAppend(js, msg);
+  js += "};var h=window.__calfnxtOnHost;if(h)h(m);"
+        "else (window.__calfnxtHostQ=window.__calfnxtHostQ||[]).push(m);})();";
+  return js;
+}
+
+/** Read a REW text export and hand it to the page as one JSON message. */
+std::string eqFileJsForPath(const std::string& path)
+{
+  std::ifstream in(path, std::ios::binary);
+  if (!in)
+    return eqFileErrorJs("Could not read that file.");
+  in.seekg(0, std::ios::end);
+  const auto sz = in.tellg();
+  if (sz < 0)
+    return eqFileErrorJs("Could not read that file.");
+  if (sz > 256 * 1024)
+    return eqFileErrorJs("That file is too large.");
+  std::string data(static_cast<size_t>(sz), '\0');
+  in.seekg(0);
+  if (sz > 0 && !in.read(data.data(), static_cast<std::streamsize>(sz)))
+    return eqFileErrorJs("Could not read that file.");
+  std::string js = "(function(){var m={t:\"eqfile\",cmd:\"text\",b64:\"";
+  js += base64Encode(data);
+  js += "\"};var h=window.__calfnxtOnHost;if(h)h(m);"
+        "else (window.__calfnxtHostQ=window.__calfnxtHostQ||[]).push(m);})();";
+  return js;
+}
+
 } // namespace
 
 void WebEditor::fillWebRoot(char* out, size_t cap)
@@ -583,6 +655,13 @@ void WebEditor::handleHelperLine(const std::string& line)
       cmd += '}';
       vizSource_->handleIrCommand(cmd.c_str());
     }
+    return;
+  }
+  if (jsonHasType(line.c_str(), "_eqfile"))
+  {
+    std::string path;
+    if (jsonUnescapedStringAfterKey(line.c_str(), "\"path\"", path) && !path.empty())
+      evalJs(eqFileJsForPath(path).c_str());
     return;
   }
   onWebMessage(line.c_str());
@@ -2063,6 +2142,15 @@ bool WebEditor::onWebMessage(const char* json)
       if (hz >= 5 && hz <= 60)
         vizHzRuntime().hz.store(hz, std::memory_order_relaxed);
     }
+    return true;
+  }
+
+  if (jsonHasType(json, "eqfile"))
+  {
+    char cmd[32] {};
+    if (jsonStringAfterKey(json, "\"cmd\"", cmd, sizeof cmd)
+        && std::strcmp(cmd, "browse") == 0)
+      sendLine("{\"t\":\"_eqfile\"}");
     return true;
   }
 

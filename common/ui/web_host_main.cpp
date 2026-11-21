@@ -1109,6 +1109,43 @@ void handlePluginLine(const std::string& line)
     g_object_unref(native);
     return;
   }
+  if (jsonHasType(line.c_str(), "_eqfile"))
+  {
+    GtkWindow* parent = g.plug ? GTK_WINDOW(g.plug) : nullptr;
+    GtkFileChooserNative* native = gtk_file_chooser_native_new(
+      "REW filters", parent, GTK_FILE_CHOOSER_ACTION_OPEN, "_Open", "_Cancel");
+    if (!native)
+      return;
+    GtkFileFilter* txt = gtk_file_filter_new();
+    gtk_file_filter_set_name(txt, "REW filter text");
+    gtk_file_filter_add_pattern(txt, "*.txt");
+    gtk_file_filter_add_pattern(txt, "*.TXT");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(native), txt);
+    GtkFileFilter* all = gtk_file_filter_new();
+    gtk_file_filter_set_name(all, "All files");
+    gtk_file_filter_add_pattern(all, "*");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(native), all);
+    const int res = gtk_native_dialog_run(GTK_NATIVE_DIALOG(native));
+    if (res == GTK_RESPONSE_ACCEPT)
+    {
+      char* filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(native));
+      if (filename && filename[0])
+      {
+        std::string json = "{\"t\":\"_eqfile\",\"path\":\"";
+        for (const char* p = filename; *p; ++p)
+        {
+          if (*p == '\\' || *p == '"')
+            json.push_back('\\');
+          json.push_back(*p);
+        }
+        json += "\"}";
+        sendLine(json.c_str());
+      }
+      g_free(filename);
+    }
+    g_object_unref(native);
+    return;
+  }
   evalJs(line.c_str());
 }
 
