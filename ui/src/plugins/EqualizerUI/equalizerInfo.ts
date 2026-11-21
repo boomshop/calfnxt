@@ -104,7 +104,7 @@ export const equalizerInfo = {
         heading: 'How to use it',
         blocks: [
           {
-            p: 'A smaller span makes a modest cut or boost easier to see and to drag. 12 fills the chart with ±12 dB. 36 shows the full gain of a band. A band set past the span stays at that gain. The chart clips the drawing at the edge.',
+            p: 'The buttons are 12, 18, 24, 30 and 36. A smaller span makes a modest cut or boost easier to see and to drag. 12 fills the chart with ±12 dB. 36 shows the full gain of a band. A band set past the span stays at that gain. The chart clips the drawing at the edge.',
           },
         ],
       },

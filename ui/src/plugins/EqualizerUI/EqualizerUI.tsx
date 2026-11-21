@@ -128,12 +128,10 @@ const EQ_DYN_RATIO_LABELS = EQ_DYN_RATIO_DOTS.map((n) => ({
   label: String(n),
 }));
 
-const EQ_RANGE_DOTS = [12, 18, 24, 30, 36];
-const EQ_RANGE_LABELS = [
-  { pos: 12, label: '12' },
-  { pos: 24, label: '24' },
-  { pos: 36, label: '36' },
-];
+const EQ_RANGE_ENTRIES = [12, 18, 24, 30, 36].map((n) => ({
+  label: String(n),
+  value: n,
+}));
 /** Handle limits stay at the gain range so the chart zoom does not rewrite bands. */
 const EQ_HANDLE_Y = { min: EQ_GAIN_MIN, max: EQ_GAIN_MAX };
 
@@ -608,20 +606,15 @@ export function EqualizerUI(props: EqualizerUIProps) {
           spectrumMode={Math.round(spectrumMode)}
         />
         <WithInfo title={equalizerInfo.range} className="chart-range">
-          <Knob
-            value$={host.range$}
-            min={EQ_CHART_RANGE_MIN}
-            max={EQ_CHART_RANGE_MAX}
-            reset={EQ_CHART_RANGE_DEFAULT}
-            snap={6}
-            size="small"
-            label="Range"
-            beginEdit={() => host.beginEdit(paramIds.range)}
-            endEdit={() => host.endEdit(paramIds.range)}
-            dots={EQ_RANGE_DOTS}
-            labels={EQ_RANGE_LABELS}
-            {...{
-              'value.format': (v: number) => `±${Math.round(v)}`,
+          <Buttons
+            layout="horizontal"
+            className="eq-range"
+            entries={EQ_RANGE_ENTRIES}
+            value={Math.round(chartRange)}
+            onChange={(v) => {
+              host.beginEdit(paramIds.range);
+              host.range$.set(v as number);
+              host.endEdit(paramIds.range);
             }}
           />
         </WithInfo>

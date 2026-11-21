@@ -34,9 +34,30 @@
       position: absolute;
       z-index: 5;
       top: 2px;
-      right: 16px;
+      /* Same corner inset as the old range knob, plus the y-axis labels. */
+      right: 22px;
       width: auto;
       height: auto;
+
+      > .info-tip {
+        right: auto;
+        left: 0;
+        transform: translateX(calc(-100% - 2px));
+      }
+
+      > .eq-range {
+        gap: 4px;
+
+        > .Button {
+          padding: 2px 4px;
+          height: auto;
+          min-height: 0;
+
+          > .aux-label {
+            font-size: var(--font-size-small);
+          }
+        }
+      }
     }
 
     > .eq-load-note {
