@@ -822,8 +822,17 @@ export function applyHarmonicsDemo(
   return () => window.clearInterval(hold);
 }
 
+/** BS.1770 pack so the meter block is filled when a capture has no loudness. */
+const MBLIMITER_DEMO_LOUDNESS = [
+  -11.2, -13.4, -14, 6.2, -1.1, -1.4, -0.8, -0.9, -0.6, -0.7, 42, 0, 1, 1,
+  -1.2, -1.5, -16.5, -16.8, -18.4, -12.2, 0,
+];
+
 function applyMblimiterMeters(host: IMblimiterHost, viz: VizFixture) {
   applySharedViz(viz);
+  const loudness = viz.loudness ?? MBLIMITER_DEMO_LOUDNESS;
+  host.loudness$.set(loudness);
+  pushViz('loud', 'loudness', loudness);
   if (viz.gains) {
     // gains are ≤0 dB; host expects positive amounts for strip + overall meters.
     const amounts = viz.gains.map((db) => Math.max(0, -db));

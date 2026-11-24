@@ -273,6 +273,8 @@ void MblimiterPlugin::resetProcessing()
   broadband_.setMulti(false);
   bbMeter_.reset(sr);
   overallMeter_.reset(sr);
+  loudness_.setSampleRate(sampleRate_);
+  loudness_.reset();
 
   attackOld_ = -1.f;
   limitOld_ = -1.f;
@@ -541,6 +543,71 @@ void MblimiterPlugin::publishHistSnapshot()
   histLock_.endWrite();
 }
 
+void MblimiterPlugin::feedLoudnessSilence(int frames)
+{
+  if (!vizConsumerActive() || frames < 1)
+    return;
+  for (int i = 0; i < frames; ++i)
+    loudness_.process(0.f, 0.f);
+}
+
+void MblimiterPlugin::feedLoudnessOutput(const ProcessData& data)
+{
+  if (!vizConsumerActive())
+    return;
+  if (data.numOutputs < 1 || !data.outputs || data.numSamples < 1)
+  {
+    feedLoudnessSilence(data.numSamples);
+    return;
+  }
+  const int32 n = data.numSamples;
+  const int32 nCh = data.outputs[0].numChannels;
+  if (data.symbolicSampleSize == kSample32)
+  {
+    auto** ch = data.outputs[0].channelBuffers32;
+    if (!ch || nCh < 1 || !ch[0])
+    {
+      feedLoudnessSilence(n);
+      return;
+    }
+    const float* left = ch[0];
+    const float* right = (nCh > 1 && ch[1]) ? ch[1] : left;
+    for (int32 i = 0; i < n; ++i)
+      loudness_.process(left[i], right[i]);
+    return;
+  }
+  auto** ch = data.outputs[0].channelBuffers64;
+  if (!ch || nCh < 1 || !ch[0])
+  {
+    feedLoudnessSilence(n);
+    return;
+  }
+  const double* left = ch[0];
+  const double* right = (nCh > 1 && ch[1]) ? ch[1] : left;
+  for (int32 i = 0; i < n; ++i)
+    loudness_.process(static_cast<float>(left[i]), static_cast<float>(right[i]));
+}
+
+int MblimiterPlugin::takeLoudness(float* out, int maxOut)
+{
+  if (!vizConsumerActive())
+    return 0;
+  return loudness_.take(out, maxOut);
+}
+
+bool MblimiterPlugin::handleMeterCommand(const char* json)
+{
+  if (!json)
+    return false;
+  // "reset" also covers a stray "resetpeak"; this plugin has one meter reset.
+  if (std::strstr(json, "reset"))
+  {
+    loudness_.reset();
+    return true;
+  }
+  return false;
+}
+
 int MblimiterPlugin::takeGainReductionDb(float* out, int maxOut)
 {
   if (!out || maxOut < 1)
@@ -770,6 +837,7 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
       }
     }
     publishHistSnapshot();
+    feedLoudnessSilence(data.numSamples);
     return kResultOk;
   }
 
@@ -826,6 +894,7 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
         spectrumFloor_ = true;
     }
     io_.end(data);
+    feedLoudnessOutput(data);
     return kResultOk;
   }
   if (!quietIn)
@@ -1237,6 +1306,8 @@ tresult PLUGIN_API MblimiterPlugin::process(ProcessData& data)
   splitL_.sanitize();
   splitR_.sanitize();
   io_.end(data);
+  // After out gain: this is the signal the host receives.
+  feedLoudnessOutput(data);
   return kResultOk;
 }
 

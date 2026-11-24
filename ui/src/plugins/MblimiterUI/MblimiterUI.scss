@@ -144,8 +144,147 @@
       }
     }
 
+    > .character {
+      .feat-group {
+        .aux-button {
+          height: auto;
+          min-height: 0;
+          padding: 4px;
+          margin-top: -32px;
+          margin-right: -4px;
+
+          > .aux-icon {
+            --aux-icon-size: 16px;
+          }
+        }
+      }
+    }
+
     > .meter {
       flex: 0 0 auto;
+      align-items: stretch;
+      gap: 4px;
+
+      > .reset {
+        position: absolute;
+        top: 0px;
+        right: 0px;
+        z-index: 2;
+        width: auto;
+
+        .aux-button {
+          height: 100%;
+          min-height: 0;
+          padding: 2px 6px;
+          font-size: 10px;
+          line-height: 16px;
+        }
+      }
+
+      > .loud {
+        position: relative;
+        display: flex;
+        align-items: stretch;
+        gap: 3px;
+        padding-left: 18px;
+        min-width: 0;
+        min-height: 0;
+
+        > .Scale {
+          position: absolute;
+          top: 0;
+          bottom: 20px;
+          left: 0;
+          right: 0;
+          z-index: 1;
+
+          --aux-scale-labelmarginvertical: calc(100% - 12px);
+          --aux-scale-dotsize: calc(100% - 14px);
+          --aux-scale-markersize: calc(100% - 14px);
+
+          > .aux-dot {
+            opacity: 0.35;
+            background: var(--color);
+          }
+        }
+
+        > .WithInfo {
+          display: flex;
+          min-width: 0;
+
+          > .MultiMeter,
+          > .LevelMeter {
+            flex: 1 1 auto;
+            height: 100%;
+            min-width: 0;
+            min-height: 0;
+          }
+        }
+
+        .MultiMeter {
+          --aux-meter-size: 8px;
+          --aux-multimeter-gridgap: 2px;
+          min-width: 0;
+        }
+
+        .LevelMeter,
+        .aux-levelmeter {
+          --aux-meter-size: 8px;
+          min-height: 0;
+        }
+
+        .aux-levelmeter.aux-vertical,
+        .LevelMeter.aux-vertical {
+          grid-template-rows: 1fr auto;
+          grid-template-areas:
+            'bar bar'
+            'label label';
+          gap: 1px 0;
+
+          > .aux-label {
+            height: 18px;
+            font-size: 8px;
+            line-height: 9px;
+            white-space: pre-line;
+            text-align: center;
+            color: var(--color-least);
+          }
+        }
+
+        > .levels .aux-levelmeter {
+          min-width: 10px;
+        }
+
+        > .lufs .aux-levelmeter {
+          min-width: 10px;
+        }
+
+        > .range .LevelMeter {
+          min-width: 14px;
+        }
+      }
+
+      > .gr {
+        display: flex;
+
+        > .LevelMeter {
+          height: 100%;
+          min-height: 0;
+          --aux-meter-size: 8px;
+          grid-template-rows: 1fr auto;
+          grid-template-areas:
+            'scale bar'
+            'label label';
+          gap: 1px 2px;
+
+          > .aux-label {
+            height: 18px;
+            font-size: 8px;
+            line-height: 9px;
+            text-align: center;
+          }
+        }
+      }
     }
 
     > .character {
@@ -163,7 +302,7 @@
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: var(--gap);
+    gap: 2px;
     justify-content: center;
   }
 }

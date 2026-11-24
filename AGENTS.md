@@ -299,6 +299,8 @@ Open Cursor on **`/home/markus/Programmierung/calf/calfnxt`** (not `calf_next`).
   Limiter-style Limit / Attenuation / Character (incl. Min Release).
 - Viz id `"mblimiter"`: `gr` array (N band combined + 1 master), `gains`, `bandio`,
   `envelope` like mbcomp (`[full, band, grLin]` × slots).
+- Output loudness (after out gain, editor open only) uses the Analyzer pack on
+  viz id `"loud"` (`LoudnessMeter`, kind `loudness`). UI Reset sends `{t:"meter",cmd:"reset"}`.
 
 ### Tuner
 

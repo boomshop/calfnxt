@@ -7,6 +7,7 @@ import {
   HistoryChart,
   Knob,
   LevelMeter,
+  MultiMeter,
   MultibandChart,
   Select,
   Toggle,
@@ -15,6 +16,8 @@ import {
   MB_BAND_HISTORY_MS,
   mblimiterHistorySeries,
 } from '../../widgets';
+import { Scale } from '../../widgets/Scale';
+import { postToHost } from '../../utils/bridge';
 import { LIMITER_HISTORY_TOGGLES } from '../../prefs/historySeriesVisible';
 import { paramIds } from '../../generated/mblimiterModel';
 import {
@@ -102,6 +105,13 @@ const UNIT_LABELS = [
   { pos: 0.5, label: '0.5' },
   { pos: 1, label: '1' },
 ];
+
+/** Shared −60…+6 scale for the output loudness bars. Ticks, not a target. */
+const LOUD_SCALE_DOTS = [
+  -60, -57, -54, -51, -48, -45, -42, -39, -36, -33, -30, -27, -24, -21, -18,
+  -15, -12, -9, -6, -3, 0, 3, 6,
+];
+const LOUD_SCALE_LABELS = [-60, -48, -36, -24, -18, -12, -6, 0, 6];
 
 const MARGIN_DOTS = [0, 0.1, 0.5, 1, 2, 3];
 const MARGIN_LABELS = [
@@ -308,10 +318,7 @@ export function MblimiterUI(props: MblimiterUIProps) {
           <Select value$={host.slope$} entries={MBLIMITER_SLOPE_ENTRIES} />
         </WithInfo>
         <WithInfo title={mblimiterInfo.scale} className="info-block scale">
-          <Select
-            value$={host.scale$}
-            entries={[...MBLIMITER_SCALE_ENTRIES]}
-          />
+          <Select value$={host.scale$} entries={[...MBLIMITER_SCALE_ENTRIES]} />
         </WithInfo>
         <WithInfo
           title={mblimiterInfo.numBands}
@@ -332,18 +339,18 @@ export function MblimiterUI(props: MblimiterUIProps) {
       </Header>
 
       <WithInfo title={mblimiterInfo.chart}>
-      <MultibandChart
-        bandCount={numBands}
-        slope$={host.slope$}
-        gr$={grs$}
-        xover$={host.xover$}
-        listen$={listens$}
-        showThresholds={false}
-        spectrumIn$={host.spectrumIn$}
-        spectrumOut$={host.spectrumOut$}
-        spectrumScale$={host.scale$}
-        xoverEdit={xoverEdit}
-      />
+        <MultibandChart
+          bandCount={numBands}
+          slope$={host.slope$}
+          gr$={grs$}
+          xover$={host.xover$}
+          listen$={listens$}
+          showThresholds={false}
+          spectrumIn$={host.spectrumIn$}
+          spectrumOut$={host.spectrumOut$}
+          spectrumScale$={host.scale$}
+          xoverEdit={xoverEdit}
+        />
       </WithInfo>
 
       <div className="strips">
@@ -488,36 +495,16 @@ export function MblimiterUI(props: MblimiterUIProps) {
           </div>
         </div>
 
-        <div className="block meter">
-          <div className="title">GR</div>
-          <WithInfo title={mblimiterInfo.gr}>
-            <LevelMeter
-              className="gr"
-              value$={host.gr$}
-              min={0}
-              max={24}
-              base={0}
-              reverse
-              show_scale
-              falling={0}
-              show_hold={false}
-              scale="log2"
-              log_factor={5}
-              levels={[1, 3, 6, 12]}
-            />
-          </WithInfo>
-        </div>
-
         <div className="block character">
           <div className="title">Character</div>
 
           <div className="feat-group">
             <WithInfo title={mblimiterInfo.colorEnable}>
-              <Toggle state$={host.colorEnable$} label="Color" />
+              <Toggle state$={host.colorEnable$} icon="power" />
             </WithInfo>
             <WithInfo title={mblimiterInfo.color}>
               <Knob
-                label="Amount"
+                label="Color"
                 size="medium"
                 value$={host.color$}
                 enabled$={host.colorEnable$}
@@ -536,11 +523,11 @@ export function MblimiterUI(props: MblimiterUIProps) {
 
           <div className="feat-group">
             <WithInfo title={mblimiterInfo.truePeak}>
-              <Toggle state$={host.truePeak$} label="True Peak" />
+              <Toggle state$={host.truePeak$} icon="power" />
             </WithInfo>
             <WithInfo title={mblimiterInfo.margin}>
               <Knob
-                label="Margin"
+                label="True Peak"
                 size="medium"
                 value$={host.margin$}
                 enabled$={host.truePeak$}
@@ -559,11 +546,11 @@ export function MblimiterUI(props: MblimiterUIProps) {
 
           <div className="feat-group">
             <WithInfo title={mblimiterInfo.holdEnable}>
-              <Toggle state$={host.holdEnable$} label="Hold" />
+              <Toggle state$={host.holdEnable$} icon="power" />
             </WithInfo>
             <WithInfo title={mblimiterInfo.releaseHold}>
               <Knob
-                label="Time"
+                label="Hold"
                 size="medium"
                 value$={host.releaseHold$}
                 enabled$={host.holdEnable$}
@@ -582,11 +569,11 @@ export function MblimiterUI(props: MblimiterUIProps) {
 
           <div className="feat-group">
             <WithInfo title={mblimiterInfo.emphasisEnable}>
-              <Toggle state$={host.emphasisEnable$} label="Emphasis" />
+              <Toggle state$={host.emphasisEnable$} icon="power" />
             </WithInfo>
             <WithInfo title={mblimiterInfo.emphasis}>
               <Knob
-                label="Amount"
+                label="Emphasis"
                 size="medium"
                 value$={host.emphasis$}
                 enabled$={host.emphasisEnable$}
@@ -599,6 +586,90 @@ export function MblimiterUI(props: MblimiterUIProps) {
                   'value.format': (v: number) => `${Math.round(v * 100)} %`,
                 }}
                 {...edit(paramIds.emphasis)}
+              />
+            </WithInfo>
+          </div>
+        </div>
+
+        <div className="block meter">
+          <div className="title">Meters</div>
+          <WithInfo title={mblimiterInfo.loudnessReset} className="reset">
+            <Button
+              label="Reset"
+              onClick={() => postToHost({ t: 'meter', cmd: 'reset' })}
+            />
+          </WithInfo>
+
+          <WithInfo title={mblimiterInfo.gr} className="gr">
+            <LevelMeter
+              className="gr"
+              label="GR"
+              value$={host.gr$}
+              min={0}
+              max={24}
+              base={0}
+              reverse
+              show_scale
+              falling={0}
+              show_hold={false}
+              scale="log2"
+              log_factor={5}
+              levels={[1, 3, 6, 12]}
+            />
+          </WithInfo>
+
+          <div className="loud">
+            <Scale
+              min={-60}
+              max={6}
+              {...{
+                base: 0,
+                fixed_dots: LOUD_SCALE_DOTS,
+                fixed_labels: LOUD_SCALE_LABELS,
+              }}
+              layout="right"
+              scale="linear"
+              labels={(v: number) => v.toFixed(0)}
+            />
+            <WithInfo title={mblimiterInfo.levels} className="levels">
+              <MultiMeter
+                value$={host.levels$}
+                count={4}
+                labels={['L\nrms', 'L\ntp', 'R\ntp', 'R\nrms']}
+                min={-60}
+                max={6}
+                falling={0}
+                scale="linear"
+                layout="right"
+                show_scale={false}
+              />
+            </WithInfo>
+            <WithInfo title={mblimiterInfo.loudness} className="lufs">
+              <MultiMeter
+                value$={host.lufs$}
+                count={3}
+                labels={['M', 'ST', 'I']}
+                min={-60}
+                max={6}
+                falling={0}
+                scale="linear"
+                layout="left"
+                show_scale={false}
+              />
+            </WithInfo>
+            <WithInfo title={mblimiterInfo.range} className="range">
+              <LevelMeter
+                label="LRA"
+                value$={host.lraHi$}
+                base$={host.lraLo$}
+                min={-60}
+                max={6}
+                layout="left"
+                falling={0}
+                scale="linear"
+                show_scale={false}
+                show_hold
+                auto_hold={false}
               />
             </WithInfo>
           </div>

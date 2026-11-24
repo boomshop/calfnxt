@@ -12,6 +12,7 @@ import {
   bindVizBandIo,
   bindVizEnvelope,
   bindVizGrArray,
+  bindVizLoudness,
   bindVizSpectrum,
   postBegin,
   postEnd,
@@ -98,6 +99,15 @@ export interface IMblimiterHost {
   grAll$: DynamicValue<number[]>;
   /** Overall deepest GR (strip×broadband) with DSP fall ballistics. */
   gr$: DynamicValue<number>;
+  /** Analyzer loudness pack of the plugin output (BS.1770). */
+  loudness$: DynamicValue<number[]>;
+  /** MultiMeter order: L RMS, L true peak, R true peak, R RMS. */
+  levels$: DynamicValue<number[]>;
+  /** MultiMeter order: momentary, short-term, integrated (LUFS). */
+  lufs$: DynamicValue<number[]>;
+  /** Absolute short-term ends of the loudness range (LUFS). */
+  lraLo$: DynamicValue<number>;
+  lraHi$: DynamicValue<number>;
   /** Interleaved band levels [in0, out0, in1, out1, …] in dB. */
   bandIo$: DynamicValue<number[]>;
   /** Packed per-band history from DSP viz (split into band slices). */
@@ -357,6 +367,41 @@ export function createBoundMblimiterHost(): IMblimiterHost {
   disposers.push(bindVizSpectrum(spectrumIn$, 'fft_in'));
   disposers.push(bindVizSpectrum(spectrumOut$, 'fft_out'));
 
+  const METER_FLOOR = -60;
+  const meterDb = (v: number | undefined) =>
+    v == null || !Number.isFinite(v) || v < -90 ? METER_FLOOR : v;
+  const loudness$ = DynamicValue.fromConstant<number[]>([]);
+  const levels$ = DynamicValue.fromConstant<number[]>([
+    METER_FLOOR,
+    METER_FLOOR,
+    METER_FLOOR,
+    METER_FLOOR,
+  ]);
+  const lufs$ = DynamicValue.fromConstant<number[]>([
+    METER_FLOOR,
+    METER_FLOOR,
+    METER_FLOOR,
+  ]);
+  const lraLo$ = DynamicValue.fromConstant(METER_FLOOR);
+  const lraHi$ = DynamicValue.fromConstant(METER_FLOOR);
+  disposers.push(bindVizLoudness(loudness$, 'loud'));
+  disposers.push(
+    loudness$.subscribe((v) => {
+      const momentary = meterDb(v[0]);
+      const shortTerm = meterDb(v[1]);
+      const integrated = (v[12] ?? 0) >= 0.5 ? meterDb(v[2]) : METER_FLOOR;
+      lufs$.set([momentary, shortTerm, integrated]);
+      const lraOk = (v[13] ?? 0) >= 0.5;
+      lraLo$.set(lraOk ? meterDb(v[18]) : METER_FLOOR);
+      lraHi$.set(lraOk ? meterDb(v[19]) : METER_FLOOR);
+      const rmsL = meterDb(v[16]);
+      const rmsR = meterDb(v[17]);
+      const pkL = meterDb(v[4]);
+      const pkR = meterDb(v[5]);
+      levels$.set([rmsL, pkL, pkR, rmsR]);
+    }, true),
+  );
+
   return {
     meta: pluginMeta,
     io,
@@ -388,6 +433,11 @@ export function createBoundMblimiterHost(): IMblimiterHost {
     bands,
     grAll$,
     gr$,
+    loudness$,
+    levels$,
+    lufs$,
+    lraLo$,
+    lraHi$,
     bandIo$,
     historyAll$,
     spectrumIn$,

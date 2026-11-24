@@ -759,6 +759,66 @@ export const mblimiterInfo = {
     ],
   }),
 
+  levels: infoDoc({
+    name: 'Levels',
+    lead: 'Left and right of the signal that leaves the plugin, as a short RMS and as true peak.',
+    sections: [
+      {
+        heading: 'What you see',
+        blocks: [
+          {
+            p: 'The order is left RMS, left true peak, right true peak, right RMS. RMS is about a 300 ms average. True peak is the inter-sample peak since the last update, at 4× as in BS.1770. The scale runs from −60 to +6 dB and is shared with the loudness bars. Out gain is included. Bypass, band listen, and difference listen all change what leaves the plugin, so these bars follow that.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  loudness: infoDoc({
+    name: 'Loudness',
+    lead: 'Momentary, short-term, and integrated loudness of the output, in LUFS.',
+    sections: [
+      {
+        heading: 'What you see',
+        blocks: [
+          {
+            p: 'M is 400 ms and ST is 3 seconds. Those two are not gated. I is the integrated loudness since Reset, with the −70 LUFS and −10 LU gates from BS.1770. It stays at the bottom of the scale until the measurement has settled. The same −60 to +6 scale is behind these bars. The numbers run while this window is open. They follow the output, including Out gain, and also follow bypass, band listen, and difference listen.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  range: infoDoc({
+    name: 'Range',
+    lead: 'How wide the short-term loudness has been since Reset.',
+    sections: [
+      {
+        heading: 'What you see',
+        blocks: [
+          {
+            p: 'The bar runs from the quiet end to the loud end of the short-term values, the 10th to the 95th percentile. It stays empty until the measurement has settled. A short bar is a flat passage. A long bar is a wide one. Reset clears it.',
+          },
+        ],
+      },
+    ],
+  }),
+
+  loudnessReset: infoDoc({
+    name: 'Reset',
+    lead: 'Clears the integrated loudness, the loudness range, and the peak maximums.',
+    sections: [
+      {
+        heading: 'How to use it',
+        blocks: [
+          {
+            p: 'Start it at the top of the passage you want to judge. This button is not a parameter. Momentary and short-term fill back in on their own.',
+          },
+        ],
+      },
+    ],
+  }),
+
   gr: infoDoc({
     name: 'GR',
     lead: 'Shows the deepest gain reduction among the active strips and the final limiter.',

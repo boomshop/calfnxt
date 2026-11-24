@@ -7,6 +7,7 @@
 #include "gr_meter.h"
 #include "io_stage.h"
 #include "lookahead_limiter.h"
+#include "loudness_meter.h"
 #include "peak_hold.h"
 #include "resample_n.h"
 #include "spectrum_tap.h"
@@ -56,6 +57,9 @@ public:
   const char* vizSpectrumId() const override { return "fft_in"; }
   int takeOutputSpectrum(float* out, int maxOut) override;
   const char* vizOutputSpectrumId() const override { return "fft_out"; }
+  int takeLoudness(float* out, int maxOut) override;
+  const char* vizLoudnessId() const override { return "loud"; }
+  bool handleMeterCommand(const char* json) override;
   void configureVizBins(const char* id, int bins) override;
 
   OBJ_METHODS(MblimiterPlugin, Plugin::EffectBase)
@@ -98,6 +102,9 @@ private:
   void histFeedSample(int band, float bandOutPeak, float grLin, float limitLin);
   void publishHistSnapshot();
   void ensureMultiBuffer();
+  /** BS.1770 on the plugin output. Runs only while the editor is polling. */
+  void feedLoudnessSilence(int frames);
+  void feedLoudnessOutput(const Steinberg::Vst::ProcessData& data);
   /** Light denormal scrub for OS filters when all limiters are sleeping. */
   void idleSanitize(int nFrames);
 
@@ -123,6 +130,8 @@ private:
   Viz::LevelPeakHold bandOutHold_[kMaxBands];
   Dsp::SpectrumTap spectrumIn_;
   Dsp::SpectrumTap spectrumOut_;
+  /** Output loudness (after out gain). Same pack as the Analyzer. */
+  Dsp::LoudnessMeter loudness_;
 
   std::vector<float> multiBuf_;
   float weightLin_[kMaxBands] {};
