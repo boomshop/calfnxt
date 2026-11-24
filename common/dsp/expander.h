@@ -2,6 +2,8 @@
 
 // Feed-forward expander / gate (Calf Gate heritage, Damien/Thor detection).
 // Soft knee + soft range floor; open/release threshold hysteresis + hold.
+// Hold keeps the measured level (and therefore the gain) from closing.
+// Release runs only after that pause, on the same speed scale as Attack.
 
 #include "compressor.h" // DetectorMode, StereoLink, hermiteInterpolation
 #include "dsp_math.h"
@@ -155,60 +157,28 @@ public:
         std::min(1.f, releaseCoeffBase_ / (1.f + 2.5f * depth));
     }
 
-    if (mode_ == DetectorMode::Rms)
-    {
-      const float sq = linked * linked;
-      sanitize(rmsSq_);
-      rmsSq_ += (sq - rmsSq_) * (sq > rmsSq_ ? attackCoeff : releaseCoeff);
-      sanitize(rmsSq_);
-      linSlope_ = std::sqrt(std::max(0.f, rmsSq_));
-    }
-    else
-    {
-      sanitize(linSlope_);
-      linSlope_ +=
-        (linked - linSlope_) * (linked > linSlope_ ? attackCoeff : releaseCoeff);
-      sanitize(linSlope_);
-    }
-
     if (passthrough_)
     {
+      smoothLevel(linked, attackCoeff, releaseCoeff, true);
       open_ = true;
       holdSamplesLeft_ = 0;
       lastGr_ = 1.f;
       return 1.f;
     }
 
-    // Hysteresis + hold: stay open for holdMs after falling below release thresh.
-    if (linSlope_ > thresholdLin_)
+    // Gate from the raw level. The smoothed level is held at the open
+    // threshold on purpose, so it must not be what starts Hold or the close.
+    const bool justClosed = updateOpenHold(linked);
+    if (justClosed && linSlope_ > releaseThresholdLin_)
     {
-      open_ = true;
-      holdSamplesLeft_ = 0;
+      // Land on the closed-curve knee so Release moves the gain at once.
+      linSlope_ = releaseThresholdLin_;
+      rmsSq_ = linSlope_ * linSlope_;
     }
-    else if (open_)
-    {
-      if (linSlope_ < releaseThresholdLin_)
-      {
-        if (holdSamplesTotal_ <= 0)
-        {
-          open_ = false;
-          holdSamplesLeft_ = 0;
-        }
-        else if (holdSamplesLeft_ <= 0)
-        {
-          holdSamplesLeft_ = holdSamplesTotal_;
-        }
-        else if (--holdSamplesLeft_ <= 0)
-        {
-          open_ = false;
-          holdSamplesLeft_ = 0;
-        }
-      }
-      else
-      {
-        holdSamplesLeft_ = 0;
-      }
-    }
+    // Downward release only once the gate has left Hold. While open, the
+    // level may still follow a loud decay down to Threshold (unity) and
+    // then sits there through the hysteresis gap and the hold.
+    smoothLevel(linked, attackCoeff, releaseCoeff, !open_);
 
     const float curveThreshDb = open_ ? thresholdDb_ : releaseThresholdDb_;
     if (std::fabs(curveThreshDb - curveThreshDb_) > 1.0e-6f)
@@ -310,6 +280,80 @@ private:
   {
     curveThreshDb_ = thresholdDb;
     thresholdLinCurve_ = std::max(1.0e-8f, dbToLin(thresholdDb));
+  }
+
+  /** True on the sample the gate leaves open (hold elapsed, or hold is 0). */
+  bool updateOpenHold(float raw)
+  {
+    const bool wasOpen = open_;
+    if (raw > thresholdLin_)
+    {
+      open_ = true;
+      holdSamplesLeft_ = 0;
+    }
+    else if (open_)
+    {
+      if (raw < releaseThresholdLin_)
+      {
+        if (holdSamplesTotal_ <= 0)
+        {
+          open_ = false;
+          holdSamplesLeft_ = 0;
+        }
+        else if (holdSamplesLeft_ <= 0)
+          holdSamplesLeft_ = holdSamplesTotal_;
+        else if (--holdSamplesLeft_ <= 0)
+        {
+          open_ = false;
+          holdSamplesLeft_ = 0;
+        }
+      }
+      else
+        holdSamplesLeft_ = 0; // back above the close level: cancel hold
+    }
+    return wasOpen && !open_;
+  }
+
+  /**
+   * Attack always tracks a louder raw level. Release tracks downward only
+   * when `releaseDown` (gate closed). While open, a level above Threshold
+   * may fall to Threshold and then holds, so the gain stays open.
+   */
+  void smoothLevel(float linked, float attackCoeff, float releaseCoeff,
+                   bool releaseDown)
+  {
+    if (mode_ == DetectorMode::Rms)
+    {
+      const float sq = linked * linked;
+      const float openSq = thresholdLin_ * thresholdLin_;
+      sanitize(rmsSq_);
+      if (sq > rmsSq_)
+        rmsSq_ += (sq - rmsSq_) * attackCoeff;
+      else if (releaseDown)
+        rmsSq_ += (sq - rmsSq_) * releaseCoeff;
+      else if (open_ && rmsSq_ > openSq)
+      {
+        rmsSq_ += (sq - rmsSq_) * releaseCoeff;
+        if (rmsSq_ < openSq)
+          rmsSq_ = openSq;
+      }
+      sanitize(rmsSq_);
+      linSlope_ = std::sqrt(std::max(0.f, rmsSq_));
+      return;
+    }
+
+    sanitize(linSlope_);
+    if (linked > linSlope_)
+      linSlope_ += (linked - linSlope_) * attackCoeff;
+    else if (releaseDown)
+      linSlope_ += (linked - linSlope_) * releaseCoeff;
+    else if (open_ && linSlope_ > thresholdLin_)
+    {
+      linSlope_ += (linked - linSlope_) * releaseCoeff;
+      if (linSlope_ < thresholdLin_)
+        linSlope_ = thresholdLin_;
+    }
+    sanitize(linSlope_);
   }
 
   float outputGain(float linSlope) const

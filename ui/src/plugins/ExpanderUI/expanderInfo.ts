@@ -474,6 +474,14 @@ export const expanderInfo = {
           },
         ],
       },
+      {
+        heading: 'In detail',
+        blocks: [
+          {
+            p: 'The measured level does not fall into the reduction while this time is running, so the gain stays where the open curve left it. Release starts when Hold ends. The two times add. A new peak above Threshold cancels the hold.',
+          },
+        ],
+      },
     ],
   }),
 
