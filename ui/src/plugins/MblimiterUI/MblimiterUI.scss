@@ -124,7 +124,7 @@
       > .top {
         display: flex;
         align-items: center;
-        gap: var(--gap);
+        // gap: var(--gap);
         justify-content: space-evenly;
       }
 
@@ -185,8 +185,9 @@
         position: relative;
         display: flex;
         align-items: stretch;
-        gap: 3px;
-        padding-left: 18px;
+        gap: 8px;
+        padding-left: 12px;
+        padding-right: 12px;
         min-width: 0;
         min-height: 0;
 
@@ -201,6 +202,10 @@
           --aux-scale-labelmarginvertical: calc(100% - 12px);
           --aux-scale-dotsize: calc(100% - 14px);
           --aux-scale-markersize: calc(100% - 14px);
+
+          &.left {
+            right: 12px;
+          }
 
           > .aux-dot {
             opacity: 0.35;
@@ -223,7 +228,6 @@
 
         .MultiMeter {
           --aux-meter-size: 8px;
-          --aux-multimeter-gridgap: 2px;
           min-width: 0;
         }
 
@@ -236,12 +240,19 @@
         .aux-levelmeter.aux-vertical,
         .LevelMeter.aux-vertical {
           grid-template-rows: 1fr auto;
+          grid-template-columns: auto;
           grid-template-areas:
-            'bar bar'
-            'label label';
+            'bar'
+            'label';
           gap: 1px 0;
+          justify-items: center;
+
+          > .aux-bar {
+            justify-self: center;
+          }
 
           > .aux-label {
+            font-family: Oswald;
             height: 18px;
             font-size: 8px;
             line-height: 9px;
@@ -274,13 +285,13 @@
           grid-template-rows: 1fr auto;
           grid-template-areas:
             'scale bar'
-            'label label';
+            '. label';
           gap: 1px 2px;
 
           > .aux-label {
             height: 18px;
             font-size: 8px;
-            line-height: 9px;
+            line-height: 12px;
             text-align: center;
           }
         }

@@ -630,6 +630,7 @@ export function MblimiterUI(props: MblimiterUIProps) {
               layout="right"
               scale="linear"
               labels={(v: number) => v.toFixed(0)}
+              className="left"
             />
             <WithInfo title={mblimiterInfo.levels} className="levels">
               <MultiMeter
@@ -653,7 +654,7 @@ export function MblimiterUI(props: MblimiterUIProps) {
                 max={6}
                 falling={0}
                 scale="linear"
-                layout="left"
+                layout="right"
                 show_scale={false}
               />
             </WithInfo>
@@ -664,7 +665,7 @@ export function MblimiterUI(props: MblimiterUIProps) {
                 base$={host.lraLo$}
                 min={-60}
                 max={6}
-                layout="left"
+                layout="right"
                 falling={0}
                 scale="linear"
                 show_scale={false}
@@ -672,6 +673,19 @@ export function MblimiterUI(props: MblimiterUIProps) {
                 auto_hold={false}
               />
             </WithInfo>
+            <Scale
+              min={-60}
+              max={6}
+              {...{
+                base: 0,
+                fixed_dots: [],
+                fixed_labels: LOUD_SCALE_LABELS,
+              }}
+              layout="left"
+              scale="linear"
+              className="right"
+              labels={(v: number) => v.toFixed(0)}
+            />
           </div>
         </div>
       </div>
